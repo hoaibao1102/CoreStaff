@@ -2,13 +2,13 @@
 :root{--bg:#f5f7fb;--panel:#fff;--panel2:#f8fafc;--text:#102039;--muted:#65758b;--line:#dbe3ee;--brand:#174ea6;--brand2:#0b2f66;--accent:#0ea5a8;--code:#0b1424;--codeText:#dce8f8;--shadow:0 12px 35px rgba(15,35,65,.09);--radius:18px;--header:64px;--side:310px}
 html[data-theme="dark"]{--bg:#0b1320;--panel:#111d2d;--panel2:#162337;--text:#e8eef7;--muted:#98a9bf;--line:#273950;--brand:#68a5ff;--brand2:#0d2d58;--accent:#4bd4cf;--code:#07101d;--codeText:#dce8f8;--shadow:0 12px 35px rgba(0,0,0,.28)}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;line-height:1.65}.topbar{height:var(--header);position:fixed;inset:0 0 auto 0;z-index:60;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:15px}.brand{display:flex;align-items:center;gap:11px;min-width:270px}.logo{width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#1f6de0,#0b2f66);color:#fff;display:grid;place-items:center;font-weight:900;box-shadow:0 7px 18px rgba(23,78,166,.28)}.brand strong{font-size:15px}.brand small{display:block;color:var(--muted);font-size:11px}.search{position:relative;max-width:680px;flex:1}.search input{width:100%;height:42px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:12px;padding:0 74px 0 40px;outline:none}.search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 15%,transparent)}.search-icon{position:absolute;left:13px;top:9px;color:var(--muted)}.shortcut{position:absolute;right:10px;top:10px;font-size:11px;color:var(--muted);border:1px solid var(--line);padding:1px 7px;border-radius:6px}.icon-btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:11px;height:40px;min-width:40px;padding:0 12px;cursor:pointer}.menu-btn{display:none}.sidebar{position:fixed;top:var(--header);bottom:0;left:0;width:var(--side);background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:20px 15px 30px;z-index:50}.sidebar-note{padding:14px;border:1px solid color-mix(in srgb,var(--brand) 25%,var(--line));background:color-mix(in srgb,var(--brand) 7%,var(--panel));border-radius:14px;margin-bottom:16px}.sidebar-note strong{display:block;font-size:12px;color:var(--brand)}.sidebar-note span{font-size:11px;color:var(--muted)}.nav-group{margin:9px 0}.nav-group-title{width:100%;display:flex;justify-content:space-between;border:0;background:transparent;color:var(--text);font-weight:800;text-align:left;padding:9px;cursor:pointer}.nav-group-links{display:grid}.nav-group.collapsed .nav-group-links{display:none}.nav-link{display:block;color:var(--muted);text-decoration:none;font-size:12px;padding:7px 10px 7px 14px;border-left:2px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-link:hover,.nav-link.active{color:var(--brand);background:color-mix(in srgb,var(--brand) 7%,transparent);border-left-color:var(--brand)}.main{margin-left:var(--side);padding:calc(var(--header) + 28px) 28px 70px}.content{max-width:1120px;margin:auto}.hero{background:linear-gradient(135deg,#071c3b 0%,#0e438a 60%,#087b82 130%);color:#fff;border-radius:26px;padding:38px;box-shadow:var(--shadow);overflow:hidden;position:relative}.hero:after{content:"";position:absolute;width:330px;height:330px;border-radius:50%;right:-80px;top:-130px;background:rgba(255,255,255,.08)}.hero .tag{font-size:11px;font-weight:800;letter-spacing:.12em;color:#99f6e4}.hero h1{font-size:clamp(30px,5vw,54px);line-height:1.06;margin:9px 0 14px;letter-spacing:-.045em}.hero p{max-width:760px;color:#d4e4fb;margin:0}.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.hero-actions a{padding:9px 14px;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;background:#fff;color:#123b73}.hero-actions a.secondary{background:rgba(255,255,255,.11);color:#fff;border:1px solid rgba(255,255,255,.2)}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:var(--shadow)}.stat b{display:block;font-size:24px;color:var(--brand)}.stat span{font-size:12px;color:var(--muted)}.overview-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.overview-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px}.overview-card h3{margin-top:0}.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.role{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:11px}.role b{font-size:12px}.role span{display:block;color:var(--muted);font-size:11px}.flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center}.flow span{background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;font-size:11px}.flow i{color:var(--accent)}.doc-article{margin-top:34px}.doc-header{display:flex;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:var(--shadow)}.doc-header h1{margin:0;font-size:28px}.doc-header p{margin:2px 0;color:var(--muted)}.doc-icon{width:58px;height:58px;border-radius:16px;background:var(--brand2);color:#fff;display:grid;place-items:center;font-weight:900}.eyebrow,.section-kicker{font-size:10px!important;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--brand)!important}.doc-intro,.wiki-section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px;margin-top:14px;box-shadow:0 5px 20px rgba(15,35,65,.04)}.wiki-section h2{font-size:25px;line-height:1.25;margin:4px 0 20px;padding-bottom:13px;border-bottom:1px solid var(--line)}.section-body h3{margin-top:27px;color:var(--brand)}.section-body h4{margin-top:20px}.section-body a{color:var(--brand)}.section-body code:not(pre code code){background:color-mix(in srgb,var(--brand) 9%,var(--panel2));border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-size:.88em}.em}.section-body pre{background:var(--code);color:var(--codeText);padding:18px;border-radius:14px;overflow:auto;font-size:12px;line-height:1.55;position:relative}.section-body pre[data-lang]:before{content:attr(data-lang);position:absolute;right:10px;top:7px;font-size:9px;color:#7f96b2;text-transform:uppercase}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px;margin:16px 0}table{width:100%;border-collapse:collapse;min-width:600px;font-size:12px}th{background:var(--panel2);text-align:left;color:var(--text);font-weight:800}th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}.callout{border-left:4px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel2));padding:12px 16px;margin:16px 0;border-radius:0 11px 11px 0}.to-top{display:inline-block;margin-top:16px;color:var(--muted);font-size:11px;text-decoration:none}.search-empty{display:none;text-align:center;padding:50px;background:var(--panel);border:1px solid var(--line);border-radius:18px;margin-top:20px}.searching .searchable{display:none}.searching .searchable.match{display:block}.searching .doc-article{display:contents}.searching .doc-intro{display:none}.searching .wiki-section.match{margin-top:12px}.highlight{background:#fde68a;color:#422006;border-radius:3px;padding:0 1px}.source-warning{border-left:4px solid #f59e0b;background:color-mix(in srgb,#f59e0b 9%,var(--panel));padding:13px 15px;border-radius:10px;margin:16px 0;font-size:12px}.footer{text-align:center;color:var(--muted);font-size:11px;padding:35px}.overlay{display:none}
-@media(max-width:980px){.stat-grid{grid-template-columns:repeat(2,1fr)}.overview-grid{grid-template-columns:1fr}.brand{min-width:auto}.brand small{display:none}.sidebar{transform:translateX(-102%);transition:.2s}.sidebar.open{transform:translateX(0);box-shadow:20px 0 50px rgba(0,0,0,.25)}.overlay.show{display:block;position:fixed;inset:var(--header) 0 0;background:rgba(1,8,20,.45);z-index:45}.main{margin-left:0}.menu-btn{display:inline-block}}
+.proposal-register{font-size:14px}.proposal-identity{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px}.identity-meta,.identity-name,.proposal-card{border:1px solid var(--line);background:var(--panel2);border-radius:15px;padding:18px}.identity-meta{display:grid;align-content:center;gap:14px}.identity-meta span{display:flex;justify-content:space-between;align-items:center;gap:12px}.identity-meta b,.identity-name small,.card-label{font-size:10px;letter-spacing:.12em;color:var(--brand);font-weight:900}.identity-name h3{font-size:21px;line-height:1.3;margin:6px 0}.identity-name p{margin:0;color:var(--muted)}.proposal-note{margin:14px 0;padding:13px 15px;border-left:4px solid #f59e0b;background:color-mix(in srgb,#f59e0b 9%,var(--panel));border-radius:0 11px 11px 0;font-size:12px}.proposal-grid,.priority-grid{display:grid;grid-template-columns:.78fr 1.22fr;gap:14px;margin-top:14px}.priority-grid{grid-template-columns:1fr 1fr}.proposal-card h3{margin:5px 0 13px;font-size:17px}.feature-card p{margin:0;line-height:1.8}.actor-list,.flow-card ol{list-style:none;padding:0;margin:0;display:grid;gap:8px}.actor-list li{display:flex;align-items:center;gap:10px;padding:9px;background:var(--panel);border:1px solid var(--line);border-radius:10px}.actor-list span{font:700 10px ui-monospace;color:var(--brand)}.flow-card li{display:grid;grid-template-columns:55px minmax(0,1fr) auto;gap:9px;align-items:start;padding:11px;background:var(--panel);border:1px solid var(--line);border-radius:11px}.flow-card li span{font:800 10px ui-monospace;color:var(--brand)}.flow-card li b{font-size:12px;line-height:1.45}.flow-card li em{font-style:normal;font-size:9px;font-weight:900;border-radius:20px;padding:3px 7px}.flow-card.must li em{background:#dcfce7;color:#166534}.flow-card.nice li em{background:#e0f2fe;color:#075985}@media(max-width:760px){.proposal-identity,.proposal-grid,.priority-grid{grid-template-columns:1fr}.flow-card li{grid-template-columns:50px minmax(0,1fr)}.flow-card li em{grid-column:2;justify-self:start}.identity-name h3{font-size:18px}}@media(max-width:980px){.stat-grid{grid-template-columns:repeat(2,1fr)}.overview-grid{grid-template-columns:1fr}.brand{min-width:auto}.brand small{display:none}.sidebar{transform:translateX(-102%);transition:.2s}.sidebar.open{transform:translateX(0);box-shadow:20px 0 50px rgba(0,0,0,.25)}.overlay.show{display:block;position:fixed;inset:var(--header) 0 0;background:rgba(1,8,20,.45);z-index:45}.main{margin-left:0}.menu-btn{display:inline-block}}
 @media(max-width:620px){:root{--header:58px}.topbar{padding:0 10px;gap:8px}.logo{width:36px;height:36px}.brand strong{font-size:13px}.search input{padding-right:12px}.shortcut,.theme-text{display:none}.main{padding:calc(var(--header) + 14px) 10px 45px}.hero{padding:26px 20px;border-radius:19px}.stat-grid{grid-template-columns:1fr 1fr;gap:8px}.stat{padding:13px}.stat b{font-size:20px}.doc-header,.doc-intro,.wiki-section{padding:18px;border-radius:15px}.doc-header h1{font-size:21px}.doc-icon{width:45px;height:45px}.wiki-section h2{font-size:21px}.role-grid{grid-template-columns:1fr}table{font-size:11px}.sidebar{width:min(88vw,330px)}}
 @media print{.topbar,.sidebar,.to-top,.hero-actions{display:none!important}.main{margin:0;padding:0}.wiki-section,.doc-header,.doc-intro{box-shadow:none;break-inside:avoid}.hero{background:#123b73!important;-webkit-print-color-adjust:exact}.doc-article{page-break-before:always}}
 </style></head><body>
 <header class="topbar"><button id="menuBtn" class="icon-btn menu-btn" aria-label="Mở menu">☰</button><div class="brand"><div class="logo">TL</div><div><strong>TimeLock Wiki</strong><small>SWP391 · Multi-tenant Attendance Platform</small></div></div><label class="search"><span class="search-icon">⌕</span><input id="search" type="search" placeholder="Tìm toàn bộ tài liệu..." aria-label="Tìm kiếm wiki"><span class="shortcut">Ctrl K</span></label><button id="themeBtn" class="icon-btn" title="Đổi giao diện">◐ <span class="theme-text">Theme</span></button></header>
 <div id="overlay" class="overlay"></div><aside id="sidebar" class="sidebar"><div class="sidebar-note"><strong id="resultCount">Toàn bộ wiki</strong><span>2 nguồn · SRS v3.0 là baseline chính thức</span></div><a class="nav-link" href="#overview"><span>⌂ Tổng quan dự án</span></a><div class="nav-group" data-doc="srs"><button class="nav-group-title" aria-expanded="true"><span>SRS TimeLock v3.0</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#srs-0-thong-tin-tai-lieu" data-target="srs-0-thong-tin-tai-lieu"><span>0. Thông tin tài liệu</span></a><a class="nav-link" href="#srs-1-gioi-thieu" data-target="srs-1-gioi-thieu"><span>1. Giới thiệu</span></a><a class="nav-link" href="#srs-2-pham-vi-he-thong" data-target="srs-2-pham-vi-he-thong"><span>2. Phạm vi hệ thống</span></a><a class="nav-link" href="#srs-3-actors-va-phan-quyen" data-target="srs-3-actors-va-phan-quyen"><span>3. Actors và phân quyền</span></a><a class="nav-link" href="#srs-4-authentication-va-quan-ly-phien" data-target="srs-4-authentication-va-quan-ly-phien"><span>4. Authentication và quản lý phiên</span></a><a class="nav-link" href="#srs-5-mo-hinh-cham-cong" data-target="srs-5-mo-hinh-cham-cong"><span>5. Mô hình chấm công</span></a><a class="nav-link" href="#srs-6-ca-lam-viec-va-ngay-cong" data-target="srs-6-ca-lam-viec-va-ngay-cong"><span>6. Ca làm việc và ngày công</span></a><a class="nav-link" href="#srs-7-state-machine" data-target="srs-7-state-machine"><span>7. State machine</span></a><a class="nav-link" href="#srs-8-yeu-cau-chuc-nang-authentication" data-target="srs-8-yeu-cau-chuc-nang-authentication"><span>8. Yêu cầu chức năng — Authentication</span></a><a class="nav-link" href="#srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration" data-target="srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration"><span>9. Yêu cầu chức năng — System Admin, Organization và HR configuration</span></a><a class="nav-link" href="#srs-10-yeu-cau-chuc-nang-employee" data-target="srs-10-yeu-cau-chuc-nang-employee"><span>10. Yêu cầu chức năng — Employee</span></a><a class="nav-link" href="#srs-11-yeu-cau-chuc-nang-department-manager" data-target="srs-11-yeu-cau-chuc-nang-department-manager"><span>11. Yêu cầu chức năng — Department Manager</span></a><a class="nav-link" href="#srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong" data-target="srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong"><span>11A. Yêu cầu chức năng — HR và chốt kỳ công</span></a><a class="nav-link" href="#srs-12-business-rules" data-target="srs-12-business-rules"><span>12. Business rules</span></a><a class="nav-link" href="#srs-13-use-cases-chinh" data-target="srs-13-use-cases-chinh"><span>13. Use cases chính</span></a><a class="nav-link" href="#srs-14-danh-sach-man-hinh-va-route" data-target="srs-14-danh-sach-man-hinh-va-route"><span>14. Danh sách màn hình và route</span></a><a class="nav-link" href="#srs-15-data-model-logic" data-target="srs-15-data-model-logic"><span>15. Data model logic</span></a><a class="nav-link" href="#srs-16-api-requirements" data-target="srs-16-api-requirements"><span>16. API requirements</span></a><a class="nav-link" href="#srs-17-error-codes" data-target="srs-17-error-codes"><span>17. Error codes</span></a><a class="nav-link" href="#srs-18-transaction-concurrency-va-idempotency" data-target="srs-18-transaction-concurrency-va-idempotency"><span>18. Transaction, concurrency và idempotency</span></a><a class="nav-link" href="#srs-19-yeu-cau-phi-chuc-nang" data-target="srs-19-yeu-cau-phi-chuc-nang"><span>19. Yêu cầu phi chức năng</span></a><a class="nav-link" href="#srs-20-ui-states-bat-buoc" data-target="srs-20-ui-states-bat-buoc"><span>20. UI states bắt buộc</span></a><a class="nav-link" href="#srs-21-acceptance-criteria-tong-hop" data-target="srs-21-acceptance-criteria-tong-hop"><span>21. Acceptance criteria tổng hợp</span></a><a class="nav-link" href="#srs-22-test-strategy" data-target="srs-22-test-strategy"><span>22. Test strategy</span></a><a class="nav-link" href="#srs-23-kien-truc-logic-e-xuat" data-target="srs-23-kien-truc-logic-e-xuat"><span>23. Kiến trúc logic đề xuất</span></a><a class="nav-link" href="#srs-24-seed-data-va-demo-mode" data-target="srs-24-seed-data-va-demo-mode"><span>24. Seed data và demo mode</span></a><a class="nav-link" href="#srs-25-ke-hoach-trien-khai-theo-giai-oan" data-target="srs-25-ke-hoach-trien-khai-theo-giai-oan"><span>25. Kế hoạch triển khai theo giai đoạn</span></a><a class="nav-link" href="#srs-26-definition-of-done-cho-mvp" data-target="srs-26-definition-of-done-cho-mvp"><span>26. Definition of Done cho MVP</span></a><a class="nav-link" href="#srs-27-open-questions-va-gia-tri-mac-inh" data-target="srs-27-open-questions-va-gia-tri-mac-inh"><span>27. Open questions và giá trị mặc định</span></a><a class="nav-link" href="#srs-28-thuat-ngu" data-target="srs-28-thuat-ngu"><span>28. Thuật ngữ</span></a><a class="nav-link" href="#srs-29-ket-luan" data-target="srs-29-ket-luan"><span>29. Kết luận</span></a></div></div><div class="nav-group" data-doc="proposal"><button class="nav-group-title" aria-expanded="true"><span>Project Proposal</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#proposal-1-thong-tin-theo-bang-fa26-swp391" data-target="proposal-1-thong-tin-theo-bang-fa26-swp391"><span>1. Thông tin theo bảng FA26_SWP391</span></a><a class="nav-link" href="#proposal-2-project-name" data-target="proposal-2-project-name"><span>2. Project Name</span></a><a class="nav-link" href="#proposal-3-problem-statement" data-target="proposal-3-problem-statement"><span>3. Problem Statement</span></a><a class="nav-link" href="#proposal-4-project-objectives" data-target="proposal-4-project-objectives"><span>4. Project Objectives</span></a><a class="nav-link" href="#proposal-5-actors" data-target="proposal-5-actors"><span>5. Actors</span></a><a class="nav-link" href="#proposal-6-main-features" data-target="proposal-6-main-features"><span>6. Main Features</span></a><a class="nav-link" href="#proposal-7-must-have-flows" data-target="proposal-7-must-have-flows"><span>7. Must-have Flows</span></a><a class="nav-link" href="#proposal-8-nice-to-have-flows" data-target="proposal-8-nice-to-have-flows"><span>8. Nice-to-have Flows</span></a><a class="nav-link" href="#proposal-9-core-business-rules" data-target="proposal-9-core-business-rules"><span>9. Core Business Rules</span></a><a class="nav-link" href="#proposal-10-main-entities" data-target="proposal-10-main-entities"><span>10. Main Entities</span></a><a class="nav-link" href="#proposal-11-suggested-technology-stack" data-target="proposal-11-suggested-technology-stack"><span>11. Suggested Technology Stack</span></a><a class="nav-link" href="#proposal-12-project-scope-boundaries" data-target="proposal-12-project-scope-boundaries"><span>12. Project Scope Boundaries</span></a><a class="nav-link" href="#proposal-13-demo-accounts-and-mock-scenarios" data-target="proposal-13-demo-accounts-and-mock-scenarios"><span>13. Demo Accounts and Mock Scenarios</span></a><a class="nav-link" href="#proposal-14-hero-demo-flow" data-target="proposal-14-hero-demo-flow"><span>14. Hero Demo Flow</span></a><a class="nav-link" href="#proposal-15-expected-outcomes" data-target="proposal-15-expected-outcomes"><span>15. Expected Outcomes</span></a><a class="nav-link" href="#proposal-16-short-version-for-spreadsheet-cell" data-target="proposal-16-short-version-for-spreadsheet-cell"><span>16. Short Version for Spreadsheet Cell</span></a></div></div></aside>
-<main id="main" class="main"><div class="content"><section id="overview"><div class="hero"><div class="tag">TIMELOCK · PROJECT KNOWLEDGE BASE</div><h1>Chấm công. Duyệt công.<br>Chốt công.</h1><p>Nền tảng web multi-tenant quản lý trọn vòng đời ngày công bằng Network, GPS và Selfie; cô lập dữ liệu giữa các tổ chức; hỗ trợ điều chỉnh, phê duyệt và khóa kỳ công có thể kiểm chứng.</p><div class="hero-actions"><a href="#doc-srs">Đọc SRS v3.0</a><a class="secondary" href="#doc-proposal">Xem Project Proposal</a><a class="secondary" href="#srs-14-danh-sach-man-hinh-va-route">Routes</a><a class="secondary" href="#srs-15-data-model-logic">Data model</a></div></div>
+<main id="main" class="main"><div class="content"><section id="overview"><div class="hero"><div class="tag">TIMELOCK · PROJECT KNOWLEDGE BASE</div><h1>Chấm công. Duyệt công.<br>Chốt công.</h1><p>Nền tảng web multi-tenant quản lý trọn vòng đời ngày công bằng Network, GPS và Selfie; cô lập dữ liệu giữa các tổ chức; hỗ trợ điều chỉnh, phê duyệt và khóa kỳ công có thể kiểm chứng.</p><div class="hero-actions"><a href="https://vercel.com/baobao-s-projects1/time-lock-prototype" target="_blank" rel="noopener noreferrer">↗ Xem Prototype trực tuyến</a><a class="secondary" href="#doc-srs">Đọc SRS v3.0</a><a class="secondary" href="#doc-proposal">Xem Project Proposal</a><a class="secondary" href="#srs-14-danh-sach-man-hinh-va-route">Routes</a><a class="secondary" href="#srs-15-data-model-logic">Data model</a></div></div>
 <div class="stat-grid"><div class="stat"><b>4</b><span>Vai trò chính thức</span></div><div class="stat"><b>2+</b><span>Organization độc lập</span></div><div class="stat"><b>3</b><span>Network · GPS · Selfie</span></div><div class="stat"><b>v3.0</b><span>Multi-tenant baseline</span></div></div>
 <div class="overview-grid"><div class="overview-card"><h3>Vai trò và phạm vi</h3><div class="role-grid"><div class="role"><b>SYSTEM_ADMIN</b><span>Organization, HR đầu tiên, audit nền tảng</span></div><div class="role"><b>HR</b><span>Cơ cấu tenant, điều chỉnh, chốt/mở kỳ</span></div><div class="role"><b>DEPARTMENT_MANAGER</b><span>Duyệt và xác nhận phòng ban</span></div><div class="role"><b>EMPLOYEE</b><span>Chấm công và dữ liệu cá nhân</span></div></div></div><div class="overview-card"><h3>Luồng nghiệp vụ</h3><div class="flow"><span>Organization</span><i>→</i><span>HR configuration</span><i>→</i><span>Attendance</span><i>→</i><span>Approval</span><i>→</i><span>Adjustment</span><i>→</i><span>Closing</span><i>→</i><span>Export</span></div><div class="source-warning"><strong>Quy tắc nguồn:</strong> SRS v3.0 là baseline hiện hành. Project Proposal được giữ nguyên đầy đủ như nguồn đề xuất ban đầu; nếu có khác biệt, ưu tiên SRS.</div></div></div></section>
 <div id="empty" class="search-empty"><h3>Không tìm thấy nội dung</h3><p>Thử từ khóa khác hoặc nhấn Esc để xóa tìm kiếm.</p></div><article id="doc-srs" class="doc-article"><header class="doc-header searchable" data-title="SRS TimeLock v3.0"><div class="doc-icon">SRS</div><div><p class="eyebrow">Nguồn: SRS_TIMELOCK.md</p><h1>SRS TimeLock v3.0</h1><p>Tài liệu yêu cầu phần mềm chính thức</p></div></header><div class="doc-intro"><h1>SRS — TIMELOCK</h1>
@@ -3314,117 +3314,23 @@ Backend
 <strong>Học kỳ:</strong> FA26<br />
 <strong>Trạng thái:</strong> Đề xuất dự án sinh viên</p>
 </blockquote>
-<hr /></div><section id="proposal-1-thong-tin-theo-bang-fa26-swp391" class="wiki-section searchable" data-title="1. Thông tin theo bảng FA26_SWP391" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
-<li>Thông tin theo bảng FA26_SWP391</li>
-</ol></h2><div class="section-body"><div class="table-wrap"><table>
-<thead>
-<tr>
-<th style="text-align: right;">No.</th>
-<th>Lecturers</th>
-<th>Project Name</th>
-<th>Actors</th>
-<th>Main Features</th>
-<th>Must Have</th>
-<th>Nice to Have</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: right;">TBD</td>
-<td>TBD</td>
-<td><strong>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System</strong></td>
-<td>Employee</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;">Approver / Department Manager</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;">HR / Timekeeping Officer</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;">System Administrator</td>
-<td>Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.</td>
-<td><strong>Flow 1:</strong> User, Role &amp; Attendance Configuration Management</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>Flow 2:</strong> Employee Check-in/Check-out &amp; Evidence Management</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>Flow 3:</strong> Attendance Approval &amp; Clarification Workflow</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>Flow 4:</strong> Monthly Timesheet Review &amp; Closing</td>
-<td><strong>Flow 5:</strong> Adjustment Request After Closing</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>Flow 6:</strong> Dashboard, Notification &amp; Export</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td style="text-align: right;"><strong>Flow 7:</strong> Advanced Security and Analytics</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table></div>
-<blockquote class="callout">
-<p><code>Lecturers</code> và số thứ tự chưa có thông tin nên được để <code>TBD</code>, tránh tự gán sai giảng viên phụ trách.</p>
-</blockquote>
-<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-2-project-name" class="wiki-section searchable" data-title="2. Project Name" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<hr /></div><section id="proposal-1-thong-tin-theo-bang-fa26-swp391" class="wiki-section searchable proposal-register" data-title="1. Thông tin theo bảng FA26_SWP391" data-doc="proposal">
+<div class="section-kicker">Project Proposal · FA26_SWP391 format</div>
+<h2>1. Thông tin theo bảng FA26_SWP391</h2>
+<div class="proposal-identity">
+  <div class="identity-meta"><span><b>No.</b><code>TBD</code></span><span><b>Lecturers</b><code>TBD</code></span></div>
+  <div class="identity-name"><small>PROJECT NAME</small><h3>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</h3><p>TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System</p></div>
+</div>
+<div class="proposal-note"><strong>Đối chiếu nguồn:</strong> No. và Lecturers chưa có dữ liệu nên giữ nguyên <code>TBD</code>. TimeLock là đề xuất mới theo cấu trúc cột FA26_SWP391, không phải một hàng đã tồn tại trong file tham chiếu.</div>
+<div class="proposal-grid">
+  <section class="proposal-card actors-card"><div class="card-label">ACTORS</div><h3>4 nhóm người dùng</h3><ol class="actor-list"><li><span>01</span><b>Employee</b></li><li><span>02</span><b>Approver / Department Manager</b></li><li><span>03</span><b>HR / Timekeeping Officer</b></li><li><span>04</span><b>System Administrator</b></li></ol></section>
+  <section class="proposal-card feature-card"><div class="card-label">MAIN FEATURES</div><h3>Phạm vi chức năng</h3><p>Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.</p></section>
+</div>
+<div class="priority-grid">
+  <section class="proposal-card flow-card must"><div class="card-label">MUST HAVE</div><h3>Required flows</h3><ol><li><span>Flow 1</span><b>User, Role &amp; Attendance Configuration Management</b><em>REQUIRED</em></li><li><span>Flow 2</span><b>Employee Check-in/Check-out &amp; Evidence Management</b><em>REQUIRED</em></li><li><span>Flow 3</span><b>Attendance Approval &amp; Clarification Workflow</b><em>REQUIRED</em></li><li><span>Flow 4</span><b>Monthly Timesheet Review &amp; Closing</b><em>REQUIRED</em></li></ol></section>
+  <section class="proposal-card flow-card nice"><div class="card-label">NICE TO HAVE</div><h3>Optional flows</h3><ol><li><span>Flow 5</span><b>Adjustment Request After Closing</b><em>OPTIONAL</em></li><li><span>Flow 6</span><b>Dashboard, Notification &amp; Export</b><em>OPTIONAL</em></li><li><span>Flow 7</span><b>Advanced Security and Analytics</b><em>OPTIONAL</em></li></ol></section>
+</div>
+<a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-2-project-name" class="wiki-section searchable" data-title="2. Project Name" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
 <li>Project Name</li>
 </ol></h2><div class="section-body"><h3>Tên chính thức</h3>
 <p><strong>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong></p>

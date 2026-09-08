@@ -11,20 +11,44 @@
 
 ## 1. Thông tin theo bảng FA26_SWP391
 
-| No. | Lecturers | Project Name | Actors | Main Features | Must Have | Nice to Have |
-|---:|---|---|---|---|---|---|
-| TBD | TBD | **TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên**  
-**TimeLock — Employee Attendance, Approval & Timesheet Closing System** | Employee  
-Approver / Department Manager  
-HR / Timekeeping Officer  
-System Administrator | Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log. | **Flow 1:** User, Role & Attendance Configuration Management  
-**Flow 2:** Employee Check-in/Check-out & Evidence Management  
-**Flow 3:** Attendance Approval & Clarification Workflow  
-**Flow 4:** Monthly Timesheet Review & Closing | **Flow 5:** Adjustment Request After Closing  
-**Flow 6:** Dashboard, Notification & Export  
-**Flow 7:** Advanced Security and Analytics |
+### Thông tin nhận diện
 
-> `Lecturers` và số thứ tự chưa có thông tin nên được để `TBD`, tránh tự gán sai giảng viên phụ trách.
+| Trường | Giá trị |
+|---|---|
+| No. | `TBD` |
+| Lecturers | `TBD` |
+| Project Name (VI) | **TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên** |
+| Project Name (EN) | **TimeLock — Employee Attendance, Approval & Timesheet Closing System** |
+
+> `Lecturers` và số thứ tự chưa có thông tin nên được để `TBD`, tránh tự gán sai giảng viên phụ trách. TimeLock là đề xuất mới theo cấu trúc cột của bảng FA26_SWP391, không phải một dòng đã tồn tại trong bản Excel tham chiếu.
+
+### Actors
+
+1. **Employee**
+2. **Approver / Department Manager**
+3. **HR / Timekeeping Officer**
+4. **System Administrator**
+
+### Main Features
+
+Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.
+
+### Must Have
+
+| Flow | Nội dung | Mức ưu tiên |
+|---|---|---|
+| Flow 1 | User, Role & Attendance Configuration Management | REQUIRED |
+| Flow 2 | Employee Check-in/Check-out & Evidence Management | REQUIRED |
+| Flow 3 | Attendance Approval & Clarification Workflow | REQUIRED |
+| Flow 4 | Monthly Timesheet Review & Closing | REQUIRED |
+
+### Nice to Have
+
+| Flow | Nội dung | Mức ưu tiên |
+|---|---|---|
+| Flow 5 | Adjustment Request After Closing | OPTIONAL |
+| Flow 6 | Dashboard, Notification & Export | OPTIONAL |
+| Flow 7 | Advanced Security and Analytics | OPTIONAL |
 
 ---
 
