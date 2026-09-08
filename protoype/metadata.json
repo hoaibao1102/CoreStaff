@@ -1,0 +1,6 @@
+{
+  "name": "TVS TimeKeeping Wireframe & UX Prototype",
+  "description": "Bộ wireframe hoàn chỉnh & prototype tương tác module Chấm công TVS TimeKeeping cho ERP doanh nghiệp (Employee Mobile & Approver Desktop).",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

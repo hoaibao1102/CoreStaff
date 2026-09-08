@@ -1,0 +1,3989 @@
+<!doctype html><html lang="vi" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="TimeLock project wiki — multi-tenant attendance, approval and timesheet closing system"><title>TimeLock Project Wiki</title><style>
+:root{--bg:#f5f7fb;--panel:#fff;--panel2:#f8fafc;--text:#102039;--muted:#65758b;--line:#dbe3ee;--brand:#174ea6;--brand2:#0b2f66;--accent:#0ea5a8;--code:#0b1424;--codeText:#dce8f8;--shadow:0 12px 35px rgba(15,35,65,.09);--radius:18px;--header:64px;--side:310px}
+html[data-theme="dark"]{--bg:#0b1320;--panel:#111d2d;--panel2:#162337;--text:#e8eef7;--muted:#98a9bf;--line:#273950;--brand:#68a5ff;--brand2:#0d2d58;--accent:#4bd4cf;--code:#07101d;--codeText:#dce8f8;--shadow:0 12px 35px rgba(0,0,0,.28)}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;line-height:1.65}.topbar{height:var(--header);position:fixed;inset:0 0 auto 0;z-index:60;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:15px}.brand{display:flex;align-items:center;gap:11px;min-width:270px}.logo{width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#1f6de0,#0b2f66);color:#fff;display:grid;place-items:center;font-weight:900;box-shadow:0 7px 18px rgba(23,78,166,.28)}.brand strong{font-size:15px}.brand small{display:block;color:var(--muted);font-size:11px}.search{position:relative;max-width:680px;flex:1}.search input{width:100%;height:42px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:12px;padding:0 74px 0 40px;outline:none}.search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 15%,transparent)}.search-icon{position:absolute;left:13px;top:9px;color:var(--muted)}.shortcut{position:absolute;right:10px;top:10px;font-size:11px;color:var(--muted);border:1px solid var(--line);padding:1px 7px;border-radius:6px}.icon-btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:11px;height:40px;min-width:40px;padding:0 12px;cursor:pointer}.menu-btn{display:none}.sidebar{position:fixed;top:var(--header);bottom:0;left:0;width:var(--side);background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:20px 15px 30px;z-index:50}.sidebar-note{padding:14px;border:1px solid color-mix(in srgb,var(--brand) 25%,var(--line));background:color-mix(in srgb,var(--brand) 7%,var(--panel));border-radius:14px;margin-bottom:16px}.sidebar-note strong{display:block;font-size:12px;color:var(--brand)}.sidebar-note span{font-size:11px;color:var(--muted)}.nav-group{margin:9px 0}.nav-group-title{width:100%;display:flex;justify-content:space-between;border:0;background:transparent;color:var(--text);font-weight:800;text-align:left;padding:9px;cursor:pointer}.nav-group-links{display:grid}.nav-group.collapsed .nav-group-links{display:none}.nav-link{display:block;color:var(--muted);text-decoration:none;font-size:12px;padding:7px 10px 7px 14px;border-left:2px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-link:hover,.nav-link.active{color:var(--brand);background:color-mix(in srgb,var(--brand) 7%,transparent);border-left-color:var(--brand)}.main{margin-left:var(--side);padding:calc(var(--header) + 28px) 28px 70px}.content{max-width:1120px;margin:auto}.hero{background:linear-gradient(135deg,#071c3b 0%,#0e438a 60%,#087b82 130%);color:#fff;border-radius:26px;padding:38px;box-shadow:var(--shadow);overflow:hidden;position:relative}.hero:after{content:"";position:absolute;width:330px;height:330px;border-radius:50%;right:-80px;top:-130px;background:rgba(255,255,255,.08)}.hero .tag{font-size:11px;font-weight:800;letter-spacing:.12em;color:#99f6e4}.hero h1{font-size:clamp(30px,5vw,54px);line-height:1.06;margin:9px 0 14px;letter-spacing:-.045em}.hero p{max-width:760px;color:#d4e4fb;margin:0}.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.hero-actions a{padding:9px 14px;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;background:#fff;color:#123b73}.hero-actions a.secondary{background:rgba(255,255,255,.11);color:#fff;border:1px solid rgba(255,255,255,.2)}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:var(--shadow)}.stat b{display:block;font-size:24px;color:var(--brand)}.stat span{font-size:12px;color:var(--muted)}.overview-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.overview-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px}.overview-card h3{margin-top:0}.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.role{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:11px}.role b{font-size:12px}.role span{display:block;color:var(--muted);font-size:11px}.flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center}.flow span{background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;font-size:11px}.flow i{color:var(--accent)}.doc-article{margin-top:34px}.doc-header{display:flex;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:var(--shadow)}.doc-header h1{margin:0;font-size:28px}.doc-header p{margin:2px 0;color:var(--muted)}.doc-icon{width:58px;height:58px;border-radius:16px;background:var(--brand2);color:#fff;display:grid;place-items:center;font-weight:900}.eyebrow,.section-kicker{font-size:10px!important;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--brand)!important}.doc-intro,.wiki-section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px;margin-top:14px;box-shadow:0 5px 20px rgba(15,35,65,.04)}.wiki-section h2{font-size:25px;line-height:1.25;margin:4px 0 20px;padding-bottom:13px;border-bottom:1px solid var(--line)}.section-body h3{margin-top:27px;color:var(--brand)}.section-body h4{margin-top:20px}.section-body a{color:var(--brand)}.section-body code:not(pre code code){background:color-mix(in srgb,var(--brand) 9%,var(--panel2));border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-size:.88em}.em}.section-body pre{background:var(--code);color:var(--codeText);padding:18px;border-radius:14px;overflow:auto;font-size:12px;line-height:1.55;position:relative}.section-body pre[data-lang]:before{content:attr(data-lang);position:absolute;right:10px;top:7px;font-size:9px;color:#7f96b2;text-transform:uppercase}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px;margin:16px 0}table{width:100%;border-collapse:collapse;min-width:600px;font-size:12px}th{background:var(--panel2);text-align:left;color:var(--text);font-weight:800}th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}.callout{border-left:4px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel2));padding:12px 16px;margin:16px 0;border-radius:0 11px 11px 0}.to-top{display:inline-block;margin-top:16px;color:var(--muted);font-size:11px;text-decoration:none}.search-empty{display:none;text-align:center;padding:50px;background:var(--panel);border:1px solid var(--line);border-radius:18px;margin-top:20px}.searching .searchable{display:none}.searching .searchable.match{display:block}.searching .doc-article{display:contents}.searching .doc-intro{display:none}.searching .wiki-section.match{margin-top:12px}.highlight{background:#fde68a;color:#422006;border-radius:3px;padding:0 1px}.source-warning{border-left:4px solid #f59e0b;background:color-mix(in srgb,#f59e0b 9%,var(--panel));padding:13px 15px;border-radius:10px;margin:16px 0;font-size:12px}.footer{text-align:center;color:var(--muted);font-size:11px;padding:35px}.overlay{display:none}
+@media(max-width:980px){.stat-grid{grid-template-columns:repeat(2,1fr)}.overview-grid{grid-template-columns:1fr}.brand{min-width:auto}.brand small{display:none}.sidebar{transform:translateX(-102%);transition:.2s}.sidebar.open{transform:translateX(0);box-shadow:20px 0 50px rgba(0,0,0,.25)}.overlay.show{display:block;position:fixed;inset:var(--header) 0 0;background:rgba(1,8,20,.45);z-index:45}.main{margin-left:0}.menu-btn{display:inline-block}}
+@media(max-width:620px){:root{--header:58px}.topbar{padding:0 10px;gap:8px}.logo{width:36px;height:36px}.brand strong{font-size:13px}.search input{padding-right:12px}.shortcut,.theme-text{display:none}.main{padding:calc(var(--header) + 14px) 10px 45px}.hero{padding:26px 20px;border-radius:19px}.stat-grid{grid-template-columns:1fr 1fr;gap:8px}.stat{padding:13px}.stat b{font-size:20px}.doc-header,.doc-intro,.wiki-section{padding:18px;border-radius:15px}.doc-header h1{font-size:21px}.doc-icon{width:45px;height:45px}.wiki-section h2{font-size:21px}.role-grid{grid-template-columns:1fr}table{font-size:11px}.sidebar{width:min(88vw,330px)}}
+@media print{.topbar,.sidebar,.to-top,.hero-actions{display:none!important}.main{margin:0;padding:0}.wiki-section,.doc-header,.doc-intro{box-shadow:none;break-inside:avoid}.hero{background:#123b73!important;-webkit-print-color-adjust:exact}.doc-article{page-break-before:always}}
+</style></head><body>
+<header class="topbar"><button id="menuBtn" class="icon-btn menu-btn" aria-label="Mở menu">☰</button><div class="brand"><div class="logo">TL</div><div><strong>TimeLock Wiki</strong><small>SWP391 · Multi-tenant Attendance Platform</small></div></div><label class="search"><span class="search-icon">⌕</span><input id="search" type="search" placeholder="Tìm toàn bộ tài liệu..." aria-label="Tìm kiếm wiki"><span class="shortcut">Ctrl K</span></label><button id="themeBtn" class="icon-btn" title="Đổi giao diện">◐ <span class="theme-text">Theme</span></button></header>
+<div id="overlay" class="overlay"></div><aside id="sidebar" class="sidebar"><div class="sidebar-note"><strong id="resultCount">Toàn bộ wiki</strong><span>2 nguồn · SRS v3.0 là baseline chính thức</span></div><a class="nav-link" href="#overview"><span>⌂ Tổng quan dự án</span></a><div class="nav-group" data-doc="srs"><button class="nav-group-title" aria-expanded="true"><span>SRS TimeLock v3.0</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#srs-0-thong-tin-tai-lieu" data-target="srs-0-thong-tin-tai-lieu"><span>0. Thông tin tài liệu</span></a><a class="nav-link" href="#srs-1-gioi-thieu" data-target="srs-1-gioi-thieu"><span>1. Giới thiệu</span></a><a class="nav-link" href="#srs-2-pham-vi-he-thong" data-target="srs-2-pham-vi-he-thong"><span>2. Phạm vi hệ thống</span></a><a class="nav-link" href="#srs-3-actors-va-phan-quyen" data-target="srs-3-actors-va-phan-quyen"><span>3. Actors và phân quyền</span></a><a class="nav-link" href="#srs-4-authentication-va-quan-ly-phien" data-target="srs-4-authentication-va-quan-ly-phien"><span>4. Authentication và quản lý phiên</span></a><a class="nav-link" href="#srs-5-mo-hinh-cham-cong" data-target="srs-5-mo-hinh-cham-cong"><span>5. Mô hình chấm công</span></a><a class="nav-link" href="#srs-6-ca-lam-viec-va-ngay-cong" data-target="srs-6-ca-lam-viec-va-ngay-cong"><span>6. Ca làm việc và ngày công</span></a><a class="nav-link" href="#srs-7-state-machine" data-target="srs-7-state-machine"><span>7. State machine</span></a><a class="nav-link" href="#srs-8-yeu-cau-chuc-nang-authentication" data-target="srs-8-yeu-cau-chuc-nang-authentication"><span>8. Yêu cầu chức năng — Authentication</span></a><a class="nav-link" href="#srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration" data-target="srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration"><span>9. Yêu cầu chức năng — System Admin, Organization và HR configuration</span></a><a class="nav-link" href="#srs-10-yeu-cau-chuc-nang-employee" data-target="srs-10-yeu-cau-chuc-nang-employee"><span>10. Yêu cầu chức năng — Employee</span></a><a class="nav-link" href="#srs-11-yeu-cau-chuc-nang-department-manager" data-target="srs-11-yeu-cau-chuc-nang-department-manager"><span>11. Yêu cầu chức năng — Department Manager</span></a><a class="nav-link" href="#srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong" data-target="srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong"><span>11A. Yêu cầu chức năng — HR và chốt kỳ công</span></a><a class="nav-link" href="#srs-12-business-rules" data-target="srs-12-business-rules"><span>12. Business rules</span></a><a class="nav-link" href="#srs-13-use-cases-chinh" data-target="srs-13-use-cases-chinh"><span>13. Use cases chính</span></a><a class="nav-link" href="#srs-14-danh-sach-man-hinh-va-route" data-target="srs-14-danh-sach-man-hinh-va-route"><span>14. Danh sách màn hình và route</span></a><a class="nav-link" href="#srs-15-data-model-logic" data-target="srs-15-data-model-logic"><span>15. Data model logic</span></a><a class="nav-link" href="#srs-16-api-requirements" data-target="srs-16-api-requirements"><span>16. API requirements</span></a><a class="nav-link" href="#srs-17-error-codes" data-target="srs-17-error-codes"><span>17. Error codes</span></a><a class="nav-link" href="#srs-18-transaction-concurrency-va-idempotency" data-target="srs-18-transaction-concurrency-va-idempotency"><span>18. Transaction, concurrency và idempotency</span></a><a class="nav-link" href="#srs-19-yeu-cau-phi-chuc-nang" data-target="srs-19-yeu-cau-phi-chuc-nang"><span>19. Yêu cầu phi chức năng</span></a><a class="nav-link" href="#srs-20-ui-states-bat-buoc" data-target="srs-20-ui-states-bat-buoc"><span>20. UI states bắt buộc</span></a><a class="nav-link" href="#srs-21-acceptance-criteria-tong-hop" data-target="srs-21-acceptance-criteria-tong-hop"><span>21. Acceptance criteria tổng hợp</span></a><a class="nav-link" href="#srs-22-test-strategy" data-target="srs-22-test-strategy"><span>22. Test strategy</span></a><a class="nav-link" href="#srs-23-kien-truc-logic-e-xuat" data-target="srs-23-kien-truc-logic-e-xuat"><span>23. Kiến trúc logic đề xuất</span></a><a class="nav-link" href="#srs-24-seed-data-va-demo-mode" data-target="srs-24-seed-data-va-demo-mode"><span>24. Seed data và demo mode</span></a><a class="nav-link" href="#srs-25-ke-hoach-trien-khai-theo-giai-oan" data-target="srs-25-ke-hoach-trien-khai-theo-giai-oan"><span>25. Kế hoạch triển khai theo giai đoạn</span></a><a class="nav-link" href="#srs-26-definition-of-done-cho-mvp" data-target="srs-26-definition-of-done-cho-mvp"><span>26. Definition of Done cho MVP</span></a><a class="nav-link" href="#srs-27-open-questions-va-gia-tri-mac-inh" data-target="srs-27-open-questions-va-gia-tri-mac-inh"><span>27. Open questions và giá trị mặc định</span></a><a class="nav-link" href="#srs-28-thuat-ngu" data-target="srs-28-thuat-ngu"><span>28. Thuật ngữ</span></a><a class="nav-link" href="#srs-29-ket-luan" data-target="srs-29-ket-luan"><span>29. Kết luận</span></a></div></div><div class="nav-group" data-doc="proposal"><button class="nav-group-title" aria-expanded="true"><span>Project Proposal</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#proposal-1-thong-tin-theo-bang-fa26-swp391" data-target="proposal-1-thong-tin-theo-bang-fa26-swp391"><span>1. Thông tin theo bảng FA26_SWP391</span></a><a class="nav-link" href="#proposal-2-project-name" data-target="proposal-2-project-name"><span>2. Project Name</span></a><a class="nav-link" href="#proposal-3-problem-statement" data-target="proposal-3-problem-statement"><span>3. Problem Statement</span></a><a class="nav-link" href="#proposal-4-project-objectives" data-target="proposal-4-project-objectives"><span>4. Project Objectives</span></a><a class="nav-link" href="#proposal-5-actors" data-target="proposal-5-actors"><span>5. Actors</span></a><a class="nav-link" href="#proposal-6-main-features" data-target="proposal-6-main-features"><span>6. Main Features</span></a><a class="nav-link" href="#proposal-7-must-have-flows" data-target="proposal-7-must-have-flows"><span>7. Must-have Flows</span></a><a class="nav-link" href="#proposal-8-nice-to-have-flows" data-target="proposal-8-nice-to-have-flows"><span>8. Nice-to-have Flows</span></a><a class="nav-link" href="#proposal-9-core-business-rules" data-target="proposal-9-core-business-rules"><span>9. Core Business Rules</span></a><a class="nav-link" href="#proposal-10-main-entities" data-target="proposal-10-main-entities"><span>10. Main Entities</span></a><a class="nav-link" href="#proposal-11-suggested-technology-stack" data-target="proposal-11-suggested-technology-stack"><span>11. Suggested Technology Stack</span></a><a class="nav-link" href="#proposal-12-project-scope-boundaries" data-target="proposal-12-project-scope-boundaries"><span>12. Project Scope Boundaries</span></a><a class="nav-link" href="#proposal-13-demo-accounts-and-mock-scenarios" data-target="proposal-13-demo-accounts-and-mock-scenarios"><span>13. Demo Accounts and Mock Scenarios</span></a><a class="nav-link" href="#proposal-14-hero-demo-flow" data-target="proposal-14-hero-demo-flow"><span>14. Hero Demo Flow</span></a><a class="nav-link" href="#proposal-15-expected-outcomes" data-target="proposal-15-expected-outcomes"><span>15. Expected Outcomes</span></a><a class="nav-link" href="#proposal-16-short-version-for-spreadsheet-cell" data-target="proposal-16-short-version-for-spreadsheet-cell"><span>16. Short Version for Spreadsheet Cell</span></a></div></div></aside>
+<main id="main" class="main"><div class="content"><section id="overview"><div class="hero"><div class="tag">TIMELOCK · PROJECT KNOWLEDGE BASE</div><h1>Chấm công. Duyệt công.<br>Chốt công.</h1><p>Nền tảng web multi-tenant quản lý trọn vòng đời ngày công bằng Network, GPS và Selfie; cô lập dữ liệu giữa các tổ chức; hỗ trợ điều chỉnh, phê duyệt và khóa kỳ công có thể kiểm chứng.</p><div class="hero-actions"><a href="#doc-srs">Đọc SRS v3.0</a><a class="secondary" href="#doc-proposal">Xem Project Proposal</a><a class="secondary" href="#srs-14-danh-sach-man-hinh-va-route">Routes</a><a class="secondary" href="#srs-15-data-model-logic">Data model</a></div></div>
+<div class="stat-grid"><div class="stat"><b>4</b><span>Vai trò chính thức</span></div><div class="stat"><b>2+</b><span>Organization độc lập</span></div><div class="stat"><b>3</b><span>Network · GPS · Selfie</span></div><div class="stat"><b>v3.0</b><span>Multi-tenant baseline</span></div></div>
+<div class="overview-grid"><div class="overview-card"><h3>Vai trò và phạm vi</h3><div class="role-grid"><div class="role"><b>SYSTEM_ADMIN</b><span>Organization, HR đầu tiên, audit nền tảng</span></div><div class="role"><b>HR</b><span>Cơ cấu tenant, điều chỉnh, chốt/mở kỳ</span></div><div class="role"><b>DEPARTMENT_MANAGER</b><span>Duyệt và xác nhận phòng ban</span></div><div class="role"><b>EMPLOYEE</b><span>Chấm công và dữ liệu cá nhân</span></div></div></div><div class="overview-card"><h3>Luồng nghiệp vụ</h3><div class="flow"><span>Organization</span><i>→</i><span>HR configuration</span><i>→</i><span>Attendance</span><i>→</i><span>Approval</span><i>→</i><span>Adjustment</span><i>→</i><span>Closing</span><i>→</i><span>Export</span></div><div class="source-warning"><strong>Quy tắc nguồn:</strong> SRS v3.0 là baseline hiện hành. Project Proposal được giữ nguyên đầy đủ như nguồn đề xuất ban đầu; nếu có khác biệt, ưu tiên SRS.</div></div></div></section>
+<div id="empty" class="search-empty"><h3>Không tìm thấy nội dung</h3><p>Thử từ khóa khác hoặc nhấn Esc để xóa tìm kiếm.</p></div><article id="doc-srs" class="doc-article"><header class="doc-header searchable" data-title="SRS TimeLock v3.0"><div class="doc-icon">SRS</div><div><p class="eyebrow">Nguồn: SRS_TIMELOCK.md</p><h1>SRS TimeLock v3.0</h1><p>Tài liệu yêu cầu phần mềm chính thức</p></div></header><div class="doc-intro"><h1>SRS — TIMELOCK</h1>
+<blockquote class="callout">
+<p><strong>Software Requirements Specification</strong><br />
+<strong>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong><br />
+Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ quy trình từ cấu hình nhân sự, chấm công Network/GPS/Selfie, phê duyệt ngoại lệ đến rà soát và khóa kỳ công hằng tháng.</p>
+</blockquote>
+<hr /></div><section id="srs-0-thong-tin-tai-lieu" class="wiki-section searchable" data-title="0. Thông tin tài liệu" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Thông tin tài liệu</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hạng mục</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tên hệ thống</td>
+<td><strong>TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System</strong></td>
+</tr>
+<tr>
+<td>Tên tiếng Việt</td>
+<td><strong>Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong></td>
+</tr>
+<tr>
+<td>Loại sản phẩm</td>
+<td>Nền tảng web multi-tenant responsive; mobile-first cho Employee, desktop-first cho Department Manager, HR và System Admin</td>
+</tr>
+<tr>
+<td>Đối tượng</td>
+<td>Dự án SWP391 — FA26; nền tảng cung cấp dịch vụ chấm công cho nhiều tổ chức độc lập</td>
+</tr>
+<tr>
+<td>Xác thực</td>
+<td>Email hoặc mã nhân viên và mật khẩu</td>
+</tr>
+<tr>
+<td>Vai trò MVP</td>
+<td><code>EMPLOYEE</code>, <code>DEPARTMENT_MANAGER</code>, <code>HR</code>, <code>SYSTEM_ADMIN</code></td>
+</tr>
+<tr>
+<td>Phiên bản SRS</td>
+<td><strong>3.0 — Multi-tenant baseline</strong></td>
+</tr>
+<tr>
+<td>Nguồn tham chiếu</td>
+<td><code>TIMELOCK_PROJECT_PROPOSAL.md</code>, prototype React trong <code>protoype/src</code> và bảng đề tài FA26_SWP391</td>
+</tr>
+<tr>
+<td>Trạng thái</td>
+<td><strong>Baseline triển khai MVP; các mục <code>【MỞ】</code> cần nhóm và giảng viên chốt</strong></td>
+</tr>
+</tbody>
+</table></div>
+<h3>0.1. Ký hiệu</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Ký hiệu</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>【MVP】</strong></td>
+<td>Bắt buộc có trong phiên bản nộp môn học</td>
+</tr>
+<tr>
+<td><strong>【SHOULD】</strong></td>
+<td>Nên có nếu đủ thời gian</td>
+</tr>
+<tr>
+<td><strong>【LATER】</strong></td>
+<td>Để giai đoạn sau, không ảnh hưởng nghiệm thu MVP</td>
+</tr>
+<tr>
+<td><strong>【MỞ】</strong></td>
+<td>Chưa chốt; tài liệu đưa ra giá trị mặc định để có thể bắt đầu làm</td>
+</tr>
+</tbody>
+</table></div>
+<h3>0.2. Các quyết định nền tảng</h3>
+<ol>
+<li>TimeLock là nền tảng <strong>multi-tenant</strong> cung cấp dịch vụ chấm công cho nhiều <code>Organization</code>; dữ liệu giữa các tổ chức phải được cô lập tuyệt đối.</li>
+<li>MVP có bốn vai trò: <code>SYSTEM_ADMIN</code>, <code>HR</code>, <code>DEPARTMENT_MANAGER</code>, <code>EMPLOYEE</code>.</li>
+<li><code>SYSTEM_ADMIN</code> quản trị nền tảng, tạo/khóa Organization và cấp tài khoản HR đầu tiên; không xử lý hoặc chốt công thay khách hàng.</li>
+<li><code>HR</code> quản trị cơ cấu nhân sự trong Organization, rà soát, chốt/mở lại kỳ và xuất bảng tổng hợp.</li>
+<li><code>DEPARTMENT_MANAGER</code> kế thừa quyền chấm công cá nhân, xử lý ngoại lệ và xác nhận công của phòng ban được giao.</li>
+<li><code>EMPLOYEE</code> chấm công và chỉ truy cập dữ liệu cá nhân.</li>
+<li>Người dùng đăng nhập bằng email hoặc mã nhân viên + mật khẩu; MVP không cho đăng ký công khai.</li>
+<li>Employee chọn <code>IN_OFFICE</code> hoặc <code>OUT_OFFICE</code>; bằng chứng thực tế là <code>NETWORK</code>, <code>GPS</code> hoặc <code>SELFIE</code>.</li>
+<li>Điều chỉnh công và phân loại ngày nghỉ/vắng tối thiểu thuộc MVP để HR có thể làm sạch dữ liệu trước khi chốt.</li>
+<li>TimeLock chỉ tạo bảng công; không tính lương, thuế hoặc bảo hiểm trong MVP.</li>
+<li>Backend là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công.</li>
+<li>Prototype dùng mock data để trình diễn; dữ liệu mock không phải kiến trúc production.</li>
+</ol>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-1-gioi-thieu" class="wiki-section searchable" data-title="1. Giới thiệu" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Giới thiệu</li>
+</ol></h2><div class="section-body"><h3>1.1. Bối cảnh</h3>
+<p>Nhiều tổ chức cần cùng một nền tảng chấm công nhưng phải sở hữu dữ liệu, cơ cấu phòng ban, workplace, ca làm và kỳ công riêng. Bảng tính hoặc hệ thống chỉ ghi nhận giờ vào/ra không đủ để xác minh vị trí, xử lý ngoại lệ và khóa dữ liệu cuối tháng.</p>
+<p>TimeLock vận hành theo mô hình:</p>
+<pre data-lang="text"><code>System Admin tạo Organization và tài khoản HR đầu tiên
+→ HR cấu hình Department, Workplace, Shift, Calendar và người dùng trong tenant
+→ Employee/Department Manager/HR chấm công cá nhân bằng Network, GPS hoặc Selfie
+→ Department Manager xử lý ngoại lệ của phòng ban và xác nhận bảng công
+→ HR xử lý adjustment, phân loại nghỉ/vắng và rà soát blocker toàn Organization
+→ HR chốt, khóa kỳ và xuất snapshot tổng hợp
+</code></pre>
+<p>Mọi request nghiệp vụ phải được ràng buộc bởi <code>organizationId</code> lấy từ session. Tenant A không thể đọc hoặc mutation dữ liệu Tenant B dù biết ID tài nguyên.</p>
+<h3>1.2. Mục tiêu sản phẩm</h3>
+<ul>
+<li>Xây dựng TimeLock multi-tenant với authentication, authorization, tenant isolation và phân quyền theo resource.</li>
+<li>Cho phép Employee chấm công bằng web responsive trên điện thoại hoặc máy tính.</li>
+<li>Hỗ trợ làm tại văn phòng và ngoài văn phòng bằng Network, GPS hoặc Selfie.</li>
+<li>Cho phép Department Manager xử lý ngoại lệ và xác nhận dữ liệu của phòng ban được giao.</li>
+<li>Cho phép HR quản lý cơ cấu tenant, lịch công, adjustment, chốt/mở lại kỳ và export.</li>
+<li>Cho phép System Admin quản lý Organization, trạng thái dịch vụ, HR đầu tiên và audit nền tảng.</li>
+<li>Lưu thời gian server, evidence, snapshot và audit để bảo đảm dữ liệu có thể truy vết.</li>
+<li>Chứng minh cô lập dữ liệu giữa ít nhất hai Organization trong demo và kiểm thử.</li>
+</ul>
+<h3>1.3. Mục tiêu không thuộc MVP</h3>
+<ul>
+<li>Tính lương, thuế, bảo hiểm hoặc xuất bảng lương.</li>
+<li>Quản lý nghỉ phép hoàn chỉnh.</li>
+<li>Nhận diện khuôn mặt hoặc liveness detection bằng AI.</li>
+<li>Theo dõi vị trí liên tục ở nền.</li>
+<li>Chấm công offline rồi đồng bộ sau.</li>
+<li>Đăng nhập mạng xã hội hoặc OAuth.</li>
+<li>Subscription plan, billing, cổng thanh toán và custom domain cho SaaS.</li>
+<li>Ứng dụng native iOS/Android.</li>
+<li>Tích hợp máy chấm công vân tay.</li>
+</ul>
+<h3>1.4. Tiêu chí thành công của đồ án</h3>
+<p>MVP được xem là thành công khi có thể demo end-to-end:</p>
+<ol>
+<li>System Admin tạo hai Organization và cấp tài khoản HR đầu tiên cho mỗi tenant.</li>
+<li>HR tạo Department, Workplace, Shift, Calendar, Department Manager và Employee trong Organization của mình.</li>
+<li>Employee check-in/out đúng thứ tự bằng GPS/Network; nhân viên ngoài văn phòng gửi Selfie + GPS.</li>
+<li>Department Manager chỉ xem và xử lý ngoại lệ của phòng ban được giao.</li>
+<li>Employee tạo AdjustmentRequest cho ngày công sai/thiếu; thay đổi được áp dụng có audit before/after.</li>
+<li>Hệ thống phân biệt ngày làm việc, nghỉ tuần, ngày lễ, nghỉ có phép/không lương, vắng và incomplete.</li>
+<li>Department Manager xác nhận bảng công phòng ban; HR xem blocker, chốt kỳ và export snapshot.</li>
+<li>HR mở lại kỳ khi có lý do; kỳ CLOSED chặn mutation trực tiếp.</li>
+<li>HR-A/Manager-A/Employee-A không thể đọc dữ liệu Organization B dù thay ID hoặc query.</li>
+<li>Dữ liệu tồn tại sau refresh/khởi động lại và mọi thao tác quan trọng có audit.</li>
+</ol>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-2-pham-vi-he-thong" class="wiki-section searchable" data-title="2. Phạm vi hệ thống" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Phạm vi hệ thống</li>
+</ol></h2><div class="section-body"><h3>2.1. Trong phạm vi MVP</h3>
+<h4>Nền tảng và tenant</h4>
+<ul>
+<li>System Admin tạo, khóa/mở và giám sát Organization.</li>
+<li>System Admin cấp tài khoản HR đầu tiên; không chốt hoặc duyệt công thay tenant.</li>
+<li>Mọi tài nguyên nghiệp vụ được cô lập bằng <code>organizationId</code> lấy từ session.</li>
+<li>Seed tối thiểu hai Organization để chứng minh tenant isolation.</li>
+</ul>
+<h4>Tài khoản và cơ cấu tổ chức</h4>
+<ul>
+<li>Đăng nhập/đăng xuất, hồ sơ, đổi/reset mật khẩu và RBAC.</li>
+<li>HR quản lý Department, Employee và Department Manager trong tenant.</li>
+<li>HR quản lý Workplace, Network/CIDR, Shift và assignment có hiệu lực theo thời gian.</li>
+<li>Giữ snapshot Organization/Department/Shift/Workplace trên dữ liệu lịch sử.</li>
+</ul>
+<h4>Lịch công tối thiểu</h4>
+<ul>
+<li>Cấu hình ngày làm việc trong tuần và ngày lễ của Organization.</li>
+<li>HR ghi nhận nghỉ có phép hoặc nghỉ không lương ở mức tối thiểu.</li>
+<li>Hệ thống phân loại <code>WORKING_DAY</code>, <code>WEEKLY_OFF</code>, <code>PUBLIC_HOLIDAY</code>, <code>PAID_LEAVE</code>, <code>UNPAID_LEAVE</code>, <code>ABSENT</code>, <code>INCOMPLETE</code>.</li>
+</ul>
+<h4>Employee</h4>
+<ul>
+<li>Check-in/out bằng Network, GPS hoặc Selfie + GPS.</li>
+<li>Xem lịch sử, chi tiết, trạng thái phê duyệt và tổng hợp cá nhân.</li>
+<li>Gửi giải trình và tạo AdjustmentRequest cho ngày sai/thiếu.</li>
+</ul>
+<h4>Department Manager</h4>
+<ul>
+<li>Có quyền Employee cho dữ liệu cá nhân nếu có assignment.</li>
+<li>Xử lý approval/adjustment của các Department được giao.</li>
+<li>Xem evidence/audit đúng tenant và department scope.</li>
+<li>Xác nhận bảng công phòng ban khi không còn blocker.</li>
+</ul>
+<h4>HR và chốt kỳ công</h4>
+<ul>
+<li>Rà soát toàn Organization, xử lý blocker và áp dụng adjustment đã duyệt.</li>
+<li>Tạo, chốt/mở lại kỳ công theo tháng; mở lại bắt buộc có lý do và audit.</li>
+<li>Tạo <code>TimesheetSummary</code> snapshot và export CSV bắt buộc; XLSX là SHOULD.</li>
+<li>Thay đổi dữ liệu làm tăng period version và vô hiệu xác nhận phòng ban cũ.</li>
+</ul>
+<h4>Hệ thống</h4>
+<ul>
+<li>Backend cung cấp thời gian chính thức, transaction, idempotency và audit.</li>
+<li>Evidence là private resource; kiểm tra tenant/resource authorization khi truy cập.</li>
+<li>Kỳ CLOSED chặn mutation trực tiếp; mọi query từ chối truy cập chéo tenant.</li>
+</ul>
+<h3>2.2. SHOULD</h3>
+<ul>
+<li>Quên mật khẩu bằng email có token hết hạn.</li>
+<li>Dashboard nâng cao theo tenant, phòng ban và kỳ.</li>
+<li>Notification trong ứng dụng; email/push notification.</li>
+<li>Refresh token/session rotation.</li>
+<li>Export XLSX và bản nháp có watermark <code>DRAFT</code>.</li>
+<li>Một Department Manager tạm thời phụ trách nhiều phòng ban.</li>
+</ul>
+<h3>2.3. LATER</h3>
+<ul>
+<li>Subscription plan, billing, cổng thanh toán và custom domain.</li>
+<li>Module nghỉ phép đầy đủ có quota/accrual/quy trình phê duyệt riêng.</li>
+<li>Nhiều ca trong ngày hoặc ca qua đêm.</li>
+<li>Nhận diện khuôn mặt/liveness.</li>
+<li>Báo cáo nâng cao và payroll.</li>
+<li>Chấm công offline rồi đồng bộ.</li>
+<li>Ứng dụng native và tích hợp máy chấm công.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-3-actors-va-phan-quyen" class="wiki-section searchable" data-title="3. Actors và phân quyền" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Actors và phân quyền</li>
+</ol></h2><div class="section-body"><h3>3.1. Danh sách vai trò</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Phạm vi</th>
+<th>Quyền chính</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SYSTEM_ADMIN</code></td>
+<td>Toàn nền tảng</td>
+<td>Quản lý Organization, trạng thái dịch vụ, HR đầu tiên và audit kỹ thuật; không xử lý công</td>
+</tr>
+<tr>
+<td><code>HR</code></td>
+<td>Một Organization</td>
+<td>Quản lý cơ cấu/nhân sự, lịch công, adjustment, rà soát, chốt/mở lại và export</td>
+</tr>
+<tr>
+<td><code>DEPARTMENT_MANAGER</code></td>
+<td>Các Department được giao trong một Organization</td>
+<td>Có quyền chấm công cá nhân; duyệt ngoại lệ/adjustment và xác nhận bảng công</td>
+</tr>
+<tr>
+<td><code>EMPLOYEE</code></td>
+<td>Bản thân trong một Organization</td>
+<td>Chấm công, xem dữ liệu cá nhân, giải trình và yêu cầu điều chỉnh</td>
+</tr>
+</tbody>
+</table></div>
+<h3>3.2. Ma trận quyền</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chức năng</th>
+<th style="text-align: center;">Employee</th>
+<th style="text-align: center;">Department Manager</th>
+<th style="text-align: center;">HR</th>
+<th style="text-align: center;">System Admin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chấm công/xem công cá nhân</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ nếu có assignment</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Xem công người khác</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Department được giao</td>
+<td style="text-align: center;">Toàn Organization</td>
+<td style="text-align: center;">❌ mặc định</td>
+</tr>
+<tr>
+<td>Xem evidence</td>
+<td style="text-align: center;">Của mình</td>
+<td style="text-align: center;">Request đúng scope</td>
+<td style="text-align: center;">Khi xử lý nghiệp vụ</td>
+<td style="text-align: center;">Chỉ support có audit</td>
+</tr>
+<tr>
+<td>Approve/reject/clarify</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Đúng department</td>
+<td style="text-align: center;">Override có lý do</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Duyệt adjustment</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Bước quản lý</td>
+<td style="text-align: center;">Áp dụng/quyết định cuối</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Xác nhận bảng công phòng ban</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">Theo dõi/override có lý do</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Quản lý Department/Employee/Shift</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Chỉ xem</td>
+<td style="text-align: center;">✅ trong tenant</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Quản lý Organization</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Xem tenant mình</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td>Tạo tài khoản HR đầu tiên</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td>Rà soát/chốt/mở lại kỳ</td>
+<td style="text-align: center;">Xem cá nhân</td>
+<td style="text-align: center;">Xem phòng ban</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Export chính thức</td>
+<td style="text-align: center;">Cá nhân</td>
+<td style="text-align: center;">Phòng ban</td>
+<td style="text-align: center;">Toàn Organization</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Xem audit</td>
+<td style="text-align: center;">Cá nhân đã lọc</td>
+<td style="text-align: center;">Department scope</td>
+<td style="text-align: center;">Organization scope</td>
+<td style="text-align: center;">Audit nền tảng</td>
+</tr>
+</tbody>
+</table></div>
+<h3>3.3. Nguyên tắc phân quyền và tenant isolation</h3>
+<ul>
+<li>Backend kiểm tra role, <code>organizationId</code> và resource scope ở từng API.</li>
+<li><code>organizationId</code>, <code>employeeId</code> và role tin cậy lấy từ session/token, không lấy từ payload.</li>
+<li>Mọi query nghiệp vụ ràng buộc <code>resource.organizationId = currentUser.organizationId</code> trước khi kiểm tra quyền chi tiết.</li>
+<li>Department Manager chỉ xử lý tài nguyên có <code>departmentId</code> thuộc <code>managedDepartmentIds</code> tại thời điểm hiệu lực.</li>
+<li>HR chỉ thao tác trong Organization của mình; HR không thể chọn <code>organizationId</code> tùy ý.</li>
+<li>System Admin thao tác Organization ở namespace nền tảng; truy cập dữ liệu/evidence tenant chỉ qua support có lý do và audit.</li>
+<li>Chỉ HR chốt/mở lại kỳ; System Admin không quyết định nghiệp vụ công.</li>
+<li>Tài nguyên ngoài tenant trả <code>404 RESOURCE_NOT_FOUND</code> để giảm rò rỉ định danh.</li>
+<li>Unique constraint, object-storage key và cache key phải bao gồm <code>organizationId</code>.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-4-authentication-va-quan-ly-phien" class="wiki-section searchable" data-title="4. Authentication và quản lý phiên" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Authentication và quản lý phiên</li>
+</ol></h2><div class="section-body"><h3>4.1. Chính sách tạo tài khoản</h3>
+<p><strong>MVP: System Admin cấp HR đầu tiên; HR cấp tài khoản nội bộ tenant.</strong></p>
+<pre data-lang="text"><code>System Admin tạo Organization + HR đầu tiên
+→ HR tạo Department Manager/Employee trong tenant
+→ hệ thống sinh user ACTIVE với mật khẩu tạm thời
+→ user đăng nhập lần đầu và đổi mật khẩu
+→ session gắn userId + organizationId + role
+</code></pre>
+<p>Lý do không mở đăng ký công khai trong MVP:</p>
+<ul>
+<li>Đây là hệ thống dùng nội bộ trong từng Organization.</li>
+<li>Mọi user nghiệp vụ phải thuộc một Organization; Employee cần department/workplace/shift/manager.</li>
+<li>Tránh tăng phạm vi xác minh email, chống spam và quy trình phê duyệt đăng ký.</li>
+</ul>
+<h3>4.2. Định danh đăng nhập</h3>
+<p>User có thể đăng nhập bằng một trong hai giá trị:</p>
+<ul>
+<li><code>email</code>; hoặc</li>
+<li><code>employeeCode</code>.</li>
+</ul>
+<p>Email và employeeCode được so sánh không phân biệt hoa thường và unique trong phạm vi Organization: <code>UNIQUE(organizationId, email)</code> và <code>UNIQUE(organizationId, employeeCode)</code>. Identifier trùng giữa hai tenant được phép; cơ chế login phải xác định tenant bằng organization code/domain hoặc bước chọn Organization.</p>
+<h3>4.3. Luồng đăng nhập</h3>
+<pre data-lang="mermaid"><code>sequenceDiagram
+    actor U as User
+    participant FE as Frontend
+    participant API as Backend
+    participant DB as Database
+
+    U-&gt;&gt;FE: Nhập email/mã NV + mật khẩu
+    FE-&gt;&gt;API: POST /api/auth/login
+    API-&gt;&gt;DB: Tìm user + kiểm tra trạng thái
+    API-&gt;&gt;API: Verify password hash
+    alt Hợp lệ
+        API--&gt;&gt;FE: Access token/session + user profile
+        FE-&gt;&gt;FE: Điều hướng theo role
+    else Không hợp lệ
+        API--&gt;&gt;FE: AUTH_INVALID_CREDENTIALS
+        FE--&gt;&gt;U: Thông báo chung, không tiết lộ trường nào sai
+    end
+</code></pre>
+<h3>4.4. Yêu cầu mật khẩu</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Quy tắc</th>
+<th>Giá trị MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Độ dài tối thiểu</td>
+<td>8 ký tự</td>
+</tr>
+<tr>
+<td>Thành phần</td>
+<td>Ít nhất 1 chữ và 1 số</td>
+</tr>
+<tr>
+<td>Lưu trữ</td>
+<td>Chỉ lưu hash bằng Argon2id hoặc bcrypt; không lưu plaintext</td>
+</tr>
+<tr>
+<td>Mật khẩu tạm thời</td>
+<td>Bắt buộc đổi ở lần đăng nhập đầu</td>
+</tr>
+<tr>
+<td>So sánh</td>
+<td>Thực hiện bằng thư viện password hashing chuẩn</td>
+</tr>
+<tr>
+<td>Log</td>
+<td>Không log password hoặc request body login</td>
+</tr>
+</tbody>
+</table></div>
+<h3>4.5. Session/token</h3>
+<p>Có thể chọn một trong hai cách triển khai, nhưng MVP phải dùng nhất quán:</p>
+<p><strong>Khuyến nghị cho web:</strong> access token ngắn hạn trong cookie <code>HttpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code> và refresh/session server-side.</p>
+<p>Nếu dùng JWT Bearer token:</p>
+<ul>
+<li>Access token hết hạn trong 15–30 phút.</li>
+<li>Refresh token lưu trong HttpOnly cookie, có rotation.</li>
+<li>Frontend không lưu refresh token vào <code>localStorage</code>.</li>
+<li>Token chứa tối thiểu <code>sub</code>, <code>role</code>, <code>iat</code>, <code>exp</code>; dữ liệu hồ sơ lấy từ backend.</li>
+</ul>
+<p>Với đồ án cần giảm độ phức tạp, có thể dùng session ID trong HttpOnly cookie và bảng <code>UserSession</code> trong database.</p>
+<h3>4.6. Đăng xuất</h3>
+<ul>
+<li><code>POST /api/auth/logout</code> vô hiệu hóa session/refresh token hiện tại.</li>
+<li>Frontend xóa state/cache nhạy cảm và điều hướng về <code>/login</code>.</li>
+<li>Nút Back của trình duyệt không được hiển thị lại dữ liệu bảo vệ nếu chưa xác thực.</li>
+</ul>
+<h3>4.7. Khóa tài khoản và chống brute force</h3>
+<ul>
+<li>User có <code>status = ACTIVE | LOCKED | DISABLED</code>.</li>
+<li>Sau 5 lần đăng nhập sai liên tiếp trong 15 phút, khóa đăng nhập tạm thời 15 phút.</li>
+<li>System Admin có thể khóa/mở khóa thủ công.</li>
+<li>Thông báo login sai phải dùng nội dung chung để tránh dò tài khoản.</li>
+<li>Lưu audit cho login thành công, thất bại, logout, đổi mật khẩu và reset mật khẩu; không lưu password.</li>
+</ul>
+<h3>4.8. Đổi và đặt lại mật khẩu</h3>
+<p><strong>MVP bắt buộc:</strong></p>
+<ul>
+<li>User đổi mật khẩu bằng mật khẩu hiện tại.</li>
+<li>System Admin đặt mật khẩu tạm thời mới.</li>
+<li>Khi System Admin reset, các session cũ của user bị thu hồi.</li>
+</ul>
+<p><strong>SHOULD:</strong></p>
+<ul>
+<li>Quên mật khẩu qua token một lần, hết hạn sau 15 phút.</li>
+<li>Response luôn chung chung dù email có tồn tại hay không.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-5-mo-hinh-cham-cong" class="wiki-section searchable" data-title="5. Mô hình chấm công" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Mô hình chấm công</li>
+</ol></h2><div class="section-body"><h3>5.1. Work mode</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>WorkMode</th>
+<th>Tên hiển thị</th>
+<th>Ngữ cảnh</th>
+<th>Cách xác minh</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>IN_OFFICE</code></td>
+<td>Làm tại văn phòng</td>
+<td>User có mặt tại workplace</td>
+<td>Ưu tiên Network, sau đó GPS; có thể fallback Selfie</td>
+</tr>
+<tr>
+<td><code>OUT_OFFICE</code></td>
+<td>Làm bên ngoài</td>
+<td>Đi thị trường/công tác/remote</td>
+<td>Selfie + vị trí làm bằng chứng</td>
+</tr>
+</tbody>
+</table></div>
+<h3>5.2. Attendance method</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Dữ liệu chính</th>
+<th>Kết quả mặc định</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NETWORK</code></td>
+<td>Public IP backend quan sát được</td>
+<td>Tự động ghi nhận nếu IP hợp lệ</td>
+</tr>
+<tr>
+<td><code>GPS</code></td>
+<td>Latitude, longitude, accuracy</td>
+<td>Tự động ghi nhận nếu geofence hợp lệ</td>
+</tr>
+<tr>
+<td><code>SELFIE</code></td>
+<td>Ảnh mới + GPS + server time</td>
+<td>Ghi nhận và tạo yêu cầu <code>PENDING</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>WorkMode</code> là lựa chọn nghiệp vụ của user. <code>AttendanceMethod</code> là loại bằng chứng cuối cùng do backend xác định và lưu.</p>
+<h3>5.3. Quy tắc chọn method cho IN_OFFICE</h3>
+<pre data-lang="text"><code>Nếu request đi qua mạng được phép
+  → NETWORK
+Ngược lại nếu có GPS trong geofence và accuracy đạt
+  → GPS
+Ngược lại
+  → yêu cầu SELFIE fallback
+</code></pre>
+<p>MVP có thể triển khai fallback Selfie để bảo đảm demo trọn luồng. Nếu muốn scope nhỏ hơn, System Admin được phép tắt <code>allowSelfieFallback</code>; lúc đó hệ thống trả lỗi và không cho chấm công.</p>
+<h3>5.4. Quy tắc OUT_OFFICE</h3>
+<ul>
+<li>Bắt buộc chụp ảnh mới cho mỗi check-in/check-out.</li>
+<li>Bắt buộc lấy vị trí mới tại thời điểm thao tác.</li>
+<li>Vị trí là bằng chứng, không yêu cầu nằm trong geofence.</li>
+<li>Check-in và check-out có thể ở hai địa điểm khác nhau.</li>
+<li>Khoảng cách lớn chỉ tạo warning cho Department Manager, không tự động reject.</li>
+<li>Selfie không thực hiện nhận diện khuôn mặt trong MVP.</li>
+</ul>
+<h3>5.5. Quy tắc giữ WorkMode</h3>
+<ul>
+<li>User chọn WorkMode khi check-in.</li>
+<li><code>AttendanceDay.workMode</code> được cố định sau check-in.</li>
+<li>Check-out sử dụng WorkMode đã lưu; user không tự đổi mode giữa ngày trong MVP.</li>
+<li>System Admin có thể sửa qua chức năng adjustment ở phase sau; mọi sửa đổi phải có audit.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-6-ca-lam-viec-va-ngay-cong" class="wiki-section searchable" data-title="6. Ca làm việc và ngày công" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Ca làm việc và ngày công</li>
+</ol></h2><div class="section-body"><h3>6.1. Mô hình ca MVP</h3>
+<p>Mỗi employee được gán một ca mặc định:</p>
+<pre data-lang="text"><code>Shift
+- name
+- startTime
+- endTime
+- breakMinutes
+- gracePeriodMinutes
+- active
+</code></pre>
+<p>Giả định MVP:</p>
+<ul>
+<li>Một ngày tối đa một ca.</li>
+<li>Ca bắt đầu và kết thúc trong cùng ngày.</li>
+<li>Không hỗ trợ ca qua đêm.</li>
+<li>Không có check-in/check-out nghỉ trưa.</li>
+</ul>
+<h3>6.2. Quy tắc đi trễ/về sớm</h3>
+<p>Giá trị mặc định để triển khai:</p>
+<pre data-lang="text"><code>lateMinutes = max(0, checkInAt - (shiftStart + gracePeriod))
+earlyMinutes = max(0, shiftEnd - checkOutAt)
+workingMinutes = max(0, checkOutAt - checkInAt - breakMinutes)
+</code></pre>
+<ul>
+<li><code>gracePeriodMinutes</code> mặc định: 5 phút.</li>
+<li><code>breakMinutes</code> mặc định: 60 phút.</li>
+<li>Backend tính, frontend chỉ hiển thị.</li>
+<li>Nếu chưa check-out, <code>workingMinutes = null</code>.</li>
+<li><code>0</code> nghĩa là đã tính và kết quả bằng 0.</li>
+</ul>
+<h3>6.3. Ngày làm việc</h3>
+<ul>
+<li>Work date được backend xác định theo timezone cấu hình hệ thống.</li>
+<li>Timezone mặc định: <code>Asia/Ho_Chi_Minh</code>.</li>
+<li>MVP không cho user thay đổi timezone.</li>
+<li>System Admin có thể cấu hình ngày trong tuần làm việc ở mức đơn giản.</li>
+<li>Ngày không có ca được đánh dấu <code>DAY_OFF</code> và không có action.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-7-state-machine" class="wiki-section searchable" data-title="7. State machine" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>State machine</li>
+</ol></h2><div class="section-body"><h3>7.1. Attendance status</h3>
+<pre data-lang="text"><code>NOT_CHECKED_IN
+  └── check-in hợp lệ → CHECKED_IN
+
+CHECKED_IN
+  └── check-out hợp lệ → COMPLETED
+
+Trạng thái không thao tác:
+DAY_OFF
+LOCKED
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Available action</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NOT_CHECKED_IN</code></td>
+<td><code>CHECK_IN</code></td>
+<td>Chưa vào ca</td>
+</tr>
+<tr>
+<td><code>CHECKED_IN</code></td>
+<td><code>CHECK_OUT</code></td>
+<td>Đang trong ca</td>
+</tr>
+<tr>
+<td><code>COMPLETED</code></td>
+<td><code>NONE</code></td>
+<td>Đã hoàn tất ngày công</td>
+</tr>
+<tr>
+<td><code>DAY_OFF</code></td>
+<td><code>NONE</code></td>
+<td>Không có ca</td>
+</tr>
+<tr>
+<td><code>LOCKED</code></td>
+<td><code>NONE</code></td>
+<td>Ngày/kỳ công đã khóa</td>
+</tr>
+</tbody>
+</table></div>
+<h3>7.2. Approval status</h3>
+<p>Approval tách khỏi Attendance status:</p>
+<pre data-lang="text"><code>NOT_REQUIRED                         (NETWORK/GPS hợp lệ)
+PENDING
+  ├── APPROVED
+  ├── REJECTED
+  └── CLARIFICATION_REQUESTED
+        └── employee phản hồi → PENDING
+</code></pre>
+<ul>
+<li>Selfie check-in ở trạng thái <code>PENDING</code> không chặn check-out.</li>
+<li>Mỗi event có approval status riêng.</li>
+<li>Ngày công có <code>overallApprovalStatus</code> được tổng hợp từ các event/request.</li>
+<li><code>REJECTED</code> không xóa event; event và lý do phải được giữ để audit.</li>
+</ul>
+<h3>7.3. User status</h3>
+<pre data-lang="text"><code>ACTIVE
+LOCKED
+DISABLED
+</code></pre>
+<ul>
+<li><code>LOCKED</code>: khóa tạm hoặc system admin khóa, không đăng nhập được.</li>
+<li><code>DISABLED</code>: tài khoản ngừng sử dụng; dữ liệu cũ vẫn được giữ.</li>
+<li>Không hard-delete user đã có attendance records.</li>
+</ul>
+<h3>7.4. Timesheet period status</h3>
+<pre data-lang="text"><code>OPEN → REVIEWING → READY_TO_CLOSE → CLOSED
+                     ↑               │
+                     └── HR mở lại có lý do ──┘
+</code></pre>
+<ul>
+<li>Hệ thống tự suy ra <code>READY_TO_CLOSE</code> khi không còn blocker và mọi Department bắt buộc đã xác nhận đúng version.</li>
+<li>Thay đổi attendance/calendar/adjustment làm tăng version và đưa kỳ về <code>REVIEWING</code>.</li>
+</ul>
+<h3>7.5. Workday classification và adjustment</h3>
+<pre data-lang="text"><code>WorkdayType: WORKING_DAY | WEEKLY_OFF | PUBLIC_HOLIDAY | PAID_LEAVE | UNPAID_LEAVE
+DayResult: PRESENT | ABSENT | INCOMPLETE
+Adjustment: PENDING_MANAGER → APPROVED | REJECTED; APPROVED → APPLIED
+</code></pre>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-8-yeu-cau-chuc-nang-authentication" class="wiki-section searchable" data-title="8. Yêu cầu chức năng — Authentication" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Yêu cầu chức năng — Authentication</li>
+</ol></h2><div class="section-body"><h3>FR-AUTH-01 — Đăng nhập 【MVP】</h3>
+<ul>
+<li>User nhập email/mã nhân viên và mật khẩu.</li>
+<li>Hệ thống validate dữ liệu bắt buộc.</li>
+<li>Credential đúng và user ACTIVE → tạo session.</li>
+<li>Credential sai → trả lỗi chung.</li>
+<li>User có <code>mustChangePassword = true</code> → chỉ được vào màn hình đổi mật khẩu.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<pre data-lang="gherkin"><code>Given một tài khoản ACTIVE với mật khẩu hợp lệ
+When user gửi thông tin đăng nhập đúng
+Then hệ thống tạo phiên đăng nhập
+And trả thông tin user không chứa passwordHash
+And điều hướng user đến trang phù hợp với role
+</code></pre>
+<h3>FR-AUTH-02 — Đăng xuất 【MVP】</h3>
+<ul>
+<li>Vô hiệu hóa session hiện tại.</li>
+<li>Xóa cache user ở client.</li>
+<li>API bảo vệ sau đó phải trả <code>401 UNAUTHORIZED</code>.</li>
+</ul>
+<h3>FR-AUTH-03 — Đổi mật khẩu 【MVP】</h3>
+<ul>
+<li>Yêu cầu mật khẩu hiện tại, mật khẩu mới và xác nhận.</li>
+<li>Mật khẩu mới phải đạt policy và khác mật khẩu hiện tại.</li>
+<li>Sau đổi thành công, có thể thu hồi các session khác.</li>
+</ul>
+<h3>FR-AUTH-04 — System Admin reset mật khẩu 【MVP】</h3>
+<ul>
+<li>Chỉ System Admin thực hiện.</li>
+<li>Tạo mật khẩu tạm thời hoặc cho System Admin nhập giá trị đạt policy.</li>
+<li>Đặt <code>mustChangePassword = true</code>.</li>
+<li>Thu hồi session đang hoạt động của tài khoản đó.</li>
+</ul>
+<h3>FR-AUTH-05 — Quên mật khẩu 【SHOULD】</h3>
+<ul>
+<li>User nhập email.</li>
+<li>Hệ thống tạo token một lần, lưu dạng hash, có hạn 15 phút.</li>
+<li>Không tiết lộ email có tồn tại hay không.</li>
+</ul>
+<h3>FR-AUTH-06 — Bảo vệ route 【MVP】</h3>
+<ul>
+<li>Guest chỉ truy cập login/reset password và màn chọn Organization nếu dùng chung domain.</li>
+<li>Employee routes yêu cầu authenticated user trong tenant.</li>
+<li>Department Manager routes yêu cầu <code>DEPARTMENT_MANAGER</code> hoặc <code>HR</code> trong đúng Organization.</li>
+<li>HR routes chỉ cho <code>HR</code> cùng Organization.</li>
+<li>Platform routes chỉ cho <code>SYSTEM_ADMIN</code>.</li>
+<li>Frontend redirect không thay thế kiểm tra tenant/resource scope ở backend.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration" class="wiki-section searchable" data-title="9. Yêu cầu chức năng — System Admin, Organization và HR configuration" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Yêu cầu chức năng — System Admin, Organization và HR configuration</li>
+</ol></h2><div class="section-body"><h3>FR-SYS-01 — Quản lý Organization 【MVP】</h3>
+<ul>
+<li>System Admin xem danh sách tenant có phân trang; tạo, sửa tên/code và khóa/mở Organization.</li>
+<li><code>organizationCode</code> unique toàn nền tảng; dữ liệu Organization bị khóa vẫn được giữ.</li>
+<li>Khóa Organization làm session nghiệp vụ bị từ chối ở request kế tiếp.</li>
+</ul>
+<h3>FR-SYS-02 — Cấp tài khoản HR đầu tiên 【MVP】</h3>
+<ul>
+<li>System Admin tạo HR đầu tiên cho Organization và mật khẩu tạm thời.</li>
+<li>Không tạo Employee/Department Manager thay HR trong flow thông thường.</li>
+<li>Không cho vô hiệu hóa System Admin cuối cùng.</li>
+</ul>
+<h3>FR-SYS-03 — Giám sát và hỗ trợ 【MVP】</h3>
+<ul>
+<li>Xem trạng thái tenant, số user, dung lượng evidence và lỗi vận hành tổng hợp.</li>
+<li>Truy cập dữ liệu tenant chỉ qua support mode có ticket/lý do, thời hạn và audit.</li>
+<li>System Admin không approve/reject, không chốt/mở kỳ và không sửa AttendanceDay.</li>
+</ul>
+<h3>FR-HRCFG-01 — Quản lý Department 【MVP】</h3>
+<ul>
+<li>HR CRUD mềm Department trong tenant; code unique theo Organization.</li>
+<li>Gán một hoặc nhiều manager theo thời gian hiệu lực; hỗ trợ phòng chưa có manager nhưng tạo blocker khi chốt.</li>
+</ul>
+<h3>FR-HRCFG-02 — Quản lý user tenant 【MVP】</h3>
+<ul>
+<li>HR tạo/sửa/khóa Employee và Department Manager trong Organization.</li>
+<li>HR không tạo SYSTEM_ADMIN hoặc đổi organizationId của user.</li>
+<li>Không hard-delete user đã có lịch sử.</li>
+</ul>
+<h3>FR-HRCFG-03 — Workplace, Network và Shift 【MVP】</h3>
+<ul>
+<li>HR CRUD mềm Workplace, allowed network/CIDR và Shift trong tenant.</li>
+<li>Latitude <code>[-90,90]</code>, longitude <code>[-180,180]</code>, radius mặc định 100m, maximum accuracy 80m.</li>
+<li>Entity đang được tham chiếu chỉ inactive, không hard-delete.</li>
+</ul>
+<h3>FR-HRCFG-04 — Assignment có hiệu lực 【MVP】</h3>
+<ul>
+<li>Gán Employee vào Department, Workplace, Shift và Department Manager với <code>effectiveFrom/effectiveTo</code>.</li>
+<li>Không cho hai assignment active chồng lấn của cùng loại với một Employee.</li>
+<li>Chuyển phòng/ca không thay đổi snapshot lịch sử.</li>
+</ul>
+<h3>FR-HRCFG-05 — Work calendar tối thiểu 【MVP】</h3>
+<ul>
+<li>HR cấu hình ngày làm việc tuần và ngày lễ riêng của Organization.</li>
+<li>HR ghi nhận <code>PAID_LEAVE</code>/<code>UNPAID_LEAVE</code> tối thiểu cho nhân viên.</li>
+<li>Hệ thống suy ra <code>ABSENT</code> hoặc <code>INCOMPLETE</code> trên ngày có nghĩa vụ làm việc nhưng thiếu event.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-10-yeu-cau-chuc-nang-employee" class="wiki-section searchable" data-title="10. Yêu cầu chức năng — Employee" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Yêu cầu chức năng — Employee</li>
+</ol></h2><div class="section-body"><h3>FR-EMP-01 — Màn hình hôm nay 【MVP】</h3>
+<p>Hiển thị:</p>
+<ul>
+<li>Tên, mã nhân viên.</li>
+<li>Ngày và giờ hiển thị.</li>
+<li>Ca được gán.</li>
+<li>Workplace.</li>
+<li>Attendance status.</li>
+<li>Check-in/check-out time.</li>
+<li>WorkMode đã chọn nếu có.</li>
+<li>Method thực tế của từng event.</li>
+<li>Approval status.</li>
+<li>Nút action tương ứng.</li>
+<li>Lý do nút bị khóa.</li>
+</ul>
+<p>Đồng hồ client chỉ để tham khảo; thời gian trên event phải dùng server time.</p>
+<h3>FR-EMP-02 — Chọn WorkMode 【MVP】</h3>
+<ul>
+<li>Khi <code>NOT_CHECKED_IN</code>, user chọn <code>IN_OFFICE</code> hoặc <code>OUT_OFFICE</code>.</li>
+<li>Sau check-in, mode bị khóa cho ngày đó.</li>
+<li>UI giải thích ngắn dữ liệu sẽ được thu thập.</li>
+</ul>
+<h3>FR-EMP-03 — Check-in IN_OFFICE 【MVP】</h3>
+<ol>
+<li>FE gửi <code>workMode = IN_OFFICE</code>, GPS mới nếu có và idempotency key.</li>
+<li>Backend lấy user từ session, kiểm tra assignment và trạng thái ngày.</li>
+<li>Backend tự đọc public IP.</li>
+<li>Backend chọn Network hoặc GPS.</li>
+<li>Nếu cả hai không hợp lệ:<br />
+   - <code>allowSelfieFallback = true</code> → trả <code>SELFIE_REQUIRED</code>; FE mở camera;<br />
+   - nếu false → trả lỗi validation.</li>
+<li>Thành công → tạo event và chuyển sang <code>CHECKED_IN</code>.</li>
+</ol>
+<h3>FR-EMP-04 — Check-in OUT_OFFICE 【MVP】</h3>
+<ol>
+<li>FE yêu cầu quyền camera và GPS.</li>
+<li>User chụp ảnh mới.</li>
+<li>FE hiển thị preview và cho chụp lại.</li>
+<li>User xác nhận.</li>
+<li>FE upload multipart gồm ảnh, vị trí và idempotency key.</li>
+<li>Backend validate, lưu file private, tạo event <code>PENDING</code> và approval request.</li>
+<li>Attendance status chuyển <code>CHECKED_IN</code>.</li>
+</ol>
+<h3>FR-EMP-05 — Check-out 【MVP】</h3>
+<ul>
+<li>Chỉ khi status là <code>CHECKED_IN</code>.</li>
+<li>Dùng WorkMode đã lưu từ check-in.</li>
+<li>Thu thập bằng chứng mới; không tái sử dụng ảnh/GPS check-in.</li>
+<li>Thành công → status <code>COMPLETED</code>, backend tính working/late/early minutes.</li>
+<li>Nếu Selfie, tạo/cập nhật approval request theo thiết kế dữ liệu đã chọn.</li>
+</ul>
+<h3>FR-EMP-06 — Camera và Selfie 【MVP】</h3>
+<ul>
+<li>Ưu tiên camera trước bằng <code>facingMode: user</code>.</li>
+<li>Không cung cấp file picker trong flow chính.</li>
+<li>Cho phép preview và retake.</li>
+<li>Dừng media tracks khi đóng camera, submit hoặc unmount.</li>
+<li>Ảnh hợp lệ: JPEG/PNG/WebP; tối đa 5 MB sau xử lý.</li>
+<li>Backend kiểm MIME và file signature.</li>
+<li>Nếu camera bị từ chối, hiển thị hướng dẫn cụ thể.</li>
+</ul>
+<h3>FR-EMP-07 — GPS 【MVP】</h3>
+<ul>
+<li>Lấy vị trí mới với <code>maximumAge = 0</code> trước submit.</li>
+<li>Gửi latitude, longitude, accuracy và <code>capturedAtClient</code> để audit.</li>
+<li>Backend tính distance bằng Haversine.</li>
+<li><code>capturedAtClient</code> không phải thời gian công chính thức.</li>
+<li>Không theo dõi vị trí nền.</li>
+</ul>
+<h3>FR-EMP-08 — Lịch sử 【MVP】</h3>
+<ul>
+<li>Mặc định tháng hiện tại.</li>
+<li>Cho chọn tháng.</li>
+<li>Hiển thị KPI: ngày công, đi trễ, về sớm, ngày nghỉ/vắng nếu có dữ liệu.</li>
+<li>Danh sách gồm ngày, check-in, check-out, tổng phút/giờ, attendance status và approval status.</li>
+<li>Chỉ trả dữ liệu của user hiện tại.</li>
+</ul>
+<h3>FR-EMP-09 — Chi tiết ngày công 【MVP】</h3>
+<ul>
+<li>Ngày, ca, workplace, work mode.</li>
+<li>Check-in/check-out event.</li>
+<li>Method, server time, vị trí/địa chỉ, accuracy.</li>
+<li>Ảnh Selfie của chính user nếu có.</li>
+<li>Working/late/early minutes.</li>
+<li>Approval status, rejection reason, clarification.</li>
+<li>Audit timeline đã lọc thông tin phù hợp cho Employee.</li>
+</ul>
+<h3>FR-EMP-10 — Gửi giải trình 【MVP】</h3>
+<ul>
+<li>Chỉ khi request ở <code>CLARIFICATION_REQUESTED</code> hoặc <code>REJECTED</code> nếu policy cho phép.</li>
+<li>Nội dung bắt buộc, 10–1000 ký tự.</li>
+<li>Sau gửi, request chuyển về <code>PENDING</code>.</li>
+<li>Audit lưu người gửi, thời gian và nội dung.</li>
+</ul>
+<h3>FR-EMP-11 — Hồ sơ cá nhân 【MVP】</h3>
+<p>Employee xem:</p>
+<ul>
+<li>Họ tên, email, employeeCode, role.</li>
+<li>Workplace, shift và department manager.</li>
+<li>Có thể sửa avatar/số điện thoại nếu triển khai; không tự sửa role, code, workplace hoặc shift.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-11-yeu-cau-chuc-nang-department-manager" class="wiki-section searchable" data-title="11. Yêu cầu chức năng — Department Manager" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Yêu cầu chức năng — Department Manager</li>
+</ol></h2><div class="section-body"><h3>FR-MGR-01 — Danh sách yêu cầu 【MVP】</h3>
+<ul>
+<li>Chỉ yêu cầu thuộc Department được giao và cùng Organization.</li>
+<li>Tabs/filter: Pending, Approved, Rejected, Clarification, All.</li>
+<li>Search theo tên, employeeCode hoặc request code.</li>
+<li>Lọc method, ngày và department nếu có.</li>
+<li>Phân trang phía server.</li>
+<li>Hiển thị warning nổi bật.</li>
+</ul>
+<h3>FR-MGR-02 — Chi tiết Selfie 【MVP】</h3>
+<p>Hiển thị:</p>
+<ul>
+<li>Thông tin employee và ca.</li>
+<li>Ảnh check-in/check-out qua endpoint có authorization.</li>
+<li>Server time.</li>
+<li>Tọa độ, địa chỉ, accuracy.</li>
+<li>Khoảng cách giữa hai điểm nếu có cả hai event.</li>
+<li>Employee clarification.</li>
+<li>Adjustment request/review/apply và period version.</li>
+<li>Audit timeline.</li>
+</ul>
+<h3>FR-MGR-03 — Chi tiết GPS bất thường 【SHOULD】</h3>
+<ul>
+<li>Workplace và geofence.</li>
+<li>Vị trí employee.</li>
+<li>Distance và accuracy.</li>
+<li>Lý do yêu cầu xem xét.</li>
+<li>Có thể dùng sơ đồ/radar đơn giản thay vì dịch vụ bản đồ để giảm phạm vi.</li>
+</ul>
+<h3>FR-MGR-04 — Approve 【MVP】</h3>
+<ul>
+<li>Chỉ request đang <code>PENDING</code> hoặc trạng thái cho phép.</li>
+<li>Backend kiểm tra organizationId, department scope và current status trong transaction.</li>
+<li>Cập nhật request/event/day tương ứng.</li>
+<li>Ghi audit.</li>
+<li>Employee thấy trạng thái mới khi refetch.</li>
+</ul>
+<h3>FR-MGR-05 — Reject 【MVP】</h3>
+<ul>
+<li>Lý do bắt buộc, 10–1000 ký tự.</li>
+<li>Không xóa evidence/event.</li>
+<li>Cập nhật trạng thái <code>REJECTED</code> và audit.</li>
+<li>Không cho reject request đã có quyết định cuối cùng nếu chưa có chức năng reopen.</li>
+</ul>
+<h3>FR-MGR-06 — Request clarification 【MVP】</h3>
+<ul>
+<li>Nội dung bắt buộc, 10–1000 ký tự.</li>
+<li>Chuyển trạng thái <code>CLARIFICATION_REQUESTED</code>.</li>
+<li>Employee được phép gửi phản hồi.</li>
+<li>Sau phản hồi, request trở lại <code>PENDING</code>.</li>
+</ul>
+<h3>FR-MGR-07 — Duyệt nhanh 【SHOULD】</h3>
+<ul>
+<li>Có thể duyệt từ danh sách.</li>
+<li>Nên có hộp xác nhận để tránh thao tác nhầm.</li>
+<li>Không cho reject nhanh mà thiếu lý do.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong" class="wiki-section searchable" data-title="11A. Yêu cầu chức năng — HR và chốt kỳ công" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>11A. Yêu cầu chức năng — HR và chốt kỳ công</h2><div class="section-body"><h3>FR-HR-01 — Danh sách kỳ công 【MVP】</h3>
+<ul>
+<li>HR xem các kỳ theo tháng, trạng thái, thời điểm tạo/chốt và người thao tác.</li>
+<li>Mỗi tháng chỉ có một kỳ công.</li>
+<li>Trạng thái: <code>OPEN</code>, <code>REVIEWING</code>, <code>READY_TO_CLOSE</code>, <code>CLOSED</code>.</li>
+</ul>
+<h3>FR-HR-02 — Rà soát kỳ công 【MVP】</h3>
+<ul>
+<li>Tổng hợp theo nhân viên/phòng ban: ngày công, working minutes, late minutes, early minutes.</li>
+<li>Hiển thị lỗi chặn: thiếu check-in/out, approval còn Pending, clarification chưa hoàn tất.</li>
+<li>Cho phép lọc và mở chi tiết ngày gây lỗi.</li>
+</ul>
+<h3>FR-HR-03 — Xác nhận phòng ban 【MVP】</h3>
+<ul>
+<li>Department Manager chỉ xác nhận khi không còn lỗi chặn trong phạm vi quản lý.</li>
+<li>Mỗi xác nhận lưu department manager, thời gian và snapshot thống kê phòng ban.</li>
+<li>Thay đổi ngày công sau xác nhận làm mất trạng thái xác nhận và yêu cầu rà soát lại.</li>
+</ul>
+<h3>FR-HR-04 — Chốt kỳ công 【MVP】</h3>
+<ul>
+<li>Chỉ HR thực hiện khi kỳ ở <code>READY_TO_CLOSE</code> và tất cả phòng ban bắt buộc đã xác nhận.</li>
+<li>Backend kiểm tra lại toàn bộ blocker trong transaction, không tin kết quả kiểm tra từ frontend.</li>
+<li>Chốt thành công tạo <code>TimesheetSummary</code> snapshot cho từng nhân viên và chuyển kỳ sang <code>CLOSED</code>.</li>
+<li>Dữ liệu ngày công thuộc kỳ <code>CLOSED</code> không được mutation trực tiếp.</li>
+</ul>
+<h3>FR-HR-05 — Mở lại kỳ công 【MVP】</h3>
+<ul>
+<li>Chỉ HR trong Organization thực hiện; System Admin không có quyền nghiệp vụ này.</li>
+<li>Lý do bắt buộc 10–1000 ký tự.</li>
+<li>Chuyển kỳ từ <code>CLOSED</code> về <code>REVIEWING</code>, vô hiệu snapshot export cũ và ghi audit.</li>
+</ul>
+<h3>FR-HR-06 — Xuất bảng tổng hợp 【MVP】</h3>
+<ul>
+<li>HR xuất CSV hoặc XLSX từ snapshot của kỳ đã chốt.</li>
+<li>File gồm kỳ, mã/tên nhân viên, phòng ban, ngày công, working/late/early minutes và trạng thái chốt.</li>
+<li>Tổng trong file phải khớp snapshot database; export không tự tính lại từ dữ liệu đang thay đổi.</li>
+</ul>
+<h3>FR-HR-07 — Tổng hợp cá nhân 【MVP】</h3>
+<ul>
+<li>Employee xem tổng hợp tháng của chính mình và trạng thái kỳ.</li>
+<li>Employee không xem được tổng hợp của người khác bằng cách đổi ID/query.</li>
+</ul>
+<h3>FR-ADJ-01 — Tạo yêu cầu điều chỉnh 【MVP】</h3>
+<ul>
+<li>Employee chọn ngày, loại sai sót, thời gian đề xuất, lý do 10–1000 ký tự và evidence tùy chọn.</li>
+<li>Không tạo adjustment cho ngày thuộc tenant khác hoặc kỳ CLOSED; kỳ CLOSED phải được HR mở lại trước.</li>
+<li>Trạng thái: <code>PENDING_MANAGER</code>, <code>APPROVED</code>, <code>REJECTED</code>, <code>APPLIED</code>.</li>
+</ul>
+<h3>FR-ADJ-02 — Duyệt và áp dụng điều chỉnh 【MVP】</h3>
+<ul>
+<li>Department Manager duyệt/từ chối trong department scope; HR có thể override với lý do.</li>
+<li>HR áp dụng adjustment được duyệt trong transaction, lưu beforeData/afterData và tăng <code>TimesheetPeriod.version</code>.</li>
+<li>Mọi DepartmentConfirmation của version cũ hết hiệu lực.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-12-business-rules" class="wiki-section searchable" data-title="12. Business rules" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Business rules</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mã</th>
+<th>Quy tắc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BR-AUTH-01</td>
+<td>Mọi API ngoài login/reset đều yêu cầu session hợp lệ.</td>
+</tr>
+<tr>
+<td>BR-AUTH-02</td>
+<td>Password chỉ được lưu dạng hash.</td>
+</tr>
+<tr>
+<td>BR-AUTH-03</td>
+<td>User LOCKED/DISABLED hoặc Organization SUSPENDED không được dùng session nghiệp vụ.</td>
+</tr>
+<tr>
+<td>BR-TENANT-01</td>
+<td>Mọi resource nghiệp vụ thuộc đúng một Organization và mọi query bắt buộc lọc organizationId từ session.</td>
+</tr>
+<tr>
+<td>BR-TENANT-02</td>
+<td>Truy cập ID ngoài tenant trả 404; không tiết lộ sự tồn tại tài nguyên.</td>
+</tr>
+<tr>
+<td>BR-TENANT-03</td>
+<td>Unique constraint, cache key và storage key phải được namespaced theo organizationId.</td>
+</tr>
+<tr>
+<td>BR-RBAC-01</td>
+<td>Quyền được kiểm tra ở backend trên từng resource.</td>
+</tr>
+<tr>
+<td>BR-SCOPE-01</td>
+<td>Employee chỉ xem và thao tác dữ liệu của chính mình.</td>
+</tr>
+<tr>
+<td>BR-MGR-01</td>
+<td>Department Manager chỉ xử lý request cùng tenant và thuộc Department được giao tại thời điểm hiệu lực.</td>
+</tr>
+<tr>
+<td>BR-DAY-01</td>
+<td>Một employee chỉ có một AttendanceDay cho mỗi workDate trong Organization.</td>
+</tr>
+<tr>
+<td>BR-CAL-01</td>
+<td>ABSENT/INCOMPLETE chỉ được suy ra trên ngày có nghĩa vụ làm việc sau khi áp dụng weekly calendar, holiday và leave.</td>
+</tr>
+<tr>
+<td>BR-HIST-01</td>
+<td>Chuyển Department/Shift/Workplace không được làm thay đổi snapshot lịch sử.</td>
+</tr>
+<tr>
+<td>BR-ORDER-01</td>
+<td>Không check-out trước check-in.</td>
+</tr>
+<tr>
+<td>BR-DUP-01</td>
+<td>Không tạo hai check-in hoặc hai check-out hợp lệ cho cùng ngày.</td>
+</tr>
+<tr>
+<td>BR-MODE-01</td>
+<td>WorkMode được chọn lúc check-in và giữ nguyên đến hết ngày.</td>
+</tr>
+<tr>
+<td>BR-METHOD-01</td>
+<td>User không tự quyết định method chính thức; backend resolve và lưu.</td>
+</tr>
+<tr>
+<td>BR-TIME-01</td>
+<td>Thời gian chính thức lấy từ backend/database time.</td>
+</tr>
+<tr>
+<td>BR-GPS-01</td>
+<td>Backend tính lại distance; không tin distance/insideGeofence từ FE.</td>
+</tr>
+<tr>
+<td>BR-GPS-02</td>
+<td>GPS hợp lệ khi distance ≤ radius và accuracy ≤ maximumAccuracy.</td>
+</tr>
+<tr>
+<td>BR-NET-01</td>
+<td>Public IP lấy từ request/proxy đáng tin; không tin IP FE gửi.</td>
+</tr>
+<tr>
+<td>BR-SELFIE-01</td>
+<td>Mỗi event dùng ảnh mới và vị trí mới.</td>
+</tr>
+<tr>
+<td>BR-SELFIE-02</td>
+<td>Selfie check-in pending không chặn check-out.</td>
+</tr>
+<tr>
+<td>BR-SELFIE-03</td>
+<td>Hai địa điểm khác nhau không tự động làm bản ghi bị từ chối.</td>
+</tr>
+<tr>
+<td>BR-EVID-01</td>
+<td>Evidence private và chỉ truy cập qua authorization.</td>
+</tr>
+<tr>
+<td>BR-IDEM-01</td>
+<td>Mỗi mutation attendance có Idempotency-Key.</td>
+</tr>
+<tr>
+<td>BR-PERIOD-01</td>
+<td>Mỗi tháng chỉ có một TimesheetPeriod.</td>
+</tr>
+<tr>
+<td>BR-PERIOD-02</td>
+<td>Chỉ HR chốt kỳ khi không còn blocker và các phòng ban bắt buộc đã xác nhận.</td>
+</tr>
+<tr>
+<td>BR-PERIOD-03</td>
+<td>Kỳ CLOSED chặn check-in/out, clarification và chỉnh sửa trực tiếp dữ liệu ngày công.</td>
+</tr>
+<tr>
+<td>BR-PERIOD-04</td>
+<td>Chỉ HR cùng Organization được mở lại kỳ, bắt buộc có lý do và audit.</td>
+</tr>
+<tr>
+<td>BR-SNAPSHOT-01</td>
+<td>Export kỳ đã chốt lấy từ TimesheetSummary snapshot, không tính lại tùy thời điểm.</td>
+</tr>
+<tr>
+<td>BR-ADJ-01</td>
+<td>Mọi sửa ngày công phải đi qua AdjustmentRequest; không chỉnh trực tiếp AttendanceEvent.</td>
+</tr>
+<tr>
+<td>BR-ADJ-02</td>
+<td>Kỳ CLOSED phải được HR mở lại trước khi áp dụng adjustment.</td>
+</tr>
+<tr>
+<td>BR-VERSION-01</td>
+<td>Mutation dữ liệu trong kỳ làm tăng period version và vô hiệu DepartmentConfirmation version cũ.</td>
+</tr>
+<tr>
+<td>BR-AUDIT-01</td>
+<td>Login, cấu hình, chấm công, approval và chốt/mở lại kỳ đều có audit.</td>
+</tr>
+<tr>
+<td>BR-STATE-01</td>
+<td>FE không tự kết luận mutation thành công khi chưa có response/refetch xác nhận.</td>
+</tr>
+<tr>
+<td>BR-DELETE-01</td>
+<td>Dữ liệu có lịch sử không hard-delete; dùng trạng thái inactive/disabled.</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-13-use-cases-chinh" class="wiki-section searchable" data-title="13. Use cases chính" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Use cases chính</li>
+</ol></h2><div class="section-body"><h3>UC-01 — User đăng nhập</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee / Department Manager / System Admin</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>User tồn tại và ACTIVE</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>User gửi form login</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Validate → verify password → tạo session → trả profile → điều hướng</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Sai credential, user locked, rate limited, server error</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Session hợp lệ được tạo; audit login thành công</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-02 — System Admin tạo Organization và HR đầu tiên</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>System Admin</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>System Admin đã đăng nhập</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Tạo Organization → tạo HR đầu tiên → cấp mật khẩu tạm → audit</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Organization code trùng; System Admin không hợp lệ</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Tenant ACTIVE; HR thuộc tenant và phải đổi mật khẩu</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-03 — Employee check-in tại văn phòng</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Đã login; có assignment; status NOT_CHECKED_IN</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Chọn IN → gửi signals → backend validate → resolve method → tạo event</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Sai network; ngoài geofence; GPS yếu; cần Selfie fallback; duplicate</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Status CHECKED_IN; availableAction CHECK_OUT</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-04 — Employee check-in ngoài văn phòng bằng Selfie</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Đã login; status NOT_CHECKED_IN; camera/GPS sẵn sàng</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Chọn OUT → chụp → preview → upload → backend lưu → tạo approval request</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Từ chối quyền; file lỗi/quá lớn; timeout; duplicate</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>CHECKED_IN + approval PENDING</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-05 — Employee check-out</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Status CHECKED_IN</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Thu thập bằng chứng mới → submit → backend validate → tạo OUT event → tính phút</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Chưa check-in; đã check-out; evidence không hợp lệ</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>COMPLETED; availableAction NONE</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-06 — Department Manager xử lý Selfie</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Department Manager</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Request thuộc phạm vi và đang PENDING</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Mở detail → xem evidence → approve/reject/clarify → backend transaction + audit</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Request đã được xử lý bởi tab khác; không có quyền</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Trạng thái request/day được cập nhật bền vững</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-07 — Department Manager xác nhận phòng ban</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Department Manager</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Đã xử lý hết blocker trong phạm vi; kỳ đang REVIEWING</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Mở tổng hợp → rà soát → xác nhận → lưu snapshot xác nhận</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Còn Pending/thiếu check-out; dữ liệu thay đổi đồng thời</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Phòng ban được đánh dấu sẵn sàng chốt</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-08 — HR chốt kỳ công</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>HR</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Kỳ READY_TO_CLOSE; mọi phòng ban bắt buộc đã xác nhận</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Kiểm tra blocker → lock kỳ → tạo summaries → audit → cho phép export</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Còn blocker; kỳ đã đóng; xung đột dữ liệu</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Kỳ CLOSED; mutation ngày công bị khóa</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-09 — HR mở lại kỳ</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>HR</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Kỳ cùng Organization đang CLOSED</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Nhập lý do → xác nhận → kỳ về REVIEWING → invalid export cũ → audit</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Lý do không hợp lệ; không có quyền</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Kỳ được phép rà soát lại nhưng toàn bộ phòng ban phải xác nhận lại</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-10 — Employee yêu cầu điều chỉnh công</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Ngày thuộc tenant và kỳ chưa CLOSED</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Chọn ngày/sai sót → nhập dữ liệu đề xuất + lý do → gửi → Manager duyệt → HR áp dụng</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Ngoài tenant; kỳ đã chốt; dữ liệu đề xuất không hợp lệ</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Adjustment APPLIED; lưu before/after; period version tăng</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-11 — Chứng minh tenant isolation</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>HR/Manager/Employee của Organization A</td>
+</tr>
+<tr>
+<td>Tiền điều kiện</td>
+<td>Tài nguyên hợp lệ thuộc Organization B tồn tại</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>User A đổi ID/query để truy cập tài nguyên B</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Không có</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Backend trả 404; không rò rỉ nội dung hoặc metadata của B; audit security event nếu cần</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-14-danh-sach-man-hinh-va-route" class="wiki-section searchable" data-title="14. Danh sách màn hình và route" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Danh sách màn hình và route</li>
+</ol></h2><div class="section-body"><h3>14.1. Public</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Màn hình</th>
+<th style="text-align: center;">MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/login</code></td>
+<td>Đăng nhập + xác định Organization</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/forgot-password</code>, <code>/reset-password</code></td>
+<td>Khôi phục mật khẩu</td>
+<td style="text-align: center;">SHOULD</td>
+</tr>
+</tbody>
+</table></div>
+<h3>14.2. Employee dùng chung</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Màn hình</th>
+<th style="text-align: center;">MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/app/attendance</code></td>
+<td>Hôm nay/check-in/out</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/attendance/history</code></td>
+<td>Lịch sử và tổng hợp tháng</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/attendance/history/:date</code></td>
+<td>Chi tiết ngày/evidence/audit</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/adjustments</code></td>
+<td>Yêu cầu điều chỉnh cá nhân</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/profile</code></td>
+<td>Hồ sơ và assignment</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table></div>
+<h3>14.3. Department Manager</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Màn hình</th>
+<th style="text-align: center;">MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/manager/approvals</code></td>
+<td>Queue phê duyệt đúng scope</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/manager/approvals/:id</code></td>
+<td>Chi tiết/xử lý</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/manager/adjustments</code></td>
+<td>Adjustment phòng ban</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/manager/timesheet</code></td>
+<td>Rà soát và xác nhận phòng ban</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table></div>
+<h3>14.4. HR tenant</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Màn hình</th>
+<th style="text-align: center;">MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/hr/dashboard</code></td>
+<td>Tổng quan Organization</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/departments</code>, <code>/hr/users</code></td>
+<td>Cơ cấu và người dùng tenant</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/workplaces</code>, <code>/hr/shifts</code>, <code>/hr/calendar</code></td>
+<td>Cấu hình công</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/adjustments</code></td>
+<td>Duyệt cuối/áp dụng điều chỉnh</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/periods</code>, <code>/hr/periods/:id</code></td>
+<td>Rà soát/chốt/mở lại kỳ</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/periods/:id/export</code></td>
+<td>Export snapshot</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table></div>
+<h3>14.5. System Admin platform</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Màn hình</th>
+<th style="text-align: center;">MVP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/platform/organizations</code></td>
+<td>Quản lý Organization</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/platform/organizations/:id</code></td>
+<td>Trạng thái tenant/HR đầu tiên</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/platform/audit-logs</code></td>
+<td>Audit nền tảng/support mode</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table></div>
+<h3>14.6. Điều hướng</h3>
+<ul>
+<li>Employee → <code>/app/attendance</code>.</li>
+<li>Department Manager → <code>/manager/approvals</code>, đồng thời truy cập được employee routes cá nhân.</li>
+<li>HR → <code>/hr/dashboard</code>; có employee routes nếu được gán ca.</li>
+<li>System Admin → <code>/platform/organizations</code>; không có route nghiệp vụ chấm công.</li>
+<li>Route trái role hoặc tenant scope trả 403/404 phù hợp; guest về <code>/login</code>.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-15-data-model-logic" class="wiki-section searchable" data-title="15. Data model logic" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Data model logic</li>
+</ol></h2><div class="section-body"><h3>15.1. Organization</h3>
+<pre data-lang="text"><code>Organization
+- id: UUID
+- code: string UNIQUE toàn nền tảng
+- name
+- status: ACTIVE | SUSPENDED | DISABLED
+- timezone: IANA string (default Asia/Ho_Chi_Minh)
+- evidenceRetentionDays: integer
+- createdBy: FK User(System Admin)
+- createdAt, updatedAt
+</code></pre>
+<h3>15.2. User và UserSession</h3>
+<pre data-lang="text"><code>User
+- id: UUID
+- organizationId: FK Organization nullable cho SYSTEM_ADMIN
+- email
+- employeeCode nullable cho SYSTEM_ADMIN
+- passwordHash
+- fullName, phone, avatarUrl
+- role: SYSTEM_ADMIN | HR | DEPARTMENT_MANAGER | EMPLOYEE
+- status: ACTIVE | LOCKED | DISABLED
+- mustChangePassword, failedLoginCount, lockedUntil, lastLoginAt
+- createdAt, updatedAt
+- UNIQUE(organizationId, email)
+- UNIQUE(organizationId, employeeCode)
+
+UserSession
+- id, userId, organizationId nullable
+- tokenHash/sessionId, expiresAt, revokedAt
+- userAgent, ipAddress, createdAt
+</code></pre>
+<h3>15.3. Department và ManagerAssignment</h3>
+<pre data-lang="text"><code>Department
+- id, organizationId
+- code, name, active
+- createdAt, updatedAt
+- UNIQUE(organizationId, code)
+
+ManagerAssignment
+- id, organizationId, departmentId, managerId
+- effectiveFrom, effectiveTo nullable, active
+- createdAt, updatedAt
+</code></pre>
+<h3>15.4. Workplace và AllowedNetwork</h3>
+<pre data-lang="text"><code>Workplace
+- id, organizationId
+- code, name, address, latitude, longitude
+- allowedRadiusMeters, maximumAccuracyMeters
+- allowNetworkAttendance, allowGpsAttendance, allowSelfieFallback
+- active, createdAt, updatedAt
+- UNIQUE(organizationId, code)
+
+AllowedNetwork
+- id, organizationId, workplaceId
+- name, cidrOrIp, active, createdAt, updatedAt
+</code></pre>
+<h3>15.5. Shift và WorkCalendar</h3>
+<pre data-lang="text"><code>Shift
+- id, organizationId
+- code, name, startTime, endTime
+- breakMinutes, gracePeriodMinutes, active
+- createdAt, updatedAt
+- UNIQUE(organizationId, code)
+
+OrganizationCalendar
+- id, organizationId, workingWeekdays
+- effectiveFrom, effectiveTo nullable
+
+CalendarException
+- id, organizationId, date
+- type: PUBLIC_HOLIDAY | SPECIAL_WORKING_DAY
+- name, createdAt
+- UNIQUE(organizationId, date)
+
+EmployeeDayOverride
+- id, organizationId, employeeId, date
+- type: PAID_LEAVE | UNPAID_LEAVE
+- reason, createdBy, createdAt
+- UNIQUE(organizationId, employeeId, date)
+</code></pre>
+<h3>15.6. EmployeeAssignment</h3>
+<pre data-lang="text"><code>EmployeeAssignment
+- id, organizationId, employeeId
+- departmentId, workplaceId, shiftId
+- effectiveFrom, effectiveTo nullable, active
+- createdAt, updatedAt
+</code></pre>
+<p>Không ghi đè assignment cũ khi chuyển phòng/ca. Backend chọn assignment theo <code>workDate</code> và lưu snapshot vào AttendanceDay.</p>
+<h3>15.7. AttendanceDay và AttendanceEvent</h3>
+<pre data-lang="text"><code>AttendanceDay
+- id, organizationId, employeeId, periodId
+- workDate, workMode nullable
+- workdayType: WORKING_DAY | WEEKLY_OFF | PUBLIC_HOLIDAY | PAID_LEAVE | UNPAID_LEAVE
+- dayResult: PRESENT | ABSENT | INCOMPLETE nullable
+- attendanceStatus: NOT_CHECKED_IN | CHECKED_IN | COMPLETED | DAY_OFF | LOCKED
+- overallApprovalStatus
+- checkInAt, checkOutAt, workingMinutes, lateMinutes, earlyMinutes
+- organizationSnapshot, departmentSnapshot, shiftSnapshot, employeeSnapshot, workplaceSnapshot
+- createdAt, updatedAt
+- UNIQUE(organizationId, employeeId, workDate)
+
+AttendanceEvent
+- id, organizationId, attendanceDayId, employeeId
+- eventType: CHECK_IN | CHECK_OUT
+- method: NETWORK | GPS | SELFIE
+- recordedAt, capturedAtClient, workplaceId
+- publicIp, latitude, longitude, accuracyMeters, distanceFromWorkplaceMeters, address
+- validationStatus: VALID | FLAGGED
+- approvalStatus, evidenceId, userAgent, createdAt
+- UNIQUE(organizationId, attendanceDayId, eventType)
+</code></pre>
+<h3>15.8. Evidence</h3>
+<pre data-lang="text"><code>Evidence
+- id, organizationId, ownerUserId
+- storageKey, originalFileName, mimeType, sizeBytes, sha256
+- capturedAtClient, retentionUntil, createdAt
+- UNIQUE(organizationId, storageKey)
+</code></pre>
+<p>Storage key phải namespaced theo Organization; binary không lưu trực tiếp trong DB.</p>
+<h3>15.9. ApprovalRequest và ApprovalHistory</h3>
+<pre data-lang="text"><code>ApprovalRequest
+- id, organizationId, code
+- attendanceDayId, employeeId, departmentId, assignedManagerId
+- type: SELFIE_EVIDENCE | GPS_ANOMALY
+- status: PENDING | APPROVED | REJECTED | CLARIFICATION_REQUESTED
+- reasonNeedApproval, warning, employeeClarification, rejectionReason, decidedAt
+- createdAt, updatedAt
+- UNIQUE(organizationId, code)
+
+ApprovalHistory
+- id, organizationId, approvalRequestId, actorId
+- action, comment, previousStatus, newStatus, createdAt
+</code></pre>
+<h3>15.10. AdjustmentRequest</h3>
+<pre data-lang="text"><code>AdjustmentRequest
+- id, organizationId, code
+- attendanceDayId, employeeId, departmentId
+- requestedCheckInAt, requestedCheckOutAt, requestedWorkMode
+- reason, evidenceId nullable
+- status: PENDING_MANAGER | APPROVED | REJECTED | APPLIED
+- managerId, managerComment, reviewedAt
+- appliedByHrId, beforeData, afterData, appliedAt
+- createdAt, updatedAt
+- UNIQUE(organizationId, code)
+</code></pre>
+<h3>15.11. TimesheetPeriod, confirmation và summary</h3>
+<pre data-lang="text"><code>TimesheetPeriod
+- id, organizationId, month
+- status: OPEN | REVIEWING | READY_TO_CLOSE | CLOSED
+- version
+- openedAt, openedBy, closedAt, closedBy, reopenedAt, reopenedBy, reopenReason
+- createdAt, updatedAt
+- UNIQUE(organizationId, month)
+
+DepartmentTimesheetConfirmation
+- id, organizationId, periodId, departmentId, managerId
+- periodVersion, confirmedAt, summarySnapshot
+- UNIQUE(organizationId, periodId, departmentId, periodVersion)
+
+TimesheetSummary
+- id, organizationId, periodId, employeeId, periodVersion
+- employeeCodeSnapshot, fullNameSnapshot, departmentSnapshot
+- payableDays, workingMinutes, lateMinutes, earlyMinutes
+- absentDays, paidLeaveDays, unpaidLeaveDays, incompleteDays
+- finalApprovalStatus, createdAt
+- UNIQUE(organizationId, periodId, employeeId, periodVersion)
+</code></pre>
+<h3>15.12. AuditLog, SupportAccessGrant và IdempotencyRecord</h3>
+<pre data-lang="text"><code>AuditLog
+- id, organizationId nullable, actorId nullable
+- action, entityType, entityId, beforeData, afterData
+- ipAddress, userAgent, createdAt
+
+SupportAccessGrant
+- id, organizationId, systemAdminId
+- ticketCode, reason, scopes, expiresAt, revokedAt, createdAt
+
+IdempotencyRecord
+- id, organizationId, userId, key, operation, requestHash
+- responseStatus, responseBody, expiresAt, createdAt
+- UNIQUE(organizationId, userId, key)
+</code></pre>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-16-api-requirements" class="wiki-section searchable" data-title="16. API requirements" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>API requirements</li>
+</ol></h2><div class="section-body"><h3>16.1. Quy ước chung</h3>
+<ul>
+<li>Base path: <code>/api</code>.</li>
+<li>JSON dùng <code>camelCase</code>.</li>
+<li>Timestamp dùng ISO 8601 có timezone hoặc UTC <code>Z</code>.</li>
+<li>Pagination: <code>page</code>, <code>pageSize</code>; response có <code>items</code>, <code>page</code>, <code>pageSize</code>, <code>totalItems</code>, <code>totalPages</code>.</li>
+<li>Mutation attendance nhận header <code>Idempotency-Key</code>.</li>
+<li>Lỗi thống nhất:</li>
+</ul>
+<pre data-lang="json"><code>{
+  &quot;success&quot;: false,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;AUTH_INVALID_CREDENTIALS&quot;,
+    &quot;message&quot;: &quot;Thông tin đăng nhập không hợp lệ.&quot;,
+    &quot;details&quot;: null
+  }
+}
+</code></pre>
+<h3>16.2. Auth APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Quyền</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/login</code></td>
+<td>Public</td>
+<td>Đăng nhập</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/logout</code></td>
+<td>Authenticated</td>
+<td>Đăng xuất</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/me</code></td>
+<td>Authenticated</td>
+<td>User/session hiện tại</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/change-password</code></td>
+<td>Authenticated</td>
+<td>Đổi mật khẩu</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/forgot-password</code></td>
+<td>Public, SHOULD</td>
+<td>Gửi reset token</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/reset-password</code></td>
+<td>Public + token, SHOULD</td>
+<td>Đặt mật khẩu mới</td>
+</tr>
+</tbody>
+</table></div>
+<p>Login request:</p>
+<pre data-lang="json"><code>{
+  &quot;identifier&quot;: &quot;NV001&quot;,
+  &quot;password&quot;: &quot;********&quot;
+}
+</code></pre>
+<p>Login response không được chứa <code>passwordHash</code>, failed count hoặc token hash.</p>
+<h3>16.3. Employee APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/attendance/today</code></td>
+<td>State hôm nay và config cần thiết</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/attendance/check-in</code></td>
+<td>Check-in</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/attendance/check-out</code></td>
+<td>Check-out</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/attendance/history?month=YYYY-MM</code></td>
+<td>Lịch sử của chính user</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/attendance/days/:date</code></td>
+<td>Chi tiết ngày của chính user</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/profile</code></td>
+<td>Hồ sơ cá nhân</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/profile</code></td>
+<td>Sửa trường được phép</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/approvals/:id/clarification-response</code></td>
+<td>Gửi giải trình của employee</td>
+</tr>
+</tbody>
+</table></div>
+<h3>16.4. Department Manager APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/approvals</code></td>
+<td>Danh sách trong phạm vi</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/approvals/:id</code></td>
+<td>Chi tiết request</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/approvals/:id/approve</code></td>
+<td>Duyệt</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/approvals/:id/reject</code></td>
+<td>Từ chối kèm reason</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/approvals/:id/request-clarification</code></td>
+<td>Yêu cầu giải trình</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/evidence/:id</code></td>
+<td>Stream/download evidence có quyền</td>
+</tr>
+</tbody>
+</table></div>
+<h3>16.5. HR và Timesheet APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Quyền</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/timesheet-periods</code></td>
+<td>HR</td>
+<td>Danh sách kỳ công</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/timesheet-periods</code></td>
+<td>HR</td>
+<td>Mở kỳ tháng</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/timesheet-periods/:id/review</code></td>
+<td>Department Manager/HR</td>
+<td>Blocker và tiến độ rà soát</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/timesheet-periods/:id/department-confirmations</code></td>
+<td>Department Manager</td>
+<td>Xác nhận phòng ban</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/timesheet-periods/:id/close</code></td>
+<td>HR</td>
+<td>Chốt kỳ và tạo snapshot</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/timesheet-periods/:id/reopen</code></td>
+<td>HR</td>
+<td>Mở lại kỳ có lý do</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/timesheet-periods/:id/summaries</code></td>
+<td>HR</td>
+<td>Bảng tổng hợp snapshot</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/timesheet-periods/:id/export?format=csv|xlsx</code></td>
+<td>HR</td>
+<td>Xuất kỳ đã chốt</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/attendance/period-summary?month=YYYY-MM</code></td>
+<td>Authenticated</td>
+<td>Tổng hợp cá nhân</td>
+</tr>
+</tbody>
+</table></div>
+<h3>16.6. System Admin và HR configuration APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Nhóm</th>
+<th>Endpoints tối thiểu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Platform Organizations</td>
+<td><code>GET/POST /api/platform/organizations</code>, <code>GET/PATCH /api/platform/organizations/:id</code>, <code>POST .../:id/suspend</code>, <code>POST .../:id/activate</code> — SYSTEM_ADMIN</td>
+</tr>
+<tr>
+<td>Initial HR</td>
+<td><code>POST /api/platform/organizations/:id/initial-hr</code> — SYSTEM_ADMIN</td>
+</tr>
+<tr>
+<td>Support access</td>
+<td><code>POST/DELETE /api/platform/support-grants/:id</code> — SYSTEM_ADMIN, audit bắt buộc</td>
+</tr>
+<tr>
+<td>Tenant users</td>
+<td><code>GET/POST/PATCH /api/hr/users</code> — HR, organizationId từ session</td>
+</tr>
+<tr>
+<td>Departments</td>
+<td>CRUD mềm <code>/api/hr/departments</code> và manager assignments — HR</td>
+</tr>
+<tr>
+<td>Workplaces/Networks/Shifts</td>
+<td>CRUD mềm <code>/api/hr/workplaces</code>, <code>/api/hr/shifts</code> — HR</td>
+</tr>
+<tr>
+<td>Calendar</td>
+<td>CRUD <code>/api/hr/calendar-exceptions</code>, <code>/api/hr/employee-day-overrides</code> — HR</td>
+</tr>
+<tr>
+<td>Audit</td>
+<td><code>GET /api/hr/audit-logs</code> tenant scope; <code>GET /api/platform/audit-logs</code> platform scope</td>
+</tr>
+</tbody>
+</table></div>
+<h3>16.6A. Adjustment APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Quyền</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/adjustments</code></td>
+<td>Employee</td>
+<td>Tạo yêu cầu của chính mình</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/adjustments/mine</code></td>
+<td>Employee</td>
+<td>Danh sách cá nhân</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/manager/adjustments</code></td>
+<td>Department Manager</td>
+<td>Danh sách đúng department scope</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/manager/adjustments/:id/approve</code></td>
+<td>Department Manager</td>
+<td>Duyệt bước quản lý</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/manager/adjustments/:id/reject</code></td>
+<td>Department Manager</td>
+<td>Từ chối có lý do</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/hr/adjustments/:id/apply</code></td>
+<td>HR</td>
+<td>Áp dụng transaction + audit + tăng version</td>
+</tr>
+</tbody>
+</table></div>
+<p>Mọi API tenant bỏ qua/reject <code>organizationId</code> do client gửi; tenant được suy ra từ session.</p>
+<h3>16.7. Today response đề xuất</h3>
+<pre data-lang="json"><code>{
+  &quot;workDate&quot;: &quot;2026-09-08&quot;,
+  &quot;attendanceStatus&quot;: &quot;NOT_CHECKED_IN&quot;,
+  &quot;availableAction&quot;: &quot;CHECK_IN&quot;,
+  &quot;workMode&quot;: null,
+  &quot;checkIn&quot;: null,
+  &quot;checkOut&quot;: null,
+  &quot;workingMinutes&quot;: null,
+  &quot;lateMinutes&quot;: null,
+  &quot;earlyMinutes&quot;: null,
+  &quot;overallApprovalStatus&quot;: &quot;NOT_REQUIRED&quot;,
+  &quot;assignment&quot;: {
+    &quot;shiftName&quot;: &quot;Ca hành chính&quot;,
+    &quot;shiftHours&quot;: &quot;08:00 - 17:00&quot;,
+    &quot;workplaceId&quot;: &quot;uuid&quot;,
+    &quot;workplaceName&quot;: &quot;Văn phòng chính&quot;
+  },
+  &quot;capabilities&quot;: {
+    &quot;canUseInOffice&quot;: true,
+    &quot;canUseOutOffice&quot;: true,
+    &quot;allowSelfieFallback&quot;: true
+  }
+}
+</code></pre>
+<h3>16.8. Check-in JSON request</h3>
+<pre data-lang="http"><code>POST /api/attendance/check-in
+Idempotency-Key: &lt;UUID&gt;
+Content-Type: application/json
+</code></pre>
+<pre data-lang="json"><code>{
+  &quot;workMode&quot;: &quot;IN_OFFICE&quot;,
+  &quot;location&quot;: {
+    &quot;latitude&quot;: 10.7381,
+    &quot;longitude&quot;: 106.6204,
+    &quot;accuracyMeters&quot;: 18,
+    &quot;capturedAtClient&quot;: &quot;2026-09-08T08:01:10+07:00&quot;
+  }
+}
+</code></pre>
+<p>Không gửi <code>userId</code>, <code>publicIp</code>, <code>distance</code>, <code>method</code>, <code>insideGeofence</code>, <code>recordedAt</code> hoặc <code>approvalStatus</code> như dữ liệu đáng tin.</p>
+<h3>16.9. Selfie multipart request</h3>
+<pre data-lang="text"><code>workMode: OUT_OFFICE hoặc IN_OFFICE
+selfie: &lt;binary image&gt;
+latitude: 10.729850
+longitude: 106.721450
+accuracyMeters: 18
+capturedAtClient: 2026-09-08T08:15:03+07:00
+</code></pre>
+<h3>16.10. Mutation response</h3>
+<pre data-lang="json"><code>{
+  &quot;success&quot;: true,
+  &quot;data&quot;: {
+    &quot;workDate&quot;: &quot;2026-09-08&quot;,
+    &quot;attendanceStatus&quot;: &quot;CHECKED_IN&quot;,
+    &quot;availableAction&quot;: &quot;CHECK_OUT&quot;,
+    &quot;workMode&quot;: &quot;OUT_OFFICE&quot;,
+    &quot;overallApprovalStatus&quot;: &quot;PENDING&quot;,
+    &quot;checkIn&quot;: {
+      &quot;eventId&quot;: &quot;uuid&quot;,
+      &quot;eventType&quot;: &quot;CHECK_IN&quot;,
+      &quot;method&quot;: &quot;SELFIE&quot;,
+      &quot;recordedAt&quot;: &quot;2026-09-08T01:15:07Z&quot;,
+      &quot;approvalStatus&quot;: &quot;PENDING&quot;
+    }
+  }
+}
+</code></pre>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-17-error-codes" class="wiki-section searchable" data-title="17. Error codes" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Error codes</li>
+</ol></h2><div class="section-body"><h3>17.1. Authentication</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th style="text-align: right;">HTTP</th>
+<th>Ý nghĩa/FE handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTH_INVALID_CREDENTIALS</code></td>
+<td style="text-align: right;">401</td>
+<td>Báo thông tin không hợp lệ, không chỉ rõ identifier/password</td>
+</tr>
+<tr>
+<td><code>AUTH_ACCOUNT_LOCKED</code></td>
+<td style="text-align: right;">423</td>
+<td>Báo tài khoản đang khóa; không cho retry liên tục</td>
+</tr>
+<tr>
+<td><code>AUTH_ACCOUNT_DISABLED</code></td>
+<td style="text-align: right;">403</td>
+<td>Liên hệ System Admin</td>
+</tr>
+<tr>
+<td><code>AUTH_SESSION_EXPIRED</code></td>
+<td style="text-align: right;">401</td>
+<td>Xóa auth state, về login</td>
+</tr>
+<tr>
+<td><code>AUTH_PASSWORD_CHANGE_REQUIRED</code></td>
+<td style="text-align: right;">403</td>
+<td>Điều hướng trang đổi mật khẩu</td>
+</tr>
+<tr>
+<td><code>AUTH_CURRENT_PASSWORD_INVALID</code></td>
+<td style="text-align: right;">400</td>
+<td>Báo mật khẩu hiện tại sai</td>
+</tr>
+<tr>
+<td><code>AUTH_PASSWORD_POLICY_FAILED</code></td>
+<td style="text-align: right;">400</td>
+<td>Hiển thị policy</td>
+</tr>
+<tr>
+<td><code>AUTH_RATE_LIMITED</code></td>
+<td style="text-align: right;">429</td>
+<td>Hiển thị thời gian thử lại</td>
+</tr>
+</tbody>
+</table></div>
+<h3>17.2. Authorization/resource</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th style="text-align: right;">HTTP</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FORBIDDEN</code></td>
+<td style="text-align: right;">403</td>
+<td>Không có quyền</td>
+</tr>
+<tr>
+<td><code>RESOURCE_NOT_FOUND</code></td>
+<td style="text-align: right;">404</td>
+<td>Không tồn tại hoặc không thuộc phạm vi</td>
+</tr>
+<tr>
+<td><code>VALIDATION_ERROR</code></td>
+<td style="text-align: right;">400</td>
+<td>Dữ liệu form không hợp lệ</td>
+</tr>
+<tr>
+<td><code>CONFLICT</code></td>
+<td style="text-align: right;">409</td>
+<td>Email/code hoặc state conflict</td>
+</tr>
+<tr>
+<td><code>TENANT_SUSPENDED</code></td>
+<td style="text-align: right;">423</td>
+<td>Organization đã bị khóa</td>
+</tr>
+<tr>
+<td><code>TENANT_SCOPE_VIOLATION</code></td>
+<td style="text-align: right;">404</td>
+<td>Resource không tồn tại trong tenant hiện tại</td>
+</tr>
+<tr>
+<td><code>DEPARTMENT_SCOPE_VIOLATION</code></td>
+<td style="text-align: right;">403</td>
+<td>Manager không được giao Department này</td>
+</tr>
+</tbody>
+</table></div>
+<h3>17.3. Attendance</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th style="text-align: right;">HTTP</th>
+<th>FE handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ASSIGNMENT_NOT_CONFIGURED</code></td>
+<td style="text-align: right;">409</td>
+<td>Hướng dẫn liên hệ System Admin</td>
+</tr>
+<tr>
+<td><code>NETWORK_NOT_ALLOWED</code></td>
+<td style="text-align: right;">422</td>
+<td>Hướng dẫn dùng mạng đúng hoặc fallback</td>
+</tr>
+<tr>
+<td><code>NETWORK_NOT_CONFIGURED</code></td>
+<td style="text-align: right;">409</td>
+<td>Liên hệ System Admin</td>
+</tr>
+<tr>
+<td><code>CLIENT_IP_UNAVAILABLE</code></td>
+<td style="text-align: right;">422</td>
+<td>Thử lại; kiểm tra proxy config</td>
+</tr>
+<tr>
+<td><code>OUTSIDE_ALLOWED_AREA</code></td>
+<td style="text-align: right;">422</td>
+<td>Hiển thị distance/radius</td>
+</tr>
+<tr>
+<td><code>LOW_LOCATION_ACCURACY</code></td>
+<td style="text-align: right;">422</td>
+<td>Lấy GPS lại</td>
+</tr>
+<tr>
+<td><code>LOCATION_PERMISSION_REQUIRED</code></td>
+<td style="text-align: right;">400</td>
+<td>Hướng dẫn cấp quyền</td>
+</tr>
+<tr>
+<td><code>LOCATION_UNAVAILABLE</code></td>
+<td style="text-align: right;">422</td>
+<td>Cho retry</td>
+</tr>
+<tr>
+<td><code>CAMERA_PERMISSION_REQUIRED</code></td>
+<td style="text-align: right;">400</td>
+<td>Hướng dẫn cấp quyền</td>
+</tr>
+<tr>
+<td><code>SELFIE_REQUIRED</code></td>
+<td style="text-align: right;">422</td>
+<td>Mở Selfie flow</td>
+</tr>
+<tr>
+<td><code>SELFIE_IMAGE_INVALID</code></td>
+<td style="text-align: right;">400</td>
+<td>Chụp lại</td>
+</tr>
+<tr>
+<td><code>FILE_TOO_LARGE</code></td>
+<td style="text-align: right;">413</td>
+<td>Nén/chụp lại</td>
+</tr>
+<tr>
+<td><code>UNSUPPORTED_FILE_TYPE</code></td>
+<td style="text-align: right;">415</td>
+<td>Chụp lại bằng định dạng hỗ trợ</td>
+</tr>
+<tr>
+<td><code>ALREADY_CHECKED_IN</code></td>
+<td style="text-align: right;">409</td>
+<td>Refetch today</td>
+</tr>
+<tr>
+<td><code>ALREADY_CHECKED_OUT</code></td>
+<td style="text-align: right;">409</td>
+<td>Refetch today</td>
+</tr>
+<tr>
+<td><code>INVALID_ATTENDANCE_ACTION</code></td>
+<td style="text-align: right;">409</td>
+<td>Refetch today</td>
+</tr>
+<tr>
+<td><code>ATTENDANCE_LOCKED</code></td>
+<td style="text-align: right;">423</td>
+<td>Ẩn action</td>
+</tr>
+<tr>
+<td><code>DUPLICATE_REQUEST</code></td>
+<td style="text-align: right;">409</td>
+<td>Dùng response idempotent hoặc refetch</td>
+</tr>
+</tbody>
+</table></div>
+<h3>17.4. Approval</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th style="text-align: right;">HTTP</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>APPROVAL_ALREADY_DECIDED</code></td>
+<td style="text-align: right;">409</td>
+<td>Refetch request</td>
+</tr>
+<tr>
+<td><code>APPROVAL_NOT_ASSIGNED</code></td>
+<td style="text-align: right;">403</td>
+<td>Không thuộc department manager</td>
+</tr>
+<tr>
+<td><code>REJECTION_REASON_REQUIRED</code></td>
+<td style="text-align: right;">400</td>
+<td>Yêu cầu nhập lý do</td>
+</tr>
+<tr>
+<td><code>CLARIFICATION_MESSAGE_REQUIRED</code></td>
+<td style="text-align: right;">400</td>
+<td>Yêu cầu nhập nội dung</td>
+</tr>
+<tr>
+<td><code>INVALID_APPROVAL_TRANSITION</code></td>
+<td style="text-align: right;">409</td>
+<td>Refetch và hiển thị state mới</td>
+</tr>
+<tr>
+<td><code>ADJUSTMENT_PERIOD_CLOSED</code></td>
+<td style="text-align: right;">423</td>
+<td>HR phải mở lại kỳ trước khi áp dụng adjustment</td>
+</tr>
+<tr>
+<td><code>ADJUSTMENT_ALREADY_DECIDED</code></td>
+<td style="text-align: right;">409</td>
+<td>Request đã được xử lý</td>
+</tr>
+<tr>
+<td><code>ADJUSTMENT_NOT_APPROVED</code></td>
+<td style="text-align: right;">409</td>
+<td>HR chỉ áp dụng request đã duyệt</td>
+</tr>
+<tr>
+<td><code>WORKDAY_CLASSIFICATION_REQUIRED</code></td>
+<td style="text-align: right;">409</td>
+<td>Ngày nghỉ/vắng chưa được phân loại</td>
+</tr>
+</tbody>
+</table></div>
+<h3>17.5. Timesheet closing</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th style="text-align: right;">HTTP</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PERIOD_NOT_FOUND</code></td>
+<td style="text-align: right;">404</td>
+<td>Kỳ công không tồn tại</td>
+</tr>
+<tr>
+<td><code>PERIOD_ALREADY_EXISTS</code></td>
+<td style="text-align: right;">409</td>
+<td>Tháng đã có kỳ công</td>
+</tr>
+<tr>
+<td><code>PERIOD_NOT_READY</code></td>
+<td style="text-align: right;">409</td>
+<td>Còn blocker hoặc thiếu xác nhận phòng ban</td>
+</tr>
+<tr>
+<td><code>PERIOD_ALREADY_CLOSED</code></td>
+<td style="text-align: right;">409</td>
+<td>Kỳ đã được chốt</td>
+</tr>
+<tr>
+<td><code>PERIOD_CLOSED</code></td>
+<td style="text-align: right;">423</td>
+<td>Dữ liệu kỳ đã khóa, không được mutation</td>
+</tr>
+<tr>
+<td><code>DEPARTMENT_NOT_READY</code></td>
+<td style="text-align: right;">409</td>
+<td>Phòng ban còn bản ghi chưa hoàn tất</td>
+</tr>
+<tr>
+<td><code>REOPEN_REASON_REQUIRED</code></td>
+<td style="text-align: right;">400</td>
+<td>Mở lại kỳ phải có lý do hợp lệ</td>
+</tr>
+<tr>
+<td><code>EXPORT_NOT_READY</code></td>
+<td style="text-align: right;">409</td>
+<td>Chỉ export snapshot kỳ đã chốt</td>
+</tr>
+<tr>
+<td><code>PERIOD_VERSION_CONFLICT</code></td>
+<td style="text-align: right;">409</td>
+<td>Dữ liệu thay đổi sau lần rà soát; phải refetch</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-18-transaction-concurrency-va-idempotency" class="wiki-section searchable" data-title="18. Transaction, concurrency và idempotency" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Transaction, concurrency và idempotency</li>
+</ol></h2><div class="section-body"><h3>18.1. Check-in/check-out transaction</h3>
+<p>Backend thực hiện trong transaction:</p>
+<ol>
+<li>Xác thực session và Organization ACTIVE.</li>
+<li>Suy ra organizationId từ session, kiểm tra tenant/resource scope và idempotency key.</li>
+<li>Lock/read AttendanceDay hiện tại.</li>
+<li>Validate state/action.</li>
+<li>Lấy assignment và snapshot config.</li>
+<li>Validate network/GPS/file.</li>
+<li>Lấy server time.</li>
+<li>Tạo event.</li>
+<li>Cập nhật AttendanceDay.</li>
+<li>Tạo ApprovalRequest nếu cần.</li>
+<li>Ghi audit.</li>
+<li>Lưu idempotent response.</li>
+<li>Commit.</li>
+</ol>
+<h3>18.2. Approval transaction</h3>
+<ul>
+<li>Lock ApprovalRequest.</li>
+<li>Kiểm tra department manager và trạng thái hiện tại.</li>
+<li>Cập nhật request/event/day.</li>
+<li>Thêm ApprovalHistory và AuditLog.</li>
+<li>Commit rồi trả representation mới.</li>
+</ul>
+<h3>18.3. Adjustment transaction</h3>
+<ul>
+<li>Lock AdjustmentRequest, AttendanceDay và TimesheetPeriod cùng Organization.</li>
+<li>Kiểm tra APPROVED, department scope, period chưa CLOSED và version hiện tại.</li>
+<li>Lưu beforeData, áp dụng afterData, tính lại ngày công và tăng period version.</li>
+<li>Vô hiệu xác nhận phòng ban version cũ; ghi audit và commit cùng transaction.</li>
+</ul>
+<h3>18.4. Chốt kỳ transaction</h3>
+<ul>
+<li>Lock <code>TimesheetPeriod</code> và kiểm tra status/version hiện tại.</li>
+<li>Kiểm tra lại toàn bộ blocker và xác nhận phòng ban.</li>
+<li>Tạo <code>TimesheetSummary</code> snapshot cho từng nhân viên.</li>
+<li>Chuyển kỳ sang <code>CLOSED</code>, lưu người/thời gian chốt.</li>
+<li>Ghi AuditLog và commit trong cùng transaction.</li>
+<li>Nếu bất kỳ bước nào lỗi, rollback toàn bộ; không để kỳ CLOSED thiếu snapshot.</li>
+</ul>
+<h3>18.5. Idempotency</h3>
+<ul>
+<li>FE tạo UUID khi bắt đầu một thao tác mới.</li>
+<li>Retry do timeout phải dùng cùng key.</li>
+<li>Cùng key + cùng request trả lại kết quả cũ.</li>
+<li>Cùng key + payload khác trả <code>409 IDEMPOTENCY_KEY_REUSED</code>.</li>
+<li>Unique database constraint vẫn là lớp bảo vệ cuối cho event type/ngày.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-19-yeu-cau-phi-chuc-nang" class="wiki-section searchable" data-title="19. Yêu cầu phi chức năng" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Yêu cầu phi chức năng</li>
+</ol></h2><div class="section-body"><h3>19.1. Bảo mật</h3>
+<ul>
+<li>HTTPS trong môi trường deploy.</li>
+<li>Password hash bằng Argon2id/bcrypt.</li>
+<li>Cookie auth có <code>HttpOnly</code>, <code>Secure</code> khi HTTPS, <code>SameSite</code> phù hợp.</li>
+<li>Chống CSRF nếu dùng cookie session.</li>
+<li>Validate và sanitize input ở backend.</li>
+<li>ORM/prepared statements để chống SQL injection.</li>
+<li>Escape output; không render HTML user nhập.</li>
+<li>Rate limit login và endpoint nhạy cảm.</li>
+<li>CORS chỉ cho origin được cấu hình.</li>
+<li>Không log password, token, ảnh base64 hoặc thông tin bí mật.</li>
+<li>Secrets chỉ qua environment variables; không commit <code>.env</code> thật.</li>
+<li>Evidence endpoint kiểm tra Organization và resource scope trên từng file.</li>
+<li>Tenant context lấy từ session, không chấp nhận organizationId từ client làm nguồn quyền.</li>
+<li>ORM query, cache, job queue và storage key phải tenant-scoped.</li>
+<li>System Admin support mode có grant hữu hạn, lý do/ticket, scope tối thiểu và audit.</li>
+<li>Test IDOR chéo tenant là security gate bắt buộc.</li>
+</ul>
+<h3>19.2. Quyền riêng tư</h3>
+<ul>
+<li>Hiển thị thông báo trước khi thu thập camera/GPS.</li>
+<li>Chỉ lấy vị trí khi user mở hoặc thực hiện attendance flow.</li>
+<li>Không theo dõi vị trí nền.</li>
+<li>Không lưu ảnh/GPS dài hạn ở localStorage/IndexedDB.</li>
+<li>Xóa EXIF nếu không cần.</li>
+<li>Evidence không có public URL vĩnh viễn.</li>
+<li>Chính sách retention mặc định cho demo: 90 ngày, có thể cấu hình; <code>【MỞ】</code>.</li>
+</ul>
+<h3>19.3. Hiệu năng</h3>
+<ul>
+<li>API thông thường p95 dưới 500ms trên môi trường local/demo, không tính upload ảnh và reverse geocoding.</li>
+<li>Upload Selfie dưới 5 giây với ảnh ≤ 5MB trên mạng ổn định.</li>
+<li>Danh sách dùng phân trang; không tải toàn bộ audit/history.</li>
+<li>Ảnh preview dùng thumbnail hoặc kích thước phù hợp.</li>
+</ul>
+<h3>19.4. Khả dụng và độ tin cậy</h3>
+<ul>
+<li>Không hiển thị thành công trước khi backend xác nhận.</li>
+<li>Lỗi timeout không tạo duplicate event.</li>
+<li>Refresh trang giữ nguyên dữ liệu từ database.</li>
+<li>Reverse geocoding lỗi không làm mất event nếu tọa độ hợp lệ; address có thể null.</li>
+<li>Camera stream luôn được giải phóng.</li>
+</ul>
+<h3>19.5. Tương thích</h3>
+<ul>
+<li>Chrome/Edge phiên bản hiện đại trên desktop và Android.</li>
+<li>Safari iOS là SHOULD vì quyền camera có khác biệt.</li>
+<li>Camera/GPS yêu cầu secure context (HTTPS), ngoại trừ localhost.</li>
+<li>Responsive từ 360px đến desktop.</li>
+</ul>
+<h3>19.6. Accessibility</h3>
+<ul>
+<li>Form có label, lỗi gắn với field.</li>
+<li>Có thể dùng bàn phím cho login/system admin/department manager.</li>
+<li>Focus modal được quản lý và trả về trigger khi đóng.</li>
+<li>Không chỉ dùng màu để truyền trạng thái.</li>
+<li>Button có accessible name; ảnh có alt phù hợp.</li>
+<li>Mục tiêu WCAG 2.1 AA ở các flow chính.</li>
+</ul>
+<h3>19.7. Maintainability</h3>
+<ul>
+<li>TypeScript strict nếu dùng TypeScript.</li>
+<li>Tách UI, business service và persistence.</li>
+<li>Database migration có version.</li>
+<li>API error code ổn định.</li>
+<li>Không đưa Simulation Sandbox vào production build.</li>
+<li>Có seed script tạo dữ liệu demo, không hard-code trong source UI.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-20-ui-states-bat-buoc" class="wiki-section searchable" data-title="20. UI states bắt buộc" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>UI states bắt buộc</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Khu vực</th>
+<th>States</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Login</td>
+<td>idle, validating, submitting, invalid credentials, locked, server error</td>
+</tr>
+<tr>
+<td>Auth bootstrap</td>
+<td>loading session, authenticated, unauthenticated, expired</td>
+</tr>
+<tr>
+<td>Today</td>
+<td>loading, ready, submitting, completed, day off, locked, assignment missing, error</td>
+</tr>
+<tr>
+<td>GPS</td>
+<td>idle, locating, ready, low accuracy, outside, permission denied, timeout, unavailable</td>
+</tr>
+<tr>
+<td>Camera</td>
+<td>idle, requesting, ready, captured, denied, unavailable, error</td>
+</tr>
+<tr>
+<td>Upload</td>
+<td>preparing, uploading, success, timeout, file invalid</td>
+</tr>
+<tr>
+<td>History</td>
+<td>loading, data, empty, error</td>
+</tr>
+<tr>
+<td>Approval list</td>
+<td>loading, data, empty, filtered-empty, error</td>
+</tr>
+<tr>
+<td>Approval detail</td>
+<td>loading, data, forbidden/not found, stale/conflict</td>
+</tr>
+<tr>
+<td>Timesheet review</td>
+<td>loading, ready, blockers, partially-confirmed, ready-to-close, stale/conflict</td>
+</tr>
+<tr>
+<td>Period closing</td>
+<td>confirming, closing, closed, already-closed, rollback/error</td>
+</tr>
+<tr>
+<td>Export</td>
+<td>preparing, ready, downloading, stale snapshot, error</td>
+</tr>
+<tr>
+<td>Organization</td>
+<td>loading, active, suspended, disabled, support-access-required</td>
+</tr>
+<tr>
+<td>Calendar/day classification</td>
+<td>working, weekly-off, holiday, leave, absent, incomplete</td>
+</tr>
+<tr>
+<td>Adjustment</td>
+<td>draft, pending-manager, approved, rejected, applying, applied, period-closed</td>
+</tr>
+<tr>
+<td>Tenant forms</td>
+<td>create/edit, validation error, duplicate-in-tenant, forbidden, save success/failure</td>
+</tr>
+</tbody>
+</table></div>
+<p>Mọi trạng thái lỗi phải có hành động phù hợp: thử lại, cấp quyền, đăng nhập lại hoặc liên hệ System Admin. Không chỉ hiển thị “Có lỗi xảy ra”.</p>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-21-acceptance-criteria-tong-hop" class="wiki-section searchable" data-title="21. Acceptance criteria tổng hợp" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Acceptance criteria tổng hợp</li>
+</ol></h2><div class="section-body"><h3>21.1. Authentication</h3>
+<ul>
+<li>AC-AUTH-01: Credential đúng tạo session và trả đúng role.</li>
+<li>AC-AUTH-02: Credential sai không tiết lộ user có tồn tại.</li>
+<li>AC-AUTH-03: Password trong DB không phải plaintext.</li>
+<li>AC-AUTH-04: Logout làm session không còn dùng được.</li>
+<li>AC-AUTH-05: User locked/disabled bị chặn ở backend.</li>
+<li>AC-AUTH-06: Employee gọi System Admin API nhận 403.</li>
+<li>AC-AUTH-07: User có mật khẩu tạm phải đổi trước khi dùng hệ thống.</li>
+</ul>
+<h3>21.2. Employee</h3>
+<ul>
+<li>AC-EMP-01: Employee chỉ nhận history của chính mình.</li>
+<li>AC-EMP-02: Check-out trước check-in bị từ chối.</li>
+<li>AC-EMP-03: Double-click check-in chỉ tạo một event.</li>
+<li>AC-EMP-04: Server time không đổi khi user sửa giờ thiết bị.</li>
+<li>AC-EMP-05: Selfie check-in tạo ApprovalRequest trong DB.</li>
+<li>AC-EMP-06: Selfie pending vẫn cho check-out.</li>
+<li>AC-EMP-07: Check-in/out Selfie dùng hai evidence độc lập.</li>
+<li>AC-EMP-08: Refresh trang không làm mất attendance state.</li>
+<li>AC-EMP-09: Camera dừng khi rời flow.</li>
+<li>AC-EMP-10: Completed không còn action.</li>
+</ul>
+<h3>21.3. Department Manager</h3>
+<ul>
+<li>AC-MGR-01: Department Manager không xem được request ngoài phạm vi.</li>
+<li>AC-MGR-02: Reject thiếu reason bị từ chối.</li>
+<li>AC-MGR-03: Approve cập nhật request/event/day trong cùng transaction.</li>
+<li>AC-MGR-04: Employee thấy quyết định sau refetch/login lại.</li>
+<li>AC-MGR-05: Hai Department Manager/tab cùng xử lý chỉ quyết định đầu hợp lệ; lần sau nhận conflict.</li>
+<li>AC-MGR-06: Evidence URL không thể truy cập khi logout hoặc không có quyền.</li>
+</ul>
+<h3>21.4. System Admin và multi-tenant</h3>
+<ul>
+<li>AC-SYS-01: System Admin tạo Organization và HR đầu tiên nhưng không gọi được approval/period-close API.</li>
+<li>AC-SYS-02: Organization SUSPENDED không dùng session nghiệp vụ.</li>
+<li>AC-TENANT-01: HR-A đổi ID/query vẫn không đọc/sửa được resource của B.</li>
+<li>AC-TENANT-02: Manager-A không xử lý được request ngoài Department/Organization được giao.</li>
+<li>AC-TENANT-03: Email/employeeCode được trùng giữa tenant nhưng không trùng trong cùng tenant.</li>
+<li>AC-TENANT-04: Evidence URL/storage key không cho phép bypass tenant authorization.</li>
+<li>AC-TENANT-05: Cache, background job và export không trả dữ liệu lẫn giữa tenant.</li>
+<li>AC-SYS-03: Support access hết hạn/ngoài scope bị từ chối và mọi truy cập được audit.</li>
+</ul>
+<h3>21.5. HR và chốt kỳ</h3>
+<ul>
+<li>AC-HR-01: Không chốt được kỳ khi còn approval Pending hoặc thiếu check-out.</li>
+<li>AC-HR-02: Department Manager không xác nhận được phòng ban ngoài phạm vi.</li>
+<li>AC-HR-03: Thay đổi dữ liệu sau xác nhận làm xác nhận cũ hết hiệu lực theo period version.</li>
+<li>AC-HR-04: Chốt thành công tạo đủ TimesheetSummary và chuyển kỳ CLOSED trong một transaction.</li>
+<li>AC-HR-05: Check-in/out hoặc clarification thuộc kỳ CLOSED nhận <code>423 PERIOD_CLOSED</code>.</li>
+<li>AC-HR-06: HR mở lại kỳ cùng Organization phải nhập lý do và tạo audit log.</li>
+<li>AC-HR-07: Employee chỉ xem được tổng hợp của chính mình.</li>
+<li>AC-HR-08: CSV/XLSX khớp dữ liệu snapshot của kỳ đã chốt.</li>
+<li>AC-HR-09: Hai tab cùng chốt chỉ request đầu thành công; request sau nhận conflict/already closed.</li>
+<li>AC-ADJ-01: Adjustment áp dụng với before/after audit và tăng period version.</li>
+<li>AC-ADJ-02: Kỳ CLOSED phải được HR mở lại trước khi áp dụng adjustment.</li>
+<li>AC-CAL-01: Weekly off/holiday/leave không bị tính ABSENT; ngày làm việc thiếu event được phân loại đúng.</li>
+<li>AC-HIST-01: Chuyển phòng/ca không thay đổi snapshot kỳ cũ.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-22-test-strategy" class="wiki-section searchable" data-title="22. Test strategy" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Test strategy</li>
+</ol></h2><div class="section-body"><h3>22.1. Unit test</h3>
+<ul>
+<li>Password policy và auth error mapping.</li>
+<li>Haversine distance.</li>
+<li>GPS validation.</li>
+<li>Resolve attendance method.</li>
+<li>Attendance state transition.</li>
+<li>Approval state transition.</li>
+<li>Tính working/late/early minutes.</li>
+<li>RBAC, tenant-scope và department-scope policy functions.</li>
+<li>Work calendar/day classification và adjustment transition.</li>
+<li>Idempotency request hash.</li>
+<li>Timesheet period state transition và blocker calculation.</li>
+<li>Tổng hợp TimesheetSummary và period version.</li>
+</ul>
+<h3>22.2. Integration/API test</h3>
+<ul>
+<li>Login/logout/session expiry.</li>
+<li>Organization lifecycle, initial HR và tenant-scoped unique constraints.</li>
+<li>HR CRUD Department/Workplace/Shift/Calendar/Assignment.</li>
+<li>Check-in/check-out transaction.</li>
+<li>Concurrent check-in/out.</li>
+<li>Selfie upload validation.</li>
+<li>Approval workflow và authorization scope.</li>
+<li>Evidence endpoint authorization.</li>
+<li>History filtering theo current user và Organization.</li>
+<li>Adjustment review/apply/version invalidation.</li>
+<li>Department confirmation scope/version.</li>
+<li>Close/reopen period transaction và audit.</li>
+<li>Export integrity từ snapshot.</li>
+</ul>
+<h3>22.3. E2E</h3>
+<ol>
+<li>System Admin tạo Organization A/B và HR-A/HR-B.</li>
+<li>HR-A cấu hình Department, Workplace, Shift, Calendar, Manager-A và Employee-A.</li>
+<li>Employee-A GPS check-in; Employee-C Selfie ngoài văn phòng.</li>
+<li>Manager-A xử lý approval, adjustment và xác nhận phòng ban.</li>
+<li>HR-A phân loại nghỉ/vắng, áp dụng adjustment và rà soát blocker.</li>
+<li>HR-A chốt kỳ, export snapshot và chứng minh CLOSED chặn mutation.</li>
+<li>HR-A mở lại có lý do; confirmation version cũ mất hiệu lực.</li>
+<li>User Organization A thử truy cập resource B và bị từ chối.</li>
+<li>System Admin xem health/audit nhưng không xử lý/chốt công.</li>
+</ol>
+<h3>22.4. Security tests tối thiểu</h3>
+<ul>
+<li>SQL injection strings ở login/search không vượt validation/query binding.</li>
+<li>User A không đọc được attendance/evidence của User B bằng cách đổi ID.</li>
+<li>Employee không tự sửa role trong payload profile.</li>
+<li>Token/session hết hạn trả 401.</li>
+<li>File giả MIME bị backend từ chối.</li>
+<li>Path traversal trong file name không ảnh hưởng storage path.</li>
+<li>Login rate limiting hoạt động.</li>
+<li>HR-A không đọc/sửa được resource B bằng UUID thật.</li>
+<li>Manager không vượt managedDepartmentIds.</li>
+<li>Evidence/cache/export/background job không lẫn tenant.</li>
+<li>System Admin không gọi được close/reopen/approval API; support grant hết hạn bị chặn.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-23-kien-truc-logic-e-xuat" class="wiki-section searchable" data-title="23. Kiến trúc logic đề xuất" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Kiến trúc logic đề xuất</li>
+</ol></h2><div class="section-body"><pre data-lang="text"><code>System Admin Portal                 Tenant Application
+└── Organization/Support UI         ├── Employee UI
+                                    ├── Department Manager UI
+                                    └── HR UI
+              └──────── HTTPS / API ─────────┘
+                             │
+Backend
+├── Tenant Context Middleware (session → organizationId)
+├── Auth &amp; RBAC/Resource Scope
+├── Organization &amp; Support Access
+├── Department/Workplace/Shift/Calendar
+├── Attendance/Evidence/Approval/Adjustment
+├── Timesheet Closing/Snapshot/Export
+├── Audit &amp; Idempotency
+└── Tenant-scoped jobs/cache/storage
+                             │
+       PostgreSQL + Private Object Storage
+</code></pre>
+<h3>23.1. Ranh giới trách nhiệm</h3>
+<p><strong>Frontend:</strong> form/routing, camera/GPS, hiển thị backend state và chặn double-click ở UX; không quyết định tenant, role hoặc method chính thức.</p>
+<p><strong>Backend:</strong> suy ra tenant context, kiểm tra role/resource scope, server time, validation, calendar classification, state machine, transaction, snapshot, export và audit.</p>
+<p><strong>Data isolation:</strong> repository/service nhận tenant context bắt buộc; database constraints/indexes, object storage, cache và background jobs được namespaced theo Organization. System Admin dùng platform namespace và support grant, không giả mạo tenant session.</p>
+<h3>23.2. Khoảng cách từ prototype đến sản phẩm TimeLock</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prototype/mock hiện tại</th>
+<th>Sản phẩm TimeLock cần hiện thực</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>localStorage</code> làm mock server</td>
+<td>Database + API thật</td>
+</tr>
+<tr>
+<td>Employee và Department Manager store tách rời</td>
+<td>Cùng domain/service/database</td>
+</tr>
+<tr>
+<td>Login dùng mock account/localStorage</td>
+<td>Auth backend + password hash + session an toàn</td>
+</tr>
+<tr>
+<td>User/role/kịch bản hard-code</td>
+<td>Bảng User + RBAC + assignment + seed script</td>
+</tr>
+<tr>
+<td>Shift/workplace hard-code</td>
+<td>System Admin CRUD + database</td>
+</tr>
+<tr>
+<td>Giờ “server” dùng <code>new Date()</code> trên client</td>
+<td>Backend/database timestamp</td>
+</tr>
+<tr>
+<td>Ảnh Unsplash fallback</td>
+<td>Upload ảnh thật; fallback chỉ dùng seed/demo riêng</td>
+</tr>
+<tr>
+<td>Harness/SimulationSandbox còn trong source</td>
+<td>Không import vào production entry; chỉ giữ như tài liệu dev nếu cần</td>
+</tr>
+<tr>
+<td>App hiện chuyển màn bằng state</td>
+<td>Router + protected routes theo Employee/Department Manager/HR/System Admin</td>
+</tr>
+<tr>
+<td>Chưa có Organization/Department/calendar</td>
+<td>Bổ sung tenant context, department scope và lịch công tối thiểu</td>
+</tr>
+<tr>
+<td>Chưa có adjustment</td>
+<td>Thêm request → manager review → HR apply + audit/version</td>
+</tr>
+<tr>
+<td>Chưa có chốt kỳ công trong prototype</td>
+<td>Bổ sung TimesheetPeriod, blockers, confirmation, close/reopen và export</td>
+</tr>
+<tr>
+<td>Mock data chỉ một tenant</td>
+<td>Seed hai tenant và test IDOR chéo Organization</td>
+</tr>
+<tr>
+<td>Department Manager decision chỉ cập nhật state cục bộ</td>
+<td>Transaction cập nhật DB và employee đọc lại được</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-24-seed-data-va-demo-mode" class="wiki-section searchable" data-title="24. Seed data và demo mode" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Seed data và demo mode</li>
+</ol></h2><div class="section-body"><p>Để thuận tiện chấm bài, cung cấp seed script, không hard-code credential trong production source.</p>
+<p>Dữ liệu seed đề xuất:</p>
+<ul>
+<li>Organization A và B, mỗi tenant có HR riêng.</li>
+<li>Organization A: 2 Department, 2 Workplace, 2 Shift, 1 Manager, 2 Employee.</li>
+<li>Organization B: 1 Department, 1 Workplace, 1 Manager, 1 Employee để test isolation.</li>
+<li>Calendar có ngày làm việc, ngày lễ, paid/unpaid leave và ngày incomplete.</li>
+<li>Approval Selfie/GPS, AdjustmentRequest pending/approved.</li>
+<li>Một kỳ REVIEWING có blocker và một kỳ CLOSED có snapshot.</li>
+</ul>
+<p>Credential demo chỉ ghi trong README hoặc file <code>.env.example</code>/seed guide của môi trường demo, yêu cầu đổi nếu deploy công khai.</p>
+<p>Hero demo 5–7 phút:</p>
+<pre data-lang="text"><code>System Admin tạo Organization A/B + HR đầu tiên
+→ HR-A cấu hình cơ cấu và lịch công
+→ Employee GPS/Selfie check-in
+→ Manager xử lý evidence/adjustment và xác nhận phòng
+→ HR xử lý blocker, chốt kỳ, export snapshot
+→ thử mutation CLOSED và mở lại có audit
+→ HR-A dùng UUID thật của B nhưng nhận 404
+→ System Admin xem health/audit, không có quyền nghiệp vụ công
+</code></pre>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-25-ke-hoach-trien-khai-theo-giai-oan" class="wiki-section searchable" data-title="25. Kế hoạch triển khai theo giai đoạn" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Kế hoạch triển khai theo giai đoạn</li>
+</ol></h2><div class="section-body"><h3>Phase 1 — Foundation</h3>
+<ul>
+<li>Khởi tạo frontend/backend/database.</li>
+<li>Database migrations.</li>
+<li>Auth login/logout/me/change password.</li>
+<li>User + RBAC + protected routes.</li>
+<li>Seed System Admin.</li>
+</ul>
+<h3>Phase 2 — Multi-tenant và HR configuration</h3>
+<ul>
+<li>Organization lifecycle + tenant context middleware.</li>
+<li>Department, tenant-user, Workplace/Network/Shift CRUD.</li>
+<li>Calendar/leave tối thiểu và assignment có hiệu lực.</li>
+<li>Tenant-isolation integration tests.</li>
+</ul>
+<h3>Phase 3 — Attendance core</h3>
+<ul>
+<li>Today API.</li>
+<li>Attendance state machine.</li>
+<li>IN_OFFICE Network/GPS.</li>
+<li>Check-in/check-out transaction.</li>
+<li>History/detail.</li>
+<li>Idempotency.</li>
+</ul>
+<h3>Phase 4 — Selfie và Approval</h3>
+<ul>
+<li>Camera/preview/upload.</li>
+<li>Private evidence storage.</li>
+<li>ApprovalRequest tự động.</li>
+<li>Department Manager list/detail/actions.</li>
+<li>Employee clarification.</li>
+<li>Adjustment request/review/apply và period version.</li>
+</ul>
+<h3>Phase 5 — Timesheet closing</h3>
+<ul>
+<li>TimesheetPeriod và period state machine.</li>
+<li>Rà soát blocker và xác nhận phòng ban.</li>
+<li>TimesheetSummary snapshot.</li>
+<li>Chốt/mở lại kỳ và export CSV/XLSX.</li>
+</ul>
+<h3>Phase 6 — Hardening và demo</h3>
+<ul>
+<li>Audit log.</li>
+<li>Validation/error states.</li>
+<li>Unit/integration/E2E.</li>
+<li>Responsive/accessibility.</li>
+<li>Seed/demo script.</li>
+<li>Deploy HTTPS và viết README.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-26-definition-of-done-cho-mvp" class="wiki-section searchable" data-title="26. Definition of Done cho MVP" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Definition of Done cho MVP</li>
+</ol></h2><div class="section-body"><ul>
+<li>[ ] Có migration và seed chạy được từ database rỗng.</li>
+<li>[ ] Có login/logout/change password thật.</li>
+<li>[ ] Password được hash; không có credential production hard-code.</li>
+<li>[ ] Có RBAC, resource scope và tenant context backend; protected routes frontend.</li>
+<li>[ ] Test chéo hai Organization chứng minh không rò dữ liệu qua API/evidence/cache/export.</li>
+<li>[ ] System Admin quản lý Organization/HR đầu tiên nhưng không có quyền nghiệp vụ công.</li>
+<li>[ ] HR quản lý Department/User/Workplace/Shift/Calendar/Assignment trong tenant.</li>
+<li>[ ] Employee check-in/out và xem history/detail.</li>
+<li>[ ] Network hoặc GPS validation chạy ở backend.</li>
+<li>[ ] Selfie upload thật tạo ApprovalRequest thật.</li>
+<li>[ ] Department Manager approve/reject/clarify đúng Department scope và kết quả lưu bền vững.</li>
+<li>[ ] Adjustment lưu before/after và tăng period version.</li>
+<li>[ ] Calendar phân loại đúng holiday/leave/absent/incomplete.</li>
+<li>[ ] Department Manager xác nhận được dữ liệu phòng ban sẵn sàng chốt.</li>
+<li>[ ] HR rà soát blocker, chốt kỳ và tạo TimesheetSummary snapshot.</li>
+<li>[ ] Kỳ CLOSED chặn mọi mutation ngày công.</li>
+<li>[ ] HR mở lại kỳ cùng tenant bắt buộc có lý do và audit.</li>
+<li>[ ] CSV/XLSX khớp snapshot database.</li>
+<li>[ ] Employee thấy kết quả duyệt và tổng hợp tháng sau reload.</li>
+<li>[ ] Có idempotency và unique constraints chống trùng.</li>
+<li>[ ] Evidence private và kiểm tra authorization.</li>
+<li>[ ] Có loading/empty/error/permission states chính.</li>
+<li>[ ] Unit và integration test cho business rules trọng yếu.</li>
+<li>[ ] Build production thành công.</li>
+<li>[ ] README có hướng dẫn setup, env, migration, seed, run và tài khoản demo.</li>
+<li>[ ] Có video hoặc kịch bản demo end-to-end nếu môn học yêu cầu.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-27-open-questions-va-gia-tri-mac-inh" class="wiki-section searchable" data-title="27. Open questions và giá trị mặc định" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Open questions và giá trị mặc định</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mã</th>
+<th>Câu hỏi</th>
+<th>Mặc định đề xuất</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OQ-01</td>
+<td>Stack?</td>
+<td>Node.js/NestJS hoặc Spring Boot + PostgreSQL</td>
+</tr>
+<tr>
+<td>OQ-02</td>
+<td>Xác định tenant lúc login?</td>
+<td>organizationCode + identifier + password; platform login riêng</td>
+</tr>
+<tr>
+<td>OQ-03</td>
+<td>Kiến trúc tenant?</td>
+<td>Shared schema có organizationId; test isolation bắt buộc</td>
+</tr>
+<tr>
+<td>OQ-04</td>
+<td>Manager quản lý nhiều phòng?</td>
+<td>Có qua ManagerAssignment có hiệu lực</td>
+</tr>
+<tr>
+<td>OQ-05</td>
+<td>Radius/accuracy?</td>
+<td>100m / 80m theo Workplace</td>
+</tr>
+<tr>
+<td>OQ-06</td>
+<td>Grace/break?</td>
+<td>5 phút / 60 phút theo Shift</td>
+</tr>
+<tr>
+<td>OQ-07</td>
+<td>Calendar MVP?</td>
+<td>Tuần + holiday + paid/unpaid leave override</td>
+</tr>
+<tr>
+<td>OQ-08</td>
+<td>Selfie retention?</td>
+<td>90 ngày theo Organization</td>
+</tr>
+<tr>
+<td>OQ-09</td>
+<td>Chốt/mở lại?</td>
+<td>Chỉ HR cùng Organization; mở lại có lý do/audit</td>
+</tr>
+<tr>
+<td>OQ-10</td>
+<td>Adjustment sau chốt?</td>
+<td>HR mở lại kỳ trước khi áp dụng</td>
+</tr>
+<tr>
+<td>OQ-11</td>
+<td>Export?</td>
+<td>CSV bắt buộc; XLSX SHOULD; CLOSED lấy từ snapshot</td>
+</tr>
+<tr>
+<td>OQ-12</td>
+<td>Support access?</td>
+<td>Grant có ticket, reason, scopes, expiresAt và audit</td>
+</tr>
+<tr>
+<td>OQ-13</td>
+<td>Billing/subscription?</td>
+<td>LATER</td>
+</tr>
+<tr>
+<td>OQ-14</td>
+<td>Evidence storage?</td>
+<td>Private, namespace organizationId</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-28-thuat-ngu" class="wiki-section searchable" data-title="28. Thuật ngữ" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Thuật ngữ</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuật ngữ</th>
+<th>Định nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Authentication</td>
+<td>Xác minh user là ai bằng credential/session</td>
+</tr>
+<tr>
+<td>Authorization/RBAC</td>
+<td>Kiểm tra user được phép làm gì theo role và resource scope</td>
+</tr>
+<tr>
+<td>Multi-tenant</td>
+<td>Một nền tảng phục vụ nhiều Organization với dữ liệu cô lập</td>
+</tr>
+<tr>
+<td>Organization/Tenant</td>
+<td>Khách hàng sở hữu phạm vi dữ liệu riêng</td>
+</tr>
+<tr>
+<td>Department</td>
+<td>Phòng ban thuộc Organization</td>
+</tr>
+<tr>
+<td>Tenant context</td>
+<td>organizationId tin cậy suy ra từ session</td>
+</tr>
+<tr>
+<td>Employee</td>
+<td>User chấm công cho chính mình</td>
+</tr>
+<tr>
+<td>Department Manager</td>
+<td>Trưởng phòng duyệt ngoại lệ/adjustment và xác nhận Department được giao</td>
+</tr>
+<tr>
+<td>HR</td>
+<td>User rà soát, chốt kỳ công và xuất bảng tổng hợp</td>
+</tr>
+<tr>
+<td>System Admin</td>
+<td>Quản trị nền tảng/Organization; không xử lý hoặc chốt/mở công</td>
+</tr>
+<tr>
+<td>WorkMode</td>
+<td><code>IN_OFFICE</code> hoặc <code>OUT_OFFICE</code></td>
+</tr>
+<tr>
+<td>AttendanceMethod</td>
+<td><code>NETWORK</code>, <code>GPS</code>, <code>SELFIE</code> — bằng chứng backend lưu</td>
+</tr>
+<tr>
+<td>AttendanceDay</td>
+<td>Trạng thái tổng hợp ngày công của một employee</td>
+</tr>
+<tr>
+<td>AttendanceEvent</td>
+<td>Một lần CHECK_IN hoặc CHECK_OUT</td>
+</tr>
+<tr>
+<td>Evidence</td>
+<td>Ảnh/tệp bằng chứng private</td>
+</tr>
+<tr>
+<td>Geofence</td>
+<td>Vùng bán kính quanh workplace</td>
+</tr>
+<tr>
+<td>Accuracy</td>
+<td>Sai số ước tính do Geolocation API trả về</td>
+</tr>
+<tr>
+<td>Server time</td>
+<td>Thời gian backend/database ghi nhận chính thức</td>
+</tr>
+<tr>
+<td>Idempotency-Key</td>
+<td>Khóa chống tạo nhiều kết quả từ cùng một mutation</td>
+</tr>
+<tr>
+<td>ApprovalRequest</td>
+<td>Yêu cầu Manager xem xét evidence/bất thường</td>
+</tr>
+<tr>
+<td>AdjustmentRequest</td>
+<td>Yêu cầu sửa ngày công có workflow và audit before/after</td>
+</tr>
+<tr>
+<td>Workday classification</td>
+<td>Phân loại working/off/holiday/leave và present/absent/incomplete</td>
+</tr>
+<tr>
+<td>TimesheetPeriod</td>
+<td>Kỳ công theo tháng, đi qua OPEN/REVIEWING/READY_TO_CLOSE/CLOSED</td>
+</tr>
+<tr>
+<td>TimesheetSummary</td>
+<td>Snapshot tổng hợp của một nhân viên tại lần chốt kỳ</td>
+</tr>
+<tr>
+<td>Period blocker</td>
+<td>Lỗi ngăn chốt kỳ như thiếu event hoặc approval chưa hoàn tất</td>
+</tr>
+<tr>
+<td>AuditLog</td>
+<td>Dấu vết ai đã làm gì, khi nào, trên entity nào</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-29-ket-luan" class="wiki-section searchable" data-title="29. Kết luận" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2><ol>
+<li>Kết luận</li>
+</ol></h2><div class="section-body"><p>TimeLock là nền tảng multi-tenant quản lý trọn vòng đời ngày công cho nhiều Organization:</p>
+<pre data-lang="text"><code>Organization &amp; Tenant Isolation
++ Department/Workplace/Shift/Calendar
++ Attendance Network/GPS/Selfie
++ Evidence, Approval &amp; Adjustment
++ Department Confirmation
++ Timesheet Closing, Snapshot &amp; Export
++ Audit &amp; Support Access Control
+</code></pre>
+<p>MVP chỉ hoàn thành khi chứng minh cô lập hai tenant, phân quyền bốn role đúng phạm vi, adjustment có audit, lịch công phân biệt nghỉ/vắng, HR chốt/mở kỳ đúng tenant và export lấy từ snapshot. TimeLock không tính lương, billing hoặc subscription trong giai đoạn này.</p>
+<hr />
+<p><em>Tài liệu kết thúc — <code>SRS_TIMELOCK.md</code>, TimeLock SRS version 3.0.</em></p></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section></article><article id="doc-proposal" class="doc-article"><header class="doc-header searchable" data-title="Project Proposal"><div class="doc-icon">PRJ</div><div><p class="eyebrow">Nguồn: TIMELOCK_PROJECT_PROPOSAL.md</p><h1>Project Proposal</h1><p>Đề xuất dự án và nội dung đăng ký</p></div></header><div class="doc-intro"><h1>TimeLock — Employee Attendance &amp; Timesheet Closing System</h1>
+<blockquote class="callout">
+<p><strong>Tên tiếng Việt:</strong> Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên<br />
+<strong>Tên tiếng Anh:</strong> TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System<br />
+<strong>Loại dự án:</strong> Web application độc lập, responsive, mobile-first<br />
+<strong>Môn học:</strong> SWP391 — Software Development Project<br />
+<strong>Học kỳ:</strong> FA26<br />
+<strong>Trạng thái:</strong> Đề xuất dự án sinh viên</p>
+</blockquote>
+<hr /></div><section id="proposal-1-thong-tin-theo-bang-fa26-swp391" class="wiki-section searchable" data-title="1. Thông tin theo bảng FA26_SWP391" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Thông tin theo bảng FA26_SWP391</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th style="text-align: right;">No.</th>
+<th>Lecturers</th>
+<th>Project Name</th>
+<th>Actors</th>
+<th>Main Features</th>
+<th>Must Have</th>
+<th>Nice to Have</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">TBD</td>
+<td>TBD</td>
+<td><strong>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System</strong></td>
+<td>Employee</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;">Approver / Department Manager</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;">HR / Timekeeping Officer</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;">System Administrator</td>
+<td>Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.</td>
+<td><strong>Flow 1:</strong> User, Role &amp; Attendance Configuration Management</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Flow 2:</strong> Employee Check-in/Check-out &amp; Evidence Management</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Flow 3:</strong> Attendance Approval &amp; Clarification Workflow</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Flow 4:</strong> Monthly Timesheet Review &amp; Closing</td>
+<td><strong>Flow 5:</strong> Adjustment Request After Closing</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Flow 6:</strong> Dashboard, Notification &amp; Export</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>Flow 7:</strong> Advanced Security and Analytics</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<blockquote class="callout">
+<p><code>Lecturers</code> và số thứ tự chưa có thông tin nên được để <code>TBD</code>, tránh tự gán sai giảng viên phụ trách.</p>
+</blockquote>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-2-project-name" class="wiki-section searchable" data-title="2. Project Name" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Project Name</li>
+</ol></h2><div class="section-body"><h3>Tên chính thức</h3>
+<p><strong>TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên</strong></p>
+<h3>Tên tiếng Anh</h3>
+<p><strong>TimeLock — Employee Attendance, Approval &amp; Timesheet Closing System</strong></p>
+<h3>Tagline</h3>
+<blockquote class="callout">
+<p><strong>Chấm công. Duyệt công. Chốt công.</strong><br />
+<em>Track every minute. Close every period with confidence.</em></p>
+</blockquote>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-3-problem-statement" class="wiki-section searchable" data-title="3. Problem Statement" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Problem Statement</li>
+</ol></h2><div class="section-body"><p>Các tổ chức nhỏ thường quản lý chấm công bằng bảng tính, biểu mẫu thủ công hoặc những hệ thống chỉ ghi nhận giờ vào/ra mà chưa xử lý đầy đủ các trường hợp làm việc ngoài văn phòng. Điều này gây ra nhiều vấn đề:</p>
+<ul>
+<li>Không xác minh được nhân viên thực sự chấm công tại đâu.</li>
+<li>Dữ liệu Network, GPS và ảnh Selfie được quản lý rời rạc.</li>
+<li>Quản lý khó kiểm tra các trường hợp bất thường hoặc thiếu bằng chứng.</li>
+<li>Nhân viên không có quy trình giải trình minh bạch khi bản ghi bị từ chối.</li>
+<li>Dữ liệu ngày công có thể bị thay đổi sau khi đã tổng hợp.</li>
+<li>Bộ phận nhân sự mất nhiều thời gian rà soát, tổng hợp và khóa bảng công cuối tháng.</li>
+<li>Khó truy vết ai đã tạo, duyệt, từ chối hoặc chỉnh sửa một bản ghi.</li>
+</ul>
+<p>TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm công đến khi dữ liệu được quản lý phê duyệt và bộ phận nhân sự chốt kỳ công.</p>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-4-project-objectives" class="wiki-section searchable" data-title="4. Project Objectives" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Project Objectives</li>
+</ol></h2><div class="section-body"><ul>
+<li>Xây dựng hệ thống chấm công độc lập có đăng nhập và phân quyền theo vai trò.</li>
+<li>Hỗ trợ nhân viên chấm công tại văn phòng và ngoài văn phòng.</li>
+<li>Xác minh bản ghi bằng Network, GPS hoặc Selfie kết hợp vị trí.</li>
+<li>Quản lý bằng chứng chấm công có kiểm soát truy cập.</li>
+<li>Cung cấp quy trình duyệt, từ chối và yêu cầu giải trình.</li>
+<li>Cho phép nhân viên theo dõi lịch sử và trạng thái xử lý ngày công.</li>
+<li>Tổng hợp dữ liệu theo tháng và thực hiện chốt/khóa kỳ công.</li>
+<li>Bảo đảm dữ liệu đã chốt không bị thay đổi tùy ý.</li>
+<li>Lưu audit log cho các thao tác quan trọng.</li>
+<li>Tạo một sản phẩm responsive có thể trình diễn trên điện thoại, tablet và desktop.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-5-actors" class="wiki-section searchable" data-title="5. Actors" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Actors</li>
+</ol></h2><div class="section-body"><h3>5.1. Employee — Nhân viên</h3>
+<ul>
+<li>Đăng nhập bằng email hoặc mã nhân viên và mật khẩu.</li>
+<li>Xem ca làm việc, nơi làm việc và trạng thái chấm công hôm nay.</li>
+<li>Chọn làm tại văn phòng hoặc làm ngoài văn phòng.</li>
+<li>Check-in và check-out bằng phương thức phù hợp.</li>
+<li>Chụp Selfie và gửi vị trí khi làm ngoài văn phòng.</li>
+<li>Xem phương thức, thời gian server và bằng chứng đã ghi nhận.</li>
+<li>Xem lịch sử chấm công theo tháng.</li>
+<li>Xem chi tiết từng ngày công.</li>
+<li>Xem trạng thái phê duyệt và lý do bị từ chối.</li>
+<li>Gửi giải trình khi quản lý yêu cầu.</li>
+<li>Xem bảng tổng hợp công cá nhân trước và sau khi kỳ công được chốt.</li>
+</ul>
+<h3>5.2. Approver / Department Manager — Người phê duyệt / Quản lý phòng ban</h3>
+<ul>
+<li>Xem yêu cầu thuộc các nhân viên được phân công quản lý.</li>
+<li>Tìm kiếm và lọc yêu cầu theo nhân viên, trạng thái, ngày và phương thức.</li>
+<li>Xem ảnh Selfie, tọa độ GPS, độ chính xác và thời gian server.</li>
+<li>Xem cảnh báo như chấm công ngoài geofence hoặc hai địa điểm cách xa nhau.</li>
+<li>Phê duyệt bản ghi hợp lệ.</li>
+<li>Từ chối và bắt buộc nhập lý do.</li>
+<li>Yêu cầu nhân viên giải trình.</li>
+<li>Xem phản hồi của nhân viên và đưa ra quyết định cuối cùng.</li>
+<li>Theo dõi audit timeline của yêu cầu.</li>
+<li>Xác nhận dữ liệu phòng ban đã sẵn sàng để chốt công.</li>
+</ul>
+<h3>5.3. HR / Timekeeping Officer — Nhân sự / Nhân viên chấm công</h3>
+<ul>
+<li>Xem tình trạng hoàn thiện bảng công theo tháng và phòng ban.</li>
+<li>Xem nhân viên thiếu check-in, thiếu check-out hoặc còn yêu cầu chờ duyệt.</li>
+<li>Rà soát số ngày công, tổng giờ, số phút đi trễ và về sớm.</li>
+<li>Mở kỳ công mới.</li>
+<li>Kiểm tra điều kiện trước khi chốt kỳ.</li>
+<li>Chốt và khóa kỳ công.</li>
+<li>Mở lại kỳ công khi có lý do hợp lệ và lưu audit log.</li>
+<li>Xuất bảng tổng hợp CSV/Excel phục vụ xử lý lương bên ngoài.</li>
+<li>Xử lý hoặc phối hợp xử lý yêu cầu điều chỉnh ngày công.</li>
+</ul>
+<h3>5.4. System Administrator — Quản trị viên hệ thống</h3>
+<ul>
+<li>Quản lý tài khoản người dùng.</li>
+<li>Gán vai trò Employee, Approver, HR và Administrator.</li>
+<li>Khóa, mở khóa hoặc vô hiệu hóa tài khoản.</li>
+<li>Đặt lại mật khẩu tạm thời.</li>
+<li>Quản lý workplace và thông tin geofence.</li>
+<li>Quản lý mạng/IP/CIDR được phép chấm công.</li>
+<li>Quản lý ca làm và lịch làm việc.</li>
+<li>Gán workplace, shift và approver cho nhân viên.</li>
+<li>Cấu hình chính sách chấm công và thời hạn lưu bằng chứng.</li>
+<li>Xem audit log toàn hệ thống.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-6-main-features" class="wiki-section searchable" data-title="6. Main Features" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Main Features</li>
+</ol></h2><div class="section-body"><h3>6.1. Authentication and Account Management</h3>
+<ul>
+<li>Đăng nhập bằng email hoặc mã nhân viên.</li>
+<li>Đăng xuất và quản lý phiên đăng nhập.</li>
+<li>Đổi mật khẩu.</li>
+<li>Bắt buộc đổi mật khẩu tạm thời trong lần đăng nhập đầu tiên.</li>
+<li>Khóa đăng nhập tạm thời khi nhập sai nhiều lần.</li>
+<li>Admin tạo, cập nhật, khóa và vô hiệu hóa tài khoản.</li>
+<li>Role-based access control ở cả frontend và backend.</li>
+</ul>
+<h3>6.2. Workplace, Network and Shift Configuration</h3>
+<ul>
+<li>Quản lý danh sách địa điểm làm việc.</li>
+<li>Cấu hình latitude, longitude và bán kính geofence.</li>
+<li>Cấu hình độ chính xác GPS tối đa.</li>
+<li>Cấu hình public IP hoặc CIDR mạng văn phòng.</li>
+<li>Bật/tắt Network Attendance, GPS Attendance và Selfie fallback.</li>
+<li>Quản lý ca làm, giờ bắt đầu, giờ kết thúc, thời gian nghỉ và grace period.</li>
+<li>Gán nhân viên vào workplace, shift và approver.</li>
+</ul>
+<h3>6.3. Employee Check-in/Check-out</h3>
+<ul>
+<li>Xem trạng thái ngày công hôm nay.</li>
+<li>Chọn <code>IN_OFFICE</code> hoặc <code>OUT_OFFICE</code> khi check-in.</li>
+<li>Chấm công tại văn phòng bằng Network hoặc GPS.</li>
+<li>Tự động chuyển sang Selfie fallback nếu Network/GPS không hợp lệ và chính sách cho phép.</li>
+<li>Chấm công ngoài văn phòng bằng Selfie + GPS.</li>
+<li>Check-out theo work mode đã chọn lúc check-in.</li>
+<li>Không cho check-out trước check-in.</li>
+<li>Không tạo hai check-in hoặc hai check-out trong cùng ngày.</li>
+<li>Sử dụng thời gian backend làm thời gian chính thức.</li>
+<li>Chống gửi trùng bằng Idempotency-Key.</li>
+</ul>
+<h3>6.4. Evidence Management</h3>
+<ul>
+<li>Chụp ảnh trực tiếp bằng camera trước.</li>
+<li>Xem trước ảnh và chụp lại trước khi gửi.</li>
+<li>Mỗi check-in/check-out sử dụng ảnh mới.</li>
+<li>Lưu vị trí, độ chính xác và thời gian client để audit.</li>
+<li>Kiểm tra MIME type, file signature và dung lượng ảnh.</li>
+<li>Lưu bằng chứng trong private storage.</li>
+<li>Chỉ người sở hữu, người phê duyệt được gán và Admin mới được truy cập.</li>
+</ul>
+<h3>6.5. Approval and Clarification Workflow</h3>
+<ul>
+<li>Selfie tạo yêu cầu phê duyệt tự động.</li>
+<li>GPS bất thường có thể tạo yêu cầu xem xét.</li>
+<li>Approver xem danh sách yêu cầu trong phạm vi quản lý.</li>
+<li>Approve, Reject hoặc Request Clarification.</li>
+<li>Reject bắt buộc có lý do.</li>
+<li>Request Clarification bắt buộc có nội dung.</li>
+<li>Nhân viên gửi phản hồi; yêu cầu trở lại trạng thái Pending.</li>
+<li>Quyết định được lưu trong transaction và có audit trail.</li>
+</ul>
+<h3>6.6. Attendance History and Calculation</h3>
+<ul>
+<li>Xem lịch sử theo tháng.</li>
+<li>Xem thời gian check-in/check-out và phương thức thực tế.</li>
+<li>Hiển thị trạng thái ngày công và trạng thái phê duyệt.</li>
+<li>Tính tổng phút làm việc.</li>
+<li>Tính số phút đi trễ và về sớm.</li>
+<li>Xem chi tiết bằng chứng và audit timeline của từng ngày.</li>
+</ul>
+<h3>6.7. Monthly Timesheet Closing</h3>
+<ul>
+<li>Tạo kỳ công theo tháng.</li>
+<li>Theo dõi trạng thái <code>OPEN</code>, <code>REVIEWING</code>, <code>READY_TO_CLOSE</code>, <code>CLOSED</code>.</li>
+<li>Tổng hợp ngày công theo nhân viên và phòng ban.</li>
+<li>Kiểm tra các lỗi chặn chốt công:</li>
+<li>Thiếu check-in hoặc check-out.</li>
+<li>Yêu cầu phê duyệt chưa xử lý.</li>
+<li>Yêu cầu giải trình chưa hoàn tất.</li>
+<li>Ngày công chưa xác định trạng thái cuối.</li>
+<li>Approver xác nhận bảng công của phòng ban.</li>
+<li>HR chốt kỳ sau khi các điều kiện bắt buộc được đáp ứng.</li>
+<li>Khóa dữ liệu thuộc kỳ đã chốt.</li>
+<li>Mở lại kỳ phải có lý do và audit log.</li>
+<li>Xuất bảng tổng hợp CSV/Excel.</li>
+</ul>
+<h3>6.8. Audit and Reporting</h3>
+<ul>
+<li>Audit login, logout, đổi/reset mật khẩu.</li>
+<li>Audit thay đổi workplace, shift và assignment.</li>
+<li>Audit check-in/check-out và bằng chứng.</li>
+<li>Audit approve, reject, clarification và response.</li>
+<li>Audit thao tác chốt hoặc mở lại kỳ công.</li>
+<li>Dashboard thống kê nhân viên đã check-in, đã hoàn thành và đang chờ duyệt.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-7-must-have-flows" class="wiki-section searchable" data-title="7. Must-have Flows" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Must-have Flows</li>
+</ol></h2><div class="section-body"><h3>Flow 1 — User, Role &amp; Attendance Configuration Management (REQUIRED)</h3>
+<pre data-lang="text"><code>Admin đăng nhập
+→ tạo Workplace và cấu hình geofence
+→ cấu hình Network/IP được phép
+→ tạo Shift
+→ tạo Employee/Approver/HR
+→ gán Workplace + Shift + Approver
+→ cấp tài khoản và mật khẩu tạm thời
+→ người dùng đăng nhập và đổi mật khẩu
+</code></pre>
+<p><strong>Kết quả:</strong> Nhân viên có đầy đủ cấu hình và có thể bắt đầu chấm công.</p>
+<h3>Flow 2 — Employee Check-in/Check-out &amp; Evidence Management (REQUIRED)</h3>
+<pre data-lang="text"><code>Employee đăng nhập
+→ xem ca và nơi làm việc hôm nay
+→ chọn IN_OFFICE hoặc OUT_OFFICE
+→ hệ thống xác minh Network/GPS/Selfie
+→ backend ghi nhận Check-in bằng server time
+→ Employee thực hiện Check-out bằng bằng chứng mới
+→ backend tính tổng giờ, đi trễ và về sớm
+→ Employee xem lịch sử ngày công
+</code></pre>
+<p><strong>Kết quả:</strong> Một ngày công hoàn chỉnh được lưu bền vững, không bị tạo trùng.</p>
+<h3>Flow 3 — Attendance Approval &amp; Clarification Workflow (REQUIRED)</h3>
+<pre data-lang="text"><code>Employee gửi Selfie hoặc phát sinh ngoại lệ GPS
+→ hệ thống tạo ApprovalRequest
+→ Approver xem bằng chứng
+→ Approver chọn Approve / Reject / Request Clarification
+→ nếu cần, Employee gửi giải trình
+→ yêu cầu trở lại Pending
+→ Approver đưa ra quyết định cuối cùng
+→ Employee thấy trạng thái mới sau khi tải lại
+</code></pre>
+<p><strong>Kết quả:</strong> Bản ghi bất thường được xử lý minh bạch và có audit trail.</p>
+<h3>Flow 4 — Monthly Timesheet Review &amp; Closing (REQUIRED)</h3>
+<pre data-lang="text"><code>HR mở kỳ công tháng
+→ hệ thống tổng hợp dữ liệu của từng nhân viên
+→ Approver rà soát dữ liệu phòng ban
+→ xử lý hết bản ghi thiếu hoặc Pending
+→ Approver xác nhận phòng ban sẵn sàng
+→ HR kiểm tra điều kiện chốt
+→ HR chốt và khóa kỳ công
+→ hệ thống tạo snapshot tổng hợp
+→ HR xuất CSV/Excel
+</code></pre>
+<p><strong>Kết quả:</strong> Kỳ công được khóa, dữ liệu có thể dùng làm đầu vào cho quy trình tính lương bên ngoài.</p>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-8-nice-to-have-flows" class="wiki-section searchable" data-title="8. Nice-to-have Flows" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Nice-to-have Flows</li>
+</ol></h2><div class="section-body"><h3>Flow 5 — Adjustment Request After Closing (OPTIONAL)</h3>
+<ul>
+<li>Employee hoặc HR tạo yêu cầu điều chỉnh ngày công.</li>
+<li>Bắt buộc nêu lý do và đính kèm bằng chứng nếu cần.</li>
+<li>Approver/HR xem xét yêu cầu.</li>
+<li>Nếu được chấp nhận, hệ thống tạo phiên bản điều chỉnh thay vì ghi đè dữ liệu cũ.</li>
+<li>Lưu giá trị trước/sau và người phê duyệt trong audit log.</li>
+</ul>
+<h3>Flow 6 — Dashboard, Notification &amp; Export (OPTIONAL)</h3>
+<ul>
+<li>Dashboard theo ngày, tháng và phòng ban.</li>
+<li>Thông báo trong ứng dụng khi yêu cầu được xử lý.</li>
+<li>Nhắc Approver về yêu cầu sắp quá hạn.</li>
+<li>Nhắc HR khi kỳ công sẵn sàng chốt.</li>
+<li>Export CSV/Excel theo biểu mẫu tùy chỉnh.</li>
+<li>Gửi email thông báo sau khi chốt công.</li>
+</ul>
+<h3>Flow 7 — Advanced Security and Analytics (OPTIONAL)</h3>
+<ul>
+<li>Refresh token rotation hoặc session rotation.</li>
+<li>Cảnh báo đăng nhập bất thường.</li>
+<li>Phát hiện mẫu chấm công bất thường.</li>
+<li>Thống kê xu hướng đi trễ/về sớm.</li>
+<li>Bản đồ tổng hợp vị trí chấm công ngoài văn phòng.</li>
+<li>Nhận diện khuôn mặt/liveness detection ở giai đoạn sau.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-9-core-business-rules" class="wiki-section searchable" data-title="9. Core Business Rules" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Core Business Rules</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Business Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BR-AUTH-01</td>
+<td>Mọi API ngoài login/reset password phải yêu cầu session hợp lệ.</td>
+</tr>
+<tr>
+<td>BR-RBAC-01</td>
+<td>Backend kiểm tra quyền trên từng API và từng resource.</td>
+</tr>
+<tr>
+<td>BR-SCOPE-01</td>
+<td>Employee chỉ xem và thao tác dữ liệu của chính mình.</td>
+</tr>
+<tr>
+<td>BR-APV-01</td>
+<td>Approver chỉ xử lý nhân viên được phân công.</td>
+</tr>
+<tr>
+<td>BR-DAY-01</td>
+<td>Một nhân viên chỉ có một AttendanceDay cho mỗi ngày làm việc.</td>
+</tr>
+<tr>
+<td>BR-ORDER-01</td>
+<td>Không được check-out trước check-in.</td>
+</tr>
+<tr>
+<td>BR-DUP-01</td>
+<td>Không tạo hai check-in hoặc hai check-out hợp lệ trong cùng ngày.</td>
+</tr>
+<tr>
+<td>BR-MODE-01</td>
+<td>Work mode được chọn lúc check-in và giữ nguyên đến hết ngày.</td>
+</tr>
+<tr>
+<td>BR-METHOD-01</td>
+<td>Backend quyết định phương thức Network, GPS hoặc Selfie.</td>
+</tr>
+<tr>
+<td>BR-TIME-01</td>
+<td>Thời gian chính thức lấy từ backend/database.</td>
+</tr>
+<tr>
+<td>BR-GPS-01</td>
+<td>Backend tự tính khoảng cách và không tin kết quả từ frontend.</td>
+</tr>
+<tr>
+<td>BR-NET-01</td>
+<td>Public IP lấy từ request hoặc trusted proxy, không lấy từ payload frontend.</td>
+</tr>
+<tr>
+<td>BR-SELFIE-01</td>
+<td>Mỗi event Selfie phải sử dụng ảnh và vị trí mới.</td>
+</tr>
+<tr>
+<td>BR-EVID-01</td>
+<td>Evidence là private resource và phải kiểm tra authorization khi truy cập.</td>
+</tr>
+<tr>
+<td>BR-IDEM-01</td>
+<td>Mutation chấm công phải có Idempotency-Key.</td>
+</tr>
+<tr>
+<td>BR-CLOSE-01</td>
+<td>Không được chốt kỳ khi còn bản ghi Pending hoặc ngày công chưa hoàn tất.</td>
+</tr>
+<tr>
+<td>BR-CLOSE-02</td>
+<td>Dữ liệu thuộc kỳ đã chốt không được chỉnh sửa trực tiếp.</td>
+</tr>
+<tr>
+<td>BR-CLOSE-03</td>
+<td>Mở lại kỳ công bắt buộc nhập lý do và ghi audit log.</td>
+</tr>
+<tr>
+<td>BR-AUDIT-01</td>
+<td>Các thao tác quan trọng phải được lưu audit.</td>
+</tr>
+<tr>
+<td>BR-DELETE-01</td>
+<td>Dữ liệu có lịch sử không được hard-delete.</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-10-main-entities" class="wiki-section searchable" data-title="10. Main Entities" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Main Entities</li>
+</ol></h2><div class="section-body"><ul>
+<li><code>User</code></li>
+<li><code>UserSession</code></li>
+<li><code>Workplace</code></li>
+<li><code>AllowedNetwork</code></li>
+<li><code>Shift</code></li>
+<li><code>EmployeeAssignment</code></li>
+<li><code>AttendanceDay</code></li>
+<li><code>AttendanceEvent</code></li>
+<li><code>Evidence</code></li>
+<li><code>ApprovalRequest</code></li>
+<li><code>ApprovalHistory</code></li>
+<li><code>TimesheetPeriod</code></li>
+<li><code>TimesheetSummary</code></li>
+<li><code>TimesheetClosingHistory</code></li>
+<li><code>AdjustmentRequest</code></li>
+<li><code>AuditLog</code></li>
+<li><code>IdempotencyRecord</code></li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-11-suggested-technology-stack" class="wiki-section searchable" data-title="11. Suggested Technology Stack" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Suggested Technology Stack</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Suggested Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frontend</td>
+<td>React + TypeScript + Vite + responsive CSS/Tailwind CSS</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>Node.js with NestJS/Express hoặc Spring Boot</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>HttpOnly cookie session hoặc access/refresh token có rotation</td>
+</tr>
+<tr>
+<td>File storage</td>
+<td>Private local storage cho demo; có abstraction để chuyển sang S3-compatible storage</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>Unit test, integration/API test và end-to-end test</td>
+</tr>
+<tr>
+<td>Deployment</td>
+<td>Docker + HTTPS hosting</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-12-project-scope-boundaries" class="wiki-section searchable" data-title="12. Project Scope Boundaries" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Project Scope Boundaries</li>
+</ol></h2><div class="section-body"><h3>Trong phạm vi MVP</h3>
+<ul>
+<li>Authentication và RBAC.</li>
+<li>Admin quản lý tài khoản và cấu hình chấm công.</li>
+<li>Employee check-in/check-out.</li>
+<li>Network/GPS/Selfie evidence.</li>
+<li>Approval và clarification workflow.</li>
+<li>Lịch sử và chi tiết ngày công.</li>
+<li>Tổng hợp và chốt kỳ công.</li>
+<li>Audit log cho nghiệp vụ chính.</li>
+<li>Mock data/seed data phục vụ demo.</li>
+</ul>
+<h3>Ngoài phạm vi MVP</h3>
+<ul>
+<li>Tính lương, thuế và bảo hiểm.</li>
+<li>Quản lý nghỉ phép hoàn chỉnh.</li>
+<li>Nhận diện khuôn mặt bằng AI.</li>
+<li>Theo dõi vị trí liên tục trong nền.</li>
+<li>Chấm công offline và đồng bộ sau.</li>
+<li>Máy chấm công vân tay.</li>
+<li>Ứng dụng native iOS/Android.</li>
+<li>Multi-tenant SaaS.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-13-demo-accounts-and-mock-scenarios" class="wiki-section searchable" data-title="13. Demo Accounts and Mock Scenarios" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Demo Accounts and Mock Scenarios</li>
+</ol></h2><div class="section-body"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Account</th>
+<th>Password</th>
+<th>Role</th>
+<th>Demo Scenario</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TVS-0248</code></td>
+<td><code>Employee@123</code></td>
+<td>Employee A</td>
+<td>Check-in/check-out bằng GPS hợp lệ: cách workplace 24m, accuracy ±16m.</td>
+</tr>
+<tr>
+<td><code>TVS-0312</code></td>
+<td><code>Employee@123</code></td>
+<td>Employee C</td>
+<td>Làm ngoài văn phòng, chấm công bằng Selfie + GPS và tạo yêu cầu phê duyệt.</td>
+</tr>
+<tr>
+<td><code>TVS-0102</code></td>
+<td><code>Approver@123</code></td>
+<td>Approver B</td>
+<td>Xem và xử lý danh sách yêu cầu Selfie/GPS; approve, reject hoặc yêu cầu giải trình.</td>
+</tr>
+<tr>
+<td><code>TVS-0001</code></td>
+<td><code>Admin@123</code></td>
+<td>Administrator</td>
+<td>Xem dashboard và quản lý dữ liệu/cấu hình hệ thống.</td>
+</tr>
+</tbody>
+</table></div>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-14-hero-demo-flow" class="wiki-section searchable" data-title="14. Hero Demo Flow" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Hero Demo Flow</li>
+</ol></h2><div class="section-body"><pre data-lang="text"><code>Admin đăng nhập
+→ xem cấu hình Workplace, Shift và tài khoản đã seed
+→ Employee A đăng nhập và check-in bằng GPS
+→ Employee C đăng nhập và check-in ngoài văn phòng bằng Selfie
+→ Approver B đăng nhập, xem ảnh/vị trí và yêu cầu giải trình
+→ Employee C phản hồi
+→ Approver B phê duyệt
+→ HR rà soát kỳ công và chốt tháng
+→ hệ thống khóa dữ liệu và xuất bảng tổng hợp
+</code></pre>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-15-expected-outcomes" class="wiki-section searchable" data-title="15. Expected Outcomes" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Expected Outcomes</li>
+</ol></h2><div class="section-body"><p>Sau khi hoàn thành dự án, nhóm sinh viên có thể chứng minh:</p>
+<ul>
+<li>Khả năng phân tích và hiện thực hóa quy trình nghiệp vụ nhiều vai trò.</li>
+<li>Thiết kế responsive cho mobile, tablet và desktop.</li>
+<li>Xây dựng API, database và authentication thực tế.</li>
+<li>Áp dụng RBAC và resource-level authorization.</li>
+<li>Xử lý upload file và dữ liệu GPS an toàn.</li>
+<li>Thiết kế state machine cho attendance, approval và timesheet period.</li>
+<li>Áp dụng transaction, idempotency và unique constraints.</li>
+<li>Xây dựng báo cáo và quy trình khóa dữ liệu cuối kỳ.</li>
+<li>Viết unit test, integration test và end-to-end test.</li>
+<li>Triển khai một ứng dụng full-stack có thể demo hoàn chỉnh.</li>
+</ul>
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-16-short-version-for-spreadsheet-cell" class="wiki-section searchable" data-title="16. Short Version for Spreadsheet Cell" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2><ol>
+<li>Short Version for Spreadsheet Cell</li>
+</ol></h2><div class="section-body"><h3>Actors</h3>
+<pre data-lang="text"><code>Employee
+Approver / Department Manager
+HR / Timekeeping Officer
+System Administrator
+</code></pre>
+<h3>Main Features</h3>
+<pre data-lang="text"><code>Employee:
++ Login using email/employee code and password.
++ View today’s shift, workplace and attendance status.
++ Check in/out at the office using Network or GPS.
++ Check in/out outside the office using Selfie and GPS evidence.
++ View attendance history, day details and approval status.
++ Submit clarification when requested.
++ View monthly timesheet summary and closing status.
+
+Approver / Department Manager:
++ View attendance requests of assigned employees.
++ Review Selfie, GPS, server time, location accuracy and warnings.
++ Approve or reject attendance records.
++ Request employee clarification and review responses.
++ Confirm department timesheets are ready for monthly closing.
+
+HR / Timekeeping Officer:
++ Review monthly attendance summaries by employee and department.
++ Detect missing check-in/out and unresolved approval requests.
++ Open, review, close and reopen timesheet periods with audit logs.
++ Lock data after closing and export CSV/Excel summaries.
+
+System Administrator:
++ Manage users, roles and account status.
++ Manage workplaces, geofences, allowed networks and shifts.
++ Assign workplace, shift and approver to employees.
++ Configure attendance policies and evidence retention.
++ View system-wide audit logs.
+</code></pre>
+<h3>Must Have</h3>
+<pre data-lang="text"><code>Flow 1: User, Role &amp; Attendance Configuration Management (REQUIRED)
+Flow 2: Employee Check-in/Check-out &amp; Evidence Management (REQUIRED)
+Flow 3: Attendance Approval &amp; Clarification Workflow (REQUIRED)
+Flow 4: Monthly Timesheet Review &amp; Closing (REQUIRED)
+</code></pre>
+<h3>Nice to Have</h3>
+<pre data-lang="text"><code>Flow 5: Adjustment Request After Closing (OPTIONAL)
+Flow 6: Dashboard, Notification &amp; Export (OPTIONAL)
+Flow 7: Advanced Security and Analytics (OPTIONAL)
+</code></pre></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section></article><footer class="footer">TimeLock Project Wiki · Generated from SRS_TIMELOCK.md and TIMELOCK_PROJECT_PROPOSAL.md</footer></div></main><script>
+const qs=(s,r=document)=>r.querySelector(s), qsa=(s,r=document)=>[...r.querySelectorAll(s)];
+const sidebar=qs('#sidebar'), overlay=qs('#overlay'), main=qs('#main'), search=qs('#search');
+function toggleMenu(force){const open=force ?? !sidebar.classList.contains('open');sidebar.classList.toggle('open',open);overlay.classList.toggle('show',open)}
+qs('#menuBtn').onclick=()=>toggleMenu();overlay.onclick=()=>toggleMenu(false);
+qsa('.nav-group-title').forEach(b=>b.onclick=()=>{const g=b.closest('.nav-group');g.classList.toggle('collapsed');b.setAttribute('aria-expanded',!g.classList.contains('collapsed'))});
+qsa('.nav-link').forEach(a=>a.onclick=()=>{if(innerWidth<981)toggleMenu(false)});
+const saved=localStorage.getItem('timelock-wiki-theme');if(saved)document.documentElement.dataset.theme=saved;
+qs('#themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('timelock-wiki-theme',t)};
+function normalize(v){return v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
+function clearMarks(){qsa('mark.highlight').forEach(m=>m.replaceWith(document.createTextNode(m.textContent)))}
+function runSearch(){clearMarks();const raw=search.value.trim(),q=normalize(raw);main.classList.toggle('searching',!!q);let count=0;qsa('.searchable').forEach(el=>{const ok=!q||normalize(el.textContent).includes(q);el.classList.toggle('match',ok);if(ok&&q){count++;const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(['SCRIPT','STYLE','CODE','PRE'].includes(node.parentElement?.tagName))continue;const n=normalize(node.nodeValue),i=n.indexOf(q);if(i>=0){const mark=document.createElement('mark');mark.className='highlight';const range=document.createRange();range.setStart(node,i);range.setEnd(node,Math.min(i+raw.length,node.length));range.surroundContents(mark);break}}}});qs('#empty').style.display=q&&count===0?'block':'none';qs('#resultCount').textContent=q?`${count} mục`:'Toàn bộ wiki'}
+search.addEventListener('input',runSearch);document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();search.focus()}if(e.key==='Escape'){search.value='';runSearch();search.blur();toggleMenu(false)}});
+const observed=qsa('.wiki-section');const io=new IntersectionObserver(es=>{const top=es.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];if(!top)return;qsa('.nav-link').forEach(a=>a.classList.toggle('active',a.dataset.target===top.target.id))},{rootMargin:'-20% 0px -68% 0px'});observed.forEach(x=>io.observe(x));
+</script></body></html>
