@@ -2,7 +2,8 @@
 
 > **Tên tiếng Việt:** Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên  
 > **Tên tiếng Anh:** TimeLock — Employee Attendance, Approval & Timesheet Closing System  
-> **Loại dự án:** Web application độc lập, responsive, mobile-first  
+> **Loại dự án:** Nền tảng web multi-tenant, responsive, mobile-first  
+> **Đối tượng mục tiêu:** Văn phòng và doanh nghiệp nhỏ khoảng 10–50 nhân viên/Organization; không phải giới hạn kỹ thuật  
 > **Môn học:** SWP391 — Software Development Project  
 > **Học kỳ:** FA26  
 > **Trạng thái:** Đề xuất dự án sinh viên
@@ -97,6 +98,8 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Bảo đảm dữ liệu đã chốt không bị thay đổi tùy ý.
 - Lưu audit log cho các thao tác quan trọng.
 - Tạo một sản phẩm responsive có thể trình diễn trên điện thoại, tablet và desktop.
+- Hỗ trợ full-time/part-time bằng lịch do HR cấu hình, không hard-code giờ ca hành chính.
+- Cho phép đăng ký ca, đổi ca có đồng thuận và OT được hệ thống tự phân loại/tính từ lịch thực tế.
 
 ---
 
@@ -185,6 +188,14 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Quản lý ca làm, giờ bắt đầu, giờ kết thúc, thời gian nghỉ và grace period.
 - Gán nhân viên vào workplace, shift và approver.
 
+### 6.2A. Full-time, Part-time and Scheduling
+
+- HR tạo và cấu hình ShiftTemplate; ca 08:00–17:00 chỉ là dữ liệu seed/demo.
+- Full-time sử dụng lịch lặp RecurringSchedule.
+- Part-time đăng ký ca theo ngày; Department Manager duyệt trước khi tạo WorkSchedule chính thức.
+- MVP chỉ hỗ trợ ca trong cùng ngày, một lịch/ngày và không hỗ trợ ca qua đêm.
+- Đổi ca cần người nhận đồng ý, sau đó Department Manager phê duyệt và hệ thống cập nhật cả hai lịch trong một transaction.
+
 ### 6.3. Employee Check-in/Check-out
 
 - Xem trạng thái ngày công hôm nay.
@@ -227,6 +238,15 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Tính tổng phút làm việc.
 - Tính số phút đi trễ và về sớm.
 - Xem chi tiết bằng chứng và audit timeline của từng ngày.
+
+### 6.6A. Overtime Management
+
+- Employee gửi ngày, khung giờ, lý do và nội dung OT; không được tự chọn loại OT.
+- Department Manager duyệt khoảng thời gian OT trong đúng phạm vi và không tự duyệt request của mình.
+- Backend tự phân loại `OT_WORKING_DAY`, `OT_WEEKLY_OFF`, `OT_PUBLIC_HOLIDAY` từ WorkCalendar và WorkSchedule.
+- Hệ thống lưu requested, approved, actual và eligible minutes; check-out muộn không tự động thành OT.
+- Eligible OT là phần được duyệt giao với attendance thực tế và nằm ngoài lịch chính thức.
+- HR rà soát và hệ thống tính lại kết quả FINAL khi chốt kỳ; không tính tiền/hệ số lương.
 
 ### 6.7. Monthly Timesheet Closing
 
@@ -318,6 +338,29 @@ HR mở kỳ công tháng
 
 **Kết quả:** Kỳ công được khóa, dữ liệu có thể dùng làm đầu vào cho quy trình tính lương bên ngoài.
 
+### Flow 4A — Full-time/Part-time Schedule & Shift Swap (REQUIRED)
+
+```text
+HR cấu hình ShiftTemplate
+→ sinh lịch Full-time hoặc mở đăng ký Part-time
+→ Manager duyệt đăng ký
+→ Employee A đề nghị đổi ca
+→ Employee B đồng ý
+→ Manager duyệt
+→ hệ thống cập nhật lịch có audit
+```
+
+### Flow 4B — Overtime Request & Automatic Classification (REQUIRED)
+
+```text
+Employee gửi OT không chọn loại
+→ Manager duyệt approved window
+→ Employee thực hiện attendance
+→ backend tự classify và tính eligible OT
+→ HR rà soát
+→ kết quả FINAL vào bảng công tháng
+```
+
 ---
 
 ## 8. Nice-to-have Flows
@@ -383,7 +426,11 @@ HR mở kỳ công tháng
 - `UserSession`
 - `Workplace`
 - `AllowedNetwork`
-- `Shift`
+- `ShiftTemplate`
+- `RecurringSchedule`
+- `ShiftRegistration`
+- `WorkSchedule`
+- `ShiftSwapRequest`
 - `EmployeeAssignment`
 - `AttendanceDay`
 - `AttendanceEvent`
@@ -394,6 +441,8 @@ HR mở kỳ công tháng
 - `TimesheetSummary`
 - `TimesheetClosingHistory`
 - `AdjustmentRequest`
+- `OvertimeRequest`
+- `OvertimeResult`
 - `AuditLog`
 - `IdempotencyRecord`
 
@@ -420,6 +469,9 @@ HR mở kỳ công tháng
 - Authentication và RBAC.
 - Admin quản lý tài khoản và cấu hình chấm công.
 - Employee check-in/check-out.
+- Full-time recurring schedule và part-time shift registration.
+- Shift swap có target consent và manager approval.
+- Overtime request, automatic classification và eligible calculation.
 - Network/GPS/Selfie evidence.
 - Approval và clarification workflow.
 - Lịch sử và chi tiết ngày công.
@@ -476,7 +528,7 @@ Sau khi hoàn thành dự án, nhóm sinh viên có thể chứng minh:
 - Xây dựng API, database và authentication thực tế.
 - Áp dụng RBAC và resource-level authorization.
 - Xử lý upload file và dữ liệu GPS an toàn.
-- Thiết kế state machine cho attendance, approval và timesheet period.
+- Thiết kế state machine cho attendance, schedule registration/swap, overtime, approval và timesheet period.
 - Áp dụng transaction, idempotency và unique constraints.
 - Xây dựng báo cáo và quy trình khóa dữ liệu cuối kỳ.
 - Viết unit test, integration test và end-to-end test.

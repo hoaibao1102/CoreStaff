@@ -8,7 +8,7 @@ html[data-theme="dark"]{--bg:#0b1320;--panel:#111d2d;--panel2:#162337;--text:#e8
 </style></head><body>
 <header class="topbar"><button id="menuBtn" class="icon-btn menu-btn" aria-label="Mở menu">☰</button><div class="brand"><div class="logo">TL</div><div><strong>TimeLock Wiki</strong><small>SWP391 · Multi-tenant Attendance Platform</small></div></div><label class="search"><span class="search-icon">⌕</span><input id="search" type="search" placeholder="Tìm toàn bộ tài liệu..." aria-label="Tìm kiếm wiki"><span class="shortcut">Ctrl K</span></label><button id="themeBtn" class="icon-btn" title="Đổi giao diện">◐ <span class="theme-text">Theme</span></button></header>
 <div id="overlay" class="overlay"></div><aside id="sidebar" class="sidebar"><div class="sidebar-note"><strong id="resultCount">Toàn bộ wiki</strong><span>2 nguồn · SRS v3.0 là baseline chính thức</span></div><a class="nav-link" href="#overview"><span>⌂ Tổng quan dự án</span></a><div class="nav-group" data-doc="srs"><button class="nav-group-title" aria-expanded="true"><span>SRS TimeLock v3.0</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#srs-0-thong-tin-tai-lieu" data-target="srs-0-thong-tin-tai-lieu"><span>0. Thông tin tài liệu</span></a><a class="nav-link" href="#srs-1-gioi-thieu" data-target="srs-1-gioi-thieu"><span>1. Giới thiệu</span></a><a class="nav-link" href="#srs-2-pham-vi-he-thong" data-target="srs-2-pham-vi-he-thong"><span>2. Phạm vi hệ thống</span></a><a class="nav-link" href="#srs-3-actors-va-phan-quyen" data-target="srs-3-actors-va-phan-quyen"><span>3. Actors và phân quyền</span></a><a class="nav-link" href="#srs-4-authentication-va-quan-ly-phien" data-target="srs-4-authentication-va-quan-ly-phien"><span>4. Authentication và quản lý phiên</span></a><a class="nav-link" href="#srs-5-mo-hinh-cham-cong" data-target="srs-5-mo-hinh-cham-cong"><span>5. Mô hình chấm công</span></a><a class="nav-link" href="#srs-6-ca-lam-viec-va-ngay-cong" data-target="srs-6-ca-lam-viec-va-ngay-cong"><span>6. Ca làm việc và ngày công</span></a><a class="nav-link" href="#srs-7-state-machine" data-target="srs-7-state-machine"><span>7. State machine</span></a><a class="nav-link" href="#srs-8-yeu-cau-chuc-nang-authentication" data-target="srs-8-yeu-cau-chuc-nang-authentication"><span>8. Yêu cầu chức năng — Authentication</span></a><a class="nav-link" href="#srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration" data-target="srs-9-yeu-cau-chuc-nang-system-admin-organization-va-hr-configuration"><span>9. Yêu cầu chức năng — System Admin, Organization và HR configuration</span></a><a class="nav-link" href="#srs-10-yeu-cau-chuc-nang-employee" data-target="srs-10-yeu-cau-chuc-nang-employee"><span>10. Yêu cầu chức năng — Employee</span></a><a class="nav-link" href="#srs-11-yeu-cau-chuc-nang-department-manager" data-target="srs-11-yeu-cau-chuc-nang-department-manager"><span>11. Yêu cầu chức năng — Department Manager</span></a><a class="nav-link" href="#srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong" data-target="srs-11a-yeu-cau-chuc-nang-hr-va-chot-ky-cong"><span>11A. Yêu cầu chức năng — HR và chốt kỳ công</span></a><a class="nav-link" href="#srs-12-business-rules" data-target="srs-12-business-rules"><span>12. Business rules</span></a><a class="nav-link" href="#srs-13-use-cases-chinh" data-target="srs-13-use-cases-chinh"><span>13. Use cases chính</span></a><a class="nav-link" href="#srs-14-danh-sach-man-hinh-va-route" data-target="srs-14-danh-sach-man-hinh-va-route"><span>14. Danh sách màn hình và route</span></a><a class="nav-link" href="#srs-15-data-model-logic" data-target="srs-15-data-model-logic"><span>15. Data model logic</span></a><a class="nav-link" href="#srs-16-api-requirements" data-target="srs-16-api-requirements"><span>16. API requirements</span></a><a class="nav-link" href="#srs-17-error-codes" data-target="srs-17-error-codes"><span>17. Error codes</span></a><a class="nav-link" href="#srs-18-transaction-concurrency-va-idempotency" data-target="srs-18-transaction-concurrency-va-idempotency"><span>18. Transaction, concurrency và idempotency</span></a><a class="nav-link" href="#srs-19-yeu-cau-phi-chuc-nang" data-target="srs-19-yeu-cau-phi-chuc-nang"><span>19. Yêu cầu phi chức năng</span></a><a class="nav-link" href="#srs-20-ui-states-bat-buoc" data-target="srs-20-ui-states-bat-buoc"><span>20. UI states bắt buộc</span></a><a class="nav-link" href="#srs-21-acceptance-criteria-tong-hop" data-target="srs-21-acceptance-criteria-tong-hop"><span>21. Acceptance criteria tổng hợp</span></a><a class="nav-link" href="#srs-22-test-strategy" data-target="srs-22-test-strategy"><span>22. Test strategy</span></a><a class="nav-link" href="#srs-23-kien-truc-logic-e-xuat" data-target="srs-23-kien-truc-logic-e-xuat"><span>23. Kiến trúc logic đề xuất</span></a><a class="nav-link" href="#srs-24-seed-data-va-demo-mode" data-target="srs-24-seed-data-va-demo-mode"><span>24. Seed data và demo mode</span></a><a class="nav-link" href="#srs-25-ke-hoach-trien-khai-theo-giai-oan" data-target="srs-25-ke-hoach-trien-khai-theo-giai-oan"><span>25. Kế hoạch triển khai theo giai đoạn</span></a><a class="nav-link" href="#srs-26-definition-of-done-cho-mvp" data-target="srs-26-definition-of-done-cho-mvp"><span>26. Definition of Done cho MVP</span></a><a class="nav-link" href="#srs-27-open-questions-va-gia-tri-mac-inh" data-target="srs-27-open-questions-va-gia-tri-mac-inh"><span>27. Open questions và giá trị mặc định</span></a><a class="nav-link" href="#srs-28-thuat-ngu" data-target="srs-28-thuat-ngu"><span>28. Thuật ngữ</span></a><a class="nav-link" href="#srs-29-ket-luan" data-target="srs-29-ket-luan"><span>29. Kết luận</span></a></div></div><div class="nav-group" data-doc="proposal"><button class="nav-group-title" aria-expanded="true"><span>Project Proposal</span><span class="chev">⌄</span></button><div class="nav-group-links"><a class="nav-link" href="#proposal-1-thong-tin-theo-bang-fa26-swp391" data-target="proposal-1-thong-tin-theo-bang-fa26-swp391"><span>1. Thông tin theo bảng FA26_SWP391</span></a><a class="nav-link" href="#proposal-2-project-name" data-target="proposal-2-project-name"><span>2. Project Name</span></a><a class="nav-link" href="#proposal-3-problem-statement" data-target="proposal-3-problem-statement"><span>3. Problem Statement</span></a><a class="nav-link" href="#proposal-4-project-objectives" data-target="proposal-4-project-objectives"><span>4. Project Objectives</span></a><a class="nav-link" href="#proposal-5-actors" data-target="proposal-5-actors"><span>5. Actors</span></a><a class="nav-link" href="#proposal-6-main-features" data-target="proposal-6-main-features"><span>6. Main Features</span></a><a class="nav-link" href="#proposal-7-must-have-flows" data-target="proposal-7-must-have-flows"><span>7. Must-have Flows</span></a><a class="nav-link" href="#proposal-8-nice-to-have-flows" data-target="proposal-8-nice-to-have-flows"><span>8. Nice-to-have Flows</span></a><a class="nav-link" href="#proposal-9-core-business-rules" data-target="proposal-9-core-business-rules"><span>9. Core Business Rules</span></a><a class="nav-link" href="#proposal-10-main-entities" data-target="proposal-10-main-entities"><span>10. Main Entities</span></a><a class="nav-link" href="#proposal-11-suggested-technology-stack" data-target="proposal-11-suggested-technology-stack"><span>11. Suggested Technology Stack</span></a><a class="nav-link" href="#proposal-12-project-scope-boundaries" data-target="proposal-12-project-scope-boundaries"><span>12. Project Scope Boundaries</span></a><a class="nav-link" href="#proposal-13-demo-accounts-and-mock-scenarios" data-target="proposal-13-demo-accounts-and-mock-scenarios"><span>13. Demo Accounts and Mock Scenarios</span></a><a class="nav-link" href="#proposal-14-hero-demo-flow" data-target="proposal-14-hero-demo-flow"><span>14. Hero Demo Flow</span></a><a class="nav-link" href="#proposal-15-expected-outcomes" data-target="proposal-15-expected-outcomes"><span>15. Expected Outcomes</span></a><a class="nav-link" href="#proposal-16-short-version-for-spreadsheet-cell" data-target="proposal-16-short-version-for-spreadsheet-cell"><span>16. Short Version for Spreadsheet Cell</span></a></div></div></aside>
-<main id="main" class="main"><div class="content"><section id="overview"><div class="hero"><div class="tag">TIMELOCK · PROJECT KNOWLEDGE BASE</div><h1>Chấm công. Duyệt công.<br>Chốt công.</h1><p>Nền tảng web multi-tenant quản lý trọn vòng đời ngày công bằng Network, GPS và Selfie; cô lập dữ liệu giữa các tổ chức; hỗ trợ điều chỉnh, phê duyệt và khóa kỳ công có thể kiểm chứng.</p><div class="hero-actions"><a href="https://vercel.com/baobao-s-projects1/time-lock-prototype" target="_blank" rel="noopener noreferrer">↗ Xem Prototype trực tuyến</a><a class="secondary" href="#doc-srs">Đọc SRS v3.0</a><a class="secondary" href="#doc-proposal">Xem Project Proposal</a><a class="secondary" href="#srs-14-danh-sach-man-hinh-va-route">Routes</a><a class="secondary" href="#srs-15-data-model-logic">Data model</a></div></div>
+<main id="main" class="main"><div class="content"><section id="overview"><div class="hero"><div class="tag">TIMELOCK · PROJECT KNOWLEDGE BASE</div><h1>Chấm công. Duyệt công.<br>Chốt công.</h1><p>Nền tảng web multi-tenant cho văn phòng và doanh nghiệp nhỏ 10–50 nhân viên; hỗ trợ lịch Full-time/Part-time do HR cấu hình, Network/GPS/Selfie, đổi ca, OT tự động phân loại và chốt kỳ có thể kiểm chứng.</p><div class="hero-actions"><a href="https://vercel.com/baobao-s-projects1/time-lock-prototype" target="_blank" rel="noopener noreferrer">↗ Xem Prototype trực tuyến</a><a class="secondary" href="#doc-srs">Đọc SRS v3.0</a><a class="secondary" href="#doc-proposal">Xem Project Proposal</a><a class="secondary" href="#srs-14-danh-sach-man-hinh-va-route">Routes</a><a class="secondary" href="#srs-15-data-model-logic">Data model</a></div></div>
 <div class="stat-grid"><div class="stat"><b>4</b><span>Vai trò chính thức</span></div><div class="stat"><b>2+</b><span>Organization độc lập</span></div><div class="stat"><b>3</b><span>Network · GPS · Selfie</span></div><div class="stat"><b>v3.0</b><span>Multi-tenant baseline</span></div></div>
 <div class="overview-grid"><div class="overview-card"><h3>Vai trò và phạm vi</h3><div class="role-grid"><div class="role"><b>SYSTEM_ADMIN</b><span>Organization, HR đầu tiên, audit nền tảng</span></div><div class="role"><b>HR</b><span>Chấm công nếu có assignment; quản trị và chốt kỳ</span></div><div class="role"><b>DEPARTMENT_MANAGER</b><span>Cùng một tài khoản: Công của tôi + duyệt phòng ban</span></div><div class="role"><b>EMPLOYEE</b><span>Chấm công và dữ liệu cá nhân</span></div></div></div><div class="overview-card"><h3>Luồng nghiệp vụ</h3><div class="flow"><span>Organization</span><i>→</i><span>HR configuration</span><i>→</i><span>Attendance</span><i>→</i><span>Approval</span><i>→</i><span>Adjustment</span><i>→</i><span>Closing</span><i>→</i><span>Export</span></div><div class="source-warning"><strong>Quy tắc nguồn:</strong> SRS v3.0 là baseline hiện hành. Project Proposal được giữ nguyên đầy đủ như nguồn đề xuất ban đầu; nếu có khác biệt, ưu tiên SRS.</div></div></div></section>
 <div id="empty" class="search-empty"><h3>Không tìm thấy nội dung</h3><p>Thử từ khóa khác hoặc nhấn Esc để xóa tìm kiếm.</p></div><article id="doc-srs" class="doc-article"><header class="doc-header searchable" data-title="SRS TimeLock v3.0"><div class="doc-icon">SRS</div><div><p class="eyebrow">Nguồn: SRS_TIMELOCK.md</p><h1>SRS TimeLock v3.0</h1><p>Tài liệu yêu cầu phần mềm chính thức</p></div></header><div class="doc-intro"><h1>SRS — TIMELOCK</h1>
@@ -39,7 +39,7 @@ Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ qu
 </tr>
 <tr>
 <td>Đối tượng</td>
-<td>Dự án SWP391 — FA26; nền tảng cung cấp dịch vụ chấm công cho nhiều tổ chức độc lập</td>
+<td>Văn phòng và doanh nghiệp nhỏ có khoảng 10–50 nhân viên trong mỗi Organization; đây là phân khúc mục tiêu, không phải giới hạn kỹ thuật</td>
 </tr>
 <tr>
 <td>Xác thực</td>
@@ -106,6 +106,9 @@ Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ qu
 <li>TimeLock chỉ tạo bảng công; không tính lương, thuế hoặc bảo hiểm trong MVP.</li>
 <li>Backend là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công.</li>
 <li>Prototype dùng mock data để trình diễn; dữ liệu mock không phải kiến trúc production.</li>
+<li>TimeLock hỗ trợ <code>FULL_TIME</code> và <code>PART_TIME</code>; HR cấu hình toàn bộ ShiftTemplate, không hard-code giờ ca hành chính.</li>
+<li>Ca <code>08:00–17:00</code> chỉ là dữ liệu seed/demo; MVP chỉ giới hạn ca trong cùng ngày, không hỗ trợ ca qua đêm hoặc nhiều lịch chồng lấn.</li>
+<li>Overtime type do backend tự phân loại từ Calendar và WorkSchedule; Employee không được chọn loại OT.</li>
 </ol>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-1-gioi-thieu" class="wiki-section searchable" data-title="1. Giới thiệu" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>1. Giới thiệu</h2><div class="section-body"><h3>1.1. Bối cảnh</h3>
 <p>Nhiều tổ chức cần cùng một nền tảng chấm công nhưng phải sở hữu dữ liệu, cơ cấu phòng ban, workplace, ca làm và kỳ công riêng. Bảng tính hoặc hệ thống chỉ ghi nhận giờ vào/ra không đủ để xác minh vị trí, xử lý ngoại lệ và khóa dữ liệu cuối tháng.</p>
@@ -128,6 +131,8 @@ Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ qu
 <li>Cho phép System Admin quản lý Organization, trạng thái dịch vụ, HR đầu tiên và audit nền tảng.</li>
 <li>Lưu thời gian server, evidence, snapshot và audit để bảo đảm dữ liệu có thể truy vết.</li>
 <li>Chứng minh cô lập dữ liệu giữa ít nhất hai Organization trong demo và kiểm thử.</li>
+<li>Phục vụ tốt tenant mục tiêu 10–50 nhân viên nhưng vẫn dùng pagination và không hard-code giới hạn 50.</li>
+<li>Hỗ trợ lịch full-time lặp lại, part-time đăng ký ca, đổi ca có đồng thuận và OT tự động phân loại.</li>
 </ul>
 <h3>1.3. Mục tiêu không thuộc MVP</h3>
 <ul>
@@ -167,7 +172,11 @@ Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ qu
 <ul>
 <li>Đăng nhập/đăng xuất, hồ sơ, đổi/reset mật khẩu và RBAC.</li>
 <li>HR quản lý Department, Employee và Department Manager trong tenant.</li>
-<li>HR quản lý Workplace, Network/CIDR, Shift và assignment có hiệu lực theo thời gian.</li>
+<li>HR quản lý Workplace, Network/CIDR, ShiftTemplate và assignment có hiệu lực theo thời gian.</li>
+<li>HR cấu hình ca theo nhu cầu Organization; 08:00–17:00 chỉ là seed, không phải business rule.</li>
+<li>Full-time dùng RecurringSchedule; part-time đăng ký ca theo ngày và Manager duyệt thành WorkSchedule chính thức.</li>
+<li>Employee được yêu cầu đổi ca với người khác; bên nhận đồng ý trước khi Manager phê duyệt.</li>
+<li>Employee/Manager/HR có assignment được gửi OvertimeRequest; backend tự phân loại và tính eligible OT.</li>
 <li>Giữ snapshot Organization/Department/Shift/Workplace trên dữ liệu lịch sử.</li>
 </ul>
 <h4>Lịch công tối thiểu</h4>
@@ -219,6 +228,7 @@ Tài liệu yêu cầu phần mềm cho dự án SWP391, bao quát toàn bộ qu
 <li>Refresh token/session rotation.</li>
 <li>Export XLSX và bản nháp có watermark <code>DRAFT</code>.</li>
 <li>Một Department Manager tạm thời phụ trách nhiều phòng ban.</li>
+<li>Cảnh báo giới hạn OT theo policy nội bộ của Organization.</li>
 </ul>
 <h3>2.3. LATER</h3>
 <ul>
@@ -548,7 +558,7 @@ Ngược lại nếu có GPS trong geofence và accuracy đạt
 Ngược lại
   → yêu cầu SELFIE fallback
 </code></pre>
-<p>MVP có thể triển khai fallback Selfie để bảo đảm demo trọn luồng. Nếu muốn scope nhỏ hơn, System Admin được phép tắt <code>allowSelfieFallback</code>; lúc đó hệ thống trả lỗi và không cho chấm công.</p>
+<p>MVP có thể triển khai fallback Selfie để bảo đảm demo trọn luồng. Nếu muốn scope nhỏ hơn, HR được phép tắt <code>allowSelfieFallback</code>; lúc đó hệ thống trả lỗi và không cho chấm công.</p>
 <h3>5.4. Quy tắc OUT_OFFICE</h3>
 <ul>
 <li>Bắt buộc chụp ảnh mới cho mỗi check-in/check-out.</li>
@@ -563,45 +573,72 @@ Ngược lại
 <li>User chọn WorkMode khi check-in.</li>
 <li><code>AttendanceDay.workMode</code> được cố định sau check-in.</li>
 <li>Check-out sử dụng WorkMode đã lưu; user không tự đổi mode giữa ngày trong MVP.</li>
-<li>System Admin có thể sửa qua chức năng adjustment ở phase sau; mọi sửa đổi phải có audit.</li>
+<li>HR xử lý thay đổi qua AdjustmentRequest; mọi sửa đổi phải có audit.</li>
 </ul>
-<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-6-ca-lam-viec-va-ngay-cong" class="wiki-section searchable" data-title="6. Ca làm việc và ngày công" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>6. Ca làm việc và ngày công</h2><div class="section-body"><h3>6.1. Mô hình ca MVP</h3>
-<p>Mỗi employee được gán một ca mặc định:</p>
-<pre data-lang="text"><code>Shift
-- name
-- startTime
-- endTime
-- breakMinutes
-- gracePeriodMinutes
+<hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-6-ca-lam-viec-va-ngay-cong" class="wiki-section searchable" data-title="6. Ca làm việc và ngày công" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>6. Ca làm việc và ngày công</h2><div class="section-body"><h3>6.1. Employment type</h3>
+<pre data-lang="text"><code>EmploymentType = FULL_TIME | PART_TIME
+</code></pre>
+<ul>
+<li><code>FULL_TIME</code> và <code>PART_TIME</code> mô tả cách hình thành lịch, không quyết định giờ làm cố định.</li>
+<li>HR cấu hình ShiftTemplate cho từng Organization; hệ thống không hard-code ca hành chính.</li>
+<li>Ca <code>08:00–17:00</code>, nghỉ 60 phút và grace 5 phút chỉ là seed/demo có thể sửa hoặc thay thế.</li>
+</ul>
+<h3>6.2. ShiftTemplate và giới hạn MVP</h3>
+<pre data-lang="text"><code>ShiftTemplate
+- name, startTime, endTime
+- breakMinutes, gracePeriodMinutes
 - active
 </code></pre>
-<p>Giả định MVP:</p>
 <ul>
-<li>Một ngày tối đa một ca.</li>
-<li>Ca bắt đầu và kết thúc trong cùng ngày.</li>
+<li>Ca phải bắt đầu và kết thúc trong cùng ngày.</li>
 <li>Không hỗ trợ ca qua đêm.</li>
-<li>Không có check-in/check-out nghỉ trưa.</li>
+<li>Một Employee tối đa một WorkSchedule mỗi ngày trong MVP.</li>
+<li>Không cho WorkSchedule chồng lấn.</li>
+<li>Không có check-in/check-out riêng cho nghỉ giữa ca; <code>breakMinutes</code> được trừ theo cấu hình.</li>
 </ul>
-<h3>6.2. Quy tắc đi trễ/về sớm</h3>
-<p>Giá trị mặc định để triển khai:</p>
-<pre data-lang="text"><code>lateMinutes = max(0, checkInAt - (shiftStart + gracePeriod))
-earlyMinutes = max(0, shiftEnd - checkOutAt)
-workingMinutes = max(0, checkOutAt - checkInAt - breakMinutes)
+<h3>6.3. Lịch Full-time</h3>
+<pre data-lang="text"><code>HR tạo ShiftTemplate
+→ HR hoặc Department Manager gán RecurringSchedule
+→ hệ thống sinh WorkSchedule theo ngày
+→ Employee check-in/out theo lịch chính thức
 </code></pre>
 <ul>
-<li><code>gracePeriodMinutes</code> mặc định: 5 phút.</li>
-<li><code>breakMinutes</code> mặc định: 60 phút.</li>
-<li>Backend tính, frontend chỉ hiển thị.</li>
-<li>Nếu chưa check-out, <code>workingMinutes = null</code>.</li>
-<li><code>0</code> nghĩa là đã tính và kết quả bằng 0.</li>
+<li>RecurringSchedule gồm weekdays và thời gian hiệu lực.</li>
+<li>Department Manager chỉ gán lịch cho nhân viên thuộc Department được giao.</li>
+<li>Lịch thay đổi không được sửa snapshot của ngày công cũ.</li>
 </ul>
-<h3>6.3. Ngày làm việc</h3>
+<h3>6.4. Lịch Part-time</h3>
+<pre data-lang="text"><code>HR mở đợt đăng ký + công bố ShiftTemplate
+→ Part-time Employee đăng ký ca theo ngày
+→ Department Manager approve/reject
+→ ca APPROVED trở thành WorkSchedule chính thức
+</code></pre>
 <ul>
-<li>Work date được backend xác định theo timezone cấu hình hệ thống.</li>
-<li>Timezone mặc định: <code>Asia/Ho_Chi_Minh</code>.</li>
-<li>MVP không cho user thay đổi timezone.</li>
-<li>System Admin có thể cấu hình ngày trong tuần làm việc ở mức đơn giản.</li>
-<li>Ngày không có ca được đánh dấu <code>DAY_OFF</code> và không có action.</li>
+<li>ShiftRegistration chỉ là nguyện vọng; WorkSchedule chính thức mới dùng để tính đi trễ, vắng và công chuẩn.</li>
+<li>Part-time <code>scheduledWorkDays/scheduledWorkMinutes</code> lấy từ WorkSchedule đã duyệt, không lấy lịch tháng chung.</li>
+</ul>
+<h3>6.5. Đổi ca</h3>
+<pre data-lang="text"><code>Employee A tạo ShiftSwapRequest
+→ Employee B đồng ý
+→ Department Manager phê duyệt
+→ hệ thống hoán đổi hai WorkSchedule trong một transaction
+</code></pre>
+<ul>
+<li>Hai người cùng Organization và thuộc phạm vi Manager xử lý.</li>
+<li>Không đổi ca đã bắt đầu, đã có attendance event, chồng lấn hoặc Employee không đủ điều kiện.</li>
+<li>Giữ before/after schedule và audit; AttendanceDay dùng lịch sau khi swap được APPLIED.</li>
+</ul>
+<h3>6.6. Tính đi trễ/về sớm/giờ làm</h3>
+<pre data-lang="text"><code>lateMinutes = max(0, checkInAt - (scheduleStart + gracePeriod))
+earlyMinutes = max(0, scheduleEnd - checkOutAt)
+workingMinutes = max(0, checkOutAt - checkInAt - breakMinutes)
+</code></pre>
+<p>Backend tính theo WorkSchedule snapshot, không theo 17:00 hay một ca hard-code. Nếu chưa check-out, <code>workingMinutes = null</code>; <code>0</code> là kết quả đã tính bằng không.</p>
+<h3>6.7. Ngày làm việc</h3>
+<ul>
+<li>Work date theo timezone của Organization, mặc định <code>Asia/Ho_Chi_Minh</code>.</li>
+<li>Calendar, leave override và WorkSchedule quyết định nghĩa vụ làm việc.</li>
+<li>Ngày không có nghĩa vụ làm việc là <code>DAY_OFF</code>; ngày phải làm nhưng thiếu event được phân loại <code>ABSENT</code> hoặc <code>INCOMPLETE</code>.</li>
 </ul>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-7-state-machine" class="wiki-section searchable" data-title="7. State machine" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>7. State machine</h2><div class="section-body"><h3>7.1. Attendance status</h3>
 <pre data-lang="text"><code>NOT_CHECKED_IN
@@ -689,6 +726,18 @@ DISABLED
 DayResult: PRESENT | ABSENT | INCOMPLETE
 Adjustment: PENDING_MANAGER → APPROVED | REJECTED; APPROVED → APPLIED
 </code></pre>
+<h3>7.6. Shift registration và swap</h3>
+<pre data-lang="text"><code>ShiftRegistration: PENDING → APPROVED | REJECTED | CANCELLED
+ShiftSwapRequest: PENDING_TARGET → PENDING_MANAGER → APPROVED → APPLIED
+                                      ├── REJECTED_BY_MANAGER
+                    ├── REJECTED_BY_TARGET
+                    └── CANCELLED | EXPIRED
+</code></pre>
+<h3>7.7. Overtime</h3>
+<pre data-lang="text"><code>OvertimeRequest: PENDING → APPROVED | REJECTED | CANCELLED
+OvertimeResult: PROVISIONAL → FINAL
+</code></pre>
+<p>Loại tự động: <code>OT_WORKING_DAY | OT_WEEKLY_OFF | OT_PUBLIC_HOLIDAY</code>. Employee không gửi <code>overtimeType</code> như dữ liệu tin cậy.</p>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-8-yeu-cau-chuc-nang-authentication" class="wiki-section searchable" data-title="8. Yêu cầu chức năng — Authentication" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>8. Yêu cầu chức năng — Authentication</h2><div class="section-body"><h3>FR-AUTH-01 — Đăng nhập 【MVP】</h3>
 <ul>
 <li>User nhập email/mã nhân viên và mật khẩu.</li>
@@ -905,6 +954,8 @@ And điều hướng user đến trang phù hợp với role
 <li>Khoảng cách giữa hai điểm nếu có cả hai event.</li>
 <li>Employee clarification.</li>
 <li>Adjustment request/review/apply và period version.</li>
+<li>Shift swap target consent + manager approval.</li>
+<li>Overtime request, automatic classification và eligible calculation.</li>
 <li>Audit timeline.</li>
 </ul>
 <h3>FR-MGR-03 — Chi tiết GPS bất thường 【SHOULD】</h3>
@@ -997,6 +1048,47 @@ And điều hướng user đến trang phù hợp với role
 <li>HR áp dụng adjustment được duyệt trong transaction, lưu beforeData/afterData và tăng <code>TimesheetPeriod.version</code>.</li>
 <li>Mọi DepartmentConfirmation của version cũ hết hiệu lực.</li>
 </ul>
+<h3>FR-SCH-01 — HR quản lý ShiftTemplate 【MVP】</h3>
+<ul>
+<li>HR tạo/sửa/inactive ca trong tenant; không có giờ ca hard-code.</li>
+<li>Validate start &lt; end trong cùng ngày, break/grace không âm.</li>
+</ul>
+<h3>FR-SCH-02 — Lịch Full-time 【MVP】</h3>
+<ul>
+<li>HR hoặc Department Manager tạo RecurringSchedule trong đúng scope.</li>
+<li>Hệ thống sinh WorkSchedule theo weekdays/effective dates, chống trùng và chồng lấn.</li>
+</ul>
+<h3>FR-SCH-03 — Đăng ký ca Part-time 【MVP】</h3>
+<ul>
+<li>Part-time Employee đăng ký một ShiftTemplate cho ngày nằm trong đợt mở đăng ký.</li>
+<li>Department Manager approve/reject; chỉ APPROVED tạo WorkSchedule.</li>
+</ul>
+<h3>FR-SWAP-01 — Đổi ca 【MVP】</h3>
+<ul>
+<li>Người đề nghị chọn WorkSchedule của mình và người nhận phù hợp.</li>
+<li>Người nhận phải đồng ý trước; Manager duyệt cuối.</li>
+<li>APPLIED hoán đổi hai lịch trong một transaction và lưu audit before/after.</li>
+</ul>
+<h3>FR-OT-01 — Gửi và duyệt OT 【MVP】</h3>
+<ul>
+<li>Employee nhập ngày, requested start/end, lý do và mô tả công việc; không được nhập overtimeType.</li>
+<li>Request nên gửi trước giờ bắt đầu OT; duyệt hồi tố được gắn <code>isRetroactive</code> và bắt buộc lý do.</li>
+<li>Department Manager duyệt khung thời gian; không được tự duyệt request của mình.</li>
+</ul>
+<h3>FR-OT-02 — Tự động phân loại và tính OT 【MVP】</h3>
+<ul>
+<li>Backend phân loại theo ưu tiên <code>PUBLIC_HOLIDAY</code> → <code>WEEKLY_OFF/no schedule</code> → <code>WORKING_DAY</code>.</li>
+<li><code>eligible interval = approved interval ∩ actual attendance interval − scheduled working interval</code>.</li>
+<li>Một phút chỉ thuộc một loại OT và <code>eligibleMinutes</code> không vượt approvedMinutes.</li>
+<li>Check-out muộn không tự thành OT nếu không có request APPROVED.</li>
+<li>Khi duyệt tạo kết quả <code>PROVISIONAL</code>; khi chốt kỳ tính lại thành <code>FINAL</code> từ calendar/schedule snapshot cuối.</li>
+</ul>
+<h3>FR-OT-03 — Chi tiết OT và bảng công 【MVP】</h3>
+<ul>
+<li>Lưu requested, approved, actual và eligible minutes theo từng ngày.</li>
+<li>Tổng hợp riêng <code>otWorkingDayMinutes</code>, <code>otWeeklyOffMinutes</code>, <code>otPublicHolidayMinutes</code>.</li>
+<li>TimeLock không nhân hệ số hoặc tính tiền OT trong MVP.</li>
+</ul>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-12-business-rules" class="wiki-section searchable" data-title="12. Business rules" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>12. Business rules</h2><div class="section-body"><div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1060,6 +1152,42 @@ And điều hướng user đến trang phù hợp với role
 <tr>
 <td>BR-HIST-01</td>
 <td>Chuyển Department/Shift/Workplace không được làm thay đổi snapshot lịch sử.</td>
+</tr>
+<tr>
+<td>BR-SHIFT-01</td>
+<td>HR cấu hình ShiftTemplate; 08:00–17:00 chỉ là seed, không phải hằng số nghiệp vụ.</td>
+</tr>
+<tr>
+<td>BR-SCHEDULE-01</td>
+<td>Một Employee tối đa một WorkSchedule/ngày trong MVP và lịch không được chồng lấn.</td>
+</tr>
+<tr>
+<td>BR-PARTTIME-01</td>
+<td>Công chuẩn Part-time lấy từ WorkSchedule APPROVED, không từ lịch tháng chung.</td>
+</tr>
+<tr>
+<td>BR-SWAP-01</td>
+<td>Swap chỉ APPLIED sau khi bên nhận đồng ý và Manager duyệt; cập nhật hai lịch trong một transaction.</td>
+</tr>
+<tr>
+<td>BR-OT-01</td>
+<td>Employee không chọn overtimeType; backend phân loại từ calendar và schedule snapshot.</td>
+</tr>
+<tr>
+<td>BR-OT-02</td>
+<td>Không có OvertimeRequest APPROVED thì thời gian ngoài ca không được tính eligible OT.</td>
+</tr>
+<tr>
+<td>BR-OT-03</td>
+<td>Eligible OT là phần được duyệt giao với attendance thực tế và nằm ngoài scheduled interval.</td>
+</tr>
+<tr>
+<td>BR-OT-04</td>
+<td>Một phút OT chỉ thuộc một loại; public holiday ưu tiên weekly off và working day.</td>
+</tr>
+<tr>
+<td>BR-OT-05</td>
+<td>Thay đổi schedule/calendar/OT làm tăng period version và vô hiệu confirmation cũ.</td>
 </tr>
 <tr>
 <td>BR-ORDER-01</td>
@@ -1473,7 +1601,88 @@ And điều hướng user đến trang phù hợp với role
 </tr>
 </tbody>
 </table></div>
-<h3>UC-11 — Chứng minh tenant isolation</h3>
+<h3>UC-11 — Part-time đăng ký ca</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Part-time Employee / Department Manager</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>HR công bố ca → Employee đăng ký → Manager duyệt → tạo WorkSchedule</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Trùng lịch; hết hạn đăng ký; ngoài scope</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Ca APPROVED trở thành nghĩa vụ làm việc</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-12 — Hai nhân viên đổi ca</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee A, Employee B, Department Manager</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>A đề nghị → B đồng ý → Manager duyệt → transaction hoán đổi lịch</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>B từ chối; lịch đã bắt đầu; chồng lấn; ngoài scope</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>Hai WorkSchedule cập nhật và audit before/after</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-13 — OT tự động phân loại</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuộc tính</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Actor</td>
+<td>Employee / Department Manager / HR / System</td>
+</tr>
+<tr>
+<td>Luồng chính</td>
+<td>Employee gửi → Manager duyệt → attendance thực tế → hệ thống classify/calculate → HR chốt</td>
+</tr>
+<tr>
+<td>Ngoại lệ</td>
+<td>Tự duyệt; overlap; kỳ CLOSED; không có attendance thực tế</td>
+</tr>
+<tr>
+<td>Hậu điều kiện</td>
+<td>OvertimeResult FINAL nằm trong TimesheetSummary</td>
+</tr>
+</tbody>
+</table></div>
+<h3>UC-14 — Chứng minh tenant isolation</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1557,6 +1766,21 @@ And điều hướng user đến trang phù hợp với role
 <td style="text-align: center;">✅</td>
 </tr>
 <tr>
+<td><code>/app/schedule</code></td>
+<td>Lịch cá nhân/đăng ký ca Part-time</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/shift-swaps</code></td>
+<td>Yêu cầu/đồng ý đổi ca</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/app/overtime</code></td>
+<td>Gửi và xem OT cá nhân</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
 <td><code>/app/profile</code></td>
 <td>Hồ sơ và assignment</td>
 <td style="text-align: center;">✅</td>
@@ -1589,6 +1813,21 @@ And điều hướng user đến trang phù hợp với role
 <td style="text-align: center;">✅</td>
 </tr>
 <tr>
+<td><code>/manager/schedules</code></td>
+<td>Duyệt đăng ký ca và gán lịch</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/manager/shift-swaps</code></td>
+<td>Duyệt đổi ca</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/manager/overtime</code></td>
+<td>Duyệt OT và xem kết quả phòng ban</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
 <td><code>/manager/timesheet</code></td>
 <td>Rà soát và xác nhận phòng ban</td>
 <td style="text-align: center;">✅</td>
@@ -1618,6 +1857,16 @@ And điều hướng user đến trang phù hợp với role
 <tr>
 <td><code>/hr/workplaces</code>, <code>/hr/shifts</code>, <code>/hr/calendar</code></td>
 <td>Cấu hình công</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/schedules</code></td>
+<td>ShiftTemplate, recurring/part-time schedule</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>/hr/overtime</code></td>
+<td>Rà soát OT toàn Organization</td>
 <td style="text-align: center;">✅</td>
 </tr>
 <tr>
@@ -1691,6 +1940,7 @@ And điều hướng user đến trang phù hợp với role
 - employeeCode nullable cho SYSTEM_ADMIN
 - passwordHash
 - fullName, phone, avatarUrl
+- employmentType: FULL_TIME | PART_TIME nullable cho SYSTEM_ADMIN
 - role: SYSTEM_ADMIN | HR | DEPARTMENT_MANAGER | EMPLOYEE
 - status: ACTIVE | LOCKED | DISABLED
 - mustChangePassword, failedLoginCount, lockedUntil, lastLoginAt
@@ -1729,12 +1979,36 @@ AllowedNetwork
 - name, cidrOrIp, active, createdAt, updatedAt
 </code></pre>
 <h3>15.5. Shift và WorkCalendar</h3>
-<pre data-lang="text"><code>Shift
+<pre data-lang="text"><code>ShiftTemplate
 - id, organizationId
 - code, name, startTime, endTime
 - breakMinutes, gracePeriodMinutes, active
 - createdAt, updatedAt
 - UNIQUE(organizationId, code)
+
+RecurringSchedule
+- id, organizationId, employeeId, shiftTemplateId
+- weekdays, effectiveFrom, effectiveTo nullable, active
+
+ShiftRegistration
+- id, organizationId, employeeId, shiftTemplateId, workDate
+- status: PENDING | APPROVED | REJECTED | CANCELLED
+- submittedAt, reviewedBy, reviewedAt, rejectionReason
+
+WorkSchedule
+- id, organizationId, employeeId, shiftTemplateId, workDate
+- source: RECURRING | REGISTRATION | SWAP | HR_ADJUSTMENT
+- status: SCHEDULED | CANCELLED | COMPLETED
+- startAt, endAt, breakMinutes, gracePeriodMinutes
+- createdBy, approvedBy, createdAt, updatedAt
+- UNIQUE(organizationId, employeeId, workDate)
+
+ShiftSwapRequest
+- id, organizationId, requesterId, targetEmployeeId
+- requesterScheduleId, targetScheduleId
+- status: PENDING_TARGET | PENDING_MANAGER | APPROVED | APPLIED | REJECTED_BY_TARGET | REJECTED_BY_MANAGER | CANCELLED | EXPIRED
+- targetRespondedAt, managerId, managerComment, reviewedAt
+- beforeData, afterData, appliedAt, createdAt, updatedAt
 
 OrganizationCalendar
 - id, organizationId, workingWeekdays
@@ -1769,7 +2043,7 @@ EmployeeDayOverride
 - attendanceStatus: NOT_CHECKED_IN | CHECKED_IN | COMPLETED | DAY_OFF | LOCKED
 - overallApprovalStatus
 - checkInAt, checkOutAt, workingMinutes, lateMinutes, earlyMinutes
-- organizationSnapshot, departmentSnapshot, shiftSnapshot, employeeSnapshot, workplaceSnapshot
+- organizationSnapshot, departmentSnapshot, shiftSnapshot, scheduleSnapshot, employeeSnapshot, workplaceSnapshot
 - createdAt, updatedAt
 - UNIQUE(organizationId, employeeId, workDate)
 
@@ -1817,7 +2091,23 @@ ApprovalHistory
 - createdAt, updatedAt
 - UNIQUE(organizationId, code)
 </code></pre>
-<h3>15.11. TimesheetPeriod, confirmation và summary</h3>
+<h3>15.11. OvertimeRequest và OvertimeResult</h3>
+<pre data-lang="text"><code>OvertimeRequest
+- id, organizationId, employeeId, departmentId, workDate
+- requestedStartAt, requestedEndAt, reason, workDescription
+- status: PENDING | APPROVED | REJECTED | CANCELLED
+- managerId, managerComment, approvedStartAt, approvedEndAt, reviewedAt
+- isRetroactive, retroactiveReason nullable
+- createdAt, updatedAt
+
+OvertimeResult
+- id, organizationId, overtimeRequestId, attendanceDayId
+- overtimeType: OT_WORKING_DAY | OT_WEEKLY_OFF | OT_PUBLIC_HOLIDAY
+- classificationStatus: PROVISIONAL | FINAL
+- requestedMinutes, approvedMinutes, actualMinutes, eligibleMinutes
+- calendarSnapshot, scheduleSnapshot, calculationNote, calculatedAt
+</code></pre>
+<h3>15.12. TimesheetPeriod, confirmation và summary</h3>
 <pre data-lang="text"><code>TimesheetPeriod
 - id, organizationId, month
 - status: OPEN | REVIEWING | READY_TO_CLOSE | CLOSED
@@ -1836,10 +2126,12 @@ TimesheetSummary
 - employeeCodeSnapshot, fullNameSnapshot, departmentSnapshot
 - payableDays, workingMinutes, lateMinutes, earlyMinutes
 - absentDays, paidLeaveDays, unpaidLeaveDays, incompleteDays
+- scheduledWorkDays, scheduledWorkMinutes, actualWorkingDays, actualWorkingMinutes
+- otWorkingDayMinutes, otWeeklyOffMinutes, otPublicHolidayMinutes, totalEligibleOvertimeMinutes
 - finalApprovalStatus, createdAt
 - UNIQUE(organizationId, periodId, employeeId, periodVersion)
 </code></pre>
-<h3>15.12. AuditLog, SupportAccessGrant và IdempotencyRecord</h3>
+<h3>15.13. AuditLog, SupportAccessGrant và IdempotencyRecord</h3>
 <pre data-lang="text"><code>AuditLog
 - id, organizationId nullable, actorId nullable
 - action, entityType, entityId, beforeData, afterData
@@ -2132,7 +2424,75 @@ IdempotencyRecord
 </tr>
 </tbody>
 </table></div>
-<h3>16.6A. Adjustment APIs</h3>
+<h3>16.6A. Schedule, swap và overtime APIs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Quyền</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET/POST/PATCH</td>
+<td><code>/api/hr/shift-templates</code></td>
+<td>HR</td>
+<td>Cấu hình ca, không hard-code giờ</td>
+</tr>
+<tr>
+<td>GET/POST</td>
+<td><code>/api/schedules/mine/registrations</code></td>
+<td>Employee</td>
+<td>Xem/đăng ký ca Part-time</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/manager/shift-registrations/:id/approve|reject</code></td>
+<td>Department Manager</td>
+<td>Duyệt đăng ký</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/shift-swaps</code></td>
+<td>Employee</td>
+<td>Tạo yêu cầu đổi ca</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/shift-swaps/:id/target-response</code></td>
+<td>Target Employee</td>
+<td>Đồng ý/từ chối</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/manager/shift-swaps/:id/approve|reject</code></td>
+<td>Department Manager</td>
+<td>Quyết định cuối</td>
+</tr>
+<tr>
+<td>POST/GET</td>
+<td><code>/api/overtime</code>, <code>/api/overtime/mine</code></td>
+<td>Employee</td>
+<td>Gửi/xem OT cá nhân</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/manager/overtime/:id/approve|reject</code></td>
+<td>Department Manager</td>
+<td>Duyệt khung OT</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/hr/overtime-results</code></td>
+<td>HR</td>
+<td>Rà soát OT trong kỳ</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>overtimeType</code>, <code>actualMinutes</code> và <code>eligibleMinutes</code> không được nhận từ client như dữ liệu tin cậy.</p>
+<h3>16.6B. Adjustment APIs</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -2511,6 +2871,46 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <td style="text-align: right;">409</td>
 <td>Ngày nghỉ/vắng chưa được phân loại</td>
 </tr>
+<tr>
+<td><code>SHIFT_REGISTRATION_CLOSED</code></td>
+<td style="text-align: right;">409</td>
+<td>Đợt đăng ký ca đã đóng</td>
+</tr>
+<tr>
+<td><code>SCHEDULE_OVERLAP</code></td>
+<td style="text-align: right;">409</td>
+<td>Lịch làm bị chồng lấn</td>
+</tr>
+<tr>
+<td><code>SHIFT_SWAP_TARGET_REQUIRED</code></td>
+<td style="text-align: right;">409</td>
+<td>Người nhận chưa đồng ý đổi ca</td>
+</tr>
+<tr>
+<td><code>SHIFT_SWAP_NOT_ALLOWED</code></td>
+<td style="text-align: right;">409</td>
+<td>Ca đã bắt đầu/có event hoặc ngoài scope</td>
+</tr>
+<tr>
+<td><code>OVERTIME_SELF_TYPE_FORBIDDEN</code></td>
+<td style="text-align: right;">400</td>
+<td>Client không được tự chọn overtimeType</td>
+</tr>
+<tr>
+<td><code>OVERTIME_OVERLAP</code></td>
+<td style="text-align: right;">409</td>
+<td>Khoảng OT trùng request khác</td>
+</tr>
+<tr>
+<td><code>OVERTIME_NOT_APPROVED</code></td>
+<td style="text-align: right;">409</td>
+<td>Không có request OT được duyệt</td>
+</tr>
+<tr>
+<td><code>OVERTIME_RECALCULATION_REQUIRED</code></td>
+<td style="text-align: right;">409</td>
+<td>Calendar/schedule đổi; phải tính lại OT</td>
+</tr>
 </tbody>
 </table></div>
 <h3>17.5. Timesheet closing</h3>
@@ -2595,14 +2995,27 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <li>Thêm ApprovalHistory và AuditLog.</li>
 <li>Commit rồi trả representation mới.</li>
 </ul>
-<h3>18.3. Adjustment transaction</h3>
+<h3>18.3. Shift swap transaction</h3>
+<ul>
+<li>Lock hai WorkSchedule cùng tenant; kiểm tra target consent, manager scope, thời gian và overlap.</li>
+<li>Hoán đổi assignment lịch, lưu before/after và audit; lỗi bất kỳ rollback cả hai.</li>
+<li>Tăng period version nếu lịch thuộc kỳ đang REVIEWING.</li>
+</ul>
+<h3>18.4. Overtime calculation</h3>
+<ul>
+<li>Lock OvertimeRequest/AttendanceDay/TimesheetPeriod cùng tenant.</li>
+<li>Backend lấy CalendarException và WorkSchedule snapshot để tự phân loại.</li>
+<li>Tính intersection approved/actual, trừ scheduled interval, chống đếm trùng từng phút.</li>
+<li>Khi chốt kỳ, tính lại FINAL; thay đổi calendar/schedule/OT tăng version và vô hiệu confirmation.</li>
+</ul>
+<h3>18.5. Adjustment transaction</h3>
 <ul>
 <li>Lock AdjustmentRequest, AttendanceDay và TimesheetPeriod cùng Organization.</li>
 <li>Kiểm tra APPROVED, department scope, period chưa CLOSED và version hiện tại.</li>
 <li>Lưu beforeData, áp dụng afterData, tính lại ngày công và tăng period version.</li>
 <li>Vô hiệu xác nhận phòng ban version cũ; ghi audit và commit cùng transaction.</li>
 </ul>
-<h3>18.4. Chốt kỳ transaction</h3>
+<h3>18.6. Chốt kỳ transaction</h3>
 <ul>
 <li>Lock <code>TimesheetPeriod</code> và kiểm tra status/version hiện tại.</li>
 <li>Kiểm tra lại toàn bộ blocker và xác nhận phòng ban.</li>
@@ -2611,7 +3024,7 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <li>Ghi AuditLog và commit trong cùng transaction.</li>
 <li>Nếu bất kỳ bước nào lỗi, rollback toàn bộ; không để kỳ CLOSED thiếu snapshot.</li>
 </ul>
-<h3>18.5. Idempotency</h3>
+<h3>18.7. Idempotency</h3>
 <ul>
 <li>FE tạo UUID khi bắt đầu một thao tác mới.</li>
 <li>Retry do timeout phải dùng cùng key.</li>
@@ -2757,6 +3170,18 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <td>draft, pending-manager, approved, rejected, applying, applied, period-closed</td>
 </tr>
 <tr>
+<td>Schedule</td>
+<td>recurring, registration-open/closed, pending, approved, overlap, cancelled</td>
+</tr>
+<tr>
+<td>Shift swap</td>
+<td>pending-target, pending-manager, approved, applied, rejected, expired</td>
+</tr>
+<tr>
+<td>Overtime</td>
+<td>draft, pending, approved, rejected, provisional, recalculation-required, final</td>
+</tr>
+<tr>
 <td>Tenant forms</td>
 <td>create/edit, validation error, duplicate-in-tenant, forbidden, save success/failure</td>
 </tr>
@@ -2825,6 +3250,18 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <li>AC-ADJ-02: Kỳ CLOSED phải được HR mở lại trước khi áp dụng adjustment.</li>
 <li>AC-CAL-01: Weekly off/holiday/leave không bị tính ABSENT; ngày làm việc thiếu event được phân loại đúng.</li>
 <li>AC-HIST-01: Chuyển phòng/ca không thay đổi snapshot kỳ cũ.</li>
+<li>AC-TARGET-01: Hệ thống hoạt động với tenant seed 10–50 người nhưng không chặn tenant có hơn 50 user.</li>
+<li>AC-SCH-01: HR cấu hình được ca khác 08:00–17:00; tính late/early dùng WorkSchedule đó.</li>
+<li>AC-SCH-02: Full-time sinh lịch từ RecurringSchedule; part-time chỉ có nghĩa vụ làm sau khi đăng ký được duyệt.</li>
+<li>AC-SCH-03: Một nhân viên không có hai WorkSchedule cùng ngày hoặc lịch chồng lấn.</li>
+<li>AC-SWAP-01: Swap chưa được target đồng ý không thể được Manager áp dụng.</li>
+<li>AC-SWAP-02: Swap thành công cập nhật cả hai lịch hoặc rollback toàn bộ.</li>
+<li>AC-OT-01: Payload chứa overtimeType bị bỏ qua/từ chối; backend phân loại đúng theo calendar/schedule.</li>
+<li>AC-OT-02: Public holiday trùng weekly off chỉ tính OT_PUBLIC_HOLIDAY và không đếm trùng phút.</li>
+<li>AC-OT-03: Check-out muộn không có request APPROVED tạo eligibleMinutes = 0.</li>
+<li>AC-OT-04: Eligible OT không vượt approved window và chỉ gồm attendance thực tế ngoài scheduled interval.</li>
+<li>AC-OT-05: Thay đổi calendar/schedule trước chốt làm OT cần tính lại và confirmation cũ hết hiệu lực.</li>
+<li>AC-OT-06: TimesheetSummary khớp tổng OT FINAL theo ba loại.</li>
 </ul>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-22-test-strategy" class="wiki-section searchable" data-title="22. Test strategy" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>22. Test strategy</h2><div class="section-body"><h3>22.1. Unit test</h3>
 <ul>
@@ -2837,6 +3274,8 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <li>Tính working/late/early minutes.</li>
 <li>RBAC, tenant-scope và department-scope policy functions.</li>
 <li>Work calendar/day classification và adjustment transition.</li>
+<li>Shift registration/swap state transition và overlap detection.</li>
+<li>Overtime classification precedence và interval intersection/subtraction.</li>
 <li>Idempotency request hash.</li>
 <li>Timesheet period state transition và blocker calculation.</li>
 <li>Tổng hợp TimesheetSummary và period version.</li>
@@ -2853,6 +3292,9 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <li>Evidence endpoint authorization.</li>
 <li>History filtering theo current user và Organization.</li>
 <li>Adjustment review/apply/version invalidation.</li>
+<li>Full-time recurring schedule generation và part-time registration approval.</li>
+<li>Atomic shift swap có target consent.</li>
+<li>Overtime request approval, automatic classification, final recalculation và summary aggregation.</li>
 <li>Department confirmation scope/version.</li>
 <li>Close/reopen period transaction và audit.</li>
 <li>Export integrity từ snapshot.</li>
@@ -2861,10 +3303,12 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 <ol>
 <li>System Admin tạo Organization A/B và HR-A/HR-B.</li>
 <li>HR-A cấu hình Department, Workplace, Shift, Calendar, Manager-A và Employee-A.</li>
-<li>Employee-A GPS check-in; Employee-C Selfie ngoài văn phòng.</li>
-<li>Manager-A xử lý approval, adjustment và xác nhận phòng ban.</li>
-<li>HR-A phân loại nghỉ/vắng, áp dụng adjustment và rà soát blocker.</li>
-<li>HR-A chốt kỳ, export snapshot và chứng minh CLOSED chặn mutation.</li>
+<li>HR-A tạo ca 07:30–16:30 để chứng minh không hard-code 08:00–17:00; sinh lịch Full-time.</li>
+<li>Part-time Employee đăng ký ca, Manager duyệt; hai Employee đổi ca qua target consent + manager approval.</li>
+<li>Employee-A GPS check-in; Employee-C Selfie và gửi OT không chọn loại.</li>
+<li>Manager-A duyệt OT; hệ thống tự phân loại/tính eligible từ attendance thực tế.</li>
+<li>Manager-A xử lý approval/adjustment và xác nhận phòng ban.</li>
+<li>HR-A rà soát, chốt kỳ, export bảng công có ba loại OT và chứng minh CLOSED chặn mutation.</li>
 <li>HR-A mở lại có lý do; confirmation version cũ mất hiệu lực.</li>
 <li>User Organization A thử truy cập resource B và bị từ chối.</li>
 <li>System Admin xem health/audit nhưng không xử lý/chốt công.</li>
@@ -2893,7 +3337,8 @@ Backend
 ├── Tenant Context Middleware (session → organizationId)
 ├── Auth &amp; RBAC/Resource Scope
 ├── Organization &amp; Support Access
-├── Department/Workplace/Shift/Calendar
+├── Department/Workplace/ShiftTemplate/Schedule/Calendar
+├── Shift Registration/Swap/Overtime
 ├── Attendance/Evidence/Approval/Adjustment
 ├── Timesheet Closing/Snapshot/Export
 ├── Audit &amp; Idempotency
@@ -2955,6 +3400,14 @@ Backend
 <td>Bổ sung tenant context, department scope và lịch công tối thiểu</td>
 </tr>
 <tr>
+<td>Chưa có Full-time/Part-time schedule</td>
+<td>Bổ sung ShiftTemplate, RecurringSchedule, Registration và WorkSchedule</td>
+</tr>
+<tr>
+<td>Chưa có shift swap/OT</td>
+<td>Bổ sung target consent, manager approval và OT classification/calculation</td>
+</tr>
+<tr>
 <td>Chưa có adjustment</td>
 <td>Thêm request → manager review → HR apply + audit/version</td>
 </tr>
@@ -2976,9 +3429,12 @@ Backend
 <p>Dữ liệu seed đề xuất:</p>
 <ul>
 <li>Organization A và B, mỗi tenant có HR riêng.</li>
-<li>Organization A: 2 Department, 2 Workplace, 2 Shift, 1 Manager, 2 Employee.</li>
+<li>Organization A: 2 Department, 2 Workplace, nhiều ShiftTemplate do HR cấu hình, 1 Manager, tối thiểu 10 user để phản ánh phân khúc mục tiêu.</li>
+<li>Seed 08:00–17:00 chỉ là ví dụ; thêm ca 07:30–16:30 để chứng minh không hard-code.</li>
 <li>Organization B: 1 Department, 1 Workplace, 1 Manager, 1 Employee để test isolation.</li>
 <li>Calendar có ngày làm việc, ngày lễ, paid/unpaid leave và ngày incomplete.</li>
+<li>Full-time RecurringSchedule, part-time registration pending/approved và một shift swap.</li>
+<li>OvertimeRequest ngày làm việc/nghỉ tuần/ngày lễ với requested/approved/actual/eligible.</li>
 <li>Approval Selfie/GPS, AdjustmentRequest pending/approved.</li>
 <li>Một kỳ REVIEWING có blocker và một kỳ CLOSED có snapshot.</li>
 </ul>
@@ -3006,6 +3462,7 @@ Backend
 <li>Organization lifecycle + tenant context middleware.</li>
 <li>Department, tenant-user, Workplace/Network/Shift CRUD.</li>
 <li>Calendar/leave tối thiểu và assignment có hiệu lực.</li>
+<li>Full-time recurring schedule, part-time registration và WorkSchedule.</li>
 <li>Tenant-isolation integration tests.</li>
 </ul>
 <h3>Phase 3 — Attendance core</h3>
@@ -3056,6 +3513,10 @@ Backend
 <li>[ ] Department Manager approve/reject/clarify đúng Department scope và kết quả lưu bền vững.</li>
 <li>[ ] Adjustment lưu before/after và tăng period version.</li>
 <li>[ ] Calendar phân loại đúng holiday/leave/absent/incomplete.</li>
+<li>[ ] HR cấu hình ca; không có logic hard-code 08:00–17:00.</li>
+<li>[ ] Full-time/Part-time schedule, đăng ký ca và swap chạy đúng scope/transaction.</li>
+<li>[ ] OT tự phân loại WORKING_DAY/WEEKLY_OFF/PUBLIC_HOLIDAY và tính eligible theo attendance thực tế.</li>
+<li>[ ] Bảng công chi tiết có công chuẩn/thực tế/nghỉ-vắng và OT theo loại.</li>
 <li>[ ] Department Manager xác nhận được dữ liệu phòng ban sẵn sàng chốt.</li>
 <li>[ ] HR rà soát blocker, chốt kỳ và tạo TimesheetSummary snapshot.</li>
 <li>[ ] Kỳ CLOSED chặn mọi mutation ngày công.</li>
@@ -3098,6 +3559,31 @@ Backend
 <td>OQ-04</td>
 <td>Manager quản lý nhiều phòng?</td>
 <td>Có qua ManagerAssignment có hiệu lực</td>
+</tr>
+<tr>
+<td>OQ-04A</td>
+<td>Phân khúc mục tiêu?</td>
+<td>10–50 nhân viên/Organization; không hard-code giới hạn</td>
+</tr>
+<tr>
+<td>OQ-04B</td>
+<td>Ca hành chính?</td>
+<td>HR cấu hình; 08:00–17:00 chỉ là seed/demo</td>
+</tr>
+<tr>
+<td>OQ-04C</td>
+<td>Full-time/Part-time?</td>
+<td>RecurringSchedule và ShiftRegistration → WorkSchedule</td>
+</tr>
+<tr>
+<td>OQ-04D</td>
+<td>Đổi ca?</td>
+<td>Target consent + Manager approval + atomic apply</td>
+</tr>
+<tr>
+<td>OQ-04E</td>
+<td>OT type?</td>
+<td>Backend tự phân loại; Employee không chọn</td>
 </tr>
 <tr>
 <td>OQ-05</td>
@@ -3200,6 +3686,26 @@ Backend
 <td>Quản trị nền tảng/Organization; không xử lý hoặc chốt/mở công</td>
 </tr>
 <tr>
+<td>EmploymentType</td>
+<td><code>FULL_TIME</code> hoặc <code>PART_TIME</code>; quyết định cách hình thành lịch</td>
+</tr>
+<tr>
+<td>ShiftTemplate</td>
+<td>Ca mẫu do HR cấu hình; không có giờ hard-code</td>
+</tr>
+<tr>
+<td>WorkSchedule</td>
+<td>Lịch làm chính thức theo ngày, nguồn recurring/registration/swap</td>
+</tr>
+<tr>
+<td>ShiftSwapRequest</td>
+<td>Yêu cầu đổi hai WorkSchedule cần bên nhận đồng ý và Manager duyệt</td>
+</tr>
+<tr>
+<td>OvertimeRequest/Result</td>
+<td>Yêu cầu OT và kết quả requested/approved/actual/eligible do hệ thống phân loại</td>
+</tr>
+<tr>
 <td>WorkMode</td>
 <td><code>IN_OFFICE</code> hoặc <code>OUT_OFFICE</code></td>
 </tr>
@@ -3267,8 +3773,10 @@ Backend
 </table></div>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="srs-29-ket-luan" class="wiki-section searchable" data-title="29. Kết luận" data-doc="srs"><div class="section-kicker">SRS TimeLock v3.0</div><h2>29. Kết luận</h2><div class="section-body"><p>TimeLock là nền tảng multi-tenant quản lý trọn vòng đời ngày công cho nhiều Organization:</p>
 <pre data-lang="text"><code>Organization &amp; Tenant Isolation
-+ Department/Workplace/Shift/Calendar
++ Department/Workplace/ShiftTemplate/Calendar
++ Full-time/Part-time Schedule &amp; Shift Swap
 + Attendance Network/GPS/Selfie
++ Automatic Overtime Classification
 + Evidence, Approval &amp; Adjustment
 + Department Confirmation
 + Timesheet Closing, Snapshot &amp; Export
@@ -3332,6 +3840,8 @@ Backend
 <li>Bảo đảm dữ liệu đã chốt không bị thay đổi tùy ý.</li>
 <li>Lưu audit log cho các thao tác quan trọng.</li>
 <li>Tạo một sản phẩm responsive có thể trình diễn trên điện thoại, tablet và desktop.</li>
+<li>Hỗ trợ full-time/part-time bằng lịch do HR cấu hình, không hard-code giờ ca hành chính.</li>
+<li>Cho phép đăng ký ca, đổi ca có đồng thuận và OT được hệ thống tự phân loại/tính từ lịch thực tế.</li>
 </ul>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-5-actors" class="wiki-section searchable" data-title="5. Actors" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2>5. Actors</h2><div class="section-body"><h3>5.1. Employee — Nhân viên</h3>
 <ul>
@@ -3412,6 +3922,14 @@ Backend
 <li>Quản lý ca làm, giờ bắt đầu, giờ kết thúc, thời gian nghỉ và grace period.</li>
 <li>Gán nhân viên vào workplace, shift và approver.</li>
 </ul>
+<h3>6.2A. Full-time, Part-time and Scheduling</h3>
+<ul>
+<li>HR tạo và cấu hình ShiftTemplate; ca 08:00–17:00 chỉ là dữ liệu seed/demo.</li>
+<li>Full-time sử dụng lịch lặp RecurringSchedule.</li>
+<li>Part-time đăng ký ca theo ngày; Department Manager duyệt trước khi tạo WorkSchedule chính thức.</li>
+<li>MVP chỉ hỗ trợ ca trong cùng ngày, một lịch/ngày và không hỗ trợ ca qua đêm.</li>
+<li>Đổi ca cần người nhận đồng ý, sau đó Department Manager phê duyệt và hệ thống cập nhật cả hai lịch trong một transaction.</li>
+</ul>
 <h3>6.3. Employee Check-in/Check-out</h3>
 <ul>
 <li>Xem trạng thái ngày công hôm nay.</li>
@@ -3454,6 +3972,15 @@ Backend
 <li>Tính tổng phút làm việc.</li>
 <li>Tính số phút đi trễ và về sớm.</li>
 <li>Xem chi tiết bằng chứng và audit timeline của từng ngày.</li>
+</ul>
+<h3>6.6A. Overtime Management</h3>
+<ul>
+<li>Employee gửi ngày, khung giờ, lý do và nội dung OT; không được tự chọn loại OT.</li>
+<li>Department Manager duyệt khoảng thời gian OT trong đúng phạm vi và không tự duyệt request của mình.</li>
+<li>Backend tự phân loại <code>OT_WORKING_DAY</code>, <code>OT_WEEKLY_OFF</code>, <code>OT_PUBLIC_HOLIDAY</code> từ WorkCalendar và WorkSchedule.</li>
+<li>Hệ thống lưu requested, approved, actual và eligible minutes; check-out muộn không tự động thành OT.</li>
+<li>Eligible OT là phần được duyệt giao với attendance thực tế và nằm ngoài lịch chính thức.</li>
+<li>HR rà soát và hệ thống tính lại kết quả FINAL khi chốt kỳ; không tính tiền/hệ số lương.</li>
 </ul>
 <h3>6.7. Monthly Timesheet Closing</h3>
 <ul>
@@ -3525,6 +4052,23 @@ Backend
 → HR xuất CSV/Excel
 </code></pre>
 <p><strong>Kết quả:</strong> Kỳ công được khóa, dữ liệu có thể dùng làm đầu vào cho quy trình tính lương bên ngoài.</p>
+<h3>Flow 4A — Full-time/Part-time Schedule &amp; Shift Swap (REQUIRED)</h3>
+<pre data-lang="text"><code>HR cấu hình ShiftTemplate
+→ sinh lịch Full-time hoặc mở đăng ký Part-time
+→ Manager duyệt đăng ký
+→ Employee A đề nghị đổi ca
+→ Employee B đồng ý
+→ Manager duyệt
+→ hệ thống cập nhật lịch có audit
+</code></pre>
+<h3>Flow 4B — Overtime Request &amp; Automatic Classification (REQUIRED)</h3>
+<pre data-lang="text"><code>Employee gửi OT không chọn loại
+→ Manager duyệt approved window
+→ Employee thực hiện attendance
+→ backend tự classify và tính eligible OT
+→ HR rà soát
+→ kết quả FINAL vào bảng công tháng
+</code></pre>
 <hr /></div><a class="to-top" href="#overview">↑ Về đầu trang</a></section><section id="proposal-8-nice-to-have-flows" class="wiki-section searchable" data-title="8. Nice-to-have Flows" data-doc="proposal"><div class="section-kicker">Project Proposal</div><h2>8. Nice-to-have Flows</h2><div class="section-body"><h3>Flow 5 — Adjustment Request After Closing (OPTIONAL)</h3>
 <ul>
 <li>Employee hoặc HR tạo yêu cầu điều chỉnh ngày công.</li>
@@ -3646,7 +4190,11 @@ Backend
 <li><code>UserSession</code></li>
 <li><code>Workplace</code></li>
 <li><code>AllowedNetwork</code></li>
-<li><code>Shift</code></li>
+<li><code>ShiftTemplate</code></li>
+<li><code>RecurringSchedule</code></li>
+<li><code>ShiftRegistration</code></li>
+<li><code>WorkSchedule</code></li>
+<li><code>ShiftSwapRequest</code></li>
 <li><code>EmployeeAssignment</code></li>
 <li><code>AttendanceDay</code></li>
 <li><code>AttendanceEvent</code></li>
@@ -3657,6 +4205,8 @@ Backend
 <li><code>TimesheetSummary</code></li>
 <li><code>TimesheetClosingHistory</code></li>
 <li><code>AdjustmentRequest</code></li>
+<li><code>OvertimeRequest</code></li>
+<li><code>OvertimeResult</code></li>
 <li><code>AuditLog</code></li>
 <li><code>IdempotencyRecord</code></li>
 </ul>
@@ -3703,6 +4253,9 @@ Backend
 <li>Authentication và RBAC.</li>
 <li>Admin quản lý tài khoản và cấu hình chấm công.</li>
 <li>Employee check-in/check-out.</li>
+<li>Full-time recurring schedule và part-time shift registration.</li>
+<li>Shift swap có target consent và manager approval.</li>
+<li>Overtime request, automatic classification và eligible calculation.</li>
 <li>Network/GPS/Selfie evidence.</li>
 <li>Approval và clarification workflow.</li>
 <li>Lịch sử và chi tiết ngày công.</li>
@@ -3774,7 +4327,7 @@ Backend
 <li>Xây dựng API, database và authentication thực tế.</li>
 <li>Áp dụng RBAC và resource-level authorization.</li>
 <li>Xử lý upload file và dữ liệu GPS an toàn.</li>
-<li>Thiết kế state machine cho attendance, approval và timesheet period.</li>
+<li>Thiết kế state machine cho attendance, schedule registration/swap, overtime, approval và timesheet period.</li>
 <li>Áp dụng transaction, idempotency và unique constraints.</li>
 <li>Xây dựng báo cáo và quy trình khóa dữ liệu cuối kỳ.</li>
 <li>Viết unit test, integration test và end-to-end test.</li>
