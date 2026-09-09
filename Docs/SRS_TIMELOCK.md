@@ -35,14 +35,16 @@
 2. MVP có bốn vai trò: `SYSTEM_ADMIN`, `HR`, `DEPARTMENT_MANAGER`, `EMPLOYEE`.
 3. `SYSTEM_ADMIN` quản trị nền tảng, tạo/khóa Organization và cấp tài khoản HR đầu tiên; không xử lý hoặc chốt công thay khách hàng.
 4. `HR` quản trị cơ cấu nhân sự trong Organization, rà soát, chốt/mở lại kỳ và xuất bảng tổng hợp.
-5. `DEPARTMENT_MANAGER` kế thừa quyền chấm công cá nhân, xử lý ngoại lệ và xác nhận công của phòng ban được giao.
-6. `EMPLOYEE` chấm công và chỉ truy cập dữ liệu cá nhân.
-7. Người dùng đăng nhập bằng email hoặc mã nhân viên + mật khẩu; MVP không cho đăng ký công khai.
-8. Employee chọn `IN_OFFICE` hoặc `OUT_OFFICE`; bằng chứng thực tế là `NETWORK`, `GPS` hoặc `SELFIE`.
-9. Điều chỉnh công và phân loại ngày nghỉ/vắng tối thiểu thuộc MVP để HR có thể làm sạch dữ liệu trước khi chốt.
-10. TimeLock chỉ tạo bảng công; không tính lương, thuế hoặc bảo hiểm trong MVP.
-11. Backend là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công.
-12. Prototype dùng mock data để trình diễn; dữ liệu mock không phải kiến trúc production.
+5. `DEPARTMENT_MANAGER` là nhân viên có thêm quyền quản lý: dùng cùng một tài khoản để check-in/out, xem “Công của tôi”, xử lý ngoại lệ và xác nhận công của phòng ban được giao.
+6. `HR` cũng có thể chấm công cá nhân nếu có `EmployeeAssignment` hợp lệ; `SYSTEM_ADMIN` không thuộc workforce tenant nên không chấm công.
+7. `EMPLOYEE` chấm công và chỉ truy cập dữ liệu cá nhân.
+8. Department Manager và HR không được tự duyệt ApprovalRequest hoặc AdjustmentRequest của chính mình; request phải chuyển cho HR khác hoặc người quản lý thay thế.
+9. Người dùng đăng nhập bằng email hoặc mã nhân viên + mật khẩu; MVP không cho đăng ký công khai.
+10. Employee chọn `IN_OFFICE` hoặc `OUT_OFFICE`; bằng chứng thực tế là `NETWORK`, `GPS` hoặc `SELFIE`.
+11. Điều chỉnh công và phân loại ngày nghỉ/vắng tối thiểu thuộc MVP để HR có thể làm sạch dữ liệu trước khi chốt.
+12. TimeLock chỉ tạo bảng công; không tính lương, thuế hoặc bảo hiểm trong MVP.
+13. Backend là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công.
+14. Prototype dùng mock data để trình diễn; dữ liệu mock không phải kiến trúc production.
 
 ---
 
@@ -137,10 +139,19 @@ MVP được xem là thành công khi có thể demo end-to-end:
 
 #### Department Manager
 
-- Có quyền Employee cho dữ liệu cá nhân nếu có assignment.
-- Xử lý approval/adjustment của các Department được giao.
+- Dùng một tài khoản duy nhất cho cả quyền nhân viên và quyền quản lý.
+- Check-in/out, xem lịch sử, tổng hợp cá nhân, giải trình và adjustment qua khu vực “Công của tôi” nếu có `EmployeeAssignment` hợp lệ.
+- Xử lý approval/adjustment của các Department được giao, nhưng không được tự xử lý request có `employeeId` bằng chính `userId` của mình.
+- Request cá nhân của Department Manager được chuyển cho HR khác hoặc người quản lý thay thế được cấu hình.
 - Xem evidence/audit đúng tenant và department scope.
 - Xác nhận bảng công phòng ban khi không còn blocker.
+
+#### HR với tư cách nhân viên
+
+- HR được dùng các chức năng “Công của tôi” nếu có `EmployeeAssignment` hợp lệ.
+- HR không có assignment thì chỉ dùng chức năng quản trị nhân sự/chốt công và không hiện nút check-in/out.
+- HR không được tự duyệt hoặc tự áp dụng ApprovalRequest/AdjustmentRequest của chính mình.
+- `SYSTEM_ADMIN` không có EmployeeAssignment trong tenant và không có chức năng chấm công.
 
 #### HR và chốt kỳ công
 
@@ -210,6 +221,9 @@ MVP được xem là thành công khi có thể demo end-to-end:
 - `organizationId`, `employeeId` và role tin cậy lấy từ session/token, không lấy từ payload.
 - Mọi query nghiệp vụ ràng buộc `resource.organizationId = currentUser.organizationId` trước khi kiểm tra quyền chi tiết.
 - Department Manager chỉ xử lý tài nguyên có `departmentId` thuộc `managedDepartmentIds` tại thời điểm hiệu lực.
+- Quyền chấm công cá nhân được xác định bởi capability `attendance:self` kết hợp `EmployeeAssignment` còn hiệu lực, không chỉ dựa vào tên role.
+- Mọi quyết định approval/adjustment phải thỏa `actorId != employeeId`; hệ thống không hiển thị action và backend trả `SELF_APPROVAL_FORBIDDEN` nếu người xử lý là chủ bản ghi.
+- Request của Department Manager/HR phát sinh từ “Công của tôi” phải được route tới người khác đủ quyền trong cùng Organization.
 - HR chỉ thao tác trong Organization của mình; HR không thể chọn `organizationId` tùy ý.
 - System Admin thao tác Organization ở namespace nền tảng; truy cập dữ liệu/evidence tenant chỉ qua support có lý do và audit.
 - Chỉ HR chốt/mở lại kỳ; System Admin không quyết định nghiệp vụ công.
@@ -848,6 +862,8 @@ Hiển thị:
 | BR-RBAC-01 | Quyền được kiểm tra ở backend trên từng resource. |
 | BR-SCOPE-01 | Employee chỉ xem và thao tác dữ liệu của chính mình. |
 | BR-MGR-01 | Department Manager chỉ xử lý request cùng tenant và thuộc Department được giao tại thời điểm hiệu lực. |
+| BR-SELF-APPROVAL-01 | Department Manager và HR không được quyết định hoặc áp dụng request có employeeId bằng actorId của mình. |
+| BR-ATTENDANCE-CAPABILITY-01 | EMPLOYEE luôn cần assignment; DEPARTMENT_MANAGER/HR chỉ chấm công khi có EmployeeAssignment hợp lệ; SYSTEM_ADMIN không chấm công. |
 | BR-DAY-01 | Một employee chỉ có một AttendanceDay cho mỗi workDate trong Organization. |
 | BR-CAL-01 | ABSENT/INCOMPLETE chỉ được suy ra trên ngày có nghĩa vụ làm việc sau khi áp dụng weekly calendar, holiday và leave. |
 | BR-HIST-01 | Chuyển Department/Shift/Workplace không được làm thay đổi snapshot lịch sử. |
@@ -1044,8 +1060,8 @@ Hiển thị:
 ### 14.6. Điều hướng
 
 - Employee → `/app/attendance`.
-- Department Manager → `/manager/approvals`, đồng thời truy cập được employee routes cá nhân.
-- HR → `/hr/dashboard`; có employee routes nếu được gán ca.
+- Department Manager → `/manager/approvals`; menu bắt buộc có “Công của tôi” trỏ tới `/app/attendance` cùng lịch sử/adjustment cá nhân.
+- HR → `/hr/dashboard`; menu có “Công của tôi” và employee routes khi có EmployeeAssignment hợp lệ; nếu không có assignment thì ẩn action chấm công.
 - System Admin → `/platform/organizations`; không có route nghiệp vụ chấm công.
 - Route trái role hoặc tenant scope trả 403/404 phù hợp; guest về `/login`.
 
@@ -1494,6 +1510,7 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 | `TENANT_SUSPENDED` | 423 | Organization đã bị khóa |
 | `TENANT_SCOPE_VIOLATION` | 404 | Resource không tồn tại trong tenant hiện tại |
 | `DEPARTMENT_SCOPE_VIOLATION` | 403 | Manager không được giao Department này |
+| `SELF_APPROVAL_FORBIDDEN` | 403 | Không được tự duyệt hoặc tự áp dụng request của chính mình |
 
 ### 17.3. Attendance
 
@@ -1733,6 +1750,10 @@ Mọi trạng thái lỗi phải có hành động phù hợp: thử lại, cấ
 - AC-MGR-04: Employee thấy quyết định sau refetch/login lại.
 - AC-MGR-05: Hai Department Manager/tab cùng xử lý chỉ quyết định đầu hợp lệ; lần sau nhận conflict.
 - AC-MGR-06: Evidence URL không thể truy cập khi logout hoặc không có quyền.
+- AC-MGR-07: Department Manager có assignment check-in/out và xem “Công của tôi” bằng cùng một tài khoản.
+- AC-HR-SELF-01: HR có assignment được chấm công; HR không có assignment không thấy action check-in/out.
+- AC-SELF-APPROVAL-01: Department Manager/HR xử lý request của chính mình nhận `403 SELF_APPROVAL_FORBIDDEN`; request được giao cho actor khác đủ quyền.
+- AC-SYS-ATTENDANCE-01: System Admin không truy cập được chức năng check-in/out.
 
 ### 21.4. System Admin và multi-tenant
 

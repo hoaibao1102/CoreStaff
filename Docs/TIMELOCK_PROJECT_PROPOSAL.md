@@ -118,6 +118,9 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 
 ### 5.2. Approver / Department Manager — Người phê duyệt / Quản lý phòng ban
 
+- Là nhân viên có thêm quyền quản lý và sử dụng cùng một tài khoản cho cả hai phạm vi.
+- Check-in/check-out, xem lịch sử và điều chỉnh công cá nhân qua mục **Công của tôi** khi có assignment hợp lệ.
+- Không được tự duyệt yêu cầu chấm công hoặc AdjustmentRequest của chính mình; request phải chuyển cho HR/người quản lý khác đủ quyền.
 - Xem yêu cầu thuộc các nhân viên được phân công quản lý.
 - Tìm kiếm và lọc yêu cầu theo nhân viên, trạng thái, ngày và phương thức.
 - Xem ảnh Selfie, tọa độ GPS, độ chính xác và thời gian server.
@@ -131,6 +134,9 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 
 ### 5.3. HR / Timekeeping Officer — Nhân sự / Nhân viên chấm công
 
+- Có thể check-in/check-out và xem **Công của tôi** nếu được cấp assignment như một nhân viên nội bộ.
+- Nếu không có assignment, tài khoản HR chỉ dùng nghiệp vụ quản trị/chốt công và không hiển thị action chấm công.
+- Không được tự duyệt hoặc tự áp dụng yêu cầu của chính mình.
 - Xem tình trạng hoàn thiện bảng công theo tháng và phòng ban.
 - Xem nhân viên thiếu check-in, thiếu check-out hoặc còn yêu cầu chờ duyệt.
 - Rà soát số ngày công, tổng giờ, số phút đi trễ và về sớm.
@@ -143,6 +149,7 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 
 ### 5.4. System Administrator — Quản trị viên hệ thống
 
+- Không thuộc workforce của tenant và không có chức năng check-in/check-out.
 - Quản lý tài khoản người dùng.
 - Gán vai trò Employee, Approver, HR và Administrator.
 - Khóa, mở khóa hoặc vô hiệu hóa tài khoản.
