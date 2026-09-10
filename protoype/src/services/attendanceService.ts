@@ -22,10 +22,11 @@ import { CURRENT_EMPLOYEE, INITIAL_TODAY_ATTENDANCE } from '../data/mockData';
 import { loadActiveWorkplace } from './adminService';
 
 /* ------------------------------------------------------------------ *
- * Client-side "server store" persisted to localStorage.
+ * In-memory "server store" for the session only — deliberately NOT
+ * persisted (no localStorage). Reloading the page resets today's
+ * attendance so the same scenario can be tested check-in/check-out
+ * as many times as needed instead of being locked after one run.
  * ------------------------------------------------------------------ */
-
-const STORAGE_KEY = 'tvs-timekeeping-mock-v1';
 
 interface MockDb {
   today: DayAttendance;
@@ -35,25 +36,24 @@ function clone<T>(x: T): T {
   return JSON.parse(JSON.stringify(x));
 }
 
+let db: MockDb = { today: clone(INITIAL_TODAY_ATTENDANCE) };
+
 function loadDb(): MockDb {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as MockDb;
-  } catch {
-    /* fall through */
-  }
-  return { today: clone(INITIAL_TODAY_ATTENDANCE) };
+  return db;
 }
 
-function saveDb(db: MockDb): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  } catch {
-    /* storage may be unavailable — fail silently */
-  }
+function saveDb(next: MockDb): void {
+  db = next;
 }
 
 const simulateLatency = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+/** "HH:MM" → minutes since midnight, for computing a real elapsed duration. */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
 
 export class AttendanceError extends Error {
   code: string;
@@ -143,7 +143,7 @@ function buildEvent(
       address: isCheckIn
         ? 'Khu dân cư Him Lam, Phường Tân Hưng, Quận 7, TP.HCM'
         : 'Khu Công nghệ cao, Phường Tân Phú, TP. Thủ Đức, TP.HCM',
-      accuracy: isCheckIn ? 18 : 15,
+      accuracy: randomInt(10, 25),
       selfieUrl: signals.photoUrl,
       approvalStatus: 'PENDING',
     };
@@ -266,15 +266,19 @@ export async function submitCheckOut(prev: DayAttendance, params: CheckInParams)
   const { time, serverTime } = nowTime();
   const checkOut = buildEvent(method, { time, serverTime, isCheckIn: false, signals, workplace });
 
+  const totalWorkingMinutes = db.today.checkIn
+    ? Math.max(0, timeToMinutes(checkOut.time) - timeToMinutes(db.today.checkIn.time))
+    : 0;
+
   const next: DayAttendance = {
     ...db.today,
     status: 'COMPLETED',
-    totalWorkingMinutes: 545,
+    totalWorkingMinutes,
     overallApprovalStatus: method === 'SELFIE' ? 'PENDING' : db.today.overallApprovalStatus,
     checkOut,
     warningNote:
       method === 'SELFIE'
-        ? 'Check-in và Check-out cách nhau 18,4 km (Đã gắn cờ tham khảo cho Approver).'
+        ? `Check-in và Check-out cách nhau ${(randomInt(15, 250) / 10).toFixed(1)} km (Đã gắn cờ tham khảo cho Approver).`
         : db.today.warningNote,
     auditTrail: [
       ...db.today.auditTrail,

@@ -1,149 +1,214 @@
 import React from 'react';
-import {
-  Calendar,
-  ChevronRight,
-  ArrowLeft,
-  MapPin,
-  FileEdit,
-  XCircle,
-} from 'lucide-react';
+import { ArrowLeft, MapPin, FileEdit, XCircle, ChevronRight } from 'lucide-react';
 import { DayAttendance } from '../../types';
 import { AttendanceStatusBadge, ApprovalStatusBadge, MethodBadge } from '../common/Badges';
 import { AuditTimeline } from '../common/CommonStates';
 
-interface HistorySummaryProps {
-  records: DayAttendance[];
-}
+// ─── Summary KPI Cards ────────────────────────────────────────────────────────
+
+interface HistorySummaryProps { records: DayAttendance[] }
 
 export const HistorySummary: React.FC<HistorySummaryProps> = ({ records }) => {
   const totalDays = records.filter(
     (r) => r.status === 'COMPLETED' || r.status === 'CHECKED_IN' || r.status === 'LATE' || r.status === 'EARLY_LEAVE'
   ).length;
-  const lateCount = records.filter((r) => r.status === 'LATE' || (r.lateMinutes && r.lateMinutes > 0)).length;
+  const lateCount  = records.filter((r) => r.status === 'LATE'        || (r.lateMinutes  && r.lateMinutes  > 0)).length;
   const earlyCount = records.filter((r) => r.status === 'EARLY_LEAVE' || (r.earlyMinutes && r.earlyMinutes > 0)).length;
   const absenceCount = records.filter((r) => r.status === 'HOLIDAY').length;
 
   const statCards = [
-    { label: 'Số ngày công', value: totalDays, unit: '/ 22', accent: 'bg-primary', valueColor: 'text-primary' },
-    { label: 'Đi trễ', value: lateCount, unit: 'lần', accent: 'bg-error', valueColor: lateCount > 0 ? 'text-error' : 'text-on-surface' },
-    { label: 'Về sớm', value: earlyCount, unit: 'lần', accent: 'bg-tertiary', valueColor: earlyCount > 0 ? 'text-tertiary' : 'text-on-surface' },
-    { label: 'Nghỉ', value: absenceCount, unit: 'ngày', accent: 'bg-outline', valueColor: 'text-on-surface' },
+    { label: 'Ngày công', value: totalDays,    unit: '/ 22',  dot: 'bg-emerald-400', valueColor: 'text-slate-700'  },
+    { label: 'Đi trễ',   value: lateCount,    unit: 'lần',   dot: 'bg-red-400',     valueColor: lateCount  > 0 ? 'text-red-500'    : 'text-slate-500' },
+    { label: 'Về sớm',   value: earlyCount,   unit: 'lần',   dot: 'bg-amber-400',   valueColor: earlyCount > 0 ? 'text-amber-600' : 'text-slate-500' },
+    { label: 'Nghỉ',     value: absenceCount, unit: 'ngày',  dot: 'bg-slate-300',   valueColor: 'text-slate-500' },
   ];
 
   return (
-    <div id="history-summary-cards" className="grid grid-cols-2 md:grid-cols-4 gap-2">
+    <div id="history-summary-cards" className="grid grid-cols-4 gap-2">
       {statCards.map((card) => (
-        <div
-          key={card.label}
-          className="relative bg-surface-container-lowest p-2.5 rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col justify-between min-h-[76px]"
-        >
-          <div className={`absolute left-0 top-0 bottom-0 w-[4px] ${card.accent}`}></div>
-          <span className="text-[10px] text-on-surface-variant pl-1.5">{card.label}</span>
-          <span className={`font-mono text-base font-bold pl-1.5 ${card.valueColor}`}>{card.value}</span>
-          <span className="text-[9px] text-on-surface-variant pl-1.5">{card.unit}</span>
+        <div key={card.label} className="bg-[#fefcfa] p-2.5 rounded-xl border border-stone-200/80 shadow-sm flex flex-col gap-1 min-h-[64px]">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${card.dot}`} />
+            <span className="text-[10px] text-slate-400">{card.label}</span>
+          </div>
+          <span className={`font-mono text-lg font-semibold leading-none ${card.valueColor}`}>{card.value}</span>
+          <span className="text-[9px] text-slate-400">{card.unit}</span>
         </div>
       ))}
     </div>
   );
 };
 
-interface HistoryListItemProps {
-  record: DayAttendance;
+// ─── Calendar / Schedule View ─────────────────────────────────────────────────
+
+const DOW_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+type StatusKey = string;
+
+// Readable, warm palette — clear status colors
+const STATUS_CELL: Record<string, { bg: string; leftBar: string; dot: string; numText: string; timeText: string; label: string }> = {
+  COMPLETED:   { bg: 'bg-emerald-50',   leftBar: 'border-l-[3px] border-l-emerald-500', dot: 'bg-emerald-500', numText: 'text-slate-800', timeText: 'text-emerald-800', label: 'Hoàn thành' },
+  LATE:        { bg: 'bg-red-50',       leftBar: 'border-l-[3px] border-l-red-500',     dot: 'bg-red-500',     numText: 'text-slate-800', timeText: 'text-red-700',    label: 'Đi trễ'     },
+  EARLY_LEAVE: { bg: 'bg-amber-50',     leftBar: 'border-l-[3px] border-l-amber-500',   dot: 'bg-amber-500',   numText: 'text-slate-800', timeText: 'text-amber-800',  label: 'Về sớm'    },
+  CHECKED_IN:  { bg: 'bg-blue-50',     leftBar: 'border-l-[3px] border-l-blue-500',    dot: 'bg-blue-500',    numText: 'text-slate-800', timeText: 'text-blue-700',   label: 'Đang làm'   },
+  HOLIDAY:     { bg: 'bg-stone-100',    leftBar: 'border-l-[3px] border-l-stone-300',   dot: 'bg-stone-400',   numText: 'text-stone-500', timeText: 'text-stone-400',  label: 'Nghỉ'       },
+  LOCKED:      { bg: 'bg-stone-100',    leftBar: 'border-l-[3px] border-l-stone-300',   dot: 'bg-stone-400',   numText: 'text-stone-500', timeText: 'text-stone-400',  label: 'Khóa'       },
+};
+const EMPTY_STYLE = { bg: 'bg-transparent', leftBar: '', dot: '', numText: 'text-stone-300', timeText: '', label: '' };
+
+function cellStyle(s: StatusKey) { return STATUS_CELL[s] ?? EMPTY_STYLE; }
+
+interface HistoryCalendarViewProps {
+  records: DayAttendance[];
   onSelect: (record: DayAttendance) => void;
 }
 
-const getStatusStyle = (status: string) => {
-  switch (status) {
-    case 'COMPLETED': return 'bg-secondary-container text-on-secondary-container';
-    case 'LATE': return 'bg-error-container text-on-error-container';
-    case 'EARLY_LEAVE': return 'bg-tertiary-fixed text-on-tertiary-fixed-variant';
-    case 'CHECKED_IN': return 'bg-primary-container text-on-primary-container';
-    case 'HOLIDAY': return 'bg-surface-variant text-on-surface-variant';
-    case 'LOCKED': return 'bg-surface-container text-on-surface';
-    default: return 'bg-surface-variant text-on-surface-variant';
-  }
-};
+export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ records, onSelect }) => {
+  // Map date→record for O(1) lookup
+  const byDate = React.useMemo(() => {
+    const m: Record<string, DayAttendance> = {};
+    records.forEach((r) => { m[r.date] = r; });
+    return m;
+  }, [records]);
 
-const getStatusLabel = (record: DayAttendance) => {
-  switch (record.status) {
-    case 'COMPLETED': return 'Hoàn thành';
-    case 'LATE': return 'Đi trễ';
-    case 'EARLY_LEAVE': return 'Về sớm';
-    case 'CHECKED_IN': return 'Đang trong ca';
-    case 'HOLIDAY': return 'Nghỉ';
-    case 'LOCKED': return 'Khóa';
-    default: return 'Chưa check-in';
-  }
-};
+  // Determine month from first record
+  const [year, month] = React.useMemo(() => {
+    if (!records.length) return [2026, 8];
+    return records[0].date.split('-').map(Number);
+  }, [records]);
 
-export const HistoryListItem: React.FC<HistoryListItemProps> = ({
-  record,
-  onSelect,
-}) => {
-  const isHoliday = record.status === 'HOLIDAY';
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow    = new Date(year, month - 1, 1).getDay(); // 0=Sun
+
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
 
   return (
-    <div
-      id={`history-item-${record.id}`}
-      onClick={() => onSelect(record)}
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer space-y-2 group"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-            {record.formattedDate}
-          </span>
-          {record.totalWorkingMinutes && !isHoliday && (
-            <span className="text-[11px] text-on-surface-variant mt-0.5">
-              Tổng: {Math.floor(record.totalWorkingMinutes / 60)}h {record.totalWorkingMinutes % 60}m
+    <div id="history-calendar-view" className="bg-[#fefcfa] rounded-2xl border border-stone-200/70 shadow-sm p-4 space-y-3">
+
+      {/* ── Month header + legend ── */}
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 className="text-sm font-semibold text-slate-700 capitalize">{monthLabel}</h3>
+        <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+          {[
+            { dot: 'bg-emerald-400', label: 'Hoàn thành' },
+            { dot: 'bg-red-400',     label: 'Trễ/Sớm' },
+            { dot: 'bg-blue-400',    label: 'Đang làm' },
+          ].map(({ dot, label }) => (
+            <span key={label} className="flex items-center gap-1 text-[9px] text-slate-400 whitespace-nowrap">
+              <span className={`w-1.5 h-1.5 rounded-full ${dot} shrink-0`} />{label}
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(record.status)}`}>
-            {getStatusLabel(record)}
-          </span>
-          <ChevronRight className="w-4 h-4 text-outline group-hover:text-primary transition-colors" />
+          ))}
         </div>
       </div>
 
-      {!isHoliday ? (
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-outline-variant bg-surface-container-low rounded-lg p-2.5 text-xs">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-primary" />
-            <div>
-              <span className="text-[10px] text-on-surface-variant block">Giờ vào</span>
-              <span className="font-mono font-medium text-on-surface">
-                {record.checkIn ? record.checkIn.time : '—'}
-              </span>
-            </div>
+      {/* ── Day-of-week header row ── */}
+      <div className="grid grid-cols-7 gap-1">
+        {DOW_LABELS.map((d, i) => (
+          <div key={d} className={`text-center text-[11px] font-semibold py-1 ${
+            i === 0 || i === 6 ? 'text-red-500' : 'text-stone-500'
+          }`}>
+            {d}
           </div>
+        ))}
+      </div>
 
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-primary" />
-            <div>
-              <span className="text-[10px] text-on-surface-variant block">Giờ ra</span>
-              <span className="font-mono font-medium text-on-surface">
-                {record.checkOut ? record.checkOut.time : '—'}
+      {/* ── Day cells ── */}
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: firstDow }).map((_, i) => <div key={`blank-${i}`} />)}
+
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+          const dateStr   = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const record    = byDate[dateStr];
+          const dow       = (firstDow + (day - 1)) % 7;
+          const isWknd    = dow === 0 || dow === 6;
+          const st        = record ? cellStyle(record.status) : EMPTY_STYLE;
+          const isHoliday = record?.status === 'HOLIDAY';
+          const hasAlert  = record?.overallApprovalStatus === 'REJECTED' || record?.overallApprovalStatus === 'PENDING';
+          const hasWarn   = !!record?.warningNote;
+
+          return (
+            <button
+              key={dateStr}
+              id={`cal-cell-${dateStr}`}
+              type="button"
+              disabled={!record}
+              onClick={() => record && onSelect(record)}
+              className={[
+                'relative flex flex-col items-center rounded-lg border border-stone-200 pt-1.5 pb-2 min-h-[60px] transition-all duration-100',
+                st.bg,
+                st.leftBar,
+                record ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default',
+              ].join(' ')}
+            >
+              {/* Day number */}
+              <span className={[
+                'text-[12px] font-semibold leading-none',
+                !record             ? (isWknd ? 'text-red-300' : 'text-stone-300') :
+                isHoliday           ? 'text-stone-400' :
+                isWknd              ? 'text-red-500' :
+                                      st.numText,
+              ].join(' ')}>
+                {day}
               </span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs text-on-surface-variant italic pt-1 border-t border-outline-variant">
-          Ngày nghỉ chính thức / Không có ca làm việc.
-        </p>
-      )}
 
-      {record.overallApprovalStatus && record.overallApprovalStatus !== 'NOT_REQUIRED' && (
-        <div className="pt-1 flex items-center justify-between text-[11px]">
-          <span className="text-on-surface-variant">Trạng thái duyệt bằng chứng:</span>
-          <ApprovalStatusBadge status={record.overallApprovalStatus} size="sm" />
-        </div>
-      )}
+              {/* Working day content */}
+              {record && !isHoliday && (
+                <div className="flex flex-col items-center gap-[3px] mt-1 w-full">
+                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                  {record.checkIn && (
+                    <span className={`text-[9px] font-mono font-medium leading-none ${st.timeText}`}>
+                      {record.checkIn.time}
+                    </span>
+                  )}
+                  {record.checkOut ? (
+                    <span className={`text-[9px] font-mono leading-none ${st.timeText} opacity-75`}>
+                      {record.checkOut.time}
+                    </span>
+                  ) : record.checkIn ? (
+                    <span className="text-[8px] leading-none text-stone-400">–</span>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Holiday */}
+              {isHoliday && (
+                <span className="text-[9px] text-stone-500 font-medium mt-0.5 leading-none">Nghỉ</span>
+              )}
+
+              {/* Alert dot */}
+              {(hasAlert || hasWarn) && !isHoliday && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Footer note */}
+      <p className="text-[9px] text-slate-400 text-center pt-1 border-t border-slate-100">
+        <span className="inline-flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
+          Chấm vàng = chờ duyệt · Bấm vào ngày để xem chi tiết
+        </span>
+      </p>
     </div>
   );
 };
+
+// Keep HistoryListItem exported for backward compatibility (not rendered by default now)
+interface HistoryListItemProps { record: DayAttendance; onSelect: (r: DayAttendance) => void }
+export const HistoryListItem: React.FC<HistoryListItemProps> = ({ record, onSelect }) => (
+  <div
+    id={`history-item-${record.id}`}
+    onClick={() => onSelect(record)}
+    className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
+  >
+    <span className="text-xs font-bold text-on-surface group-hover:text-primary">{record.formattedDate}</span>
+    <ChevronRight className="w-4 h-4 text-outline group-hover:text-primary" />
+  </div>
+);
+
+// ─── DayDetailView ────────────────────────────────────────────────────────────
 
 interface DayDetailViewProps {
   record: DayAttendance;
@@ -228,9 +293,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
             <h4 className="text-xs font-bold text-on-surface">1. Sự kiện Check-in</h4>
           </div>
-          <span className="font-mono text-xs font-bold text-on-surface">
-            {record.checkIn?.time || '—'}
-          </span>
+          <span className="font-mono text-xs font-bold text-on-surface">{record.checkIn?.time || '—'}</span>
         </div>
 
         {record.checkIn ? (
@@ -253,15 +316,9 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
 
             {record.checkIn.selfieUrl && (
               <div>
-                <span className="text-[11px] font-semibold text-on-surface block mb-1">
-                  Ảnh bằng chứng selfie:
-                </span>
+                <span className="text-[11px] font-semibold text-on-surface block mb-1">Ảnh bằng chứng selfie:</span>
                 <div className="w-24 h-32 rounded-lg overflow-hidden border border-outline-variant shadow-sm">
-                  <img
-                    src={record.checkIn.selfieUrl}
-                    alt="Selfie Check-in"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={record.checkIn.selfieUrl} alt="Selfie Check-in" className="w-full h-full object-cover" />
                 </div>
               </div>
             )}
@@ -278,9 +335,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
             <h4 className="text-xs font-bold text-on-surface">2. Sự kiện Check-out</h4>
           </div>
-          <span className="font-mono text-xs font-bold text-on-surface">
-            {record.checkOut?.time || '—'}
-          </span>
+          <span className="font-mono text-xs font-bold text-on-surface">{record.checkOut?.time || '—'}</span>
         </div>
 
         {record.checkOut ? (
@@ -303,15 +358,9 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
 
             {record.checkOut.selfieUrl && (
               <div>
-                <span className="text-[11px] font-semibold text-on-surface block mb-1">
-                  Ảnh bằng chứng selfie:
-                </span>
+                <span className="text-[11px] font-semibold text-on-surface block mb-1">Ảnh bằng chứng selfie:</span>
                 <div className="w-24 h-32 rounded-lg overflow-hidden border border-outline-variant shadow-sm">
-                  <img
-                    src={record.checkOut.selfieUrl}
-                    alt="Selfie Check-out"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={record.checkOut.selfieUrl} alt="Selfie Check-out" className="w-full h-full object-cover" />
                 </div>
               </div>
             )}
@@ -324,12 +373,12 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       {/* Audit Trail Timeline */}
       <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
         <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">
-          Lịch sử xử lý & Ghi nhận
+          Lịch sử xử lý &amp; Ghi nhận
         </h4>
         <AuditTimeline logs={record.auditTrail} />
       </div>
 
-      {/* Adjustment Request Placeholder - tagged strictly with Proposed/Phase sau */}
+      {/* Adjustment Request Placeholder */}
       <div className="pt-2">
         <button
           id="btn-open-adjustment-request"

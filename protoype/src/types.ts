@@ -122,6 +122,19 @@ export interface AttendanceSignals {
   photoUrl?: string;
 }
 
+/** A manager's direct report, as shown on the department team roster (no approval action here — see ApproverRequest for that). */
+export interface DepartmentTeamMember {
+  id: string;
+  name: string;
+  code: string;
+  title: string;
+  department: string;
+  status: AttendanceStatus;
+  checkInTime?: string;
+  checkOutTime?: string;
+  approvalStatus: ApprovalStatus;
+}
+
 export interface ApproverRequest {
   id: string;
   employee: {
