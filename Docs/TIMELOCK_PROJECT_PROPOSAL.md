@@ -30,6 +30,8 @@
 3. **HR / Timekeeping Officer**
 4. **System Administrator**
 
+> Xem chi tiết luồng dữ liệu tại [TimeLock_Context_Diagram.md](file:///d:/MONHOCKI8/Project/Docs/TimeLock_Context_Diagram.md) và sơ đồ ca sử dụng tại [Use case diagram.md](file:///d:/MONHOCKI8/Project/Docs/Use%20case%20diagram.md).
+
 ### Main Features
 
 Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.

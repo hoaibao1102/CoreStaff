@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+  </defs>
+
+  <!-- Frame -->
+  <rect x="12" y="12" width="936" height="736" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  <polygon points="12,12 210,12 225,36 12,36" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="22" y="28" font-size="12.5" font-weight="700" fill="#0f172a">uc Employee Use Cases</text>
+
+  <!-- System Boundary -->
+  <rect x="220" y="50" width="705" height="675" fill="#fafafa" stroke="#334155" stroke-width="1.8" />
+  <text x="572" y="78" font-size="16" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: TimeLock Employee Attendance &amp; Self-Service</text>
+
+  <!-- STICK FIGURE: EMPLOYEE -->
+  <g id="actor-employee">
+    <circle cx="110" cy="360" r="15" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="375" x2="110" y2="420" stroke="#1e293b" stroke-width="2" />
+    <line x1="85" y1="388" x2="135" y2="388" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="90" y2="460" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="130" y2="460" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="482" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">Employee</text>
+    <text x="110" y="498" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân viên)</text>
+  </g>
+
+  <!-- Associations -->
+  <line x1="135" y1="360" x2="310" y2="120" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="375" x2="310" y2="200" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="390" x2="310" y2="350" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="405" x2="310" y2="425" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="420" x2="310" y2="500" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="435" x2="310" y2="575" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="450" x2="310" y2="650" stroke="#1e293b" stroke-width="1.6" />
+
+  <!-- USE CASES -->
+  <!-- 1. Login & Password -->
+  <ellipse cx="400" cy="120" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="118" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng nhập &amp; Đổi MK</text>
+  <text x="400" y="132" font-size="10" fill="#475569" text-anchor="middle">(Login &amp; Password)</text>
+
+  <!-- 2. Check-in / Check-out (Office) -->
+  <ellipse cx="400" cy="200" rx="90" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="197" font-size="12.5" font-weight="800" fill="#0f172a" text-anchor="middle">Chấm công tại VP</text>
+  <text x="400" y="212" font-size="10" fill="#475569" text-anchor="middle">(Check-in / Check-out)</text>
+
+  <!-- Sub UC: Remote Check-in -->
+  <ellipse cx="740" cy="160" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="158" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Chấm công ngoài VP</text>
+  <text x="740" y="172" font-size="10" fill="#475569" text-anchor="middle">(Remote Check-in)</text>
+
+  <!-- Sub UC: Verify Network / GPS -->
+  <ellipse cx="740" cy="235" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="233" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xác thực GPS / WiFi</text>
+  <text x="740" y="247" font-size="10" fill="#475569" text-anchor="middle">(Network &amp; Geofence)</text>
+
+  <!-- Sub UC: Selfie + GPS -->
+  <ellipse cx="740" cy="90" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="88" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Gửi ảnh Selfie + GPS</text>
+  <text x="740" y="102" font-size="10" fill="#475569" text-anchor="middle">(Camera &amp; Location)</text>
+
+  <!-- <<extend>> Remote -> Office Check-in -->
+  <line x1="652" y1="170" x2="488" y2="192" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="570" y="172" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="570" y="186" font-size="9" fill="#64748b" text-anchor="middle">{ngoài văn phòng}</text>
+
+  <!-- <<include>> Office -> Verify Network/GPS -->
+  <line x1="488" y1="208" x2="652" y2="228" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="570" y="212" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- <<include>> Remote -> Selfie + GPS -->
+  <line x1="740" y1="135" x2="740" y2="114" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="785" y="128" font-size="9.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- 3. View Schedule & Register Shift -->
+  <ellipse cx="400" cy="350" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="348" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem lịch &amp; Đăng ký ca</text>
+  <text x="400" y="362" font-size="10" fill="#475569" text-anchor="middle">(Part-time Registration)</text>
+
+  <!-- 4. Swap Shift & OT Request -->
+  <ellipse cx="400" cy="425" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="423" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Đổi ca &amp; Yêu cầu OT</text>
+  <text x="400" y="437" font-size="10" fill="#475569" text-anchor="middle">(Shift Swap &amp; Overtime)</text>
+
+  <!-- 5. View Timesheet & History -->
+  <ellipse cx="400" cy="500" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="498" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem công &amp; Lịch sử</text>
+  <text x="400" y="512" font-size="10" fill="#475569" text-anchor="middle">(Personal Timesheet)</text>
+
+  <!-- 6. Submit Clarification -->
+  <ellipse cx="400" cy="575" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="573" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Gửi giải trình</text>
+  <text x="400" y="587" font-size="10" fill="#475569" text-anchor="middle">(Submit Clarification)</text>
+
+  <!-- 7. Adjustment Request -->
+  <ellipse cx="400" cy="650" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="648" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Yêu cầu điều chỉnh công</text>
+  <text x="400" y="662" font-size="10" fill="#475569" text-anchor="middle">(Adjustment Request)</text>
+</svg>

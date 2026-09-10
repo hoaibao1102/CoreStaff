@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+  </defs>
+
+  <!-- Frame -->
+  <rect x="12" y="12" width="936" height="736" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  <polygon points="12,12 260,12 275,36 12,36" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="22" y="28" font-size="12.5" font-weight="700" fill="#0f172a">uc Department Manager Use Cases</text>
+
+  <!-- System Boundary -->
+  <rect x="220" y="50" width="705" height="675" fill="#fafafa" stroke="#334155" stroke-width="1.8" />
+  <text x="572" y="78" font-size="16" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: TimeLock Department Management &amp; Approvals</text>
+
+  <!-- STICK FIGURE: DEPARTMENT MANAGER -->
+  <g id="actor-manager">
+    <circle cx="110" cy="360" r="15" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="375" x2="110" y2="420" stroke="#1e293b" stroke-width="2" />
+    <line x1="85" y1="388" x2="135" y2="388" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="90" y2="460" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="130" y2="460" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="482" font-size="13.5" font-weight="800" fill="#0f172a" text-anchor="middle">Department</text>
+    <text x="110" y="498" font-size="13.5" font-weight="800" fill="#0f172a" text-anchor="middle">Manager</text>
+    <text x="110" y="514" font-size="10.5" font-weight="600" fill="#64748b" text-anchor="middle">(Quản lý phòng ban)</text>
+  </g>
+
+  <!-- Associations to Personal Use Cases (Upper) -->
+  <line x1="135" y1="350" x2="310" y2="120" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="2,2" />
+  <line x1="135" y1="360" x2="310" y2="185" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="2,2" />
+  <line x1="135" y1="370" x2="310" y2="250" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="2,2" />
+
+  <!-- Associations to Management Use Cases (Lower) -->
+  <line x1="135" y1="385" x2="310" y2="330" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="395" x2="310" y2="395" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="405" x2="310" y2="460" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="415" x2="310" y2="530" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="425" x2="310" y2="595" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="435" x2="310" y2="660" stroke="#1e293b" stroke-width="1.6" />
+
+  <!-- GROUP 1: PERSONAL USE CASES (CÔNG CỦA TÔI) -->
+  <!-- 1. Personal Attendance -->
+  <ellipse cx="400" cy="120" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="118" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Tự chấm công vào/ra</text>
+  <text x="400" y="132" font-size="10" fill="#475569" text-anchor="middle">(Personal Check-in/out)</text>
+
+  <!-- 2. Personal Timesheet -->
+  <ellipse cx="400" cy="185" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="183" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem công cá nhân</text>
+  <text x="400" y="197" font-size="10" fill="#475569" text-anchor="middle">(My Timesheet &amp; History)</text>
+
+  <!-- 3. Personal Request Swap/OT -->
+  <ellipse cx="400" cy="250" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="248" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Đổi ca &amp; Yêu cầu OT</text>
+  <text x="400" y="262" font-size="10" fill="#475569" text-anchor="middle">(Shift Swap &amp; OT Request)</text>
+
+
+  <!-- GROUP 2: DEPARTMENT MANAGEMENT & APPROVAL -->
+  <!-- 4. View Department Staff & Attendance -->
+  <ellipse cx="400" cy="330" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="328" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem DS &amp; Công phòng ban</text>
+  <text x="400" y="342" font-size="10" fill="#475569" text-anchor="middle">(Dept Employees &amp; Log)</text>
+
+  <!-- 5. Approve Selfie & GPS -->
+  <ellipse cx="400" cy="395" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="393" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Duyệt Selfie &amp; GPS</text>
+  <text x="400" y="407" font-size="10" fill="#475569" text-anchor="middle">(Approve / Reject)</text>
+
+  <!-- Sub UC: Request Clarification -->
+  <ellipse cx="740" cy="395" rx="88" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="393" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Yêu cầu giải trình</text>
+  <text x="740" y="407" font-size="10" fill="#475569" text-anchor="middle">(Request Clarification)</text>
+
+  <!-- <<extend>> Clarify -> Approve -->
+  <line x1="652" y1="395" x2="490" y2="395" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="570" y="385" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="570" y="410" font-size="9" fill="#64748b" text-anchor="middle">{bất thường}</text>
+
+  <!-- 6. Approve Shift Registration / Swap -->
+  <ellipse cx="400" cy="460" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="458" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Duyệt đăng ký / Đổi ca</text>
+  <text x="400" y="472" font-size="10" fill="#475569" text-anchor="middle">(Shift &amp; Swap Approval)</text>
+
+  <!-- 7. Approve OT Request -->
+  <ellipse cx="400" cy="530" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="528" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Duyệt làm thêm giờ</text>
+  <text x="400" y="542" font-size="10" fill="#475569" text-anchor="middle">(Overtime Approval)</text>
+
+  <!-- 8. Review Dept Timesheet -->
+  <ellipse cx="400" cy="595" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="593" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Rà soát công phòng ban</text>
+  <text x="400" y="607" font-size="10" fill="#475569" text-anchor="middle">(Review Timesheet)</text>
+
+  <!-- 9. Confirm Dept Timesheet -->
+  <ellipse cx="400" cy="660" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="658" font-size="12.5" font-weight="800" fill="#0f172a" text-anchor="middle">Xác nhận công PB</text>
+  <text x="400" y="672" font-size="10" fill="#475569" text-anchor="middle">(Department Confirmation)</text>
+
+  <!-- <<include>> Confirm -> Review -->
+  <line x1="400" y1="635" x2="400" y2="620" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="450" y="630" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+</svg>
