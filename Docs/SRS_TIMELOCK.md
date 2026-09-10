@@ -993,6 +993,7 @@ Hiển thị:
 | BR-SELFIE-01 | Mỗi event dùng ảnh mới và vị trí mới. |
 | BR-SELFIE-02 | Selfie check-in pending không chặn check-out. |
 | BR-SELFIE-03 | Hai địa điểm khác nhau không tự động làm bản ghi bị từ chối. |
+| BR-CAM-01 | Selfie phải chụp trực tiếp bằng camera trước (facingMode: user), không cho phép upload từ file picker. Định dạng chấp nhận: JPEG/PNG/WebP; tối đa 5MB sau xử lý. |
 | BR-EVID-01 | Evidence private và chỉ truy cập qua authorization. |
 | BR-IDEM-01 | Mỗi mutation attendance có Idempotency-Key. |
 | BR-PERIOD-01 | Mỗi tháng chỉ có một TimesheetPeriod. |
@@ -2362,4 +2363,4 @@ MVP chỉ hoàn thành khi chứng minh cô lập hai tenant, phân quyền bố
 
 ---
 
-*Tài liệu kết thúc — `SRS_TIMELOCK.md`, TimeLock SRS version 3.0.*
+*Tài liệu kết thúc — `SRS_TIMELOCK.md`, TimeLock SRS version 3.0.
