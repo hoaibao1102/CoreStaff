@@ -10,6 +10,13 @@
 
 # 1. System Admin
 
+![System Admin Use Case Diagram](Use_Case_Admin.svg)
+
+> **File vector:** [Use_Case_Admin.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Admin.svg)
+
+<details>
+<summary><b>Xem mã nguồn Mermaid</b></summary>
+
 ```mermaid
 flowchart LR
 
@@ -58,10 +65,18 @@ flowchart LR
     class ADMIN actor;
     class LOGIN,MANAGE_ORG,CREATE_ORG,VIEW_ORG,UPDATE_ORG,CHANGE_STATUS,CREATE_HR,VIEW_AUDIT,VIEW_STATUS usecase;
 ```
+</details>
 
 ---
 
 # 2. Nhân sự (HR)
+
+![HR Use Case Diagram](Use_Case_HR.svg)
+
+> **File vector:** [Use_Case_HR.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_HR.svg)
+
+<details>
+<summary><b>Xem mã nguồn Mermaid</b></summary>
 
 ```mermaid
 flowchart LR
@@ -139,10 +154,18 @@ flowchart LR
     class HR actor;
     class LOGIN,PROFILE,PASSWORD,DEPARTMENT,EMPLOYEE,MANAGER,WORKPLACE,NETWORK,SHIFT,CALENDAR,SCHEDULE,LEAVE,VIEW_ATT,ADJUST,OT,PERIOD,CLOSE,REOPEN,EXPORT,AUDIT usecase;
 ```
+</details>
 
 ---
 
 # 3. Department Manager
+
+![Department Manager Use Case Diagram](Use_Case_Manager.svg)
+
+> **File vector:** [Use_Case_Manager.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Manager.svg)
+
+<details>
+<summary><b>Xem mã nguồn Mermaid</b></summary>
 
 ```mermaid
 flowchart LR
@@ -232,10 +255,18 @@ flowchart LR
     class MANAGER actor;
     class LOGIN,PROFILE,PASSWORD,ATTENDANCE,CHECKIN,CHECKOUT,HISTORY,TIMESHEET,ADJUST_REQUEST,VIEW_SCHEDULE,REGISTER_SHIFT,SWAP,ACCEPT_SWAP,OT_REQUEST,DEPT_EMPLOYEE,DEPT_ATTENDANCE,DEPT_TIMESHEET,CONFIRM,MANAGE_APPROVAL,SELFIE_APPROVE,ADJUST_APPROVE,SHIFT_APPROVE,SWAP_APPROVE,OT_APPROVE usecase;
 ```
+</details>
 
 ---
 
 # 4. Employee
+
+![Employee Use Case Diagram](Use_Case_Employee.svg)
+
+> **File vector:** [Use_Case_Employee.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Employee.svg)
+
+<details>
+<summary><b>Xem mã nguồn Mermaid</b></summary>
 
 ```mermaid
 flowchart LR
@@ -324,6 +355,7 @@ flowchart LR
     class EMPLOYEE actor;
     class LOGIN,PROFILE,PASSWORD,ATTEND,CHECKIN,CHECKOUT,OFFICE,REMOTE,NETWORK,GPS,SELFIE,HISTORY,DETAIL,TIMESHEET,ADJUST,EXPLANATION,SCHEDULE,REGISTER_SHIFT,SWAP,ACCEPT_SWAP,OT_REQUEST,OT_RESULT usecase;
 ```
+</details>
 
 ---
 
@@ -332,3 +364,4 @@ flowchart LR
 - `---` : Actor thực hiện Use Case.
 - `«include»` : Use Case luôn cần sử dụng Use Case khác.
 - `«extend»` : Use Case mở rộng/xảy ra trong điều kiện nhất định.
+

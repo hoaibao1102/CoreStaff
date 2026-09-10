@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+  </defs>
+
+  <!-- Frame -->
+  <rect x="12" y="12" width="936" height="736" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  <polygon points="12,12 210,12 225,36 12,36" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="22" y="28" font-size="12.5" font-weight="700" fill="#0f172a">uc HR Use Cases</text>
+
+  <!-- System Boundary -->
+  <rect x="220" y="50" width="705" height="675" fill="#fafafa" stroke="#334155" stroke-width="1.8" />
+  <text x="572" y="78" font-size="16" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: TimeLock HR Management &amp; Timesheet Closing</text>
+
+  <!-- STICK FIGURE: HR -->
+  <g id="actor-hr">
+    <circle cx="110" cy="360" r="15" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="375" x2="110" y2="420" stroke="#1e293b" stroke-width="2" />
+    <line x1="85" y1="388" x2="135" y2="388" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="90" y2="460" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="420" x2="130" y2="460" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="482" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">HR Officer</text>
+    <text x="110" y="498" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân sự)</text>
+  </g>
+
+  <!-- Associations -->
+  <line x1="135" y1="360" x2="310" y2="120" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="370" x2="310" y2="185" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="380" x2="310" y2="250" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="390" x2="310" y2="315" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="400" x2="310" y2="380" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="410" x2="310" y2="445" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="420" x2="310" y2="510" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="430" x2="310" y2="575" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="440" x2="310" y2="640" stroke="#1e293b" stroke-width="1.6" />
+
+  <!-- USE CASES -->
+  <!-- 1. Login & Profile -->
+  <ellipse cx="400" cy="120" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="118" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng nhập &amp; Hồ sơ</text>
+  <text x="400" y="132" font-size="10" fill="#475569" text-anchor="middle">(Login &amp; Profile)</text>
+
+  <!-- 2. Manage Org & Employees -->
+  <ellipse cx="400" cy="185" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="183" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Quản lý nhân sự</text>
+  <text x="400" y="197" font-size="10" fill="#475569" text-anchor="middle">(Phòng ban &amp; Nhân viên)</text>
+
+  <!-- 3. Manage Workplace & Geofence -->
+  <ellipse cx="400" cy="250" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="248" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Địa điểm &amp; Mạng WiFi</text>
+  <text x="400" y="262" font-size="10" fill="#475569" text-anchor="middle">(Workplace, GPS &amp; CIDR)</text>
+
+  <!-- 4. Manage Shifts & Calendar -->
+  <ellipse cx="400" cy="315" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="313" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Cấu hình ca &amp; Lịch</text>
+  <text x="400" y="327" font-size="10" fill="#475569" text-anchor="middle">(ShiftTemplate &amp; Calendar)</text>
+
+  <!-- 5. Leave Management -->
+  <ellipse cx="400" cy="380" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="378" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Ghi nhận nghỉ phép</text>
+  <text x="400" y="392" font-size="10" fill="#475569" text-anchor="middle">(Leave &amp; Absence Records)</text>
+
+  <!-- 6. View Organization Attendance -->
+  <ellipse cx="400" cy="445" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="443" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem công toàn tổ chức</text>
+  <text x="400" y="457" font-size="10" fill="#475569" text-anchor="middle">(Organization Attendance)</text>
+
+  <!-- 7. Process Adjustment Requests -->
+  <ellipse cx="400" cy="510" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="508" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Áp dụng điều chỉnh công</text>
+  <text x="400" y="522" font-size="10" fill="#475569" text-anchor="middle">(Apply Adjustments &amp; OT)</text>
+
+  <!-- 8. Close Timesheet Period -->
+  <ellipse cx="400" cy="575" rx="90" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="572" font-size="12.5" font-weight="800" fill="#0f172a" text-anchor="middle">Chốt kỳ công</text>
+  <text x="400" y="587" font-size="10" fill="#475569" text-anchor="middle">(Timesheet Closing)</text>
+
+  <!-- Sub UC: Reopen Period -->
+  <ellipse cx="740" cy="535" rx="88" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="533" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Mở lại kỳ công</text>
+  <text x="740" y="547" font-size="10" fill="#475569" text-anchor="middle">(Reopen Period with Audit)</text>
+
+  <!-- Sub UC: Export Timesheet -->
+  <ellipse cx="740" cy="615" rx="88" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="740" y="613" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xuất bảng công</text>
+  <text x="740" y="627" font-size="10" fill="#475569" text-anchor="middle">(Export CSV / XLSX)</text>
+
+  <!-- <<extend>> Reopen -> Close -->
+  <line x1="652" y1="545" x2="488" y2="568" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="570" y="546" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="570" y="560" font-size="9" fill="#64748b" text-anchor="middle">{khi cần sửa}</text>
+
+  <!-- <<include>> Close -> Export -->
+  <line x1="488" y1="585" x2="652" y2="605" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="570" y="590" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- 9. View Audit Log -->
+  <ellipse cx="400" cy="640" rx="90" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="400" y="638" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem nhật ký hoạt động</text>
+  <text x="400" y="652" font-size="10" fill="#475569" text-anchor="middle">(Activity Audit Log)</text>
+</svg>

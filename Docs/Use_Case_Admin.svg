@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+  </defs>
+
+  <!-- Frame -->
+  <rect x="12" y="12" width="896" height="596" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  <polygon points="12,12 210,12 225,36 12,36" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="22" y="28" font-size="12.5" font-weight="700" fill="#0f172a">uc System Admin Use Cases</text>
+
+  <!-- System Boundary -->
+  <rect x="220" y="50" width="665" height="535" fill="#fafafa" stroke="#334155" stroke-width="1.8" />
+  <text x="552" y="78" font-size="16" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: TimeLock Platform Administration</text>
+
+  <!-- STICK FIGURE: SYSTEM ADMIN -->
+  <g id="actor-admin">
+    <circle cx="110" cy="270" r="15" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="285" x2="110" y2="330" stroke="#1e293b" stroke-width="2" />
+    <line x1="85" y1="298" x2="135" y2="298" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="330" x2="90" y2="370" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="330" x2="130" y2="370" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="392" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">System Admin</text>
+    <text x="110" y="408" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle">(Quản trị viên)</text>
+  </g>
+
+  <!-- Associations -->
+  <line x1="135" y1="290" x2="310" y2="120" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="305" x2="310" y2="250" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="320" x2="310" y2="440" stroke="#1e293b" stroke-width="1.6" />
+  <line x1="135" y1="335" x2="310" y2="520" stroke="#1e293b" stroke-width="1.6" />
+
+  <!-- USE CASES -->
+  <!-- 1. Login -->
+  <ellipse cx="380" cy="120" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="380" y="118" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng nhập</text>
+  <text x="380" y="133" font-size="10.5" fill="#475569" text-anchor="middle">(Platform Login)</text>
+
+  <!-- 2. Manage Organization -->
+  <ellipse cx="380" cy="250" rx="85" ry="28" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="380" y="247" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">Quản lý tổ chức</text>
+  <text x="380" y="263" font-size="10.5" fill="#475569" text-anchor="middle">(Manage Organizations)</text>
+
+  <!-- Sub UC: Create Org -->
+  <ellipse cx="690" cy="140" rx="80" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="690" y="138" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Tạo tổ chức mới</text>
+  <text x="690" y="152" font-size="10" fill="#475569" text-anchor="middle">(Create Organization)</text>
+
+  <!-- Sub UC: View Org -->
+  <ellipse cx="690" cy="210" rx="80" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="690" y="208" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem thông tin tổ chức</text>
+  <text x="690" y="222" font-size="10" fill="#475569" text-anchor="middle">(View Org Info)</text>
+
+  <!-- Sub UC: Update Org -->
+  <ellipse cx="690" cy="280" rx="80" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="690" y="278" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Cập nhật tổ chức</text>
+  <text x="690" y="292" font-size="10" fill="#475569" text-anchor="middle">(Update Org Details)</text>
+
+  <!-- Sub UC: Lock/Unlock Org -->
+  <ellipse cx="690" cy="350" rx="80" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="690" y="348" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Khóa / Mở tổ chức</text>
+  <text x="690" y="362" font-size="10" fill="#475569" text-anchor="middle">(Change Status)</text>
+
+  <!-- Sub UC: Create HR -->
+  <ellipse cx="690" cy="420" rx="85" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="690" y="418" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Tạo tài khoản HR</text>
+  <text x="690" y="432" font-size="10" fill="#475569" text-anchor="middle">(Initial HR Account)</text>
+
+  <!-- <<include>> links from Manage Org -->
+  <line x1="445" y1="235" x2="615" y2="155" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="515" y="185" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <line x1="460" y1="245" x2="610" y2="220" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="535" y="228" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <line x1="460" y1="255" x2="610" y2="275" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="535" y="272" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <line x1="445" y1="265" x2="615" y2="405" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="515" y="350" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- <<extend>> Lock/Unlock -->
+  <line x1="610" y1="345" x2="455" y2="270" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#openArrow)" />
+  <text x="545" y="322" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+
+  <!-- 3. View Audit Log -->
+  <ellipse cx="380" cy="440" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="380" y="438" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Xem nhật ký hệ thống</text>
+  <text x="380" y="453" font-size="10.5" fill="#475569" text-anchor="middle">(Platform Audit Log)</text>
+
+  <!-- 4. Monitor Status -->
+  <ellipse cx="380" cy="520" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="380" y="518" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Theo dõi trạng thái</text>
+  <text x="380" y="533" font-size="10.5" fill="#475569" text-anchor="middle">(System Health / Status)</text>
+</svg>
