@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Smartphone, Monitor } from 'lucide-react';
+import { Building2, Monitor, ShieldCheck, Smartphone } from 'lucide-react';
 import {
   MainTab,
   EmployeeTab,
@@ -7,6 +7,9 @@ import {
   DayAttendance,
   ApproverRequest,
 } from '../types';
+import { RoleMode } from './types';
+import { HrApp } from '../components/hr/HrViews';
+import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { CURRENT_EMPLOYEE, MOCK_HISTORY_RECORDS } from '../data/mockData';
 import { useAttendance } from '../hooks/useAttendance';
 import { useApprover } from '../hooks/useApprover';
@@ -25,7 +28,7 @@ import {
 } from '../components/common/Modals';
 
 interface PrototypeWorkspaceProps {
-  initialRole?: 'EMPLOYEE' | 'APPROVER';
+  initialRole?: RoleMode;
 }
 
 export const PrototypeWorkspace: React.FC<PrototypeWorkspaceProps> = ({ initialRole = 'EMPLOYEE' }) => {
@@ -35,8 +38,15 @@ export const PrototypeWorkspace: React.FC<PrototypeWorkspaceProps> = ({ initialR
 
   // Navigation & Role
   const [mainTab, setMainTab] = useState<MainTab>('PROTOTYPE');
-  const [roleMode, setRoleMode] = useState<'EMPLOYEE' | 'APPROVER'>(initialRole);
+  const [roleMode, setRoleMode] = useState<RoleMode>(initialRole);
   const [employeeTab, setEmployeeTab] = useState<EmployeeTab>('TODAY');
+
+  // Desktop role surfaces (HrApp / AdminDashboard are self-contained; these
+  // keys force a remount so the per-frame seed applies on every preview).
+  const [hrFrameKey, setHrFrameKey] = useState('H01');
+  const [hrInitialPeriod, setHrInitialPeriod] = useState<string | undefined>();
+  const [adminFrameKey, setAdminFrameKey] = useState('S01');
+  const [adminInitialOrg, setAdminInitialOrg] = useState<string | undefined>();
 
   // History & Detail
   const [historyRecords] = useState<DayAttendance[]>(MOCK_HISTORY_RECORDS);
@@ -109,6 +119,22 @@ export const PrototypeWorkspace: React.FC<PrototypeWorkspaceProps> = ({ initialR
     attendance.setRecord({
       ...(requireInitToday()),
     });
+
+    // HR desktop frames (H01 dashboard, H02 closeable-period detail)
+    if (frameId.startsWith('H')) {
+      setRoleMode('HR');
+      setHrFrameKey(frameId);
+      setHrInitialPeriod(frameId === 'H02' ? 'KP-2026-07' : undefined);
+      return;
+    }
+
+    // Platform admin frames (S01 org list, S02 org detail)
+    if (frameId.startsWith('S')) {
+      setRoleMode('ADMIN');
+      setAdminFrameKey(frameId);
+      setAdminInitialOrg(frameId === 'S02' ? 'org-tvs' : undefined);
+      return;
+    }
 
     if (frameId.startsWith('A')) {
       setRoleMode('APPROVER');
@@ -197,6 +223,22 @@ export const PrototypeWorkspace: React.FC<PrototypeWorkspaceProps> = ({ initialR
                 <Monitor className="w-3.5 h-3.5" /> <span>Approver (Desktop)</span>
                 {pendingCount > 0 && <span className="w-2 h-2 rounded-full bg-tertiary-container"></span>}
               </button>
+              <button
+                id="btn-switch-hr"
+                type="button"
+                onClick={() => { setRoleMode('HR'); setHrFrameKey('H01'); setHrInitialPeriod(undefined); }}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${roleMode === 'HR' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
+              >
+                <Building2 className="w-3.5 h-3.5" /> <span>HR (Desktop)</span>
+              </button>
+              <button
+                id="btn-switch-admin"
+                type="button"
+                onClick={() => { setRoleMode('ADMIN'); setAdminFrameKey('S01'); setAdminInitialOrg(undefined); }}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${roleMode === 'ADMIN' ? 'bg-primary text-on-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" /> <span>System Admin</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-1 border-l border-outline-variant pl-2">
@@ -247,6 +289,14 @@ export const PrototypeWorkspace: React.FC<PrototypeWorkspaceProps> = ({ initialR
                 <div className="xl:col-span-2">
                   <SimulationSandbox attendance={attendance} sim={sim} />
                 </div>
+              </div>
+            ) : roleMode === 'HR' ? (
+              <div className="bg-surface-container-low rounded-2xl border border-outline-variant p-6 shadow-sm">
+                <HrApp key={hrFrameKey} initialPeriodId={hrInitialPeriod} />
+              </div>
+            ) : roleMode === 'ADMIN' ? (
+              <div className="bg-surface-container-low rounded-2xl border border-outline-variant p-6 shadow-sm">
+                <AdminDashboard key={adminFrameKey} initialOrgId={adminInitialOrg} />
               </div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-10 gap-6">

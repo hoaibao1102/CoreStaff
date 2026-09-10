@@ -8,19 +8,14 @@
  * raw signals and lets the service decide the actual attendance method.
  */
 import { useState, useCallback } from 'react';
-import { DayAttendance, WorkMode } from '../types';
+import { DayAttendance, AttendanceSignals } from '../types';
 import { AttendanceError, loadToday } from '../services/attendanceService';
 import * as attendanceService from '../services/attendanceService';
 
 export type AttendanceErrorState = { code: string; message: string } | null;
 
-export interface SubmitParams {
-  workMode: WorkMode;
-  networkValid: boolean;
-  gpsDistance?: number;
-  gpsAccuracy?: number;
-  photoUrl?: string;
-}
+/** Same shape the service consumes — declared once in types.ts. */
+export type SubmitParams = AttendanceSignals;
 
 export function useAttendance() {
   const [todayRecord, setTodayRecord] = useState<DayAttendance>(() => loadToday());
@@ -139,11 +134,15 @@ export function useAttendance() {
   };
 }
 
-/** Readable label for the BE-decided method, shown as a small badge under the button. */
-export function methodLabel(method: string, gpsDistance?: number): string {
+/**
+ * Readable label for the BE-decided method, shown as a small badge under the
+ * button. `networkLabel` is the tenant's matched SSID/name so the badge tracks
+ * admin edits instead of hardcoding "TVS_OFFICE_Q8".
+ */
+export function methodLabel(method: string, gpsDistance?: number, networkLabel?: string): string {
   switch (method) {
-    case 'NETWORK': return '📡 Mạng TVS_OFFICE_Q8';
-    case 'GPS': return `📍 GPS Q8 (cách ${gpsDistance ?? 0}m)`;
+    case 'NETWORK': return `📡 Mạng ${networkLabel ?? 'văn phòng'}`;
+    case 'GPS': return `📍 GPS (cách ${gpsDistance ?? 0}m)`;
     case 'SELFIE': return '📸 Selfie (bằng chứng ảnh)';
     default: return '';
   }

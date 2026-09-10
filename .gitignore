@@ -1,0 +1,8 @@
+# CodeGraph local index — generated, machine-specific
+.codegraph/
+
+node_modules/
+dist/
+build/
+*.log
+.DS_Store

@@ -26,6 +26,11 @@ describe('mock authentication', () => {
     expect(session.user.role).toBe('APPROVER');
   });
 
+  it('logs in HR account and returns HR role', async () => {
+    const session = await authenticateMockUser('TVS-0008', 'Hr@123');
+    expect(session.user.role).toBe('HR');
+  });
+
   it('rejects invalid credentials without revealing which field is wrong', async () => {
     await expect(authenticateMockUser('unknown', 'bad')).rejects.toMatchObject({
       code: 'AUTH_INVALID_CREDENTIALS',
