@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock3, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { HrApp } from './components/hr/HrViews';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { EmployeeApp, EmployeeScenario } from './components/employee/EmployeeApp';
 import { ApproverView } from './harness/ApproverView';
@@ -21,7 +22,7 @@ export default function App() {
 }
 
 function AuthenticatedApp({ session, onLogout }: { session: MockSession; onLogout: () => void }) {
-  return <div className="min-h-screen bg-[#f5f7fb]"><AppHeader session={session} onLogout={onLogout}/>{session.user.role === 'ADMIN' ? <AdminDashboard/> : session.user.role === 'APPROVER' ? <ApproverApp/> : <EmployeeShell scenario={SCENARIOS[session.user.employeeCode] ?? SCENARIOS['TVS-0248']}/>}</div>;
+  return <div className="min-h-screen bg-[#f5f7fb]"><AppHeader session={session} onLogout={onLogout}/>{session.user.role === 'ADMIN' ? <AdminDashboard/> : session.user.role === 'HR' ? <HrApp/> : session.user.role === 'APPROVER' ? <ApproverApp/> : <EmployeeShell scenario={SCENARIOS[session.user.employeeCode] ?? SCENARIOS['TVS-0248']}/>}</div>;
 }
 
 const EmployeeShell=({scenario}:{scenario:EmployeeScenario})=>{const [policy,setPolicy]=useState(false);const [adjust,setAdjust]=useState(false);const [clarify,setClarify]=useState(false);return <><EmployeeApp scenario={scenario} onOpenPolicy={()=>setPolicy(true)} onOpenAdjustment={()=>setAdjust(true)} onOpenClarification={()=>setClarify(true)}/><PolicyModal isOpen={policy} onClose={()=>setPolicy(false)}/><AdjustmentModal isOpen={adjust} onClose={()=>setAdjust(false)}/><ClarificationModal isOpen={clarify} onClose={()=>setClarify(false)} onConfirm={()=>setClarify(false)}/></>};

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Sliders, RotateCcw, Building2, Car } from 'lucide-react';
 import { WorkMode } from '../types';
-import { InCondition, OutCondition } from './useSimulation';
+import { InCondition, OutCondition, NetworkSource, bssidForSource } from './useSimulation';
 import { UseAttendance, UseSimulation } from './types';
 
 export interface SimulationSandboxProps {
@@ -89,6 +89,29 @@ export const SimulationSandbox: React.FC<SimulationSandboxProps> = ({ attendance
               <option value="BOTH">✅ Cả mạng + GPS (ưu tiên mạng)</option>
               <option value="NONE">❌ Mất mạng + GPS yếu → tự Selfie</option>
             </select>
+
+            {/* Simulated device WiFi — production reads the real BSSID from a
+                native scan (a browser cannot); here we just pick which router
+                the device claims to be joined to. */}
+            {(sim.inCondition === 'NETWORK' || sim.inCondition === 'BOTH') && (
+              <div className="mt-3">
+                <label className="block text-[11px] font-semibold text-on-surface-variant mb-1.5">
+                  2b. Kết nối WiFi (giả lập thiết bị)
+                </label>
+                <select
+                  value={sim.networkSource}
+                  onChange={(e) => sim.setNetworkSource(e.target.value as NetworkSource)}
+                  className="w-full py-2 px-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-hidden"
+                >
+                  <option value="OFFICE_ROUTER">🏢 Router văn phòng (đúng chữ ký)</option>
+                  <option value="OTHER_WIFI">📶 WiFi lạ (caf&eacute; / 4G)</option>
+                  <option value="NONE">❌ Không có WiFi</option>
+                </select>
+                <p className="mt-1 font-mono text-[10px] text-on-surface-variant break-all">
+                  BSSID thiết bị báo: {bssidForSource(sim.networkSource) ?? '—'}
+                </p>
+              </div>
+            )}
 
             {/* GPS sliders only meaningful when GPS is available */}
             {(sim.inCondition === 'GPS' || sim.inCondition === 'BOTH' || sim.inCondition === 'NONE') && (
