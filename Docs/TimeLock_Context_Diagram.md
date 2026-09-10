@@ -1,4 +1,12 @@
-# TimeLock System - Context Diagram
+# TimeLock System — Context Diagram
+
+![TimeLock Context Diagram](TimeLock_Context_Diagram.svg)
+
+> **Ghi chú:** Sơ đồ ngữ cảnh hệ thống (DFD Level 0) mô tả luồng tương tác 2 chiều giữa TimeLock System và các Actor. Bạn có thể mở trực tiếp file vector sắc nét tại [TimeLock_Context_Diagram.svg](file:///d:/MONHOCKI8/Project/Docs/TimeLock_Context_Diagram.svg).
+
+---
+
+## Sơ đồ Mermaid (Source Code)
 
 ```mermaid
 %%{init: {

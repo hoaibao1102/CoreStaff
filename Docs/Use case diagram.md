@@ -1,8 +1,12 @@
-# TimeLock - Use Case Diagrams
+# TimeLock — Use Case Diagrams
 
-Tài liệu mô tả các Use Case chính của hệ thống **TimeLock** theo từng vai trò người dùng.
+![TimeLock UML Use Case Diagram](TimeLock_Use_Case_Diagram.svg)
+
+> **Ghi chú:** Sơ đồ Use Case tổng quan theo chuẩn UML 2.0 (System Boundary, Stick-figure Actors, Use Case Ovals, các quan hệ `<<include>>` và `<<extend>>`). Bạn có thể mở trực tiếp file vector sắc nét tại [TimeLock_Use_Case_Diagram.svg](file:///d:/MONHOCKI8/Project/Docs/TimeLock_Use_Case_Diagram.svg).
 
 ---
+
+## Chi tiết Use Cases theo từng vai trò (Mermaid Breakdown)
 
 # 1. System Admin
 

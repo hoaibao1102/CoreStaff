@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 680" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <!-- Arrow Marker -->
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#1e293b" />
+    </marker>
+    <!-- Shadow Filter -->
+    <filter id="shadow" x="-8%" y="-8%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.08" />
+    </filter>
+  </defs>
+
+  <!-- Title -->
+  <text x="500" y="42" font-size="26" font-weight="800" fill="#0f2b48" text-anchor="middle" letter-spacing="-0.5">TimeLock — Employee Attendance &amp; Timesheet Closing System</text>
+  <text x="500" y="66" font-size="13" font-weight="600" fill="#0284c7" text-anchor="middle" letter-spacing="1">SYSTEM CONTEXT DIAGRAM (SƠ ĐỒ NGỮ CẢNH HỆ THỐNG DFD LEVEL 0)</text>
+
+  <!-- ==================== FLOW LINES & LABELS ==================== -->
+
+  <!-- 1. TOP: SYSTEM ADMIN -->
+  <!-- Admin -> System -->
+  <line x1="480" y1="170" x2="480" y2="245" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="365" y="195" width="110" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="420" y="209" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle">Tạo Organization, HR</text>
+
+  <!-- System -> Admin -->
+  <line x1="520" y1="245" x2="520" y2="170" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="525" y="195" width="110" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="580" y="209" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle">Audit log, Trạng thái</text>
+
+  <!-- 2. TOP RIGHT: HR -->
+  <!-- HR -> System -->
+  <line x1="720" y1="230" x2="585" y2="305" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="625" y="240" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(-28 687 250)" />
+  <text x="687" y="254" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(-28 687 254)">Cấu hình Ca, Geofence, Chốt kỳ</text>
+
+  <!-- System -> HR -->
+  <line x1="600" y1="330" x2="735" y2="255" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="645" y="305" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(-28 707 315)" />
+  <text x="707" y="319" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(-28 707 319)">Bảng công tổ chức, File CSV/XLSX</text>
+
+  <!-- 3. BOTTOM RIGHT: DEPARTMENT MANAGER -->
+  <!-- Manager -> System -->
+  <line x1="720" y1="510" x2="585" y2="435" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="625" y="480" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(28 687 490)" />
+  <text x="687" y="494" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(28 687 494)">Duyệt Selfie, Đổi ca, Khóa PB</text>
+
+  <!-- System -> Manager -->
+  <line x1="600" y1="410" x2="735" y2="485" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="645" y="435" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(28 707 445)" />
+  <text x="707" y="449" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(28 707 449)">DS chờ duyệt, Bảng công PB</text>
+
+  <!-- 4. BOTTOM LEFT: EMPLOYEE -->
+  <!-- Employee -> System -->
+  <line x1="280" y1="510" x2="415" y2="435" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="250" y="480" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(-28 312 490)" />
+  <text x="312" y="494" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(-28 312 494)">Check-in/out, Selfie, Giải trình</text>
+
+  <!-- System -> Employee -->
+  <line x1="400" y1="410" x2="265" y2="485" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="230" y="435" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(-28 292 445)" />
+  <text x="292" y="449" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(-28 292 449)">Bảng công cá nhân, Kết quả duyệt</text>
+
+  <!-- 5. TOP LEFT: NETWORK & GPS INFRASTRUCTURE -->
+  <!-- Network -> System -->
+  <line x1="280" y1="230" x2="415" y2="305" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="250" y="240" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(28 312 250)" />
+  <text x="312" y="264" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(28 312 264)">Tọa độ GPS, IP/WiFi BSSID</text>
+
+  <!-- System -> Network -->
+  <line x1="400" y1="330" x2="265" y2="255" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrowhead)" />
+  <rect x="230" y="305" width="125" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" transform="rotate(28 292 315)" />
+  <text x="292" y="329" font-size="10.5" font-weight="600" fill="#1e293b" text-anchor="middle" transform="rotate(28 292 329)">Xác minh Geofence / CIDR</text>
+
+
+  <!-- ==================== CENTER SYSTEM NODE ==================== -->
+  <g filter="url(#shadow)">
+    <circle cx="500" cy="370" r="118" fill="#2d3748" stroke="#1a202c" stroke-width="4" />
+    <circle cx="500" cy="370" r="110" fill="#334155" />
+    <text x="500" y="345" font-size="20" font-weight="900" fill="#ffffff" text-anchor="middle">TimeLock</text>
+    <text x="500" y="370" font-size="16" font-weight="700" fill="#38bdf8" text-anchor="middle">Management System</text>
+    <line x1="430" y1="385" x2="570" y2="385" stroke="#64748b" stroke-width="1.5" />
+    <text x="500" y="405" font-size="11.5" font-weight="500" fill="#cbd5e1" text-anchor="middle">Chấm công · Phê duyệt</text>
+    <text x="500" y="422" font-size="11.5" font-weight="500" fill="#cbd5e1" text-anchor="middle">Chốt kỳ &amp; Báo cáo</text>
+  </g>
+
+
+  <!-- ==================== EXTERNAL ENTITIES (GREEN RECTANGLES) ==================== -->
+
+  <!-- Top: System Admin -->
+  <g filter="url(#shadow)">
+    <rect x="385" y="110" width="230" height="60" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="2" />
+    <text x="500" y="136" font-size="14" font-weight="800" fill="#14532d" text-anchor="middle">Quản trị viên hệ thống</text>
+    <text x="500" y="154" font-size="11.5" font-weight="600" fill="#166534" text-anchor="middle">(System Admin)</text>
+  </g>
+
+  <!-- Top Right: HR Officer -->
+  <g filter="url(#shadow)">
+    <rect x="710" y="205" width="220" height="60" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="2" />
+    <text x="820" y="231" font-size="14" font-weight="800" fill="#14532d" text-anchor="middle">Nhân sự</text>
+    <text x="820" y="249" font-size="11.5" font-weight="600" fill="#166534" text-anchor="middle">(HR / Timekeeping Officer)</text>
+  </g>
+
+  <!-- Bottom Right: Department Manager -->
+  <g filter="url(#shadow)">
+    <rect x="710" y="475" width="220" height="60" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="2" />
+    <text x="820" y="501" font-size="14" font-weight="800" fill="#14532d" text-anchor="middle">Quản lý phòng ban</text>
+    <text x="820" y="519" font-size="11.5" font-weight="600" fill="#166534" text-anchor="middle">(Department Manager)</text>
+  </g>
+
+  <!-- Bottom Left: Employee -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="475" width="220" height="60" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="2" />
+    <text x="180" y="501" font-size="14" font-weight="800" fill="#14532d" text-anchor="middle">Nhân viên</text>
+    <text x="180" y="519" font-size="11.5" font-weight="600" fill="#166534" text-anchor="middle">(Employee)</text>
+  </g>
+
+  <!-- Top Left: Network & GPS -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="205" width="220" height="60" rx="8" fill="#dcfce7" stroke="#4ade80" stroke-width="2" />
+    <text x="180" y="231" font-size="14" font-weight="800" fill="#14532d" text-anchor="middle">Hạ tầng GPS / Network</text>
+    <text x="180" y="249" font-size="11.5" font-weight="600" fill="#166534" text-anchor="middle">(Location &amp; WiFi Provider)</text>
+  </g>
+
+  <!-- Footer Watermark / Tag -->
+  <line x1="30" y1="640" x2="970" y2="640" stroke="#059669" stroke-width="2" />
+  <text x="35" y="660" font-size="12" font-weight="700" fill="#047857">TimeLock Architecture</text>
+  <text x="965" y="660" font-size="12" font-weight="700" fill="#64748b" text-anchor="end">DFD Level 0 Context Model</text>
+</svg>

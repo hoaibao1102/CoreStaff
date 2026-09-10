@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 1020" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <!-- Use Case Ellipse Gradient (Warm Peach as in reference image) -->
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+
+    <!-- Dashed open arrowhead for <<include>> and <<extend>> -->
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+  </defs>
+
+  <!-- Outer Canvas Border / UML Diagram Frame -->
+  <rect x="15" y="15" width="1030" height="990" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  
+  <!-- UML Tab in Top-Left Corner -->
+  <polygon points="15,15 170,15 185,38 15,38" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="25" y="31" font-size="13" font-weight="700" fill="#0f172a">uc Use Cases</text>
+
+  <!-- ==================== SYSTEM BOUNDARY ==================== -->
+  <rect x="220" y="55" width="620" height="925" fill="#fafafa" stroke="#334155" stroke-width="1.8" />
+  <text x="530" y="85" font-size="18" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: TimeLock System</text>
+
+
+  <!-- ==================== ACTORS (STICK FIGURES) ==================== -->
+
+  <!-- 1. EMPLOYEE (Left Top) -->
+  <g id="actor-employee">
+    <circle cx="110" cy="180" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="194" x2="110" y2="232" stroke="#1e293b" stroke-width="2" />
+    <line x1="88" y1="206" x2="132" y2="206" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="232" x2="92" y2="264" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="232" x2="128" y2="264" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="284" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">Employee</text>
+    <text x="110" y="299" font-size="11" font-weight="500" fill="#64748b" text-anchor="middle">(Nhân viên)</text>
+  </g>
+
+  <!-- 2. DEPARTMENT MANAGER (Left Middle) -->
+  <g id="actor-manager">
+    <circle cx="110" cy="480" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="494" x2="110" y2="532" stroke="#1e293b" stroke-width="2" />
+    <line x1="88" y1="506" x2="132" y2="506" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="532" x2="92" y2="564" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="532" x2="128" y2="564" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="584" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">Department</text>
+    <text x="110" y="599" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">Manager</text>
+  </g>
+
+  <!-- 3. HR OFFICER (Left Bottom) -->
+  <g id="actor-hr">
+    <circle cx="110" cy="780" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="794" x2="110" y2="832" stroke="#1e293b" stroke-width="2" />
+    <line x1="88" y1="806" x2="132" y2="806" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="832" x2="92" y2="864" stroke="#1e293b" stroke-width="2" />
+    <line x1="110" y1="832" x2="128" y2="864" stroke="#1e293b" stroke-width="2" />
+    <text x="110" y="884" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">HR / Timekeeping</text>
+    <text x="110" y="899" font-size="11" font-weight="500" fill="#64748b" text-anchor="middle">(Nhân sự)</text>
+  </g>
+
+  <!-- 4. SYSTEM ADMIN (Right Middle) -->
+  <g id="actor-admin">
+    <circle cx="945" cy="460" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="945" y1="474" x2="945" y2="512" stroke="#1e293b" stroke-width="2" />
+    <line x1="923" y1="486" x2="967" y2="486" stroke="#1e293b" stroke-width="2" />
+    <line x1="945" y1="512" x2="927" y2="544" stroke="#1e293b" stroke-width="2" />
+    <line x1="945" y1="512" x2="963" y2="544" stroke="#1e293b" stroke-width="2" />
+    <text x="945" y="564" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">System</text>
+    <text x="945" y="579" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">Admin</text>
+  </g>
+
+
+  <!-- ==================== USE CASE ELLIPSES & ASSOCIATIONS ==================== -->
+
+  <!-- === SECTION 1: ATTENDANCE & EVIDENCE (EMPLOYEE) === -->
+  <!-- UC: Check-in / Check-out (Office) -->
+  <line x1="130" y1="210" x2="275" y2="140" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="135" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="133" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Check-in / Out</text>
+  <text x="355" y="148" font-size="10.5" fill="#475569" text-anchor="middle">(Office Network / GPS)</text>
+
+  <!-- UC: Check-in Outside (Selfie + GPS) -->
+  <ellipse cx="680" cy="135" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="133" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Check-in Ngoài VP</text>
+  <text x="680" y="148" font-size="10.5" fill="#475569" text-anchor="middle">(Selfie + GPS Evidence)</text>
+
+  <!-- <<extend>> from Outside Check-in to Standard Check-in -->
+  <line x1="592" y1="135" x2="435" y2="135" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="515" y="125" font-size="10.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="515" y="152" font-size="9.5" fill="#475569" text-anchor="middle">{ngoài văn phòng}</text>
+
+  <!-- UC: Submit Clarification (Gửi giải trình) -->
+  <line x1="130" y1="220" x2="275" y2="210" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="210" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="208" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Gửi giải trình</text>
+  <text x="355" y="223" font-size="10.5" fill="#475569" text-anchor="middle">(Clarification)</text>
+
+  <!-- UC: View Personal Timesheet (Xem bảng công) -->
+  <line x1="130" y1="230" x2="275" y2="285" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="285" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="283" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem công cá nhân</text>
+  <text x="355" y="298" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Lịch sử chấm công</text>
+
+  <!-- UC: Request Shift Swap / OT -->
+  <line x1="130" y1="240" x2="275" y2="355" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="355" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="353" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng ký / Đổi ca</text>
+  <text x="355" y="368" font-size="10.5" fill="#475569" text-anchor="middle">&amp; Yêu cầu làm OT</text>
+
+
+  <!-- === SECTION 2: APPROVAL & MANAGEMENT (MANAGER) === -->
+  <!-- Manager also has personal attendance -->
+  <line x1="130" y1="490" x2="280" y2="295" stroke="#1e293b" stroke-width="1.4" stroke-dasharray="2,2" />
+
+  <!-- UC: Approve / Reject Attendance & Selfie -->
+  <line x1="130" y1="510" x2="275" y2="445" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="445" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="443" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Duyệt Selfie &amp; GPS</text>
+  <text x="355" y="458" font-size="10.5" fill="#475569" text-anchor="middle">(Approve / Reject)</text>
+
+  <!-- UC: Request Clarification from Employee -->
+  <ellipse cx="680" cy="445" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="443" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Yêu cầu giải trình</text>
+  <text x="680" y="458" font-size="10.5" fill="#475569" text-anchor="middle">(Request Clarify)</text>
+
+  <!-- <<extend>> from Request Clarification to Approve/Reject -->
+  <line x1="592" y1="445" x2="435" y2="445" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="515" y="435" font-size="10.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="515" y="462" font-size="9.5" fill="#475569" text-anchor="middle">{khi có bất thường}</text>
+
+  <!-- UC: Confirm Department Timesheet (Xác nhận bảng công PB) -->
+  <line x1="130" y1="525" x2="275" y2="525" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="525" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="523" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xác nhận công PB</text>
+  <text x="355" y="538" font-size="10.5" fill="#475569" text-anchor="middle">(Dept Confirmation)</text>
+
+  <!-- UC: Review Department Timesheet -->
+  <ellipse cx="680" cy="525" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="523" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Rà soát công phòng ban</text>
+  <text x="680" y="538" font-size="10.5" fill="#475569" text-anchor="middle">(Review &amp; Resolve Blockers)</text>
+
+  <!-- <<include>> Confirm -> Review -->
+  <line x1="435" y1="525" x2="592" y2="525" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="515" y="515" font-size="10.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+
+  <!-- === SECTION 3: HR TIMESHEET CLOSING & HR CONFIG === -->
+  <!-- UC: Close Timesheet Period (Chốt kỳ công) -->
+  <line x1="130" y1="810" x2="275" y2="670" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="670" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="668" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Chốt kỳ công</text>
+  <text x="355" y="683" font-size="10.5" fill="#475569" text-anchor="middle">(Timesheet Closing)</text>
+
+  <!-- UC: Reopen Period (Mở lại kỳ) -->
+  <ellipse cx="680" cy="670" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="668" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Mở lại kỳ công</text>
+  <text x="680" y="683" font-size="10.5" fill="#475569" text-anchor="middle">(Reopen with Audit)</text>
+
+  <!-- <<extend>> Reopen -> Close -->
+  <line x1="592" y1="670" x2="435" y2="670" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="515" y="660" font-size="10.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;extend&gt;&gt;</text>
+  <text x="515" y="687" font-size="9.5" fill="#475569" text-anchor="middle">{khi cần điều chỉnh}</text>
+
+  <!-- UC: Export Timesheet CSV / Excel -->
+  <ellipse cx="680" cy="750" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="748" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xuất bảng công</text>
+  <text x="680" y="763" font-size="10.5" fill="#475569" text-anchor="middle">(Export CSV / XLSX)</text>
+
+  <!-- <<include>> Close -> Export -->
+  <line x1="415" y1="685" x2="615" y2="738" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="525" y="705" font-size="10.5" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- UC: Manage Workplace & Shifts (Quản lý địa điểm & ca) -->
+  <line x1="130" y1="825" x2="275" y2="780" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="780" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="778" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Cấu hình ca &amp; vị trí</text>
+  <text x="355" y="793" font-size="10.5" fill="#475569" text-anchor="middle">(Shift &amp; Geofence)</text>
+
+  <!-- UC: Apply Adjustment (Xử lý điều chỉnh công) -->
+  <line x1="130" y1="840" x2="275" y2="860" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="355" cy="860" rx="80" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="355" y="858" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Áp dụng điều chỉnh</text>
+  <text x="355" y="873" font-size="10.5" fill="#475569" text-anchor="middle">(Apply Adjustment)</text>
+
+
+  <!-- === SECTION 4: SYSTEM ADMIN === -->
+  <!-- UC: Manage Organizations (Tạo/Khóa Tenant) -->
+  <line x1="925" y1="490" x2="768" y2="340" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="680" cy="340" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="338" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Quản lý tổ chức</text>
+  <text x="680" y="353" font-size="10.5" fill="#475569" text-anchor="middle">(Manage Organizations)</text>
+
+  <!-- UC: Create Initial HR Account -->
+  <ellipse cx="680" cy="255" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="253" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Tạo tài khoản HR</text>
+  <text x="680" y="268" font-size="10.5" fill="#475569" text-anchor="middle">(Initial HR Account)</text>
+
+  <!-- <<include>> Org -> HR -->
+  <line x1="680" y1="314" x2="680" y2="281" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6,4" marker-end="url(#openArrow)" />
+  <text x="645" y="300" font-size="10" font-style="italic" fill="#0f172a" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- UC: View System Audit Log -->
+  <line x1="925" y1="510" x2="768" y2="860" stroke="#1e293b" stroke-width="1.6" />
+  <ellipse cx="680" cy="860" rx="88" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" />
+  <text x="680" y="858" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">Xem nhật ký hệ thống</text>
+  <text x="680" y="873" font-size="10.5" fill="#475569" text-anchor="middle">(Platform Audit Log)</text>
+
+  <!-- Notation Legend (Bottom Note) -->
+  <g transform="translate(235, 930)">
+    <rect x="0" y="0" width="590" height="38" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1" />
+    <text x="15" y="23" font-size="11" font-weight="700" fill="#0f172a">Chú giải:</text>
+    <line x1="75" y1="19" x2="115" y2="19" stroke="#1e293b" stroke-width="1.5" />
+    <text x="122" y="23" font-size="10.5" fill="#334155">Thực hiện</text>
+    <line x1="185" y1="19" x2="235" y2="19" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#openArrow)" />
+    <text x="242" y="23" font-size="10.5" fill="#334155">&lt;&lt;include&gt;&gt; Bắt buộc gồm</text>
+    <line x1="390" y1="19" x2="440" y2="19" stroke="#1e293b" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#openArrow)" />
+    <text x="447" y="23" font-size="10.5" fill="#334155">&lt;&lt;extend&gt;&gt; Mở rộng theo điều kiện</text>
+  </g>
+</svg>

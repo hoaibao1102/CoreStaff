@@ -17,7 +17,7 @@
 | Xác thực | Email hoặc mã nhân viên và mật khẩu |
 | Vai trò MVP | `EMPLOYEE`, `DEPARTMENT_MANAGER`, `HR`, `SYSTEM_ADMIN` |
 | Phiên bản SRS | **3.0 — Multi-tenant baseline** |
-| Nguồn tham chiếu | `TIMELOCK_PROJECT_PROPOSAL.md`, prototype React trong `protoype/src` và bảng đề tài FA26_SWP391 |
+| Nguồn tham chiếu | `TIMELOCK_PROJECT_PROPOSAL.md`, `TimeLock_Context_Diagram.md`, `Use case diagram.md`, prototype React trong `protoype/src` và bảng đề tài FA26_SWP391 |
 | Trạng thái | **Baseline triển khai MVP; các mục `【MỞ】` cần nhóm và giảng viên chốt** |
 
 ### 0.1. Ký hiệu
@@ -1010,6 +1010,8 @@ Hiển thị:
 ---
 
 ## 13. Use cases chính
+
+> **Sơ đồ Use Case trực quan:** Xem chi tiết các sơ đồ Mermaid phân theo 4 vai trò tại [Use case diagram.md](file:///d:/MONHOCKI8/Project/Docs/Use%20case%20diagram.md) hoặc trên trang Wiki [TimeLock Project Wiki (Use Case Diagrams)](file:///d:/MONHOCKI8/Project/Docs/index.html#doc-use-case).
 
 ### UC-01 — User đăng nhập
 
