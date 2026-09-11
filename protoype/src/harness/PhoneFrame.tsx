@@ -12,6 +12,7 @@ import { DayAttendance, EmployeeTab } from '../types';
 import { methodLabel } from '../hooks/useAttendance';
 import { resolveMethod } from '../services/attendanceService';
 import { loadActiveWorkplace } from '../services/adminService';
+import { MOCK_SELFIE_EVIDENCE } from '../services/evidenceService';
 import { inSignals } from './useSimulation';
 import { UseAttendance, UseSimulation, SubmitParams } from './types';
 
@@ -162,10 +163,12 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
               * Quản lý hợp đồng, phép năm và chế độ thuộc cổng ERP tập trung.
             </div>
           </div>
-        ) : attendance.previewPhotoUrl ? (
+        ) : attendance.previewEvidence ? (
           <SelfiePreview
-            photoUrl={attendance.previewPhotoUrl}
+            photoUrl={attendance.previewEvidence.photoUrl}
             mode={attendance.cameraMode}
+            address={attendance.previewEvidence.location.address}
+            accuracy={attendance.previewEvidence.location.accuracyMeters}
             onRetake={attendance.retakeSelfiePhoto}
             onConfirmUse={() => attendance.confirmSelfiePhoto(buildParams())}
             isSubmitting={attendance.isSubmitting}
@@ -269,8 +272,12 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
       {attendance.isCameraOpen && (
         <CameraCapture
           mode={attendance.cameraMode}
+          mockLocation={{
+            ...MOCK_SELFIE_EVIDENCE[attendance.cameraMode].location,
+            capturedAtClient: new Date().toISOString(),
+          }}
           onClose={attendance.closeCamera}
-          onPhotoCaptured={attendance.onPhotoCaptured}
+          onCapture={attendance.captureSelfie}
         />
       )}
     </div>

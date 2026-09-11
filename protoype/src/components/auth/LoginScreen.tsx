@@ -1,6 +1,7 @@
 import React, { FormEvent, useState } from 'react';
 import { ArrowRight, Clock3, Eye, EyeOff, LockKeyhole, MapPin, ShieldCheck } from 'lucide-react';
 import { AuthError, authenticateMockUser, MOCK_ACCOUNTS, MockSession } from '../../services/authService';
+import { TimeLockLogo } from '../common/TimeLockLogo';
 
 interface LoginScreenProps { onLoggedIn: (session: MockSession) => void; }
 
@@ -29,7 +30,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoggedIn }) => {
     <main className="min-h-screen bg-[#f5f7fb] text-slate-950 lg:grid lg:grid-cols-[1.08fr_.92fr]">
       <section className="relative hidden overflow-hidden bg-[#071c3b] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_20%,#3b82f6_0,transparent_35%),radial-gradient(circle_at_90%_80%,#14b8a6_0,transparent_32%)]" />
-        <div className="relative flex items-center gap-3"><BrandMark /><div><p className="text-xl font-black tracking-tight">TimeLock</p><p className="text-xs text-blue-200">Attendance & Workforce Control</p></div></div>
+        <div className="relative">
+          <TimeLockLogo size={46} theme="dark" showTagline />
+        </div>
         <div className="relative max-w-xl">
           <span className="mb-5 inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-blue-100">Nền tảng chấm công hiện đại</span>
           <h1 className="text-5xl font-black leading-[1.08] tracking-[-.04em]">Minh bạch từng phút.<br/><span className="text-[#67e8f9]">Vững chắc mỗi kỳ công.</span></h1>
@@ -43,7 +46,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoggedIn }) => {
 
       <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden"><BrandMark /><div><p className="text-lg font-black">TimeLock</p><p className="text-xs text-slate-500">Chấm công & chốt công</p></div></div>
+          <div className="mb-8 flex items-center justify-start lg:hidden">
+            <TimeLockLogo size={38} theme="light" showTagline />
+          </div>
           <p className="text-sm font-bold text-blue-700">CHÀO MỪNG TRỞ LẠI</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight">Đăng nhập hệ thống</h2>
           <p className="mt-2 text-sm text-slate-500">Sử dụng email hoặc mã nhân viên được cấp.</p>
@@ -60,4 +65,3 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoggedIn }) => {
   );
 };
 
-const BrandMark = () => <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-900/20"><Clock3 className="h-6 w-6"/></div>;
