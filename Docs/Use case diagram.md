@@ -2,7 +2,7 @@
 
 ![TimeLock UML Use Case Diagram](TimeLock_Use_Case_Diagram.svg)
 
-> **Ghi chú:** Sơ đồ Use Case tổng quan theo chuẩn UML 2.0 (System Boundary, Stick-figure Actors, Use Case Ovals, các quan hệ `<<include>>` và `<<extend>>`). Bạn có thể mở trực tiếp file vector sắc nét tại [TimeLock_Use_Case_Diagram.svg](file:///d:/MONHOCKI8/Project/Docs/TimeLock_Use_Case_Diagram.svg).
+> **Ghi chú:** Sơ đồ Use Case tổng quan theo chuẩn UML 2.0 (System Boundary, Stick-figure Actors, Use Case Ovals, các quan hệ `<<include>>` và `<<extend>>`). Bạn có thể mở trực tiếp file vector sắc nét tại [TimeLock_Use_Case_Diagram.svg](./TimeLock_Use_Case_Diagram.svg).
 
 ---
 
@@ -12,7 +12,7 @@
 
 ![System Admin Use Case Diagram](Use_Case_Admin.svg)
 
-> **File vector:** [Use_Case_Admin.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Admin.svg)
+> **File vector:** [Use_Case_Admin.svg](./Use_Case_Admin.svg)
 
 <details>
 <summary><b>Xem mã nguồn Mermaid</b></summary>
@@ -73,7 +73,7 @@ flowchart LR
 
 ![HR Use Case Diagram](Use_Case_HR.svg)
 
-> **File vector:** [Use_Case_HR.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_HR.svg)
+> **File vector:** [Use_Case_HR.svg](./Use_Case_HR.svg)
 
 <details>
 <summary><b>Xem mã nguồn Mermaid</b></summary>
@@ -162,7 +162,7 @@ flowchart LR
 
 ![Department Manager Use Case Diagram](Use_Case_Manager.svg)
 
-> **File vector:** [Use_Case_Manager.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Manager.svg)
+> **File vector:** [Use_Case_Manager.svg](./Use_Case_Manager.svg)
 
 <details>
 <summary><b>Xem mã nguồn Mermaid</b></summary>
@@ -263,7 +263,7 @@ flowchart LR
 
 ![Employee Use Case Diagram](Use_Case_Employee.svg)
 
-> **File vector:** [Use_Case_Employee.svg](file:///d:/MONHOCKI8/Project/Docs/Use_Case_Employee.svg)
+> **File vector:** [Use_Case_Employee.svg](./Use_Case_Employee.svg)
 
 <details>
 <summary><b>Xem mã nguồn Mermaid</b></summary>

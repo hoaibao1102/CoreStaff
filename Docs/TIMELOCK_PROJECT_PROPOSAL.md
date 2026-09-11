@@ -30,7 +30,7 @@
 3. **HR / Timekeeping Officer**
 4. **System Administrator**
 
-> Xem chi tiết luồng dữ liệu tại [TimeLock_Context_Diagram.md](file:///d:/MONHOCKI8/Project/Docs/TimeLock_Context_Diagram.md) và sơ đồ ca sử dụng tại [Use case diagram.md](file:///d:/MONHOCKI8/Project/Docs/Use%20case%20diagram.md).
+> Xem chi tiết luồng dữ liệu tại [TimeLock_Context_Diagram.md](./TimeLock_Context_Diagram.md) và sơ đồ ca sử dụng tại [Use case diagram.md](./Use case diagram.md).
 
 ### Main Features
 
