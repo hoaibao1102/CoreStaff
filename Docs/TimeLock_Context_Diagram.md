@@ -18,29 +18,29 @@
     "htmlLabels": true
   },
   "themeVariables": {
-    "fontFamily": "Arial",
-    "fontSize": "14px",
-    "lineColor": "#64748b",
-    "textColor": "#1f2937"
+    "fontFamily": "Segoe UI, Arial",
+    "fontSize": "13px",
+    "lineColor": "#262626",
+    "textColor": "#111827"
   }
 }}%%
 
 flowchart LR
     subgraph LEFT[" "]
         direction TB
-        ADMIN["<b>Quản trị viên hệ thống</b>"]
-        EMPLOYEE["<b>Nhân viên</b>"]
+        ADMIN["<b>System Admin</b>"]
+        EMPLOYEE["<b>Employee</b>"]
     end
 
     subgraph CENTER[" "]
         direction TB
-        TIMELOCK((("<b>TIMELOCK SYSTEM</b><br/>Hệ thống quản lý chấm công<br/>và thời gian làm việc")))
+        TIMELOCK((("<b>TimeLock System</b>")))
     end
 
     subgraph RIGHT[" "]
         direction TB
-        HR["<b>Nhân sự (HR)</b>"]
-        MANAGER["<b>Quản lý phòng ban</b>"]
+        HR["<b>Nhân sự - HR</b>"]
+        MANAGER["<b>Department Manager</b>"]
     end
 
     ADMIN -->|"Thông tin tổ chức<br/>Thông tin tài khoản HR ban đầu<br/>Trạng thái tổ chức"| TIMELOCK
@@ -58,16 +58,10 @@ flowchart LR
     ADMIN ~~~ EMPLOYEE
     HR ~~~ MANAGER
 
-    classDef adminActor fill:#faf5ff,stroke:#8b5cf6,stroke-width:2px,color:#3b0764;
-    classDef hrActor fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#064e3b;
-    classDef managerActor fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#78350f;
-    classDef employeeActor fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#172554;
-    classDef systemNode fill:#f5f3ff,stroke:#7c3aed,stroke-width:3px,color:#1f2937;
+    classDef actorNode fill:#eeebfc,stroke:#a39beb,stroke-width:1.5px,color:#111827;
+    classDef systemNode fill:#eeebfc,stroke:#a39beb,stroke-width:1.5px,color:#111827;
 
-    class ADMIN adminActor;
-    class HR hrActor;
-    class MANAGER managerActor;
-    class EMPLOYEE employeeActor;
+    class ADMIN,HR,MANAGER,EMPLOYEE actorNode;
     class TIMELOCK systemNode;
 
     style LEFT fill:transparent,stroke:transparent
