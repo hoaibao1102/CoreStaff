@@ -135,17 +135,23 @@ function buildEvent(
   const { time, serverTime, isCheckIn, signals } = params;
 
   if (method === 'SELFIE') {
+    if (!signals.location) {
+      throw new AttendanceError('LOCATION_UNAVAILABLE', 'Không có dữ liệu vị trí đi kèm bằng chứng Selfie.');
+    }
     return {
       time,
       serverTime,
       method,
-      workplace: isCheckIn ? 'Thị trường Quận 7' : 'Thị trường TP. Thủ Đức',
-      address: isCheckIn
-        ? 'Khu dân cư Him Lam, Phường Tân Hưng, Quận 7, TP.HCM'
-        : 'Khu Công nghệ cao, Phường Tân Phú, TP. Thủ Đức, TP.HCM',
-      accuracy: isCheckIn ? 18 : 15,
+      workplace: isCheckIn ? 'Điểm làm việc ngoài văn phòng — Check-in' : 'Điểm làm việc ngoài văn phòng — Check-out',
+      address: signals.location.address,
+      coordinates: {
+        lat: signals.location.latitude,
+        lng: signals.location.longitude,
+      },
+      accuracy: signals.location.accuracyMeters,
       selfieUrl: signals.photoUrl,
       approvalStatus: 'PENDING',
+      auditNote: `Mock backend GPS captured at ${signals.location.capturedAtClient}`,
     };
   }
 

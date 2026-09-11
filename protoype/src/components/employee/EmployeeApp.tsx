@@ -10,6 +10,7 @@ import { useAttendance } from '../../hooks/useAttendance';
 import { methodLabel } from '../../hooks/useAttendance';
 import { bssidForSource } from '../../harness/useSimulation';
 import { loadActiveWorkplace } from '../../services/adminService';
+import { MOCK_SELFIE_EVIDENCE } from '../../services/evidenceService';
 import { WorkMode, EmployeeTab, DayAttendance } from '../../types';
 
 export interface EmployeeScenario { workMode: WorkMode; method: 'GPS' | 'NETWORK' | 'SELFIE'; label: string; }
@@ -46,11 +47,11 @@ export const EmployeeApp: React.FC<Props> = ({ scenario, onOpenPolicy, onOpenAdj
         {detail ? <DayDetailView record={detail} onBack={()=>setDetail(null)} onOpenAdjustment={onOpenAdjustment} onOpenClarification={onOpenClarification}/>
         : tab === 'HISTORY' ? <><div className="flex items-center justify-between"><h2 className="font-black">Lịch sử chấm công</h2><span className="rounded-lg border bg-white px-3 py-1 text-xs font-bold">08/2026</span></div><HistorySummary records={MOCK_HISTORY_RECORDS}/><div className="space-y-2">{MOCK_HISTORY_RECORDS.map(r=><HistoryListItem key={r.id} record={r} onSelect={setDetail}/>)}</div></>
         : tab === 'PROFILE' ? <Profile scenario={scenario}/>
-        : attendance.previewPhotoUrl ? <SelfiePreview photoUrl={attendance.previewPhotoUrl} mode={attendance.cameraMode} onRetake={attendance.retakeSelfiePhoto} onConfirmUse={()=>attendance.confirmSelfiePhoto(params())} isSubmitting={attendance.isSubmitting}/>
+        : attendance.previewEvidence ? <SelfiePreview photoUrl={attendance.previewEvidence.photoUrl} mode={attendance.cameraMode} address={attendance.previewEvidence.location.address} accuracy={attendance.previewEvidence.location.accuracyMeters} onRetake={attendance.retakeSelfiePhoto} onConfirmUse={()=>attendance.confirmSelfiePhoto(params())} isSubmitting={attendance.isSubmitting}/>
         : <><div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900"><strong>Kịch bản tài khoản:</strong> {scenario.label}</div><ShiftCard shiftName={CURRENT_EMPLOYEE.shift} shiftHours={CURRENT_EMPLOYEE.shiftHours} workplace={CURRENT_EMPLOYEE.workplace} workplaceAddress={CURRENT_EMPLOYEE.workplaceAddress}/><TodayStatusCard status={attendance.todayRecord.status} checkInTime={attendance.todayRecord.checkIn?.time} checkOutTime={attendance.todayRecord.checkOut?.time} totalHoursFormatted={attendance.todayRecord.totalWorkingMinutes ? `${Math.floor(attendance.todayRecord.totalWorkingMinutes/60)} giờ ${attendance.todayRecord.totalWorkingMinutes%60} phút` : undefined}/><MethodCard scenario={scenario}/><AttendanceTimeline checkIn={attendance.todayRecord.checkIn} checkOut={attendance.todayRecord.checkOut}/>{attendance.lastError&&<div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"><AlertTriangle className="h-4 w-4 shrink-0"/><span><strong>{attendance.lastError.code}</strong><br/>{attendance.lastError.message}</span></div>}{!completed?<ActionButton actionType={isCheckIn?'CHECK_IN':'CHECK_OUT'} workMode={scenario.workMode} isEnabled isLoading={attendance.isSubmitting} methodBadge={methodLabel(scenario.method,24,matchedNetwork?.ssid ?? matchedNetwork?.name)} onClick={act}/>:<div className="rounded-xl bg-emerald-100 p-4 text-center text-sm font-bold text-emerald-900">Đã hoàn thành ngày công hôm nay</div>}</>}
       </div>
       <BottomNavigation activeTab={tab} onTabChange={(next)=>{setTab(next);setDetail(null)}} pendingCount={attendance.todayRecord.overallApprovalStatus==='PENDING'?1:0}/>
-      {attendance.isCameraOpen&&<CameraCapture mode={attendance.cameraMode} onClose={attendance.closeCamera} onPhotoCaptured={attendance.onPhotoCaptured}/>} 
+      {attendance.isCameraOpen&&<CameraCapture mode={attendance.cameraMode} mockLocation={{ ...MOCK_SELFIE_EVIDENCE[attendance.cameraMode].location, capturedAtClient: new Date().toISOString() }} onClose={attendance.closeCamera} onCapture={attendance.captureSelfie}/>} 
     </div>
   </main>;
 };

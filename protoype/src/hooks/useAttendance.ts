@@ -8,9 +8,10 @@
  * raw signals and lets the service decide the actual attendance method.
  */
 import { useState, useCallback } from 'react';
-import { DayAttendance, AttendanceSignals } from '../types';
+import { DayAttendance, AttendanceSignals, SelfieEvidenceResponse } from '../types';
 import { AttendanceError, loadToday } from '../services/attendanceService';
 import * as attendanceService from '../services/attendanceService';
+import { getMockSelfieEvidence } from '../services/evidenceService';
 
 export type AttendanceErrorState = { code: string; message: string } | null;
 
@@ -25,7 +26,7 @@ export function useAttendance() {
   // Camera & Selfie flow (used by OUT_OFFICE / SELFIE fallback)
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
-  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [previewEvidence, setPreviewEvidence] = useState<SelfieEvidenceResponse | null>(null);
 
   const clearError = useCallback(() => setLastError(null), []);
 
@@ -37,7 +38,7 @@ export function useAttendance() {
       try {
         const next = await attendanceService.submitCheckIn(todayRecord, params);
         setTodayRecord(next);
-        setPreviewPhotoUrl(null);
+        setPreviewEvidence(null);
       } catch (e) {
         if (e instanceof AttendanceError) setLastError({ code: e.code, message: e.message });
         else throw e;
@@ -56,7 +57,7 @@ export function useAttendance() {
       try {
         const next = await attendanceService.submitCheckOut(todayRecord, params);
         setTodayRecord(next);
-        setPreviewPhotoUrl(null);
+        setPreviewEvidence(null);
       } catch (e) {
         if (e instanceof AttendanceError) setLastError({ code: e.code, message: e.message });
         else throw e;
@@ -74,34 +75,47 @@ export function useAttendance() {
     setLastError(null);
   }, []);
 
-  const onPhotoCaptured = useCallback((photoUrl: string) => {
-    setIsCameraOpen(false);
-    setPreviewPhotoUrl(photoUrl);
-  }, []);
+  const captureSelfie = useCallback(
+    async (customPhotoUrl?: string) => {
+      const evidence = await getMockSelfieEvidence(cameraMode);
+      setIsCameraOpen(false);
+      setPreviewEvidence({
+        ...evidence,
+        photoUrl: customPhotoUrl || evidence.photoUrl,
+      });
+    },
+    [cameraMode]
+  );
 
   const confirmSelfiePhoto = useCallback(
     (params: SubmitParams) => {
-      if (!previewPhotoUrl) return;
-      const withPhoto: SubmitParams = { ...params, photoUrl: previewPhotoUrl };
-      if (cameraMode === 'CHECK_IN') return checkIn(withPhoto);
-      return checkOut(withPhoto);
+      if (!previewEvidence) return;
+      const withEvidence: SubmitParams = {
+        ...params,
+        photoUrl: previewEvidence.photoUrl,
+        location: previewEvidence.location,
+        gpsAccuracy: previewEvidence.location.accuracyMeters,
+      };
+      if (cameraMode === 'CHECK_IN') return checkIn(withEvidence);
+      return checkOut(withEvidence);
     },
-    [previewPhotoUrl, cameraMode, checkIn, checkOut]
+    [previewEvidence, cameraMode, checkIn, checkOut]
   );
 
   const retakeSelfiePhoto = useCallback(() => {
-    setPreviewPhotoUrl(null);
+    setPreviewEvidence(null);
     setIsCameraOpen(true);
   }, []);
 
-  const showPreview = useCallback((url: string) => {
-    setPreviewPhotoUrl(url);
+  const showPreview = useCallback(async (_url?: string) => {
+    const evidence = await getMockSelfieEvidence(cameraMode);
+    setPreviewEvidence(evidence);
     setIsCameraOpen(false);
-  }, []);
+  }, [cameraMode]);
 
   const resetToday = useCallback(async () => {
     setLastError(null);
-    setPreviewPhotoUrl(null);
+    setPreviewEvidence(null);
     setIsCameraOpen(false);
     setIsSubmitting(false);
     setTodayRecord(attendanceService.resetToday());
@@ -109,7 +123,7 @@ export function useAttendance() {
 
   const setRecord = useCallback((record: DayAttendance) => {
     setTodayRecord(record);
-    setPreviewPhotoUrl(null);
+    setPreviewEvidence(null);
     setIsCameraOpen(false);
   }, []);
 
@@ -118,14 +132,15 @@ export function useAttendance() {
     isSubmitting,
     isCameraOpen,
     cameraMode,
-    previewPhotoUrl,
+    previewPhotoUrl: previewEvidence?.photoUrl ?? null,
+    previewEvidence,
     lastError,
     clearError,
     checkIn,
     checkOut,
     openCamera,
     closeCamera: () => setIsCameraOpen(false),
-    onPhotoCaptured,
+    captureSelfie,
     confirmSelfiePhoto,
     retakeSelfiePhoto,
     showPreview,
