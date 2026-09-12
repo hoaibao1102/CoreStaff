@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 820" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="sysGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="50%" stop-color="#dbeafe" />
+      <stop offset="100%" stop-color="#bfdbfe" />
+    </linearGradient>
+    <linearGradient id="actorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <linearGradient id="lawGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f0fdf4" />
+      <stop offset="100%" stop-color="#dcfce7" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 2 L 8 5 L 1 8 Z" fill="#1e293b" />
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 2 L 8 5 L 1 8 Z" fill="#2563eb" />
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 2 L 8 5 L 1 8 Z" fill="#059669" />
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.08" />
+    </filter>
+  </defs>
+
+  <!-- Frame Canvas -->
+  <rect x="14" y="14" width="1152" height="792" fill="#ffffff" stroke="#1e293b" stroke-width="2" rx="4" />
+  <polygon points="14,14 260,14 278,40 14,40" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="24" y="32" font-size="13" font-weight="700" fill="#0f172a">cd CoreStaff System Context v4.0</text>
+
+  <!-- Title & Baseline Header -->
+  <text x="590" y="44" font-size="18" font-weight="900" fill="#0f172a" text-anchor="middle">SƠ ĐỒ NGỮ CẢNH HỆ THỐNG (SYSTEM CONTEXT DIAGRAM)</text>
+  <text x="590" y="63" font-size="11.5" font-weight="600" fill="#64748b" text-anchor="middle">CoreStaff — HRM, Attendance, Labor Compliance &amp; Payroll Management System</text>
+
+  <!-- ================= CENTER SYSTEM BOUNDARY ================= -->
+  <g filter="url(#shadow)">
+    <rect x="420" y="240" width="340" height="300" rx="16" fill="url(#sysGrad)" stroke="#1d4ed8" stroke-width="2.5" />
+    <rect x="430" y="250" width="320" height="42" rx="8" fill="#1e40af" />
+    <text x="590" y="276" font-size="15" font-weight="800" fill="#ffffff" text-anchor="middle">CoreStaff Platform</text>
+    <text x="590" y="306" font-size="11" font-weight="700" fill="#1e3a8a" text-anchor="middle">(Nền tảng Quản trị Nhân sự, Chấm công &amp; Tiền lương)</text>
+
+    <!-- Capabilities summary badges -->
+    <rect x="440" y="322" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="510" y="339" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">🏢 Multi-tenant Isolation</text>
+
+    <rect x="600" y="322" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="670" y="339" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">👥 HRM &amp; Contracts</text>
+
+    <rect x="440" y="360" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="510" y="377" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">📍 Network / GPS / Selfie</text>
+
+    <rect x="600" y="360" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="670" y="377" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">⏳ Full-time &amp; Auto OT</text>
+
+    <rect x="440" y="398" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="510" y="415" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">🔒 Timesheet Closing</text>
+
+    <rect x="600" y="398" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="670" y="415" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">📸 Snapshot Input Lock</text>
+
+    <rect x="440" y="436" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="510" y="453" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">💰 Gross-to-Net Engine</text>
+
+    <rect x="600" y="436" width="140" height="26" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2" />
+    <text x="670" y="453" font-size="10.5" font-weight="700" fill="#1e40af" text-anchor="middle">📄 Transparent Payslip</text>
+
+    <!-- Architecture tech footnote -->
+    <rect x="440" y="480" width="300" height="42" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1" />
+    <text x="590" y="497" font-size="10" font-weight="700" fill="#334155" text-anchor="middle">Công nghệ: NestJS + PostgreSQL + React TypeScript</text>
+    <text x="590" y="512" font-size="9.5" fill="#64748b" text-anchor="middle">Phân quyền RBAC, Snapshot bất biến, Private Document Storage</text>
+  </g>
+
+  <!-- ================= 1. SYSTEM ADMIN (Top Left) ================= -->
+  <g id="actor-sysadmin">
+    <rect x="40" y="90" width="190" height="150" rx="10" fill="#fafafa" stroke="#475569" stroke-width="1.6" filter="url(#shadow)" />
+    <!-- Stick figure -->
+    <circle cx="135" cy="125" r="14" fill="url(#actorGrad)" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="139" x2="135" y2="175" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="115" y1="152" x2="155" y2="152" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="175" x2="120" y2="208" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="175" x2="150" y2="208" stroke="#1e293b" stroke-width="1.8" />
+    <text x="135" y="224" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">System Admin</text>
+    <text x="135" y="238" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Quản trị viên nền tảng)</text>
+  </g>
+
+  <!-- Flows: System Admin <-> Platform -->
+  <!-- Admin -> Platform -->
+  <path d="M 230 145 L 345 145 L 420 280" fill="none" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrow)" />
+  <rect x="238" y="125" width="180" height="34" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="244" y="139" font-size="9.5" font-weight="700" fill="#0f172a">1. Tạo / khóa Organization</text>
+  <text x="244" y="152" font-size="9.5" fill="#475569">   Cấp tài khoản HR đầu tiên</text>
+
+  <!-- Platform -> Admin -->
+  <path d="M 420 305 L 320 185 L 230 185" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4,3" marker-end="url(#arrowBlue)" />
+  <rect x="238" y="192" width="180" height="34" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="244" y="206" font-size="9.5" font-weight="700" fill="#1e40af">2. Sức khỏe tenant &amp; health</text>
+  <text x="244" y="219" font-size="9.5" fill="#2563eb">   Audit log toàn hệ thống</text>
+
+
+  <!-- ================= 2. HR / PAYROLL OFFICER (Top Right) ================= -->
+  <g id="actor-hr">
+    <rect x="950" y="90" width="190" height="150" rx="10" fill="#fafafa" stroke="#475569" stroke-width="1.6" filter="url(#shadow)" />
+    <!-- Stick figure -->
+    <circle cx="1045" cy="125" r="14" fill="url(#actorGrad)" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="139" x2="1045" y2="175" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1025" y1="152" x2="1065" y2="152" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="175" x2="1030" y2="208" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="175" x2="1060" y2="208" stroke="#1e293b" stroke-width="1.8" />
+    <text x="1045" y="224" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">HR / Payroll Officer</text>
+    <text x="1045" y="238" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân sự &amp; Kế toán lương)</text>
+  </g>
+
+  <!-- Flows: HR <-> Platform -->
+  <!-- HR -> Platform -->
+  <path d="M 950 145 L 835 145 L 760 280" fill="none" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrow)" />
+  <rect x="760" y="112" width="182" height="46" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="766" y="126" font-size="9.5" font-weight="700" fill="#0f172a">3. Quản lý Nhân sự &amp; Ca làm</text>
+  <text x="766" y="139" font-size="9" fill="#475569">   Hợp đồng, chính sách, apply phép</text>
+  <text x="766" y="151" font-size="9" fill="#475569">   Chốt công &amp; Duyệt/Khóa Payroll</text>
+
+  <!-- Platform -> HR -->
+  <path d="M 760 305 L 860 185 L 950 185" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4,3" marker-end="url(#arrowBlue)" />
+  <rect x="760" y="192" width="182" height="46" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="766" y="206" font-size="9.5" font-weight="700" fill="#1e40af">4. Dashboard, Cảnh báo tuân thủ</text>
+  <text x="766" y="219" font-size="9" fill="#2563eb">   Bảng tổng hợp công, Snapshot</text>
+  <text x="766" y="231" font-size="9" fill="#2563eb">   PayrollRun &amp; Báo cáo chi phí</text>
+
+
+  <!-- ================= 3. DEPARTMENT MANAGER (Bottom Left) ================= -->
+  <g id="actor-manager">
+    <rect x="40" y="550" width="190" height="150" rx="10" fill="#fafafa" stroke="#475569" stroke-width="1.6" filter="url(#shadow)" />
+    <!-- Stick figure -->
+    <circle cx="135" cy="585" r="14" fill="url(#actorGrad)" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="599" x2="135" y2="635" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="115" y1="612" x2="155" y2="612" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="635" x2="120" y2="668" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="135" y1="635" x2="150" y2="668" stroke="#1e293b" stroke-width="1.8" />
+    <text x="135" y="684" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">Department Manager</text>
+    <text x="135" y="698" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Quản lý phòng ban)</text>
+  </g>
+
+  <!-- Flows: Manager <-> Platform -->
+  <!-- Manager -> Platform -->
+  <path d="M 230 600 L 335 600 L 420 480" fill="none" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrow)" />
+  <rect x="238" y="565" width="180" height="46" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="244" y="579" font-size="9.5" font-weight="700" fill="#0f172a">5. Duyệt ngoại lệ (Selfie/GPS)</text>
+  <text x="244" y="592" font-size="9" fill="#475569">   Duyệt đơn phép, OT, điều chỉnh</text>
+  <text x="244" y="604" font-size="9" fill="#475569">   Xác nhận bảng công phòng ban</text>
+
+  <!-- Platform -> Manager -->
+  <path d="M 420 510 L 320 640 L 230 640" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4,3" marker-end="url(#arrowBlue)" />
+  <rect x="238" y="632" width="180" height="46" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="244" y="646" font-size="9.5" font-weight="700" fill="#1e40af">6. Hàng đợi phê duyệt phòng</text>
+  <text x="244" y="659" font-size="9" fill="#2563eb">   Dữ liệu chấm công nhân viên</text>
+  <text x="244" y="671" font-size="9" fill="#2563eb">   "Công của tôi" &amp; Payslip cá nhân</text>
+
+
+  <!-- ================= 4. EMPLOYEE (Bottom Right) ================= -->
+  <g id="actor-employee">
+    <rect x="950" y="550" width="190" height="150" rx="10" fill="#fafafa" stroke="#475569" stroke-width="1.6" filter="url(#shadow)" />
+    <!-- Stick figure -->
+    <circle cx="1045" cy="585" r="14" fill="url(#actorGrad)" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="599" x2="1045" y2="635" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1025" y1="612" x2="1065" y2="612" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="635" x2="1030" y2="668" stroke="#1e293b" stroke-width="1.8" />
+    <line x1="1045" y1="635" x2="1060" y2="668" stroke="#1e293b" stroke-width="1.8" />
+    <text x="1045" y="684" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">Employee</text>
+    <text x="1045" y="698" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân viên)</text>
+  </g>
+
+  <!-- Flows: Employee <-> Platform -->
+  <!-- Employee -> Platform -->
+  <path d="M 950 600 L 845 600 L 760 480" fill="none" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrow)" />
+  <rect x="760" y="565" width="182" height="46" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text x="766" y="579" font-size="9.5" font-weight="700" fill="#0f172a">7. Check-in / Check-out</text>
+  <text x="766" y="592" font-size="9" fill="#475569">   Network, GPS, Selfie bằng chứng</text>
+  <text x="766" y="604" font-size="9" fill="#475569">   Gửi đơn Phép, OT, Điều chỉnh/Giải trình</text>
+
+  <!-- Platform -> Employee -->
+  <path d="M 760 510 L 860 640 L 950 640" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4,3" marker-end="url(#arrowBlue)" />
+  <rect x="760" y="632" width="182" height="46" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
+  <text x="766" y="646" font-size="9.5" font-weight="700" fill="#1e40af">8. Lịch ca hành chính, nơi làm</text>
+  <text x="766" y="659" font-size="9" fill="#2563eb">   Lịch sử công, trạng thái đơn duyệt</text>
+  <text x="766" y="671" font-size="9" fill="#2563eb">   Phiếu lương cá nhân (Payslip)</text>
+
+
+  <!-- ================= 5. LABOR / INSURANCE / TAX POLICIES (Bottom Center) ================= -->
+  <g id="entity-law">
+    <rect x="370" y="650" width="440" height="135" rx="12" fill="url(#lawGrad)" stroke="#059669" stroke-width="2" filter="url(#shadow)" />
+    <rect x="382" y="660" width="416" height="26" rx="6" fill="#059669" />
+    <text x="590" y="678" font-size="12" font-weight="800" fill="#ffffff" text-anchor="middle">⚖️ Quy chuẩn Pháp lý &amp; Chính sách Nhà nước (Legal &amp; Policy Baseline)</text>
+
+    <!-- Law pills -->
+    <rect x="385" y="694" width="198" height="22" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+    <text x="484" y="709" font-size="9.5" font-weight="700" fill="#065f46" text-anchor="middle">Bộ luật Lao động 45/2019/QH14 (Giờ làm, OT)</text>
+
+    <rect x="603" y="694" width="198" height="22" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+    <text x="702" y="709" font-size="9.5" font-weight="700" fill="#065f46" text-anchor="middle">Luật BHXH 41/2024, BHYT, BHTN (Tỷ lệ đóng)</text>
+
+    <rect x="385" y="722" width="198" height="22" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+    <text x="484" y="737" font-size="9.5" font-weight="700" fill="#065f46" text-anchor="middle">Thuế TNCN (Biểu lũy tiến, Giảm trừ gia cảnh)</text>
+
+    <rect x="603" y="722" width="198" height="22" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+    <text x="702" y="737" font-size="9.5" font-weight="700" fill="#065f46" text-anchor="middle">Lương thử việc tối thiểu ≥ 85% mức lương công việc</text>
+
+    <text x="590" y="768" font-size="9" font-weight="600" fill="#047857" text-anchor="middle">Tất cả chính sách đều có Version, Căn cứ pháp lý (legalReference) và Ngày hiệu lực (effectiveFrom)</text>
+  </g>
+
+  <!-- Flows: Law <-> Platform -->
+  <!-- Law -> Platform -->
+  <path d="M 540 650 L 540 540" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrowGreen)" />
+  <rect x="420" y="580" width="112" height="32" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+  <text x="476" y="594" font-size="8.5" font-weight="700" fill="#065f46" text-anchor="middle">9. Quy chuẩn trần giờ</text>
+  <text x="476" y="605" font-size="8.5" fill="#047857" text-anchor="middle">Tỷ lệ BHXH &amp; Biểu PIT</text>
+
+  <!-- Platform -> Law -->
+  <path d="M 640 540 L 640 650" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowGreen)" />
+  <rect x="648" y="580" width="115" height="32" rx="4" fill="#ffffff" stroke="#a7f3d0" stroke-width="1" />
+  <text x="705" y="594" font-size="8.5" font-weight="700" fill="#065f46" text-anchor="middle">10. Truy vết tuân thủ</text>
+  <text x="705" y="605" font-size="8.5" fill="#047857" text-anchor="middle">Audit &amp; Lưu snapshot</text>
+
+  <!-- Footer note -->
+  <text x="590" y="800" font-size="10" font-style="italic" fill="#94a3b8" text-anchor="middle">
+    Ghi chú: Bản vẽ được sinh tự động theo chuẩn SRS v4.0. Quyền riêng tư: Quản lý không xem bảng lương cả phòng, Admin không xem lương tenant.
+  </text>
+</svg>

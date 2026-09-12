@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 980" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', Inter, -apple-system, sans-serif;">
+  <defs>
+    <linearGradient id="pkgGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+    <linearGradient id="pkgGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f0fdf4" />
+      <stop offset="100%" stop-color="#dcfce7" />
+    </linearGradient>
+    <linearGradient id="pkgGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff7ed" />
+      <stop offset="100%" stop-color="#ffedd5" />
+    </linearGradient>
+    <linearGradient id="pkgGrad4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="100%" stop-color="#dbeafe" />
+    </linearGradient>
+
+    <linearGradient id="ucGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#ffedd5" />
+      <stop offset="100%" stop-color="#fed7aa" />
+    </linearGradient>
+    <linearGradient id="ucGradCore" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#dbeafe" />
+      <stop offset="100%" stop-color="#bfdbfe" />
+    </linearGradient>
+    <linearGradient id="ucGradRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#fee2e2" />
+      <stop offset="100%" stop-color="#fecaca" />
+    </linearGradient>
+
+    <marker id="openArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#1e293b" stroke-width="1.6" />
+    </marker>
+    <marker id="openArrowBlue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1 L 7 5 L 1 9" fill="none" stroke="#2563eb" stroke-width="1.6" />
+    </marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.06" />
+    </filter>
+  </defs>
+
+  <!-- Frame Canvas -->
+  <rect x="12" y="12" width="1356" height="956" fill="#ffffff" stroke="#1e293b" stroke-width="2" rx="4" />
+  <polygon points="12,12 290,12 310,38 12,38" fill="#f8fafc" stroke="#1e293b" stroke-width="2" />
+  <text x="22" y="30" font-size="13" font-weight="700" fill="#0f172a">uc CoreStaff Use Cases Overview v4.0</text>
+
+  <text x="690" y="42" font-size="17" font-weight="900" fill="#0f172a" text-anchor="middle">SƠ ĐỒ CA SỬ DỤNG TỔNG HỢP TOÀN HỆ THỐNG (COMPREHENSIVE USE CASE OVERVIEW)</text>
+  <text x="690" y="60" font-size="11" font-weight="600" fill="#64748b" text-anchor="middle">Kiến trúc 4 Phân hệ Nghiệp vụ • 4 Nhóm Tác nhân • Ràng buộc Toàn vẹn Chấm công &amp; Tiền lương</text>
+
+  <!-- ================= SYSTEM BOUNDARY ================= -->
+  <rect x="220" y="75" width="940" height="880" fill="#fafafa" stroke="#334155" stroke-width="2" rx="10" />
+  <text x="690" y="100" font-size="15" font-weight="800" fill="#0f172a" text-anchor="middle">System Boundary: CoreStaff Platform (Human Resource, Attendance &amp; Payroll)</text>
+
+  <!-- PACKAGE 1: PLATFORM & AUTH -->
+  <rect x="235" y="115" width="445" height="225" rx="8" fill="url(#pkgGrad1)" stroke="#cbd5e1" stroke-width="1.4" />
+  <text x="250" y="135" font-size="12" font-weight="800" fill="#475569">📦 PHÂN HỆ 1: NỀN TẢNG &amp; XÁC THỰC</text>
+
+  <ellipse cx="340" cy="180" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="340" y="178" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng nhập &amp; Hồ sơ cá nhân</text>
+  <text x="340" y="191" font-size="9" fill="#475569" text-anchor="middle">(AUTH: Login / Profile / Password)</text>
+
+  <ellipse cx="560" cy="180" rx="90" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="560" y="178" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Quản lý Organization</text>
+  <text x="560" y="191" font-size="9" fill="#475569" text-anchor="middle">(ORG: Create Org / Provision HR)</text>
+
+  <ellipse cx="450" cy="270" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="450" y="268" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Nhật ký kiểm toán (Audit Log)</text>
+  <text x="450" y="281" font-size="9" fill="#475569" text-anchor="middle">(AUDIT: Platform &amp; Tenant History)</text>
+
+
+  <!-- PACKAGE 2: HR CORE & CONTRACTS -->
+  <rect x="700" y="115" width="445" height="340" rx="8" fill="url(#pkgGrad2)" stroke="#a7f3d0" stroke-width="1.4" />
+  <text x="715" y="135" font-size="12" font-weight="800" fill="#065f46">📦 PHÂN HỆ 2: NHÂN SỰ, HỢP ĐỒNG &amp; CHÍNH SÁCH</text>
+
+  <ellipse cx="810" cy="175" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="810" y="173" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Quản lý Nhân sự &amp; Cơ cấu</text>
+  <text x="810" y="186" font-size="9" fill="#475569" text-anchor="middle">(PEOPLE: Employee/Dept/Position)</text>
+
+  <ellipse cx="1025" cy="175" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="1025" y="173" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Hợp đồng &amp; Tài liệu bảo mật</text>
+  <text x="1025" y="186" font-size="9" fill="#475569" text-anchor="middle">(CONTRACT: Probation ≥85%, Docs)</text>
+
+  <ellipse cx="810" cy="265" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="810" y="263" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Chính sách Luật, OT &amp; Thuế</text>
+  <text x="810" y="276" font-size="9" fill="#475569" text-anchor="middle">(POLICY: Labor/OT/Insurance/Tax)</text>
+
+  <ellipse cx="1025" cy="265" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="1025" y="263" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Lương, Phụ cấp &amp; Chuyên cần</text>
+  <text x="1025" y="276" font-size="9" fill="#475569" text-anchor="middle">(COMP: Salary, Hybrid Allowance)</text>
+
+  <ellipse cx="920" cy="355" rx="100" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="920" y="352" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="middle">Cấu hình ca Full-time &amp; Lịch</text>
+  <text x="920" y="366" font-size="9" fill="#475569" text-anchor="middle">(SCHEDULE: ShiftTemplate &amp; Calendar)</text>
+
+
+  <!-- PACKAGE 3: ATTENDANCE & OVERTIME -->
+  <rect x="235" y="475" width="445" height="340" rx="8" fill="url(#pkgGrad3)" stroke="#fed7aa" stroke-width="1.4" />
+  <text x="250" y="495" font-size="12" font-weight="800" fill="#9a3412">📦 PHÂN HỆ 3: CHẤM CÔNG, NGHỈ PHÉP &amp; TĂNG CA</text>
+
+  <ellipse cx="345" cy="545" rx="95" ry="25" fill="url(#ucGradRed)" stroke="#b91c1c" stroke-width="1.8" filter="url(#shadow)" />
+  <text x="345" y="542" font-size="11.5" font-weight="800" fill="#991b1b" text-anchor="middle">Chấm công In / Out</text>
+  <text x="345" y="556" font-size="9" fill="#7f1d1d" text-anchor="middle">(ATT: Network / GPS / Selfie)</text>
+
+  <ellipse cx="565" cy="545" rx="95" ry="25" fill="url(#ucGradRed)" stroke="#b91c1c" stroke-width="1.8" filter="url(#shadow)" />
+  <text x="565" y="542" font-size="11.5" font-weight="800" fill="#991b1b" text-anchor="middle">Nghỉ phép: Submit→Approve→Apply</text>
+  <text x="565" y="556" font-size="9" fill="#7f1d1d" text-anchor="middle">(LEAVE: Paid / Unpaid Override)</text>
+
+  <ellipse cx="345" cy="655" rx="95" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="345" y="652" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="middle">Đăng ký &amp; Tự phân loại OT</text>
+  <text x="345" y="666" font-size="9" fill="#475569" text-anchor="middle">(OT: Auto classify Working/Off/Holiday)</text>
+
+  <ellipse cx="565" cy="655" rx="95" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="565" y="652" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="middle">Duyệt ngoại lệ &amp; Điều chỉnh</text>
+  <text x="565" y="666" font-size="9" fill="#475569" text-anchor="middle">(APPROVAL: Selfie, Clarify, Adjust)</text>
+
+
+  <!-- PACKAGE 4: TIMESHEET & PAYROLL -->
+  <rect x="700" y="475" width="445" height="340" rx="8" fill="url(#pkgGrad4)" stroke="#bfdbfe" stroke-width="1.4" />
+  <text x="715" y="495" font-size="12" font-weight="800" fill="#1e40af">📦 PHÂN HỆ 4: CHỐT CÔNG &amp; TIỀN LƯƠNG</text>
+
+  <ellipse cx="810" cy="545" rx="95" ry="25" fill="url(#ucGradRed)" stroke="#b91c1c" stroke-width="1.8" filter="url(#shadow)" />
+  <text x="810" y="542" font-size="11.5" font-weight="800" fill="#991b1b" text-anchor="middle">Rà soát &amp; Chốt kỳ công</text>
+  <text x="810" y="556" font-size="9" fill="#7f1d1d" text-anchor="middle">(TIMESHEET: Blockers, Close Period)</text>
+
+  <ellipse cx="1025" cy="545" rx="95" ry="25" fill="url(#ucGradCore)" stroke="#1d4ed8" stroke-width="2" filter="url(#shadow)" />
+  <text x="1025" y="542" font-size="11.5" font-weight="800" fill="#1e40af" text-anchor="middle">Sinh Snapshot bất biến</text>
+  <text x="1025" y="556" font-size="9" fill="#1e3a8a" text-anchor="middle">(SNAPSHOT: PayrollInputSnapshot)</text>
+
+  <ellipse cx="810" cy="655" rx="95" ry="25" fill="url(#ucGradCore)" stroke="#1d4ed8" stroke-width="2" filter="url(#shadow)" />
+  <text x="810" y="652" font-size="11.5" font-weight="800" fill="#1e40af" text-anchor="middle">Tính, Review &amp; Khóa lương</text>
+  <text x="810" y="666" font-size="9" fill="#1e3a8a" text-anchor="middle">(PAYROLL: Gross, BHXH, PIT, Net)</text>
+
+  <ellipse cx="1025" cy="655" rx="95" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
+  <text x="1025" y="652" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="middle">Phát hành phiếu lương</text>
+  <text x="1025" y="666" font-size="9" fill="#475569" text-anchor="middle">(PAYSLIP: Release upon LOCKED)</text>
+
+
+  <!-- INTRA-SYSTEM INCLUDES (Crucial architectural dependencies) -->
+  <line x1="905" y1="545" x2="930" y2="545" stroke="#1d4ed8" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#openArrowBlue)" />
+  <line x1="1025" y1="570" x2="885" y2="640" stroke="#1d4ed8" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#openArrowBlue)" />
+  <text x="970" y="600" font-size="9.5" font-style="italic" fill="#1d4ed8" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <line x1="905" y1="655" x2="930" y2="655" stroke="#1d4ed8" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#openArrowBlue)" />
+  <text x="918" y="650" font-size="9.5" font-style="italic" fill="#1d4ed8" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- OT and Payroll reading Policy -->
+  <path d="M 440 655 C 500 720, 680 400, 715 270" fill="none" stroke="#059669" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#openArrow)" />
+  <path d="M 810 630 C 810 500, 810 350, 810 290" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#openArrow)" />
+  <text x="825" y="440" font-size="9.5" font-style="italic" fill="#059669" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+
+
+  <!-- ================= 4 EXTERNAL ACTORS ================= -->
+  <!-- 1. System Admin (Top Left) -->
+  <g id="actor-sysadmin">
+    <circle cx="100" cy="150" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="164" x2="100" y2="200" stroke="#1e293b" stroke-width="2" />
+    <line x1="78" y1="176" x2="122" y2="176" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="200" x2="82" y2="235" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="200" x2="118" y2="235" stroke="#1e293b" stroke-width="2" />
+    <text x="100" y="255" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">System Admin</text>
+    <text x="100" y="270" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Quản trị nền tảng)</text>
+  </g>
+  <!-- SysAdmin Links -->
+  <line x1="125" y1="175" x2="250" y2="180" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="185" x2="470" y2="180" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="195" x2="355" y2="270" stroke="#1e293b" stroke-width="1.4" />
+
+  <!-- 2. HR / Payroll Officer (Top Right) -->
+  <g id="actor-hr">
+    <circle cx="1270" cy="180" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="194" x2="1270" y2="230" stroke="#1e293b" stroke-width="2" />
+    <line x1="1248" y1="206" x2="1292" y2="206" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="230" x2="1252" y2="265" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="230" x2="1288" y2="265" stroke="#1e293b" stroke-width="2" />
+    <text x="1270" y="285" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">HR / Payroll</text>
+    <text x="1270" y="300" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân sự &amp; Lương)</text>
+  </g>
+  <!-- HR Links -->
+  <line x1="1245" y1="210" x2="905" y2="175" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="220" x2="1120" y2="175" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="230" x2="905" y2="265" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="240" x2="1120" y2="265" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="250" x2="1020" y2="355" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="260" x2="660" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="270" x2="905" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="280" x2="905" y2="655" stroke="#1e293b" stroke-width="1.4" />
+
+  <!-- 3. Department Manager (Bottom Left) -->
+  <g id="actor-manager">
+    <circle cx="100" cy="620" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="634" x2="100" y2="670" stroke="#1e293b" stroke-width="2" />
+    <line x1="78" y1="646" x2="122" y2="646" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="670" x2="82" y2="705" stroke="#1e293b" stroke-width="2" />
+    <line x1="100" y1="670" x2="118" y2="705" stroke="#1e293b" stroke-width="2" />
+    <text x="100" y="725" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">Dept Manager</text>
+    <text x="100" y="740" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Quản lý phòng ban)</text>
+  </g>
+  <!-- Manager Links -->
+  <line x1="125" y1="640" x2="250" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="650" x2="470" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="660" x2="250" y2="655" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="670" x2="470" y2="655" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="680" x2="715" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="125" y1="690" x2="930" y2="655" stroke="#1e293b" stroke-width="1.4" />
+
+  <!-- 4. Employee (Bottom Right) -->
+  <g id="actor-employee">
+    <circle cx="1270" cy="620" r="14" fill="#ffedd5" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="634" x2="1270" y2="670" stroke="#1e293b" stroke-width="2" />
+    <line x1="1248" y1="646" x2="1292" y2="646" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="670" x2="1252" y2="705" stroke="#1e293b" stroke-width="2" />
+    <line x1="1270" y1="670" x2="1288" y2="705" stroke="#1e293b" stroke-width="2" />
+    <text x="1270" y="725" font-size="13" font-weight="800" fill="#0f172a" text-anchor="middle">Employee</text>
+    <text x="1270" y="740" font-size="10" font-weight="600" fill="#64748b" text-anchor="middle">(Nhân viên)</text>
+  </g>
+  <!-- Employee Links -->
+  <line x1="1245" y1="635" x2="440" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="645" x2="470" y2="545" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="655" x2="440" y2="655" stroke="#1e293b" stroke-width="1.4" />
+  <line x1="1245" y1="665" x2="1120" y2="655" stroke="#1e293b" stroke-width="1.4" />
+
+  <!-- Bottom Legend Bar -->
+  <rect x="235" y="830" width="910" height="110" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" />
+  <text x="250" y="852" font-size="11.5" font-weight="800" fill="#1e293b">💡 NGUYÊN LÝ THIẾT KẾ KIẾN TRÚC CORESTAFF (BASELINE SRS v4.0):</text>
+  <text x="250" y="872" font-size="10" fill="#475569">1. <b style="color:#b91c1c;">Chốt công &amp; Snapshot:</b> Timesheet đóng sẽ sinh ra PayrollInputSnapshot bất biến. Bảng lương CHỈ đọc snapshot, không bao giờ đọc trực tiếp live attendance.</text>
+  <text x="250" y="890" font-size="10" fill="#475569">2. <b style="color:#b91c1c;">Nghỉ phép 3 bước (D04):</b> Employee gửi LeaveRequest → Department Manager phê duyệt (đúng scope, không tự duyệt) → HR ghi nhận &amp; apply vào ngày công.</text>
+  <text x="250" y="908" font-size="10" fill="#475569">3. <b style="color:#1d4ed8;">Tăng ca tự động (D01):</b> Nhân viên chỉ đăng ký giờ và lý do; Backend tự động phân loại OT ngày thường/nghỉ tuần/lễ. Chấm công quản lý phút; Lương tính tiền OT.</text>
+  <text x="250" y="926" font-size="10" fill="#475569">4. <b style="color:#065f46;">Quyền riêng tư lương:</b> Quản lý chỉ xem phiếu lương cá nhân của chính mình. Phiếu lương chỉ hiển thị tới nhân viên sau khi HR đã Khóa lương (LOCKED).</text>
+</svg>

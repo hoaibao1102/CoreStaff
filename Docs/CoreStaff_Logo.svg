@@ -45,7 +45,7 @@
     <path d="M 80 148 C 80 126 132 126 132 148 C 132 150 128 154 124 154 H 88 C 84 154 80 150 80 148 Z" fill="#0b2f64"/>
   </g>
 
-  <!-- Wordmark Text: TimeLock -->
+  <!-- Wordmark Text: CoreStaff -->
   <g transform="translate(200, 290)" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
     <text y="0" font-size="52" font-weight="900" letter-spacing="-1">
       <tspan fill="#0b2f64">Time</tspan><tspan fill="#1e60f6">L</tspan><tspan fill="#1e60f6" dx="-2">o</tspan><tspan fill="#1e60f6" dx="-2">ck</tspan>
