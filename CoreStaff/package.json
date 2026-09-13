@@ -1,0 +1,23 @@
+{
+  "name": "corestaff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CoreStaff — Human Resource, Attendance & Payroll Management System (monorepo)",
+  "workspaces": [
+    "Apps/api",
+    "Apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace @corestaff/api",
+    "dev:web": "npm run dev --workspace @corestaff/web",
+    "dev:mobile": "npm --prefix Apps/mobile run start",
+    "build": "npm run build --workspace @corestaff/api && npm run build --workspace @corestaff/web",
+    "test": "npm run test --workspace @corestaff/api",
+    "lint": "npm run lint --workspace @corestaff/api && npm run lint --workspace @corestaff/web",
+    "lint:mobile": "npm --prefix Apps/mobile run lint",
+    "ensure-indexes": "npm run ensure-indexes --workspace @corestaff/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

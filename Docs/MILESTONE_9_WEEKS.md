@@ -4,6 +4,7 @@
 > **Quy ước tuần:** Thứ Hai–Chủ nhật  
 > **Mục tiêu:** Hoàn thiện MVP HRM multi-tenant cho doanh nghiệp 10–50 nhân viên: hồ sơ/hợp đồng, chấm công, tuân thủ giờ làm, chốt công, Payroll và Payslip.  
 > **Phạm vi đã cắt:** Part-time, đăng ký/đổi ca, ca đêm, tuyển dụng, performance, chuyển khoản lương và quyết toán PIT năm.  
+> **Tech stack:** NestJS + MongoDB replica set + ReactJS là MVP; React Native + Expo Employee app là SHOULD.  
 > **Ghi chú:** Sprint 1 (tuần này) đã hoàn thành với SRS v4 + QC review + decision log + docs đồng bộ. Sprint 9 là tuần buffer cho UAT, demo và bảo vệ dự án.
 
 ## 1. Bảng milestone tổng thể
@@ -11,7 +12,7 @@
 | Sprint/Milestone | Mục tiêu | Ngày bắt đầu | Ngày kết thúc | Deliverable cần bàn giao | Người phụ trách | Số task liên quan | Tỷ lệ hoàn thành | Trạng thái | Ghi chú |
 |---|---|---:|---:|---|---|---:|---:|---|---|
 | **Sprint 1 — HRM Scope & Architecture** | Chốt HRM/Payroll scope, policy pháp lý, ERD/API và UX | 07/09/2026 | 13/09/2026 | SRS v4; Proposal; wiki; context/use-case; decision log; backlog | Chưa phân công | 12 | 100% | 🟢 Hoàn thành | SRS v4 + QC review (48 findings) + DOCS_DECISION_LOG đã chốt. |
-| **Sprint 2 — Foundation, Tenant & Employee Core** | Auth, tenant isolation, hồ sơ nhân viên, phòng ban/chức danh | 14/09/2026 | 20/09/2026 | Organization/User/Session; EmployeeProfile; Department/Position; RBAC; tenant tests | Chưa phân công | 14 | 0% | ⚪ Chưa bắt đầu | User login tách khỏi EmployeeProfile. |
+| **Sprint 2 — Foundation, Tenant & Employee Core** | Auth, tenant isolation, hồ sơ nhân viên, phòng ban/chức danh | 14/09/2026 | 20/09/2026 | NestJS API; MongoDB replica set; Organization/User/Session; ReactJS shell; RBAC/tenant tests | Chưa phân công | 14 | 0% | ⚪ Chưa bắt đầu | User login tách khỏi EmployeeProfile. |
 | **Sprint 3 — Contract, Salary Profile & Policies** | Hợp đồng, tài liệu và cấu hình pháp lý/tài chính có hiệu lực | 21/09/2026 | 27/09/2026 | Contract/Document; SalaryProfile; Allowance hybrid; AttendanceBonusPolicy templates; Labor/OT/Insurance/Tax policies | Chưa phân công | 15 | 0% | ⚪ Chưa bắt đầu | 85%, tỷ lệ bảo hiểm, thuế và OT đều versioned. |
 | **Sprint 4 — Full-time Scheduling, Leave & Attendance** | Lịch hành chính Full-time và chấm công Network/GPS | 28/09/2026 | 04/10/2026 | ShiftTemplate; RecurringSchedule; Calendar/Leave; Today API; Network/GPS; history; calculation | Chưa phân công | 14 | 0% | ⚪ Chưa bắt đầu | HR config ca; 08:00–17:00 chỉ là seed. |
 | **Sprint 5 — Selfie, Approval, Adjustment & OT** | Evidence, approval và OT tự phân loại/kiểm soát giới hạn | 05/10/2026 | 11/10/2026 | Camera/Selfie; private evidence; approval/clarification; adjustment; OT request/result; labor compliance | Chưa phân công | 15 | 0% | ⚪ Chưa bắt đầu | Kiểm tra giờ ngày/tuần/tháng/năm theo policy. |
@@ -39,8 +40,8 @@
 **Exit criteria ĐẠT (sync delta 12/09/2026):** D04/D18/D19 đã đồng bộ SRS/Proposal/Use Case/Milestone/Backlog; stack/delegation đã chốt.
 
 ### Sprint 2 — Foundation, Tenant & Employee Core
-1. Khởi tạo frontend/backend/database và CI.
-2. Organization/User/UserSession migrations.
+1. Khởi tạo monorepo: NestJS API, ReactJS Web, MongoDB replica set và CI.
+2. Mongoose schemas + compound indexes + migration/bootstrap cho Organization/User/UserSession.
 3. Login/logout/me/change/reset password.
 4. Tenant-context middleware.
 5. RBAC/resource scope.
@@ -147,9 +148,9 @@
 7. File upload/path traversal tests.
 8. Responsive/accessibility audit.
 9. Performance smoke test.
-10. Docker/migration/seed clean run.
-11. HTTPS deployment.
-12. README/setup/operator guide.
+10. Docker Compose MongoDB replica set + schema/index bootstrap + seed clean run.
+11. HTTPS deployment NestJS API + ReactJS Web.
+12. README/setup/operator guide + React Native Employee extension setup (SHOULD).
 
 ### Sprint 9 — UAT, Demo & Final Delivery
 1. Final regression & release checklist.
@@ -171,6 +172,8 @@
 | Kết thúc dự kiến | **08/11/2026** |
 
 ## 4. Nguyên tắc
+
+> **FROZEN BASELINE — D30:** Từ sau dòng này, toàn bộ cấu trúc, Sprint, mục tiêu, ngày, deliverable, owner, số task, tỷ lệ, trạng thái, ghi chú, task breakdown và số liệu tổng quan của file Milestone là bất biến. Không sửa lại Milestone vì thay đổi scope/tech/QC trong tương lai. Mọi công việc phát sinh chỉ được thêm thành task mới trong Task Backlog từ `TASK-119`; Milestone giữ nguyên làm baseline lịch sử.
 
 - Chỉ đánh dấu hoàn thành khi có artifact và bằng chứng test/review.
 - Không hard-code tỷ lệ pháp lý trong calculation service; dùng policy version/effective date.
