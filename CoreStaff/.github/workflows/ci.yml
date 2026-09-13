@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [project_initiation, main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test
+        env:
+          # Integration/smoke tests are skipped when no URI is provided.
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}

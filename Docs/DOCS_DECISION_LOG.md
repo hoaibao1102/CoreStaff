@@ -25,8 +25,12 @@
 | D18 | Chuyên cần (Attendance bonus) | Hệ thống cung cấp **cách tính mẫu** (vd tier % 100/70/50, rule đi trễ…). **HR từng Organization tự setup** policy + tự thêm điều kiện tính; **không hard-code** rule công ty trong code | **Synced 12/09/2026:** FR-COMP-01, models/APIs/AC, TASK-034/088 |
 | D19 | Phụ cấp (Allowance) | **Hybrid:** seed **library mặc định** (ăn trưa, xăng xe, điện thoại…) để HR chọn/bật; HR vẫn **tạo thêm mục phụ cấp riêng** trong Organization | **Synced 12/09/2026:** FR-COMP-02, models/APIs/AC, TASK-033/088 |
 
-| D20 | Backend stack | **NestJS + PostgreSQL** cho MVP | **Resolved 12/09/2026:** OQ-01 / ADR Sprint 2 |
+| D20 / D29 | Technology stack (updated) | **NestJS + MongoDB replica set + ReactJS Web MVP**; **React Native + Expo Employee app = SHOULD** | **Resolved:** SRS §23.2/OQ-01/DoD, Proposal §11, Milestone/Backlog |
 | D21 | Approval delegation | Ưu tiên `ApprovalDelegation` active; fallback HR queue chung; actorId != employeeId | **Resolved 12/09/2026:** model/routing rule |
+
+| D30 | Đóng băng Milestone và Task Backlog | Từ sau D30, `MILESTONE_9_WEEKS.md` và toàn bộ TASK-001…TASK-118 là immutable baseline. Chỉ được append task mới từ TASK-119; không sửa/xóa/đổi ID/nội dung/module/Sprint/owner/support/priority/status/date/progress/hours/dependency/link/note/deadline status của task cũ; không sửa cấu trúc hoặc nội dung milestone | Governance rule có hiệu lực ngay |
+
+| D31 | Bỏ Docker khỏi triển khai | **Không dùng Docker** để deploy. MongoDB chạy qua **Atlas (replica set managed)**; API/Web deploy bằng HTTPS hosting trực tiếp (không container). Xóa `docker-compose.yml`. Thay TASK-110 (Docker Compose clean run) bằng Atlas + HTTPS hosting. | **Synced:** SRS §23.2, Proposal §11, wiki, CORESTAFF_REPO_STRUCTURE.md; append TASK-119 |
 
 Các QC Low (chính tả, format, slug) không ghi ở đây; sẽ xử lý trực tiếp trong file.
 
