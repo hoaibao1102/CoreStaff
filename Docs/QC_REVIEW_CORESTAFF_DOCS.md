@@ -63,7 +63,7 @@ Không còn NC mở liên quan Leave override.
 - OT phút vs tiền OT (Payroll); multi-tenant / RBAC / self-approval / ApprovalDelegation  
 - REJECTED blocker; Payslip LOCKED/PAID; overallApprovalStatus; VND rounding  
 - AttendanceBonus template; Allowance hybrid; Leave state machine  
-- NestJS + PostgreSQL; Use Case / Context Mermaid Leave 3 actor  
+- NestJS + MongoDB replica set + ReactJS Web MVP; React Native Employee app = SHOULD  
 
 ---
 

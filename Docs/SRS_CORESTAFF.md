@@ -43,7 +43,7 @@
 10. Employee chọn `IN_OFFICE` hoặc `OUT_OFFICE`; bằng chứng thực tế là `NETWORK`, `GPS` hoặc `SELFIE`.
 11. Điều chỉnh công và phân loại ngày nghỉ/vắng tối thiểu thuộc MVP để HR có thể làm sạch dữ liệu trước khi chốt.
 12. CoreStaff tính lương từ PayrollInputSnapshot đã khóa, bao gồm thu nhập, OT, bảo hiểm bắt buộc, PIT và Payslip.
-13. Backend là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công.
+13. Backend NestJS là nguồn chính thức cho tenant scope, quyền, thời gian, validation và trạng thái kỳ công; MongoDB chạy replica set để bảo đảm transaction.
 14. Prototype dùng mock data để trình diễn; dữ liệu mock không phải kiến trúc production.
 15. MVP chỉ hỗ trợ nhân viên `FULL_TIME` làm giờ hành chính; HR cấu hình ShiftTemplate, không hard-code 08:00–17:00.
 16. Ca `08:00–17:00` chỉ là seed/demo; HR nhập start/end/break, MVP không hỗ trợ ca đêm, ca qua ngày hoặc nhiều ca/ngày.
@@ -283,7 +283,7 @@ User có thể đăng nhập bằng một trong hai giá trị:
 - `email`; hoặc
 - `employeeCode`.
 
-Email và employeeCode được so sánh không phân biệt hoa thường và unique trong phạm vi Organization: `UNIQUE(organizationId, email)` và `UNIQUE(organizationId, employeeCode)`. Identifier trùng giữa hai tenant được phép; cơ chế login phải xác định tenant bằng organization code/domain hoặc bước chọn Organization.
+Email và employeeCode được so sánh không phân biệt hoa thường và unique trong phạm vi Organization: `UNIQUE INDEX(organizationId, email)` và `UNIQUE INDEX(organizationId, employeeCode)`. Identifier trùng giữa hai tenant được phép; cơ chế login phải xác định tenant bằng organization code/domain hoặc bước chọn Organization.
 
 ### 4.3. Luồng đăng nhập
 
@@ -1239,18 +1239,20 @@ Hiển thị:
 
 ## 15. Data model logic
 
+> **Quy ước MongoDB:** `ObjectId ref X` là tham chiếu Mongoose tới collection X; `UNIQUE INDEX(...)` là compound unique index của MongoDB, không phải SQL constraint. Mọi index/query nghiệp vụ phải bắt đầu bằng `organizationId` trừ collection nền tảng.
+
 ### 15.1. Organization
 
 ```text
 Organization
-- id: UUID
-- code: string UNIQUE toàn nền tảng
+- id: ObjectId
+- code: string; UNIQUE INDEX(code) toàn nền tảng
 - name
 - status: ACTIVE | SUSPENDED | DISABLED
 - timezone: IANA string (default Asia/Ho_Chi_Minh)
 - evidenceRetentionDays: integer
 - payrollSeparationOfDuties: boolean (default false)
-- createdBy: FK User(System Admin)
+- createdBy: ObjectId ref User(System Admin)
 - createdAt, updatedAt
 ```
 
@@ -1258,8 +1260,8 @@ Organization
 
 ```text
 User
-- id: UUID
-- organizationId: FK Organization nullable cho SYSTEM_ADMIN
+- id: ObjectId
+- organizationId: ObjectId ref Organization nullable cho SYSTEM_ADMIN
 - email
 - employeeCode nullable cho SYSTEM_ADMIN
 - passwordHash
@@ -1268,8 +1270,8 @@ User
 - status: ACTIVE | LOCKED | DISABLED
 - mustChangePassword, failedLoginCount, lockedUntil, lastLoginAt
 - createdAt, updatedAt
-- UNIQUE(organizationId, email)
-- UNIQUE(organizationId, employeeCode)
+- UNIQUE INDEX(organizationId, email)
+- UNIQUE INDEX(organizationId, employeeCode)
 
 UserSession
 - id, userId, organizationId nullable
@@ -1281,9 +1283,9 @@ UserSession
 
 ```text
 EmployeeProfile
-- id: UUID
-- organizationId: FK Organization
-- userId: FK User UNIQUE
+- id: ObjectId
+- organizationId: ObjectId ref Organization
+- userId: ObjectId ref User; UNIQUE INDEX(organizationId, userId)
 - employeeCode
 - employmentType: FULL_TIME (MVP)
 - employmentStatus: PROBATION | ACTIVE | ON_LEAVE | RESIGNED | TERMINATED
@@ -1292,7 +1294,7 @@ EmployeeProfile
 - departmentId, positionId, directManagerId, workplaceId
 - joinDate, endDate nullable
 - createdAt, updatedAt
-- UNIQUE(organizationId, employeeCode)
+- UNIQUE INDEX(organizationId, employeeCode)
 ```
 
 ### 15.3. Department và ManagerAssignment
@@ -1302,7 +1304,7 @@ Department
 - id, organizationId
 - code, name, active
 - createdAt, updatedAt
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 
 ManagerAssignment
 - id, organizationId, departmentId, managerId
@@ -1319,7 +1321,7 @@ Workplace
 - allowedRadiusMeters, maximumAccuracyMeters
 - allowNetworkAttendance, allowGpsAttendance, allowSelfieFallback
 - active, createdAt, updatedAt
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 
 AllowedNetwork
 - id, organizationId, workplaceId
@@ -1334,7 +1336,7 @@ ShiftTemplate
 - code, name, startTime, endTime
 - breakMinutes, gracePeriodMinutes, active
 - createdAt, updatedAt
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 
 RecurringSchedule
 - id, organizationId, employeeId, shiftTemplateId
@@ -1345,7 +1347,7 @@ WorkSchedule
 - status: SCHEDULED | CANCELLED | COMPLETED
 - startAt, endAt, breakMinutes, gracePeriodMinutes
 - createdBy, approvedBy, createdAt, updatedAt
-- UNIQUE(organizationId, employeeId, workDate)
+- UNIQUE INDEX(organizationId, employeeId, workDate)
 
 OrganizationCalendar
 - id, organizationId, workingWeekdays
@@ -1355,14 +1357,14 @@ CalendarException
 - id, organizationId, date
 - type: PUBLIC_HOLIDAY | SPECIAL_WORKING_DAY
 - name, createdAt
-- UNIQUE(organizationId, date)
+- UNIQUE INDEX(organizationId, date)
 
 EmployeeDayOverride
 - id, organizationId, employeeId, date
 - type: PAID_LEAVE | UNPAID_LEAVE
 - leaveRequestId (bắt buộc trong MVP — nguồn duy nhất)
 - reason, createdBy, createdAt
-- UNIQUE(organizationId, employeeId, date)
+- UNIQUE INDEX(organizationId, employeeId, date)
 ```
 
 ### 15.5A. LeaveRequest và ApprovalDelegation
@@ -1411,7 +1413,7 @@ AttendanceDay
 - checkInAt, checkOutAt, workingMinutes, lateMinutes, earlyMinutes
 - organizationSnapshot, departmentSnapshot, shiftSnapshot, scheduleSnapshot, employeeSnapshot, workplaceSnapshot
 - createdAt, updatedAt
-- UNIQUE(organizationId, employeeId, workDate)
+- UNIQUE INDEX(organizationId, employeeId, workDate)
 
 AttendanceEvent
 - id, organizationId, attendanceDayId, employeeId
@@ -1421,7 +1423,7 @@ AttendanceEvent
 - publicIp, latitude, longitude, accuracyMeters, distanceFromWorkplaceMeters, address
 - validationStatus: VALID | FLAGGED
 - approvalStatus, evidenceId, userAgent, createdAt
-- UNIQUE(organizationId, attendanceDayId, eventType)
+- UNIQUE INDEX(organizationId, attendanceDayId, eventType)
 ```
 
 ### 15.8. Evidence
@@ -1431,7 +1433,7 @@ Evidence
 - id, organizationId, ownerUserId
 - storageKey, originalFileName, mimeType, sizeBytes, sha256
 - capturedAtClient, retentionUntil, createdAt
-- UNIQUE(organizationId, storageKey)
+- UNIQUE INDEX(organizationId, storageKey)
 ```
 
 Storage key phải namespaced theo Organization; binary không lưu trực tiếp trong DB.
@@ -1446,7 +1448,7 @@ ApprovalRequest
 - status: PENDING | APPROVED | REJECTED | CLARIFICATION_REQUESTED
 - reasonNeedApproval, warning, employeeClarification, rejectionReason, decidedAt
 - createdAt, updatedAt
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 
 ApprovalHistory
 - id, organizationId, approvalRequestId, actorId
@@ -1465,7 +1467,7 @@ AdjustmentRequest
 - managerId, managerComment, reviewedAt
 - appliedByHrId, beforeData, afterData, appliedAt
 - createdAt, updatedAt
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 ```
 
 ### 15.11. OvertimeRequest và OvertimeResult
@@ -1496,12 +1498,12 @@ TimesheetPeriod
 - version
 - openedAt, openedBy, closedAt, closedBy, reopenedAt, reopenedBy, reopenReason
 - createdAt, updatedAt
-- UNIQUE(organizationId, month)
+- UNIQUE INDEX(organizationId, month)
 
 DepartmentTimesheetConfirmation
 - id, organizationId, periodId, departmentId, managerId
 - periodVersion, confirmedAt, summarySnapshot
-- UNIQUE(organizationId, periodId, departmentId, periodVersion)
+- UNIQUE INDEX(organizationId, periodId, departmentId, periodVersion)
 
 TimesheetSummary
 - id, organizationId, periodId, employeeId, periodVersion
@@ -1511,7 +1513,7 @@ TimesheetSummary
 - scheduledWorkDays, scheduledWorkMinutes, actualWorkingDays, actualWorkingMinutes
 - otWorkingDayMinutes, otWeeklyOffMinutes, otPublicHolidayMinutes, totalEligibleOvertimeMinutes
 - finalApprovalStatus, createdAt
-- UNIQUE(organizationId, periodId, employeeId, periodVersion)
+- UNIQUE INDEX(organizationId, periodId, employeeId, periodVersion)
 ```
 
 ### 15.13. AuditLog, SupportAccessGrant và IdempotencyRecord
@@ -1529,7 +1531,7 @@ SupportAccessGrant
 IdempotencyRecord
 - id, organizationId, userId, key, operation, requestHash
 - responseStatus, responseBody, expiresAt, createdAt
-- UNIQUE(organizationId, userId, key)
+- UNIQUE INDEX(organizationId, userId, key)
 ```
 
 ---
@@ -1860,7 +1862,7 @@ Backend thực hiện trong transaction:
 
 1. Xác thực session và Organization ACTIVE.
 2. Suy ra organizationId từ session, kiểm tra tenant/resource scope và idempotency key.
-3. Lock/read AttendanceDay hiện tại.
+3. Đọc AttendanceDay hiện tại và dùng conditional update theo status/version trong MongoDB transaction.
 4. Validate state/action.
 5. Lấy assignment và snapshot config.
 6. Validate network/GPS/file.
@@ -1874,7 +1876,7 @@ Backend thực hiện trong transaction:
 
 ### 18.2. Approval transaction
 
-- Lock ApprovalRequest.
+- Mở MongoDB session/transaction và cập nhật ApprovalRequest bằng điều kiện status/version hiện tại (optimistic concurrency).
 - Kiểm tra department manager và trạng thái hiện tại.
 - Cập nhật request/event/day.
 - Thêm ApprovalHistory và AuditLog.
@@ -1882,21 +1884,21 @@ Backend thực hiện trong transaction:
 
 ### 18.3. Overtime calculation
 
-- Lock OvertimeRequest/AttendanceDay/TimesheetPeriod cùng tenant.
+- Mở MongoDB session/transaction; đọc OvertimeRequest/AttendanceDay/TimesheetPeriod cùng tenant với version guards.
 - Backend lấy CalendarException và WorkSchedule snapshot để tự phân loại.
 - Tính intersection approved/actual, trừ scheduled interval, chống đếm trùng từng phút.
 - Khi chốt kỳ, tính lại FINAL; thay đổi calendar/schedule/OT tăng version và vô hiệu confirmation.
 
 ### 18.4. Adjustment transaction
 
-- Lock AdjustmentRequest, AttendanceDay và TimesheetPeriod cùng Organization.
+- Mở MongoDB session/transaction; cập nhật AdjustmentRequest, AttendanceDay và TimesheetPeriod cùng Organization bằng version guards.
 - Kiểm tra APPROVED, department scope, period chưa CLOSED và version hiện tại.
 - Lưu beforeData, áp dụng afterData, tính lại ngày công và tăng period version.
 - Vô hiệu xác nhận phòng ban version cũ; ghi audit và commit cùng transaction.
 
 ### 18.5. Chốt kỳ transaction
 
-- Lock `TimesheetPeriod` và kiểm tra status/version hiện tại.
+- Mở MongoDB session/transaction; atomically kiểm tra `TimesheetPeriod.status/version` bằng conditional update.
 - Kiểm tra lại toàn bộ blocker và xác nhận phòng ban.
 - Tạo `TimesheetSummary` snapshot cho từng nhân viên.
 - Chuyển kỳ sang `CLOSED`, lưu người/thời gian chốt.
@@ -1922,7 +1924,7 @@ Backend thực hiện trong transaction:
 - Cookie auth có `HttpOnly`, `Secure` khi HTTPS, `SameSite` phù hợp.
 - Chống CSRF nếu dùng cookie session.
 - Validate và sanitize input ở backend.
-- ORM/prepared statements để chống SQL injection.
+- Mongoose query filters, DTO allowlist và chặn MongoDB operator injection (`$where`, `$regex` tùy ý, object thay scalar); không đưa raw client object vào query.
 - Escape output; không render HTML user nhập.
 - Rate limit login và endpoint nhạy cảm.
 - CORS chỉ cho origin được cấu hình.
@@ -1979,7 +1981,7 @@ Backend thực hiện trong transaction:
 
 - TypeScript strict nếu dùng TypeScript.
 - Tách UI, business service và persistence.
-- Database migration có version.
+- MongoDB schema/index migration có version và chạy idempotent.
 - API error code ổn định.
 - Không đưa Simulation Sandbox vào production build.
 - Có seed script tạo dữ liệu demo, không hard-code trong source UI.
@@ -2150,14 +2152,14 @@ Mọi trạng thái lỗi phải có hành động phù hợp: thử lại, cấ
 
 ### 22.4. Security tests tối thiểu
 
-- SQL injection strings ở login/search không vượt validation/query binding.
+- NoSQL/operator injection payload ở login/search (`$ne`, `$gt`, `$where`, object thay scalar) bị DTO validation/query allowlist từ chối.
 - User A không đọc được attendance/evidence của User B bằng cách đổi ID.
 - Employee không tự sửa role trong payload profile.
 - Token/session hết hạn trả 401.
 - File giả MIME bị backend từ chối.
 - Path traversal trong file name không ảnh hưởng storage path.
 - Login rate limiting hoạt động.
-- HR-A không đọc/sửa được resource B bằng UUID thật.
+- HR-A không đọc/sửa được resource B bằng ObjectId thật.
 - Manager không vượt managedDepartmentIds.
 - Evidence/cache/export/background job không lẫn tenant.
 - System Admin không gọi được close/reopen/approval API; support grant hết hạn bị chặn.
@@ -2185,7 +2187,7 @@ Backend
 ├── Audit & Idempotency
 └── Tenant-scoped jobs/cache/storage
                              │
-       PostgreSQL + Private Object Storage
+       MongoDB Replica Set + Private Object Storage
 ```
 
 ### 23.1. Ranh giới trách nhiệm
@@ -2196,15 +2198,46 @@ Backend
 
 **Data isolation:** repository/service nhận tenant context bắt buộc; database constraints/indexes, object storage, cache và background jobs được namespaced theo Organization. System Admin dùng platform namespace và support grant, không giả mạo tenant session.
 
-### 23.2. Khoảng cách từ prototype đến sản phẩm CoreStaff
+### 23.2. Technology stack và MongoDB contract
+
+| Layer | Công nghệ chốt | Phạm vi |
+|---|---|---|
+| Backend | NestJS + TypeScript + Mongoose | REST API, Swagger/OpenAPI, DTO validation, RBAC/tenant guards |
+| Database | MongoDB replica set | Transaction, compound unique indexes và snapshot collections |
+| Web | ReactJS + TypeScript + Vite | System Admin, HR/Payroll, Department Manager và Employee web responsive |
+| Mobile | React Native + Expo + TypeScript 【SHOULD】 | Employee hero flow: login, attendance, request, history, Payslip |
+| Testing | Jest/Supertest, Vitest, Playwright | Unit, integration/API và E2E |
+| Infrastructure | MongoDB Atlas (replica set managed) + HTTPS hosting | Local/CI/deployment có transaction thật (không dùng Docker) |
+| File storage | Private local hoặc S3-compatible | Selfie, hợp đồng và tài liệu private |
+
+#### Quy tắc MongoDB bắt buộc
+
+- MongoDB phải chạy replica set kể cả local/CI; không chấp nhận standalone cho các flow cần transaction.
+- Dùng collection riêng cho dữ liệu tăng không giới hạn: contracts, attendance events, requests, snapshots, payroll runs, payslips và audit logs; không nhúng các mảng lịch sử này vào EmployeeProfile.
+- Mọi document nghiệp vụ có `organizationId`; query repository bắt buộc lọc `_id + organizationId` trong cùng điều kiện, không query `_id` rồi kiểm tra tenant sau.
+- Compound unique index phải tenant-scoped, ví dụ `{organizationId, employeeCode}`, `{organizationId, employeeId, workDate}`, `{organizationId, month}`.
+- API response map `_id` thành `id`; không trả `_id`, `__v` hoặc Mongoose document nội bộ cho ReactJS/React Native.
+- Tiền VND lưu integer (`baseSalaryVnd`, `grossIncomeVnd`, `netSalaryVnd`); không dùng JavaScript floating point cho giá trị tiền. Tỷ lệ có thể dùng integer basis points hoặc Decimal128 trung gian rồi làm tròn `ROUND_HALF_UP_TO_VND`.
+- PayrollInputSnapshot, TimesheetSummary và Payslip là document bất biến theo version; cập nhật tạo version mới thay vì sửa âm thầm.
+- Transaction bắt buộc cho check-in/out, leave apply xuyên kỳ, adjustment apply, timesheet close, snapshot generation, payroll lock và payslip release.
+- Cache key, queue payload, storage key và background job đều mang `organizationId`.
+
+#### Phân chia frontend
+
+- ReactJS là frontend MVP bắt buộc cho toàn bộ role và là bề mặt quản trị chính.
+- React Native là SHOULD, chỉ triển khai Employee app; không xây HR/System Admin/Payroll management trên mobile trong MVP.
+- Web/mobile dùng chung API contract, enum, error code và pure validation types; không chia sẻ DOM/native UI component.
+- Mobile lưu token/session bằng SecureStore; không lưu refresh token trong AsyncStorage.
+
+### 23.3. Khoảng cách từ prototype đến sản phẩm CoreStaff
 
 | Prototype/mock hiện tại | Sản phẩm CoreStaff cần hiện thực |
 |---|---|
-| `localStorage` làm mock server | Database + API thật |
+| `localStorage` làm mock server | NestJS API + MongoDB replica set thật |
 | Employee và Department Manager store tách rời | Cùng domain/service/database |
 | Login dùng mock account/localStorage | Auth backend + password hash + session an toàn |
-| User/role/kịch bản hard-code | Bảng User + RBAC + assignment + seed script |
-| Shift/workplace hard-code | System Admin CRUD + database |
+| User/role/kịch bản hard-code | Collections User/EmployeeProfile + RBAC + assignment + seed script |
+| Shift/workplace hard-code | HR CRUD + MongoDB collections/indexes |
 | Giờ “server” dùng `new Date()` trên client | Backend/database timestamp |
 | Ảnh Unsplash fallback | Upload ảnh thật; fallback chỉ dùng seed/demo riêng |
 | Harness/SimulationSandbox còn trong source | Không import vào production entry; chỉ giữ như tài liệu dev nếu cần |
@@ -2249,7 +2282,7 @@ System Admin tạo Organization A/B + HR đầu tiên
 → HR tính/review/khóa Payroll gồm gross, OT, BHXH/BHYT/BHTN và PIT
 → Employee xem Payslip và đối chiếu Net Salary
 → mở lại timesheet làm snapshot STALE; HR regenerate/recalculate có audit
-→ HR-A dùng UUID thật của B nhưng nhận 404
+→ HR-A dùng ObjectId thật của B nhưng nhận 404
 → System Admin xem health/audit nhưng không xem dữ liệu lương tenant
 ```
 
@@ -2260,7 +2293,7 @@ System Admin tạo Organization A/B + HR đầu tiên
 ### Phase 1 — Foundation
 
 - Khởi tạo frontend/backend/database.
-- Database migrations.
+- MongoDB schema/index bootstrap và migration scripts.
 - Auth login/logout/me/change password.
 - User + RBAC + protected routes.
 - Seed System Admin.
@@ -2312,7 +2345,9 @@ System Admin tạo Organization A/B + HR đầu tiên
 
 ## 26. Definition of Done cho MVP
 
-- [ ] Có migration và seed chạy được từ database rỗng.
+- [ ] MongoDB replica set khởi động được từ môi trường rỗng; schema/index bootstrap, migration và seed chạy thành công.
+- [ ] Compound indexes tenant-scoped được kiểm tra; không có query nghiệp vụ chỉ lọc `_id` thiếu `organizationId`.
+- [ ] Transaction integration tests chạy trên replica set thật, không mock transaction.
 - [ ] Có login/logout/change password thật.
 - [ ] Password được hash; không có credential production hard-code.
 - [ ] Có RBAC, resource scope và tenant context backend; protected routes frontend.
@@ -2344,7 +2379,9 @@ System Admin tạo Organization A/B + HR đầu tiên
 - [ ] Evidence private và kiểm tra authorization.
 - [ ] Có loading/empty/error/permission states chính.
 - [ ] Unit và integration test cho business rules trọng yếu.
-- [ ] Build production thành công.
+- [ ] ReactJS production build thành công và toàn bộ role dùng được trên web.
+- [ ] React Native Employee hero flow build được nếu thực hiện SHOULD; không chặn nghiệm thu web MVP.
+- [ ] API DTO không rò `_id`, `__v`; mọi tiền VND dùng integer và reconcile đúng.
 - [ ] README có hướng dẫn setup, env, migration, seed, run và tài khoản demo.
 - [ ] Có video hoặc kịch bản demo end-to-end nếu môn học yêu cầu.
 
@@ -2354,7 +2391,7 @@ System Admin tạo Organization A/B + HR đầu tiên
 
 | Mã | Câu hỏi | Mặc định đề xuất |
 |---|---|---|
-| OQ-01 | Stack? | **RESOLVED 12/09/2026:** NestJS + PostgreSQL |
+| OQ-01 | Stack? | **RESOLVED 12/09/2026:** NestJS + MongoDB (replica set) + ReactJS; React Native Employee app = SHOULD |
 | OQ-02 | Xác định tenant lúc login? | **RESOLVED 12/09/2026:** organizationCode + identifier + password; platform login riêng |
 | OQ-02A | Approval delegation? | **RESOLVED 12/09/2026:** active ApprovalDelegation trước, fallback HR queue chung |
 | OQ-03 | Kiến trúc tenant? | Shared schema có organizationId; test isolation bắt buộc |
@@ -2542,7 +2579,7 @@ OrganizationAllowance
 - code, name, amount
 - taxable, insuranceBased, prorated
 - effectiveFrom, effectiveTo, version, active
-- UNIQUE(organizationId, code)
+- UNIQUE INDEX(organizationId, code)
 ```
 
 ## 30D. Salary, Insurance và PIT 【MVP】
@@ -2714,6 +2751,7 @@ Organization & Tenant Isolation
 + Attendance, Leave, Approval & OT
 + Labor Compliance & Timesheet Closing
 + Payroll Snapshot, Insurance, PIT & Payslip
++ NestJS, MongoDB Replica Set, ReactJS & React Native Employee Extension
 + Audit & Policy Versioning
 ```
 

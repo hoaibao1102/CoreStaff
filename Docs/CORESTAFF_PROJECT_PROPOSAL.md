@@ -104,7 +104,7 @@ CoreStaff giải quyết toàn bộ vòng đời từ lúc nhân viên chấm c�
 - Tổng hợp dữ liệu theo tháng và thực hiện chốt/khóa kỳ công.
 - Bảo đảm dữ liệu đã chốt không bị thay đổi tùy ý.
 - Lưu audit log cho các thao tác quan trọng.
-- Tạo một sản phẩm responsive có thể trình diễn trên điện thoại, tablet và desktop.
+- ReactJS responsive là Web MVP cho toàn bộ role; React Native là SHOULD, chỉ phục vụ Employee hero flow.
 - Chỉ hỗ trợ Full-time giờ hành chính; HR cấu hình ca và giờ nghỉ, không hard-code 08:00–17:00.
 - Tự phân loại OT, kiểm soát giới hạn giờ theo policy và tính lương từ snapshot bất biến.
 
@@ -491,13 +491,14 @@ Employee gửi OT không chọn loại
 
 | Layer | Suggested Technology |
 |---|---|
-| Frontend | React + TypeScript + Vite + responsive CSS/Tailwind CSS |
-| Backend | Node.js with NestJS/Express hoặc Spring Boot |
-| Database | PostgreSQL |
-| Authentication | HttpOnly cookie session hoặc access/refresh token có rotation |
-| File storage | Private local storage cho demo; có abstraction để chuyển sang S3-compatible storage |
-| Testing | Unit test, integration/API test và end-to-end test |
-| Deployment | Docker + HTTPS hosting |
+| Web MVP | ReactJS + TypeScript + Vite + responsive CSS/Tailwind CSS |
+| Mobile 【SHOULD】 | React Native + Expo + TypeScript; chỉ Employee hero flow |
+| Backend | NestJS + TypeScript + Mongoose + Swagger/OpenAPI |
+| Database | MongoDB replica set; transaction và compound indexes tenant-scoped |
+| Authentication | HttpOnly cookie cho web; SecureStore cho mobile; refresh/session rotation |
+| File storage | Private local cho demo hoặc S3-compatible storage |
+| Testing | Jest/Supertest, Vitest, Playwright; unit, integration/API và E2E |
+| Deployment | MongoDB Atlas (replica set) + HTTPS hosting; không dùng Docker |
 
 ---
 

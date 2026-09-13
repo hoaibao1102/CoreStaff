@@ -30,6 +30,17 @@ flowchart LR
 
   LAW -->|Versioned legal references and effective rules| TL
   TL -->|Compliance calculation and traceability| LAW
+
+  subgraph TECH["Technology Platform"]
+    WEB[ReactJS Web — MVP]
+    MOBILE[React Native Employee App — SHOULD]
+    API[NestJS REST API]
+    DB[(MongoDB Replica Set)]
+  end
+
+  WEB --> API
+  MOBILE --> API
+  API --> DB
 ```
 
 ## Luồng dữ liệu theo actor

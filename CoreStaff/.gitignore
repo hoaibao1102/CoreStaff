@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+.idea/
+.vscode/
+Apps/mobile/.expo/
+Apps/mobile/android/
+Apps/mobile/ios/
+
+# Never commit real credentials — .env files are local-only, see .env.example
