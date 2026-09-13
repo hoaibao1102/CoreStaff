@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl, resolveApiBase } from './config/api';
 
 interface HealthResponse {
   status: string;
@@ -10,15 +11,30 @@ interface HealthResponse {
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [apiSource, setApiSource] = useState<'remote' | 'local' | null>(null);
+  const [apiBase, setApiBase] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/healthz')
-      .then((res) => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const resolved = await resolveApiBase();
+        if (cancelled) return;
+        setApiSource(resolved.source);
+        setApiBase(resolved.base);
+        const res = await fetch(apiUrl(resolved.base, '/api/healthz'));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<HealthResponse>;
-      })
-      .then(setHealth)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+        const body = (await res.json()) as HealthResponse;
+        if (!cancelled) setHealth(body);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -42,6 +58,11 @@ export default function App() {
             <dd>{health.mongo}</dd>
             <dt>Timezone</dt>
             <dd>{health.timezone}</dd>
+            <dt>API</dt>
+            <dd>
+              {apiSource === 'local' ? 'local fallback' : 'remote'}{' '}
+              <span className="muted">({apiBase})</span>
+            </dd>
           </dl>
         )}
       </section>
