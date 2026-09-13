@@ -35,7 +35,8 @@ export function resolveEnv(): Env {
     mongodbUri,
     mongodbSourceKey,
     port: Number(process.env.PORT ?? 3000),
-    tz: process.env.TZ ?? 'Asia/Ho_Chi_Minh',
+    // APP_TZ: Vercel (and some hosts) reserve TZ. Local .env may still use TZ.
+    tz: process.env.APP_TZ ?? process.env.TZ ?? 'Asia/Ho_Chi_Minh',
   };
 }
 
