@@ -65,8 +65,8 @@ Mở `Apps/api/.env` và điền:
 | Biến | Bắt buộc? | Ý nghĩa |
 |---|---|---|
 | `MONGODB_URI` | Có (để nối DB) | Connection string Atlas. Tooling không in giá trị này. |
-| `PORT` | Không | Mặc định `3000` |
-| `TZ` | Không | Mặc định `Asia/Ho_Chi_Minh` |
+| `PORT` | Không (local) | Mặc định `3000`. **Không** set trên Vercel (reserved). |
+| `APP_TZ` | Không | Mặc định `Asia/Ho_Chi_Minh`. Dùng `APP_TZ`, **không** dùng `TZ` (Vercel reserved). |
 | `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | Chưa dùng | Dành cho bootstrap System Admin ở task sau |
 
 `Apps/web/.env` (`VITE_API_URL`) chưa được web đọc — Vite proxy `/api` tới `http://localhost:3000`.
@@ -151,6 +151,21 @@ CoreStaff/
     ├── web/                  # ReactJS + Vite
     └── mobile/               # Expo Employee app (standalone package)
 ```
+
+## Env trên Vercel
+
+Vercel cấm một số tên biến hệ thống. Map như sau:
+
+| Local / `.env.example` | Trên Vercel | Ghi chú |
+|---|---|---|
+| `MONGODB_URI` | `MONGODB_URI` | Secret |
+| `APP_TZ` | `APP_TZ=Asia/Ho_Chi_Minh` | **Không** tạo key `TZ` |
+| `PORT` | *không thêm* | Host tự gán `PORT` |
+| `PLATFORM_ADMIN_*` | chỉ khi đã dùng bootstrap | Secret |
+
+Local `Apps/api/.env`: đổi dòng `TZ=...` thành `APP_TZ=Asia/Ho_Chi_Minh` (code vẫn fallback `TZ` nếu quên đổi).
+
+Web trên Vercel chỉ cần `VITE_API_URL` trỏ tới API đã deploy. NestJS API thường không host trên Vercel (cần process dài + Mongo); platform deploy API theo D31 là HTTPS hosting riêng.
 
 ## Ghi chú
 
