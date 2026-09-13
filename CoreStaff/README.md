@@ -165,7 +165,21 @@ Vercel cấm một số tên biến hệ thống. Map như sau:
 
 Local `Apps/api/.env`: đổi dòng `TZ=...` thành `APP_TZ=Asia/Ho_Chi_Minh` (code vẫn fallback `TZ` nếu quên đổi).
 
-Web trên Vercel chỉ cần `VITE_API_URL` trỏ tới API đã deploy. NestJS API thường không host trên Vercel (cần process dài + Mongo); platform deploy API theo D31 là HTTPS hosting riêng.
+### API trên Vercel (serverless)
+
+Vercel không chạy `app.listen()`. Entry là `Apps/api/api/index.js` → `dist/vercel.js` (không bind port).
+
+Trong project Vercel (BE):
+
+1. **Root Directory** = `CoreStaff/Apps/api`
+2. Build Command = `npm run build` (đã ghi trong `vercel.json`)
+3. Env: `MONGODB_URI`, `APP_TZ` — **không** set `PORT` / `TZ`
+4. Tắt Deployment Protection nếu cần gọi public `healthz`
+5. Push code adapter rồi Redeploy Production (**không** dùng Build Cache)
+
+Sau deploy: `GET https://<domain>/api/healthz` phải trả JSON `status: ok`.
+
+Web trên Vercel: project riêng, Root Directory `CoreStaff/Apps/web`, env `VITE_API_URL` trỏ domain API.
 
 ## Ghi chú
 
