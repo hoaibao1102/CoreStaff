@@ -37,6 +37,11 @@ body {
   margin-top: 0;
 }
 
+.muted {
+  color: #9aabc0;
+  font-weight: 400;
+}
+
 .badge {
   color: #b3261e;
 }
