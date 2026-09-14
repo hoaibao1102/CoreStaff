@@ -13,7 +13,7 @@
     "test:watch": "jest --watch",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
     "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
-    "seed": "ts-node-script src/database/seed/seed.ts"
+    "seed": "ts-node-script src/database/seed/seed.ts",
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
