@@ -12,7 +12,8 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
-    "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts"
+    "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
+    "seed": "ts-node-script src/database/seed/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -23,6 +24,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
+    "bcryptjs": "^3.0.0",
     "mongoose": "^8.9.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
