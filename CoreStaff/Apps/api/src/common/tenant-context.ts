@@ -1,4 +1,4 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { createParamDecorator, ExecutionContext, ForbiddenException } from '@nestjs/common';
 
 /**
  * Request-scoped auth context attached by AuthGuard after session resolution.
@@ -32,3 +32,13 @@ export const CurrentUser = createParamDecorator(
 		return req.user as SessionUser | undefined;
 	},
 );
+
+/**
+ * Tenant-scoped HR routes (Department/Position/EmployeeProfile, ...) have no
+ * meaning for a platform-local SYSTEM_ADMIN session (`organizationId: null`).
+ * Narrow `@Tenant()`'s result before it reaches a service.
+ */
+export function requireOrganizationId(organizationId: string | null): string {
+	if (!organizationId) throw new ForbiddenException('TENANT_CONTEXT_REQUIRED');
+	return organizationId;
+}

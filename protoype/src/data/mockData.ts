@@ -9,6 +9,7 @@ import {
   OrganizationStructure,
   ShiftTemplate,
   Workplace,
+  DepartmentTeamMember,
 } from '../types';
 
 export const CURRENT_EMPLOYEE: EmployeeProfile = {
@@ -21,6 +22,20 @@ export const CURRENT_EMPLOYEE: EmployeeProfile = {
   shift: 'Ca hành chính',
   shiftHours: '08:00 – 17:00',
   manager: 'Lê Hoàng Hải (Trưởng phòng Kinh doanh)',
+  defaultMethod: 'NETWORK',
+};
+
+/** Profile shown on the DEPARTMENT_MANAGER's own "Chấm công của tôi" tab — SRS §8 (same account checks in too). */
+export const MANAGER_EMPLOYEE: EmployeeProfile = {
+  name: 'Lê Hoàng Hải',
+  code: 'TVS-0102',
+  department: 'Phòng Kinh doanh',
+  title: 'Trưởng phòng Kinh doanh',
+  workplace: 'Văn phòng TVS Quận 8',
+  workplaceAddress: '123 đường mẫu, Quận 8, TP.HCM',
+  shift: 'Ca hành chính',
+  shiftHours: '08:00 – 17:00',
+  manager: 'Phạm Thị Thu Hà (HR)',
   defaultMethod: 'NETWORK',
 };
 
@@ -512,6 +527,19 @@ export const MOCK_APPROVER_REQUESTS: ApproverRequest[] = [
       },
     ],
   },
+];
+
+/**
+ * Department roster for the DEPARTMENT_MANAGER team view — SRS use case
+ * DEPT_EMPLOYEE/DEPT_ATTENDANCE. Manager account usr-approver-b (Lê Hoàng Hải)
+ * is scoped to Phòng Kinh doanh, matching MOCK_ACCOUNTS.
+ */
+export const MOCK_TEAM_MEMBERS: DepartmentTeamMember[] = [
+  { id: 'tm-1', name: 'Nguyễn Văn An', code: 'TVS-0248', title: 'Chuyên viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'CHECKED_IN', checkInTime: '08:15', approvalStatus: 'PENDING' },
+  { id: 'tm-2', name: 'Võ Thị Kim Chi', code: 'TVS-0255', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'COMPLETED', checkInTime: '07:58', checkOutTime: '17:05', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-3', name: 'Bùi Anh Tuấn', code: 'TVS-0261', title: 'Trưởng nhóm Kinh doanh', department: 'Phòng Kinh doanh', status: 'LATE', checkInTime: '08:42', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-4', name: 'Hoàng Thu Trang', code: 'TVS-0270', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'NOT_CHECKED_IN', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-5', name: 'Đỗ Minh Quân', code: 'TVS-0288', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'HOLIDAY', approvalStatus: 'NOT_REQUIRED' },
 ];
 
 export const FRAME_METADATA_LIST: FrameMetadata[] = [
