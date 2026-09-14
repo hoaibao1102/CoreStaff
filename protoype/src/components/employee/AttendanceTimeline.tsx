@@ -21,7 +21,7 @@ export const AttendanceTimeline: React.FC<AttendanceTimelineProps> = ({
   return (
     <div
       id="attendance-timeline"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] space-y-4"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm space-y-4"
     >
       <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
         <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider">
@@ -38,7 +38,7 @@ export const AttendanceTimeline: React.FC<AttendanceTimelineProps> = ({
               checkIn
                 ? 'bg-secondary border-surface-container-lowest text-on-secondary'
                 : 'bg-surface-variant border-outline-variant text-on-surface-variant'
-            } shadow-sm`}
+            } shadow-card-sm`}
           >
             {checkIn ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3 h-3" />}
           </div>
@@ -82,7 +82,7 @@ export const AttendanceTimeline: React.FC<AttendanceTimelineProps> = ({
               checkOut
                 ? 'bg-secondary border-surface-container-lowest text-on-secondary'
                 : 'bg-surface-variant border-outline-variant text-on-surface-variant'
-            } shadow-sm`}
+            } shadow-card-sm`}
           >
             {checkOut ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3 h-3" />}
           </div>

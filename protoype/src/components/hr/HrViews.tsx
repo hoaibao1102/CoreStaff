@@ -99,17 +99,17 @@ export const HrDashboard: React.FC<HrDashboardProps> = ({ periods, overview, onO
       {/* Lean structure overview (FR-HRCFG summary — config CRUD để phase sau) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
-          { label: 'Phòng ban', value: overview?.departments.length ?? '—', icon: Layers, tone: 'text-blue-600 bg-blue-50' },
-          { label: 'Nơi làm việc', value: overview?.workplaces.length ?? '—', icon: MapPin, tone: 'text-emerald-600 bg-emerald-50' },
-          { label: 'Ca làm việc', value: shiftCount, icon: Timer, tone: 'text-violet-600 bg-violet-50', onOpen: onOpenShifts },
-          { label: 'Nhân viên', value: overview?.employeeCount ?? '—', icon: Users, tone: 'text-amber-600 bg-amber-50' },
+          { label: 'Phòng ban', value: overview?.departments.length ?? '—', icon: Layers, tone: 'text-primary bg-primary-fixed' },
+          { label: 'Nơi làm việc', value: overview?.workplaces.length ?? '—', icon: MapPin, tone: 'text-on-success-container bg-success-container' },
+          { label: 'Ca làm việc', value: shiftCount, icon: Timer, tone: 'text-on-primary-container bg-primary-container/50', onOpen: onOpenShifts },
+          { label: 'Nhân viên', value: overview?.employeeCount ?? '—', icon: Users, tone: 'text-on-surface-variant bg-surface-variant' },
         ].map((kpi) => (
           <article key={kpi.label} className="relative bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
             <div className={`mb-3 grid h-9 w-9 place-items-center rounded-lg ${kpi.tone}`}>
               <kpi.icon className="h-4.5 w-4.5" />
             </div>
             <p className="text-xs text-on-surface-variant">{kpi.label}</p>
-            <p className="mt-0.5 text-2xl font-black text-on-surface">{kpi.value}</p>
+            <p className="mt-0.5 text-2xl font-bold text-on-surface">{kpi.value}</p>
             {kpi.onOpen && (
               <button
                 id="btn-hr-open-shifts"
@@ -513,7 +513,7 @@ export const HrPeriodDetail: React.FC<HrPeriodDetailProps> = ({
 /* H03 — ShiftTemplate configuration (SRS §6, FR-HRCFG)                 */
 /* ------------------------------------------------------------------ */
 
-const INPUT_CLS = 'w-full rounded-lg border border-outline bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-slate-900';
+const INPUT_CLS = 'w-full rounded-lg border border-outline bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-primary/40';
 
 interface ShiftForm {
   name: string;
@@ -706,7 +706,7 @@ export const HrShiftConfig: React.FC<HrShiftConfigProps> = ({ shifts, busy, onBa
                     <td className="py-3.5 px-4 text-on-surface-variant">{s.gracePeriodMinutes}′</td>
                     <td className="py-3.5 px-4">
                       <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                        s.active ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-variant text-on-surface-variant'
+                        s.active ? 'bg-success-container text-on-success-container' : 'bg-surface-variant text-on-surface-variant'
                       }`}>
                         {s.active ? 'Đang dùng' : 'Ngừng kích hoạt'}
                       </span>
@@ -790,7 +790,7 @@ export const HrApp: React.FC<{ initialPeriodId?: string }> = ({ initialPeriodId 
         <div
           role="alert"
           className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold ${
-            flash.kind === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            flash.kind === 'error' ? 'border-error/20 bg-error-container text-on-error-container' : 'border-success/20 bg-success-container text-on-success-container'
           }`}
         >
           {flash.kind === 'error' ? <XCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
