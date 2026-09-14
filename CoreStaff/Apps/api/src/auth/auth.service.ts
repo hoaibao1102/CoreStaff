@@ -1,5 +1,6 @@
 import {
 	Injectable,
+	Inject,
 	BadRequestException,
 	UnauthorizedException,
 	ForbiddenException,
@@ -10,15 +11,19 @@ import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UserDocument } from '../database/schemas/user.schema';
 import { UserSessionDocument } from '../database/schemas/user-session.schema';
-import { UserStatus } from '../database/schemas/enums';
+import { UserStatus, normalizeEmail } from '../database/schemas/enums';
 import { comparePassword, hashPassword } from './strategies/bcrypt.strategy';
 import { generateSessionToken, hashToken } from './strategies/token-strategy';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { PasswordResetTokenDocument } from '../database/schemas/password-reset-token.schema';
+import { ResetMailer, RESET_MAILER } from './strategies/reset-mailer';
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 60 * 1000;
+/** FR-AUTH-05 / SRS §4.8: one-time reset tokens expire after 15 minutes. */
+const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 /** Escape a string for safe embedding in a RegExp (prevents regex injection). */
 function escapeRegex(s: string): string {
@@ -36,6 +41,8 @@ export class AuthService {
 	constructor(
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('UserSession') private readonly sessionModel: Model<UserSessionDocument>,
+		@InjectModel('PasswordResetToken') private readonly resetTokenModel: Model<PasswordResetTokenDocument>,
+		@Inject(RESET_MAILER) private readonly resetMailer: ResetMailer,
 	) {}
 
 	async login(dto: LoginDto): Promise<{
@@ -138,13 +145,77 @@ export class AuthService {
 		return { success: true };
 	}
 
-	/** SHOULD — stub. Real implementation: generate reset token, send email. */
-	async forgotPassword(_email: string): Promise<{ success: true }> {
+	/**
+	 * FR-AUTH-05 — issue a single-use reset token (hashed at rest, 15 min TTL).
+	 * Response is identical whether or not the email exists (SRS §4.8:
+	 * "không tiết lộ email có tồn tại hay không"), and delivery failures are
+	 * swallowed for the same reason.
+	 *
+	 * emailN is unique only WITHIN a tenant (SRS §4.2), so every ACTIVE account
+	 * holding the address gets its own token — the reset link a user receives
+	 * always resolves to exactly one user. Mail failures are swallowed (same
+	 * no-enumeration rule covers no-delivery vs no-account).
+	 */
+	async forgotPassword(email: string): Promise<{ success: true }> {
+		const users = await this.userModel.find({ emailN: normalizeEmail(email), status: UserStatus.ACTIVE }).exec();
+
+		for (const user of users) {
+			const rawToken = generateSessionToken();
+			await this.resetTokenModel.create({
+				userId: user._id,
+				tokenHash: hashToken(rawToken),
+				expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+			});
+			await this.resetMailer.sendResetEmail(user.email, rawToken).catch(() => undefined);
+		}
+
 		return { success: true };
 	}
 
-	/** SHOULD — stub. */
-	async resetPassword(_token: string, _newPassword: string): Promise<{ success: true }> {
+	/**
+	 * FR-AUTH-05 — consume a reset token. Single-use via `findOneAndUpdate`
+	 * atomic claim (usedAt + revokedAt set before any further check), so a
+	 * concurrent double-submit cannot use the token twice. All invalid inputs
+	 * share one code/message: reset tokens must not be an oracle.
+	 * On success: new hash, mustChangePassword cleared, lock counters reset,
+	 * ALL sessions revoked (the caller has proven they can't use their cookie),
+	 * and every outstanding reset token for the user burned.
+	 */
+	async resetPassword(token: string, newPassword: string): Promise<{ success: true }> {
+		const now = new Date();
+		const claimed = await this.resetTokenModel
+			.findOneAndUpdate(
+				{ tokenHash: hashToken(token), usedAt: null, expiresAt: { $gt: now } },
+				{ usedAt: now },
+				{ new: true },
+			)
+			.exec();
+
+		if (!claimed) {
+			throw new UnauthorizedException('AUTH_RESET_TOKEN_INVALID');
+		}
+
+		const user = await this.userModel.findById(claimed.userId).exec();
+		if (!user || user.status !== UserStatus.ACTIVE) {
+			throw new UnauthorizedException('AUTH_RESET_TOKEN_INVALID');
+		}
+
+		// Same policy as the DTO (§4.3), enforced server-side — a reset is not
+		// a bypass around it. Reuse of the current hash is also a policy fail.
+		const weak = newPassword.length < 8 || !/(?=.*[a-zA-Z])(?=.*\d)/.test(newPassword);
+		if (weak || (await comparePassword(newPassword, user.passwordHash))) {
+			throw new BadRequestException('AUTH_PASSWORD_POLICY_FAILED');
+		}
+
+		user.passwordHash = await hashPassword(newPassword);
+		user.mustChangePassword = false;
+		user.failedLoginCount = 0;
+		delete user.lockedUntil;
+		await user.save();
+
+		await this.sessionModel.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: now }).exec();
+		await this.resetTokenModel.updateMany({ userId: user._id, usedAt: null }, { usedAt: now }).exec();
+
 		return { success: true };
 	}
 

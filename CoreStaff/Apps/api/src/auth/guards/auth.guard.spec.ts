@@ -1,5 +1,5 @@
 import { ExecutionContext } from '@nestjs/common';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard, PASSWORD_CHANGE_EXEMPT_KEY } from './auth.guard';
 import { hashToken } from '../strategies/token-strategy';
 
 const RAW = 'a'.repeat(64); // fake 32-byte hex token
@@ -9,6 +9,7 @@ const ORG = 'org-1';
 function makeGuard(opts: {
 	session?: Record<string, unknown> | null;
 	user?: Record<string, unknown> | null;
+	exempt?: boolean;
 }) {
 	const sessionModel = {
 		findOne(filter: Record<string, unknown>) {
@@ -21,7 +22,11 @@ function makeGuard(opts: {
 			return { select: () => ({ lean: async () => opts.user ?? null }) };
 		},
 	};
-	return new AuthGuard(userModel as never, sessionModel as never);
+	// Reflector fake: getAllAndOverride just replays the per-test exemption flag.
+	const reflector = {
+		getAllAndOverride: (_key: string, _sources: unknown[]) => opts.exempt ?? false,
+	};
+	return new AuthGuard(userModel as never, sessionModel as never, reflector as never);
 }
 
 function reqWithCookie(cookie?: string) {
@@ -29,7 +34,12 @@ function reqWithCookie(cookie?: string) {
 }
 
 function ctxFor(req: unknown): ExecutionContext {
-	return { switchToHttp: () => ({ getRequest: () => req }) } as unknown as ExecutionContext;
+	return {
+		switchToHttp: () => ({ getRequest: () => req }),
+		// The Reflector fake ignores these; real handlers/classes are irrelevant here.
+		getHandler: () => ({}),
+		getClass: () => ({}),
+	} as unknown as ExecutionContext;
 }
 
 const future = new Date(Date.now() + 60_000);
@@ -84,5 +94,36 @@ describe('AuthGuard — session + tenant derivation (TASK-016/017)', () => {
 		});
 		const req = reqWithCookie(`sid=${RAW}`);
 		await expect(guard.canActivate(ctxFor(req))).rejects.toMatchObject({ status: 401 });
+	});
+});
+
+describe('AuthGuard — forced password change (AC-AUTH-07 / FR-AUTH-01)', () => {
+	const valid = {
+		session: { tokenHash: TH, userId: 'u1', organizationId: ORG, expiresAt: future, revokedAt: null },
+		user: { _id: 'u1', role: 'HR', organizationId: ORG },
+	};
+
+	it('temp-password user on a non-exempt route → 403 AUTH_PASSWORD_CHANGE_REQUIRED', async () => {
+		const guard = makeGuard({ ...valid, user: { ...valid.user, mustChangePassword: true } });
+		await expect(guard.canActivate(ctxFor(reqWithCookie(`sid=${RAW}`)))).rejects.toMatchObject({
+			status: 403,
+			response: { message: 'AUTH_PASSWORD_CHANGE_REQUIRED' },
+		});
+	});
+
+	it('temp-password user on an @AllowTempPassword route (me/change-password) → allowed', async () => {
+		const guard = makeGuard({ ...valid, user: { ...valid.user, mustChangePassword: true }, exempt: true });
+		const req = reqWithCookie(`sid=${RAW}`);
+		expect(await guard.canActivate(ctxFor(req))).toBe(true);
+		expect(req.user).toMatchObject({ _id: 'u1' });
+	});
+
+	it('mustChangePassword=false → normal access, no 403', async () => {
+		const guard = makeGuard({ ...valid, user: { ...valid.user, mustChangePassword: false } });
+		await expect(guard.canActivate(ctxFor(reqWithCookie(`sid=${RAW}`)))).resolves.toBe(true);
+	});
+
+	it('exemption key name is stable (decorator/guard contract)', () => {
+		expect(PASSWORD_CHANGE_EXEMPT_KEY).toBe('auth:allowedWithTempPassword');
 	});
 });

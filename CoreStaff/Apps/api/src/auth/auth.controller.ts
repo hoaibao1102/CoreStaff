@@ -2,7 +2,7 @@ import { Controller, Post, Get, Body, Req, Res, UseGuards } from '@nestjs/common
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { AuthGuard } from './guards/auth.guard';
+import { AllowTempPassword, AuthGuard } from './guards/auth.guard';
 import { CurrentUser, SessionUser } from '../common/tenant-context';
 import { getCookie } from '../common/parse-cookies';
 import { LoginDto } from './dto/login.dto';
@@ -20,7 +20,7 @@ export class AuthController {
 
 	@Post('login')
 	@ApiOperation({ summary: 'Log in; sets the HttpOnly `sid` session cookie.' })
-	@ApiResponse({ status: 200, description: 'Authenticated. `sessionId` is cookie-only, never in the body.' })
+	@ApiResponse({ status: 201, description: 'Authenticated. `sessionId` is cookie-only, never in the body.' })
 	@ApiResponse({ status: 401, description: 'AUTH_INVALID_CREDENTIALS' })
 	@ApiResponse({ status: 403, description: 'AUTH_ACCOUNT_DISABLED' })
 	@ApiResponse({ status: 423, description: 'AUTH_ACCOUNT_LOCKED' })
@@ -56,6 +56,7 @@ export class AuthController {
 		return { success: true };
 	}
 
+	@AllowTempPassword() // the change-password screen needs the profile to render
 	@UseGuards(AuthGuard)
 	@Get('me')
 	@ApiOperation({ summary: 'Current user profile (requires the `sid` cookie from login).' })
@@ -66,28 +67,34 @@ export class AuthController {
 		return { success: true, data: profile };
 	}
 
+	@AllowTempPassword() // the whole point of the forced-change flow
 	@UseGuards(AuthGuard)
 	@Post('change-password')
 	@ApiOperation({ summary: 'Change own password; revokes all other sessions.' })
 	@ApiResponse({ status: 400, description: 'AUTH_CURRENT_PASSWORD_INVALID | AUTH_PASSWORD_POLICY_FAILED' })
 	async changePassword(
+		@Req() req: Request,
 		@CurrentUser() user: SessionUser,
 		@Body() dto: ChangePasswordDto,
 	): Promise<{ success: true }> {
 		const uid = String(user._id ?? user.id);
-		return this.authService.changePassword(uid, dto);
+		// keepToken = the caller's own sid, so the session in use survives.
+		const keepToken = getCookie(req.headers.cookie, COOKIE_NAME);
+		return this.authService.changePassword(uid, dto, keepToken);
 	}
 
 	@Post('forgot-password')
-	@ApiOperation({ summary: 'Request a password-reset email.', deprecated: true })
-	@ApiResponse({ status: 200, description: 'Always succeeds — no user enumeration. STUB (SRS SHOULD).' })
+	@ApiOperation({ summary: 'Request a password-reset email (FR-AUTH-05).' })
+	@ApiResponse({ status: 201, description: 'Always succeeds — no user enumeration. Token hashed, 15-min TTL.' })
 	async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ success: true }> {
 		return this.authService.forgotPassword(dto.email);
 	}
 
 	@Post('reset-password')
-	@ApiOperation({ summary: 'Consume a reset token.', deprecated: true })
-	@ApiResponse({ status: 200, description: 'STUB (SRS SHOULD) — token issuance not implemented yet.' })
+	@ApiOperation({ summary: 'Consume a one-time reset token; revokes all sessions.' })
+	@ApiResponse({ status: 201, description: 'Password set. mustChangePassword cleared.' })
+	@ApiResponse({ status: 401, description: 'AUTH_RESET_TOKEN_INVALID (expired / used / unknown — one code for all)' })
+	@ApiResponse({ status: 400, description: 'AUTH_PASSWORD_POLICY_FAILED' })
 	async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ success: true }> {
 		return this.authService.resetPassword(dto.token, dto.newPassword);
 	}

@@ -2,6 +2,7 @@ import { hasCompoundIndex } from './indexes';
 import { OrganizationSchema } from './schemas/organization.schema';
 import { UserSchema } from './schemas/user.schema';
 import { UserSessionSchema } from './schemas/user-session.schema';
+import { PasswordResetTokenSchema } from './schemas/password-reset-token.schema';
 import { normalizeEmail, normalizeCode } from './schemas/enums';
 
 describe('mongodb index contracts (TASK-015)', () => {
@@ -21,6 +22,11 @@ describe('mongodb index contracts (TASK-015)', () => {
     expect(hasCompoundIndex(UserSessionSchema, ['tokenHash'], true)).toBe(true);
     expect(hasCompoundIndex(UserSessionSchema, ['userId', 'expiresAt'])).toBe(true);
     expect(hasCompoundIndex(UserSessionSchema, ['organizationId', 'userId'])).toBe(true);
+  });
+
+  it('PasswordResetToken: unique hash + user/expiry lookup (FR-AUTH-05)', () => {
+    expect(hasCompoundIndex(PasswordResetTokenSchema, ['tokenHash'], true)).toBe(true);
+    expect(hasCompoundIndex(PasswordResetTokenSchema, ['userId', 'expiresAt'])).toBe(true);
   });
 });
 
