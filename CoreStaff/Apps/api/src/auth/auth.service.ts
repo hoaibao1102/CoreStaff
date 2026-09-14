@@ -1,4 +1,11 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+	Injectable,
+	BadRequestException,
+	UnauthorizedException,
+	ForbiddenException,
+	HttpException,
+	HttpStatus,
+} from '@nestjs/common';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UserDocument } from '../database/schemas/user.schema';
@@ -50,11 +57,11 @@ export class AuthService {
 		if (!candidate) throw new UnauthorizedException('AUTH_INVALID_CREDENTIALS');
 
 		if (candidate.status === UserStatus.DISABLED) {
-			throw new UnauthorizedException('AUTH_ACCOUNT_DISABLED');
+			throw new ForbiddenException('AUTH_ACCOUNT_DISABLED'); // SRS §17 → 403
 		}
 
 		if (candidate.status === UserStatus.LOCKED && candidate.lockedUntil && candidate.lockedUntil > new Date()) {
-			throw new UnauthorizedException('AUTH_ACCOUNT_LOCKED');
+			throw new HttpException('AUTH_ACCOUNT_LOCKED', HttpStatus.LOCKED); // SRS §17 → 423
 		}
 
 		const valid = await comparePassword(dto.password, candidate.passwordHash);
