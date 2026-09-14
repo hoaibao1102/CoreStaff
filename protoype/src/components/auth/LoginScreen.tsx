@@ -1,5 +1,5 @@
 import React, { FormEvent, useState } from 'react';
-import { ArrowRight, Clock3, Eye, EyeOff, LockKeyhole, MapPin, ShieldCheck } from 'lucide-react';
+import { ArrowRight, LockKeyhole, Eye, EyeOff } from 'lucide-react';
 import { AuthError, authenticateMockUser, MOCK_ACCOUNTS, MockSession } from '../../services/authService';
 import { TimeLockLogo } from '../common/TimeLockLogo';
 
@@ -27,41 +27,120 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoggedIn }) => {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] text-slate-950 lg:grid lg:grid-cols-[1.08fr_.92fr]">
-      <section className="relative hidden overflow-hidden bg-[#071c3b] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_20%,#3b82f6_0,transparent_35%),radial-gradient(circle_at_90%_80%,#14b8a6_0,transparent_32%)]" />
-        <div className="relative">
-          <TimeLockLogo size={46} theme="dark" showTagline />
-        </div>
-        <div className="relative max-w-xl">
-          <span className="mb-5 inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-blue-100">Nền tảng chấm công hiện đại</span>
-          <h1 className="text-5xl font-black leading-[1.08] tracking-[-.04em]">Minh bạch từng phút.<br/><span className="text-[#67e8f9]">Vững chắc mỗi kỳ công.</span></h1>
-          <p className="mt-6 max-w-lg text-base leading-7 text-slate-300">Ghi nhận thời gian bằng Network, GPS hoặc Selfie; quản lý phê duyệt và chuẩn bị chốt công trên cùng một hệ thống.</p>
-          <div className="mt-10 grid grid-cols-3 gap-3">
-            {[['Network & GPS', MapPin], ['Bằng chứng bảo mật', ShieldCheck], ['Giờ server', Clock3]].map(([label, Icon]) => <div key={label as string} className="rounded-2xl border border-white/10 bg-white/[.07] p-4"><Icon className="mb-3 h-5 w-5 text-cyan-300"/><p className="text-xs font-semibold text-slate-100">{label as string}</p></div>)}
+    <main className="min-h-screen bg-[#f4f5f8] flex">
+      {/* Left panel — brand / info strip */}
+      <aside className="hidden lg:flex w-96 flex-col justify-between border-r border-outline-variant/30 bg-surface px-10 py-8">
+        <div>
+          <TimeLockLogo size={40} theme="dark" showTagline />
+          <div className="mt-12 space-y-6">
+            <p className="text-sm font-medium text-on-surface-variant leading-relaxed">
+              Nền tảng ghi nhận thời gian làm việc.<br/>
+              Chuẩn hóa quy trình chấm công cho doanh nghiệp.
+            </p>
+            <div className="space-y-4 mt-10">
+              {[
+                ['Phương thức chấm công', 'GPS · NETWORK · SELFIE', 'Mỗi phương thức có bằng chứng kiểm tra tự động'],
+                ['Chu kỳ chốt công tháng', 'OPEN → CLOSED', 'Xác nhận phòng ban trước khi đóng kỳ'],
+                ['Quản lý multi-tenant', 'M organization riêng', 'System Admin cấu hình hạ tầng'],
+              ].map(([title, subtitle, desc]) => (
+                <div key={title as string} className="flex gap-3">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <div>
+                    <p className="text-xs font-bold text-on-surface">{title}</p>
+                    <p className="text-[11px] text-on-surface-variant">{subtitle}</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <p className="relative text-xs text-slate-500">© 2026 TimeLock · SWP391 Student Project</p>
-      </section>
+        <p className="text-[11px] text-outline">© 2026 TimeLock · SWP391 Student Project</p>
+      </aside>
 
-      <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
+      {/* Right panel — form card */}
+      <section className="flex flex-1 items-center justify-center px-6 py-10 sm:px-12">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center justify-start lg:hidden">
-            <TimeLockLogo size={38} theme="light" showTagline />
+          <div className="lg:hidden mb-8">
+            <TimeLockLogo size={36} theme="light" showTagline />
           </div>
-          <p className="text-sm font-bold text-blue-700">CHÀO MỪNG TRỞ LẠI</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight">Đăng nhập hệ thống</h2>
-          <p className="mt-2 text-sm text-slate-500">Sử dụng email hoặc mã nhân viên được cấp.</p>
-          <form onSubmit={submit} className="mt-8 space-y-5">
-            <label className="block"><span className="mb-2 block text-sm font-bold">Email hoặc mã nhân viên</span><input aria-label="Email hoặc mã nhân viên" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100" placeholder="VD: TVS-0248" /></label>
-            <label className="block"><span className="mb-2 block text-sm font-bold">Mật khẩu</span><span className="relative block"><LockKeyhole className="absolute left-4 top-3.5 h-5 w-5 text-slate-400"/><input aria-label="Mật khẩu" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-12 pr-12 text-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"/><button type="button" aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">{showPassword ? <EyeOff className="h-5 w-5"/> : <Eye className="h-5 w-5"/>}</button></span></label>
-            {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
-            <button disabled={isSubmitting} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0b3b8f] text-sm font-bold text-white shadow-lg shadow-blue-900/15 transition hover:bg-[#092f72] disabled:opacity-60">{isSubmitting ? 'Đang xác thực...' : <>Đăng nhập <ArrowRight className="h-4 w-4"/></>}</button>
+
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold tracking-tight text-on-surface">Đăng nhập hệ thống</h1>
+            <p className="mt-1.5 text-sm text-on-surface-variant">Sử dụng email hoặc mã nhân viên được cấp.</p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-on-surface">Email hoặc mã nhân viên</span>
+              <input
+                aria-label="Email hoặc mã nhân viên"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                autoComplete="username"
+                className="w-full rounded-lg border border-outline-variant bg-surface px-3.5 py-2.5 text-sm outline-none transition placeholder:text-outline hover:border-on-surface/20 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                placeholder="VD: TVS-0248"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-on-surface">Mật khẩu</span>
+              <div className="relative">
+                <LockKeyhole className="absolute left-3.5 top-3 h-4 w-4 text-outline" />
+                <input
+                  aria-label="Mật khẩu"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="w-full rounded-lg border border-outline-variant bg-surface pl-10 pr-11 py-2.5 text-sm outline-none transition placeholder:text-outline hover:border-on-surface/20 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 rounded p-1 text-outline hover:bg-surface-container-low transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                </button>
+              </div>
+            </label>
+
+            {error && (
+              <div role="alert" className="rounded-lg bg-error-container/50 px-3.5 py-2.5 text-sm font-medium text-on-error-container">
+                {error}
+              </div>
+            )}
+
+            <button
+              disabled={isSubmitting}
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-semibold text-white transition hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Đang xác thực...' : (
+                <>Đăng nhập <ArrowRight className="h-4 w-4" /></>
+              )}
+            </button>
           </form>
-          <div className="mt-7 rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><p className="text-xs font-black text-blue-900">TÀI KHOẢN DEMO</p><div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">{MOCK_ACCOUNTS.map((account, index) => <button key={account.id} onClick={() => useAccount(index)} className="rounded-xl border border-blue-100 bg-white p-3 text-left transition hover:border-blue-400 hover:shadow-sm"><span className="block text-[10px] font-black text-blue-700">{account.role}</span><span className="mt-1 block text-xs font-bold text-slate-800">{account.employeeCode}</span></button>)}</div><p className="mt-3 text-[11px] leading-5 text-slate-500">Chọn một vai trò để tự điền thông tin. Đây là dữ liệu mock, không gửi tới máy chủ.</p></div>
+
+          {/* Quick-select accounts */}
+          <div className="mt-8 rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">Tài khoản demo</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {MOCK_ACCOUNTS.map((account, index) => (
+                <button
+                  key={account.id}
+                  onClick={() => useAccount(index)}
+                  className="rounded-lg border border-outline-variant/40 bg-surface px-2.5 py-2 text-left transition hover:border-outline-variant hover:bg-surface-container-low"
+                >
+                  <p className="text-[10px] font-semibold text-on-surface-variant">{account.role}</p>
+                  <p className="mt-0.5 text-xs font-mono font-bold text-on-surface">{account.employeeCode}</p>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-on-surface-variant">Chọn một vai trò để tự điền thông tin. Dữ liệu mock, không gửi tới máy chủ.</p>
+          </div>
         </div>
       </section>
     </main>
   );
 };
-

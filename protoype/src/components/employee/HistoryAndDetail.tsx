@@ -86,7 +86,7 @@ export const HistoryListItem: React.FC<HistoryListItemProps> = ({
     <div
       id={`history-item-${record.id}`}
       onClick={() => onSelect(record)}
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-sm hover:shadow-md transition-all cursor-pointer space-y-2 group"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-card-sm hover:shadow-md transition-all cursor-pointer space-y-2 group"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export const HistoryListItem: React.FC<HistoryListItemProps> = ({
       </div>
 
       {!isHoliday ? (
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-outline-variant bg-surface-container-low rounded-lg p-2.5 text-xs">
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-outline-variant bg-surface-container-low rounded-lg p-2.5 text-xs">
           <div className="flex items-center gap-2">
             <Calendar className="w-3.5 h-3.5 text-primary" />
             <div>
@@ -130,7 +130,7 @@ export const HistoryListItem: React.FC<HistoryListItemProps> = ({
           </div>
         </div>
       ) : (
-        <p className="text-xs text-on-surface-variant italic pt-1 border-t border-outline-variant">
+        <p className="text-xs text-on-surface-variant italic pt-3 border-t border-outline-variant">
           Ngày nghỉ chính thức / Không có ca làm việc.
         </p>
       )}
@@ -176,10 +176,10 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Date & Shift overview */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-2 shadow-sm relative overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-2 shadow-card-sm relative overflow-hidden">
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
         <h3 className="text-sm font-bold text-on-surface pl-1.5">{record.formattedDate}</h3>
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-surface-variant text-on-surface-variant pl-1.5">
+        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-surface-variant text-on-surface-variant pl-1.5">
           <div>
             <span className="text-[10px] block">Ca làm:</span>
             <span className="text-on-surface">{record.shiftName} ({record.shiftHours})</span>
@@ -222,7 +222,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       )}
 
       {/* Detailed Check-in Event Card */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
@@ -245,7 +245,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
                 <MapPin className="w-3.5 h-3.5 text-on-surface-variant shrink-0 mt-0.5" />
                 <span>{record.checkIn.address}</span>
               </p>
-              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-outline-variant/60">
+              <div className="flex items-center justify-between text-[10px] pt-3 border-t border-outline-variant/60">
                 <span>Giờ server: {record.checkIn.serverTime}</span>
                 {record.checkIn.accuracy && <span>Độ chính xác: ±{record.checkIn.accuracy}m</span>}
               </div>
@@ -272,7 +272,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Detailed Check-out Event Card */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
@@ -295,7 +295,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
                 <MapPin className="w-3.5 h-3.5 text-on-surface-variant shrink-0 mt-0.5" />
                 <span>{record.checkOut.address}</span>
               </p>
-              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-outline-variant/60">
+              <div className="flex items-center justify-between text-[10px] pt-3 border-t border-outline-variant/60">
                 <span>Giờ server: {record.checkOut.serverTime}</span>
                 {record.checkOut.accuracy && <span>Độ chính xác: ±{record.checkOut.accuracy}m</span>}
               </div>
@@ -322,7 +322,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Audit Trail Timeline */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">
           Lịch sử xử lý & Ghi nhận
         </h4>
@@ -330,7 +330,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Adjustment Request Placeholder - tagged strictly with Proposed/Phase sau */}
-      <div className="pt-2">
+      <div className="mt-3">
         <button
           id="btn-open-adjustment-request"
           type="button"

@@ -148,7 +148,7 @@ export const NetworkVerificationCard: React.FC<NetworkCardProps> = ({
   return (
     <div
       id="card-network-verification"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] space-y-3"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm space-y-3"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -208,7 +208,7 @@ export const GPSVerificationCard: React.FC<GPSCardProps> = ({
   return (
     <div
       id="card-gps-verification"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] space-y-3"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm space-y-3"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -268,7 +268,7 @@ export const SelfieEvidenceCard: React.FC<SelfieEvidenceCardProps> = ({
   return (
     <div
       id="card-selfie-evidence"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] space-y-3"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm space-y-3"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
