@@ -10,7 +10,10 @@ import { useAttendance } from '../../hooks/useAttendance';
 import { methodLabel } from '../../hooks/useAttendance';
 import { bssidForSource } from '../../harness/useSimulation';
 import { loadActiveWorkplace } from '../../services/adminService';
-import { WorkMode, EmployeeTab, DayAttendance, EmployeeProfile } from '../../types';
+
+import { MOCK_SELFIE_EVIDENCE } from '../../services/evidenceService';
+import { WorkMode, EmployeeTab, DayAttendance } from '../../types';
+
 
 export interface EmployeeScenario { workMode: WorkMode; method: 'GPS' | 'NETWORK' | 'SELFIE'; label: string; }
 interface Props { scenario: EmployeeScenario; profile?: EmployeeProfile; onOpenPolicy: () => void; onOpenAdjustment: () => void; onOpenClarification: () => void; }
@@ -53,135 +56,45 @@ export const EmployeeApp: React.FC<Props> = ({ scenario, profile = CURRENT_EMPLO
     else if (isCheckIn) attendance.checkIn(params()); else attendance.checkOut(params());
   };
 
-  return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4">
-        <EmployeeHeader employee={profile} onOpenPolicy={onOpenPolicy} />
-        <div className="space-y-4 pb-24">
-          {detail ? (
-            <DayDetailView record={detail} onBack={() => setDetail(null)} onOpenAdjustment={onOpenAdjustment} onOpenClarification={onOpenClarification} />
-          ) : tab === 'HISTORY' ? (
-            <>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-700">Lịch sử chấm công</h2>
-                <span className="rounded-lg border border-slate-100 bg-white px-2.5 py-1 text-xs font-medium text-slate-500 shadow-sm">08/2026</span>
-              </div>
-              <HistorySummary records={MOCK_HISTORY_RECORDS} />
-              <HistoryCalendarView records={MOCK_HISTORY_RECORDS} onSelect={setDetail} />
-            </>
-          ) : tab === 'PROFILE' ? (
-            <Profile profile={profile} method={method} />
-          ) : attendance.previewPhotoUrl ? (
-            <SelfiePreview photoUrl={attendance.previewPhotoUrl} mode={attendance.cameraMode} onRetake={attendance.retakeSelfiePhoto} onConfirmUse={() => attendance.confirmSelfiePhoto(params())} isSubmitting={attendance.isSubmitting} />
-          ) : (
-            <>
-              <WorkModeCard workMode={workMode} onChange={setWorkMode} locked={workModeLocked} />
-              <MethodCard method={method} gpsReading={gpsReading} />
-              <ShiftCard shiftName={profile.shift} shiftHours={profile.shiftHours} workplace={profile.workplace} workplaceAddress={profile.workplaceAddress} />
-              <TodayStatusCard
-                status={attendance.todayRecord.status}
-                checkInTime={attendance.todayRecord.checkIn?.time}
-                checkOutTime={attendance.todayRecord.checkOut?.time}
-                totalHoursFormatted={attendance.todayRecord.totalWorkingMinutes ? `${Math.floor(attendance.todayRecord.totalWorkingMinutes / 60)} giờ ${attendance.todayRecord.totalWorkingMinutes % 60} phút` : undefined}
-              />
-              <AttendanceTimeline checkIn={attendance.todayRecord.checkIn} checkOut={attendance.todayRecord.checkOut} />
-              {attendance.lastError && (
-                <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span><strong>{attendance.lastError.code}</strong><br />{attendance.lastError.message}</span>
-                </div>
-              )}
-              {!completed ? (
-                <ActionButton
-                  actionType={isCheckIn ? 'CHECK_IN' : 'CHECK_OUT'}
-                  workMode={workMode}
-                  isEnabled
-                  isLoading={attendance.isSubmitting}
-                  methodBadge={methodLabel(method, 24, matchedNetwork?.ssid ?? matchedNetwork?.name)}
-                  onClick={act}
-                />
-              ) : (
-                <div className="rounded-xl bg-emerald-100 p-4 text-center text-sm font-bold text-emerald-900">Đã hoàn thành ngày công hôm nay</div>
-              )}
-            </>
-          )}
-        </div>
-        <BottomNavigation activeTab={tab} onTabChange={(next) => { setTab(next); setDetail(null); }} pendingCount={attendance.todayRecord.overallApprovalStatus === 'PENDING' ? 1 : 0} />
-        {attendance.isCameraOpen && <CameraCapture mode={attendance.cameraMode} onClose={attendance.closeCamera} onPhotoCaptured={attendance.onPhotoCaptured} />}
+
+  return <main className="mx-auto min-h-[calc(100dvh-49px)] w-full max-w-6xl bg-surface sm:px-5 sm:py-6">
+    <div className="mx-auto flex min-h-[calc(100dvh-49px)] w-full max-w-3xl flex-col overflow-hidden bg-surface-bright sm:min-h-0 sm:rounded-3xl sm:border sm:border-outline-variant sm:shadow-xl">
+      <EmployeeHeader employee={CURRENT_EMPLOYEE} onOpenPolicy={onOpenPolicy} />
+      <div className="flex-1 space-y-4 p-4 sm:p-6">
+        {detail ? <DayDetailView record={detail} onBack={() => setDetail(null)} onOpenAdjustment={onOpenAdjustment} onOpenClarification={onOpenClarification} />
+          : tab === 'HISTORY' ? <><div className="flex items-center justify-between pb-2"><h2 className="text-lg font-bold tracking-tight text-on-surface">Lịch sử chấm công</h2><span className="rounded-lg border bg-surface-container-low px-3 py-1 text-xs font-semibold">{MOCK_HISTORY_RECORDS[0]?.formattedDate?.replace(/,\s*.*$/, '') ?? '08/2026'}</span></div><HistorySummary records={MOCK_HISTORY_RECORDS} /><div className="space-y-2">{MOCK_HISTORY_RECORDS.map(r => <HistoryListItem key={r.id} record={r} onSelect={setDetail} />)}</div></>
+            : tab === 'PROFILE' ? <Profile scenario={scenario} />
+              : attendance.previewEvidence ? <SelfiePreview photoUrl={attendance.previewEvidence.photoUrl} mode={attendance.cameraMode} address={attendance.previewEvidence.location.address} accuracy={attendance.previewEvidence.location.accuracyMeters} onRetake={attendance.retakeSelfiePhoto} onConfirmUse={() => attendance.confirmSelfiePhoto(params())} isSubmitting={attendance.isSubmitting} />
+                : <><div className="rounded-lg border border-primary/20 bg-primary-fixed px-3 py-2 text-xs text-on-primary-fixed"><strong>Kịch bản:</strong> {scenario.label}</div><ShiftCard shiftName={CURRENT_EMPLOYEE.shift} shiftHours={CURRENT_EMPLOYEE.shiftHours} workplace={CURRENT_EMPLOYEE.workplace} workplaceAddress={CURRENT_EMPLOYEE.workplaceAddress} /><TodayStatusCard status={attendance.todayRecord.status} checkInTime={attendance.todayRecord.checkIn?.time} checkOutTime={attendance.todayRecord.checkOut?.time} totalHoursFormatted={attendance.todayRecord.totalWorkingMinutes ? `${Math.floor(attendance.todayRecord.totalWorkingMinutes / 60)} giờ ${attendance.todayRecord.totalWorkingMinutes % 60} phút` : undefined} /><MethodCard scenario={scenario} /><AttendanceTimeline checkIn={attendance.todayRecord.checkIn} checkOut={attendance.todayRecord.checkOut} />{attendance.lastError && <div className="flex gap-2 rounded-lg border border-error/20 bg-error-container p-3 text-xs text-on-error-container"><AlertTriangle className="h-4 w-4 shrink-0" /><span><strong>{attendance.lastError.code}</strong><br />{attendance.lastError.message}</span></div>}{!completed ? <ActionButton actionType={isCheckIn ? 'CHECK_IN' : 'CHECK_OUT'} workMode={scenario.workMode} isEnabled isLoading={attendance.isSubmitting} methodBadge={methodLabel(scenario.method, 24, matchedNetwork?.ssid ?? matchedNetwork?.name)} onClick={act} /> : <div className="rounded-lg bg-success-container p-4 text-center text-sm font-semibold text-on-success-container">Đã hoàn thành ngày công hôm nay</div>}</>}
       </div>
-    </main>
-  );
+      <BottomNavigation activeTab={tab} onTabChange={(next) => { setTab(next); setDetail(null) }} pendingCount={attendance.todayRecord.overallApprovalStatus === 'PENDING' ? 1 : 0} />
+      {attendance.isCameraOpen && <CameraCapture mode={attendance.cameraMode} mockLocation={{ ...MOCK_SELFIE_EVIDENCE[attendance.cameraMode].location, capturedAtClient: new Date().toISOString() }} onClose={attendance.closeCamera} onCapture={attendance.captureSelfie} />}
+    </div>
+  </main>;
 };
 
-const WORK_MODE_OPTIONS: { value: WorkMode; label: string; hint: string; icon: typeof Building2 }[] = [
-  { value: 'IN_OFFICE', label: 'Tại văn phòng', hint: 'Tự nhận diện Wifi/GPS', icon: Building2 },
-  { value: 'OUT_OFFICE', label: 'Ngoài văn phòng', hint: 'Bắt buộc chụp Selfie', icon: MapPin },
-];
-
-/** The one decision an employee makes today: where they're working — everything else (method, camera) follows from it. */
-const WorkModeCard = ({ workMode, onChange, locked }: { workMode: WorkMode; onChange: (m: WorkMode) => void; locked: boolean }) => (
-  <div className="rounded-xl border border-outline-variant bg-white p-4 shadow-sm">
-    <div className="mb-3 flex items-center justify-between">
-      <h3 className="text-sm font-black text-on-surface">Hôm nay bạn làm việc ở đâu?</h3>
-      {locked && <span className="rounded-full bg-surface-container-low px-2 py-0.5 text-[10px] font-semibold text-on-surface-variant">Đã chọn cho hôm nay</span>}
-    </div>
-    <div className="grid grid-cols-2 gap-2">
-      {WORK_MODE_OPTIONS.map((opt) => {
-        const Icon = opt.icon;
-        const active = workMode === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            disabled={locked}
-            onClick={() => onChange(opt.value)}
-            className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors ${
-              active ? 'border-primary bg-primary-container text-on-primary-container' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
-            } ${locked && !active ? 'opacity-40' : ''} ${locked ? 'cursor-default' : 'cursor-pointer'}`}
-          >
-            <Icon className="h-5 w-5" />
-            <span className="text-xs font-bold">{opt.label}</span>
-            <span className="text-[10px]">{opt.hint}</span>
-          </button>
-        );
-      })}
-    </div>
-  </div>
-);
-
-const METHOD_COPY: Record<'GPS' | 'NETWORK' | 'SELFIE', { title: string; detail: string }> = {
-  NETWORK: { title: 'Xác thực bằng Wifi văn phòng', detail: 'Hệ thống tự nhận diện bạn đang kết nối mạng nội bộ công ty.' },
-  GPS: { title: 'Xác thực bằng định vị GPS', detail: 'Hệ thống kiểm tra khoảng cách từ vị trí của bạn tới văn phòng.' },
-  SELFIE: { title: 'Xác thực bằng Selfie + vị trí', detail: 'Bạn cần chụp ảnh selfie kèm vị trí để xác minh vì đang làm ngoài văn phòng.' },
-};
-
-const MethodCard = ({ method, gpsReading }: { method: 'GPS' | 'NETWORK' | 'SELFIE'; gpsReading: { distance: number; accuracy: number } }) => {
-  const Icon = method === 'GPS' ? Radar : method === 'NETWORK' ? Wifi : Camera;
-  const copy = METHOD_COPY[method];
+const MethodCard = ({ scenario }: { scenario: EmployeeScenario }) => {
+  const Icon = scenario.method === 'GPS' ? Radar : scenario.method === 'NETWORK' ? Wifi : Camera;
   return (
-    <div className="rounded-xl border border-outline-variant bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-outline-variant bg-surface p-4">
       <div className="flex items-center gap-3">
-        <span className="rounded-xl bg-blue-100 p-2 text-blue-800"><Icon className="h-5 w-5" /></span>
-        <div>
-          <h3 className="text-sm font-black">{copy.title}</h3>
-          <p className="text-xs text-slate-500">{copy.detail}</p>
-        </div>
+        <span className="rounded-lg bg-primary-fixed-dim p-2 text-on-primary-fixed"><Icon className="h-5 w-5" /></span>
+        <div><h3 className="text-sm font-bold text-on-surface">{scenario.workMode === 'IN_OFFICE' ? 'Tại văn phòng' : 'Làm ngoài văn phòng'}</h3><p className="text-xs text-on-surface-foreground">Phương thức mock cố định: {scenario.method}</p></div>
       </div>
-      {method === 'GPS' && <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-800">GPS hợp lệ · Cách văn phòng {gpsReading.distance}m · Độ chính xác ±{gpsReading.accuracy}m</p>}
+      {scenario.method === 'GPS' && <p className="mt-3 rounded-md bg-success-container px-2 py-1.5 text-xs text-on-success-container">GPS hợp lệ · Cách workplace 24m · Độ chính xác ±16m</p>}
     </div>
   );
 };
-
-const Profile = ({ profile, method }: { profile: EmployeeProfile; method: 'GPS' | 'NETWORK' | 'SELFIE' }) => (
+const Profile = ({ scenario }: { scenario: EmployeeScenario }) => (
   <div className="space-y-4">
-    <h2 className="text-xl font-black">Hồ sơ nhân viên</h2>
-    <div className="rounded-2xl border bg-white p-5 text-sm shadow-sm">
-      <Building2 className="mb-4 h-6 w-6 text-blue-700" />
+    <h2 className="text-lg font-bold tracking-tight text-on-surface">Hồ sơ nhân viên</h2>
+    <div className="rounded-xl border border-outline-variant bg-surface p-4 shadow-card-sm">
+      <Building2 className="mb-4 h-6 w-6 text-primary" />
       <dl className="grid gap-4 sm:grid-cols-2">
-        <div><dt className="text-xs text-slate-500">Họ tên</dt><dd className="font-bold">{profile.name}</dd></div>
-        <div><dt className="text-xs text-slate-500">Mã nhân viên</dt><dd className="font-mono font-bold">{profile.code}</dd></div>
-        <div><dt className="text-xs text-slate-500">Phòng ban</dt><dd>{profile.department}</dd></div>
-        <div><dt className="text-xs text-slate-500">Phương thức hôm nay</dt><dd className="font-bold">{METHOD_COPY[method].title}</dd></div>
+        <div><dt className="text-xs text-on-surface-foreground">Họ tên</dt><dd className="font-bold text-on-surface">{CURRENT_EMPLOYEE.name}</dd></div>
+        <div><dt className="text-xs text-on-surface-foreground">Mã nhân viên</dt><dd className="font-mono font-bold text-on-surface">{CURRENT_EMPLOYEE.code}</dd></div>
+        <div><dt className="text-xs text-on-surface-foreground">Phòng ban</dt><dd className="text-on-surface">{CURRENT_EMPLOYEE.department}</dd></div>
+        <div><dt className="text-xs text-on-surface-foreground">Kịch bản mặc định</dt><dd className="font-bold text-on-surface">{scenario.method}</dd></div>
       </dl>
     </div>
   </div>

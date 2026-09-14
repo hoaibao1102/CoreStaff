@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="clockRingGrad" x1="20%" y1="10%" x2="80%" y2="90%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0b2f64" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="400" rx="48" fill="url(#bgGrad)"/>
+
+  <!-- Logo Graphics Group -->
+  <g transform="translate(110, 45)" filter="url(#subtleShadow)">
+    <!-- Orange Padlock Handle/Curve -->
+    <path d="M 100 60 H 135 C 148 60 156 68 156 80 V 105 C 156 118 148 126 135 126 H 112"
+          stroke="url(#orangeGrad)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Clock Outer Dial -->
+    <circle cx="70" cy="78" r="62" stroke="url(#clockRingGrad)" stroke-width="17" stroke-linecap="round" fill="none"/>
+
+    <!-- Clock Ticks -->
+    <circle cx="70" cy="32" r="4" fill="#2563eb"/>
+    <circle cx="24" cy="78" r="4" fill="#2563eb"/>
+    <circle cx="70" cy="124" r="4" fill="#2563eb"/>
+
+    <!-- Clock Hands (Point to 10:10) -->
+    <line x1="70" y1="78" x2="42" y2="52" stroke="#0b2f64" stroke-width="11" stroke-linecap="round"/>
+    <line x1="70" y1="78" x2="104" y2="48" stroke="#0b2f64" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="70" cy="78" r="8" fill="#0b2f64"/>
+
+    <!-- User Silhouette Foreground -->
+    <circle cx="106" cy="90" r="16" fill="#0b2f64"/>
+    <path d="M 80 148 C 80 126 132 126 132 148 C 132 150 128 154 124 154 H 88 C 84 154 80 150 80 148 Z" fill="#0b2f64"/>
+  </g>
+
+  <!-- Wordmark Text: CoreStaff -->
+  <g transform="translate(200, 290)" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text y="0" font-size="52" font-weight="900" letter-spacing="-1">
+      <tspan fill="#0b2f64">Time</tspan><tspan fill="#1e60f6">L</tspan><tspan fill="#1e60f6" dx="-2">o</tspan><tspan fill="#1e60f6" dx="-2">ck</tspan>
+    </text>
+    <!-- Keyhole inside 'o' -->
+    <circle cx="59" cy="-21" r="4" fill="#ffffff"/>
+    <polygon points="56.5,-21 61.5,-21 62.5,-11 55.5,-11" fill="#ffffff"/>
+  </g>
+
+  <!-- Subtitle Tagline -->
+  <text x="200" y="335" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#475569" letter-spacing="0.5">
+    Chấm công nhân viên • Hỗ trợ HR
+  </text>
+</svg>

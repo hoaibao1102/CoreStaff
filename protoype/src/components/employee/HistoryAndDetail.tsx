@@ -12,15 +12,15 @@ export const HistorySummary: React.FC<HistorySummaryProps> = ({ records }) => {
   const totalDays = records.filter(
     (r) => r.status === 'COMPLETED' || r.status === 'CHECKED_IN' || r.status === 'LATE' || r.status === 'EARLY_LEAVE'
   ).length;
-  const lateCount  = records.filter((r) => r.status === 'LATE'        || (r.lateMinutes  && r.lateMinutes  > 0)).length;
+  const lateCount = records.filter((r) => r.status === 'LATE' || (r.lateMinutes && r.lateMinutes > 0)).length;
   const earlyCount = records.filter((r) => r.status === 'EARLY_LEAVE' || (r.earlyMinutes && r.earlyMinutes > 0)).length;
   const absenceCount = records.filter((r) => r.status === 'HOLIDAY').length;
 
   const statCards = [
-    { label: 'Ngày công', value: totalDays,    unit: '/ 22',  dot: 'bg-emerald-400', valueColor: 'text-slate-700'  },
-    { label: 'Đi trễ',   value: lateCount,    unit: 'lần',   dot: 'bg-red-400',     valueColor: lateCount  > 0 ? 'text-red-500'    : 'text-slate-500' },
-    { label: 'Về sớm',   value: earlyCount,   unit: 'lần',   dot: 'bg-amber-400',   valueColor: earlyCount > 0 ? 'text-amber-600' : 'text-slate-500' },
-    { label: 'Nghỉ',     value: absenceCount, unit: 'ngày',  dot: 'bg-slate-300',   valueColor: 'text-slate-500' },
+    { label: 'Ngày công', value: totalDays, unit: '/ 22', dot: 'bg-emerald-400', valueColor: 'text-slate-700' },
+    { label: 'Đi trễ', value: lateCount, unit: 'lần', dot: 'bg-red-400', valueColor: lateCount > 0 ? 'text-red-500' : 'text-slate-500' },
+    { label: 'Về sớm', value: earlyCount, unit: 'lần', dot: 'bg-amber-400', valueColor: earlyCount > 0 ? 'text-amber-600' : 'text-slate-500' },
+    { label: 'Nghỉ', value: absenceCount, unit: 'ngày', dot: 'bg-slate-300', valueColor: 'text-slate-500' },
   ];
 
   return (
@@ -47,12 +47,12 @@ type StatusKey = string;
 
 // Readable, warm palette — clear status colors
 const STATUS_CELL: Record<string, { bg: string; leftBar: string; dot: string; numText: string; timeText: string; label: string }> = {
-  COMPLETED:   { bg: 'bg-emerald-50',   leftBar: 'border-l-[3px] border-l-emerald-500', dot: 'bg-emerald-500', numText: 'text-slate-800', timeText: 'text-emerald-800', label: 'Hoàn thành' },
-  LATE:        { bg: 'bg-red-50',       leftBar: 'border-l-[3px] border-l-red-500',     dot: 'bg-red-500',     numText: 'text-slate-800', timeText: 'text-red-700',    label: 'Đi trễ'     },
-  EARLY_LEAVE: { bg: 'bg-amber-50',     leftBar: 'border-l-[3px] border-l-amber-500',   dot: 'bg-amber-500',   numText: 'text-slate-800', timeText: 'text-amber-800',  label: 'Về sớm'    },
-  CHECKED_IN:  { bg: 'bg-blue-50',     leftBar: 'border-l-[3px] border-l-blue-500',    dot: 'bg-blue-500',    numText: 'text-slate-800', timeText: 'text-blue-700',   label: 'Đang làm'   },
-  HOLIDAY:     { bg: 'bg-stone-100',    leftBar: 'border-l-[3px] border-l-stone-300',   dot: 'bg-stone-400',   numText: 'text-stone-500', timeText: 'text-stone-400',  label: 'Nghỉ'       },
-  LOCKED:      { bg: 'bg-stone-100',    leftBar: 'border-l-[3px] border-l-stone-300',   dot: 'bg-stone-400',   numText: 'text-stone-500', timeText: 'text-stone-400',  label: 'Khóa'       },
+  COMPLETED: { bg: 'bg-emerald-50', leftBar: 'border-l-[3px] border-l-emerald-500', dot: 'bg-emerald-500', numText: 'text-slate-800', timeText: 'text-emerald-800', label: 'Hoàn thành' },
+  LATE: { bg: 'bg-red-50', leftBar: 'border-l-[3px] border-l-red-500', dot: 'bg-red-500', numText: 'text-slate-800', timeText: 'text-red-700', label: 'Đi trễ' },
+  EARLY_LEAVE: { bg: 'bg-amber-50', leftBar: 'border-l-[3px] border-l-amber-500', dot: 'bg-amber-500', numText: 'text-slate-800', timeText: 'text-amber-800', label: 'Về sớm' },
+  CHECKED_IN: { bg: 'bg-blue-50', leftBar: 'border-l-[3px] border-l-blue-500', dot: 'bg-blue-500', numText: 'text-slate-800', timeText: 'text-blue-700', label: 'Đang làm' },
+  HOLIDAY: { bg: 'bg-stone-100', leftBar: 'border-l-[3px] border-l-stone-300', dot: 'bg-stone-400', numText: 'text-stone-500', timeText: 'text-stone-400', label: 'Nghỉ' },
+  LOCKED: { bg: 'bg-stone-100', leftBar: 'border-l-[3px] border-l-stone-300', dot: 'bg-stone-400', numText: 'text-stone-500', timeText: 'text-stone-400', label: 'Khóa' },
 };
 const EMPTY_STYLE = { bg: 'bg-transparent', leftBar: '', dot: '', numText: 'text-stone-300', timeText: '', label: '' };
 
@@ -78,53 +78,60 @@ export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ record
   }, [records]);
 
   const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDow    = new Date(year, month - 1, 1).getDay(); // 0=Sun
+  const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Sun
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
 
   return (
-    <div id="history-calendar-view" className="bg-[#fefcfa] rounded-2xl border border-stone-200/70 shadow-sm p-4 space-y-3">
 
-      {/* ── Month header + legend ── */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-        <h3 className="text-sm font-semibold text-slate-700 capitalize">{monthLabel}</h3>
-        <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-          {[
-            { dot: 'bg-emerald-400', label: 'Hoàn thành' },
-            { dot: 'bg-red-400',     label: 'Trễ/Sớm' },
-            { dot: 'bg-blue-400',    label: 'Đang làm' },
-          ].map(({ dot, label }) => (
-            <span key={label} className="flex items-center gap-1 text-[9px] text-slate-400 whitespace-nowrap">
-              <span className={`w-1.5 h-1.5 rounded-full ${dot} shrink-0`} />{label}
+    <div
+      id={`history-item-${record.id}`}
+      onClick={() => onSelect(record)}
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-card-sm hover:shadow-md transition-all cursor-pointer space-y-2 group"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
+            {record.formattedDate}
+          </span>
+          {record.totalWorkingMinutes && !isHoliday && (
+            <span className="text-[11px] text-on-surface-variant mt-0.5">
+              Tổng: {Math.floor(record.totalWorkingMinutes / 60)}h {record.totalWorkingMinutes % 60}m
+
             </span>
           ))}
         </div>
       </div>
 
-      {/* ── Day-of-week header row ── */}
-      <div className="grid grid-cols-7 gap-1">
-        {DOW_LABELS.map((d, i) => (
-          <div key={d} className={`text-center text-[11px] font-semibold py-1 ${
-            i === 0 || i === 6 ? 'text-red-500' : 'text-stone-500'
-          }`}>
-            {d}
+
+      {!isHoliday ? (
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-outline-variant bg-surface-container-low rounded-lg p-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-primary" />
+            <div>
+              <span className="text-[10px] text-on-surface-variant block">Giờ vào</span>
+              <span className="font-mono font-medium text-on-surface">
+                {record.checkIn ? record.checkIn.time : '—'}
+              </span>
+            </div>
+
           </div>
         ))}
-      </div>
+        </div>
 
       {/* ── Day cells ── */}
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: firstDow }).map((_, i) => <div key={`blank-${i}`} />)}
 
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-          const dateStr   = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const record    = byDate[dateStr];
-          const dow       = (firstDow + (day - 1)) % 7;
-          const isWknd    = dow === 0 || dow === 6;
-          const st        = record ? cellStyle(record.status) : EMPTY_STYLE;
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const record = byDate[dateStr];
+          const dow = (firstDow + (day - 1)) % 7;
+          const isWknd = dow === 0 || dow === 6;
+          const st = record ? cellStyle(record.status) : EMPTY_STYLE;
           const isHoliday = record?.status === 'HOLIDAY';
-          const hasAlert  = record?.overallApprovalStatus === 'REJECTED' || record?.overallApprovalStatus === 'PENDING';
-          const hasWarn   = !!record?.warningNote;
+          const hasAlert = record?.overallApprovalStatus === 'REJECTED' || record?.overallApprovalStatus === 'PENDING';
+          const hasWarn = !!record?.warningNote;
 
           return (
             <button
@@ -143,55 +150,71 @@ export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ record
               {/* Day number */}
               <span className={[
                 'text-[12px] font-semibold leading-none',
-                !record             ? (isWknd ? 'text-red-300' : 'text-stone-300') :
-                isHoliday           ? 'text-stone-400' :
-                isWknd              ? 'text-red-500' :
-                                      st.numText,
+                !record ? (isWknd ? 'text-red-300' : 'text-stone-300') :
+                  isHoliday ? 'text-stone-400' :
+                    isWknd ? 'text-red-500' :
+                      st.numText,
               ].join(' ')}>
                 {day}
               </span>
+            </div>
+          </div>
+    </div>
+  ) : (
+    <p className="text-xs text-on-surface-variant italic pt-3 border-t border-outline-variant">
+      Ngày nghỉ chính thức / Không có ca làm việc.
+    </p>
+  )
+}
 
-              {/* Working day content */}
-              {record && !isHoliday && (
-                <div className="flex flex-col items-center gap-[3px] mt-1 w-full">
-                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                  {record.checkIn && (
-                    <span className={`text-[9px] font-mono font-medium leading-none ${st.timeText}`}>
-                      {record.checkIn.time}
-                    </span>
-                  )}
-                  {record.checkOut ? (
-                    <span className={`text-[9px] font-mono leading-none ${st.timeText} opacity-75`}>
-                      {record.checkOut.time}
-                    </span>
-                  ) : record.checkIn ? (
-                    <span className="text-[8px] leading-none text-stone-400">–</span>
-                  ) : null}
-                </div>
-              )}
 
-              {/* Holiday */}
-              {isHoliday && (
-                <span className="text-[9px] text-stone-500 font-medium mt-0.5 leading-none">Nghỉ</span>
-              )}
+{/* Working day content */ }
+{
+  record && !isHoliday && (
+    <div className="flex flex-col items-center gap-[3px] mt-1 w-full">
+      <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+      {record.checkIn && (
+        <span className={`text-[9px] font-mono font-medium leading-none ${st.timeText}`}>
+          {record.checkIn.time}
+        </span>
+      )}
+      {record.checkOut ? (
+        <span className={`text-[9px] font-mono leading-none ${st.timeText} opacity-75`}>
+          {record.checkOut.time}
+        </span>
+      ) : record.checkIn ? (
+        <span className="text-[8px] leading-none text-stone-400">–</span>
+      ) : null}
+    </div>
+  )
+}
 
-              {/* Alert dot */}
-              {(hasAlert || hasWarn) && !isHoliday && (
-                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
-              )}
-            </button>
+{/* Holiday */ }
+{
+  isHoliday && (
+    <span className="text-[9px] text-stone-500 font-medium mt-0.5 leading-none">Nghỉ</span>
+  )
+}
+
+{/* Alert dot */ }
+{
+  (hasAlert || hasWarn) && !isHoliday && (
+    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+  )
+}
+            </button >
           );
         })}
-      </div>
+      </div >
 
-      {/* Footer note */}
-      <p className="text-[9px] text-slate-400 text-center pt-1 border-t border-slate-100">
-        <span className="inline-flex items-center gap-1">
-          <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
-          Chấm vàng = chờ duyệt · Bấm vào ngày để xem chi tiết
-        </span>
-      </p>
-    </div>
+  {/* Footer note */ }
+  < p className = "text-[9px] text-slate-400 text-center pt-1 border-t border-slate-100" >
+    <span className="inline-flex items-center gap-1">
+      <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
+      Chấm vàng = chờ duyệt · Bấm vào ngày để xem chi tiết
+    </span>
+      </p >
+    </div >
   );
 };
 
@@ -241,10 +264,10 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Date & Shift overview */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-2 shadow-sm relative overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-2 shadow-card-sm relative overflow-hidden">
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
         <h3 className="text-sm font-bold text-on-surface pl-1.5">{record.formattedDate}</h3>
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-surface-variant text-on-surface-variant pl-1.5">
+        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-surface-variant text-on-surface-variant pl-1.5">
           <div>
             <span className="text-[10px] block">Ca làm:</span>
             <span className="text-on-surface">{record.shiftName} ({record.shiftHours})</span>
@@ -287,7 +310,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       )}
 
       {/* Detailed Check-in Event Card */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
@@ -308,7 +331,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
                 <MapPin className="w-3.5 h-3.5 text-on-surface-variant shrink-0 mt-0.5" />
                 <span>{record.checkIn.address}</span>
               </p>
-              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-outline-variant/60">
+              <div className="flex items-center justify-between text-[10px] pt-3 border-t border-outline-variant/60">
                 <span>Giờ server: {record.checkIn.serverTime}</span>
                 {record.checkIn.accuracy && <span>Độ chính xác: ±{record.checkIn.accuracy}m</span>}
               </div>
@@ -329,7 +352,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Detailed Check-out Event Card */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-secondary"></div>
@@ -350,7 +373,7 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
                 <MapPin className="w-3.5 h-3.5 text-on-surface-variant shrink-0 mt-0.5" />
                 <span>{record.checkOut.address}</span>
               </p>
-              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-outline-variant/60">
+              <div className="flex items-center justify-between text-[10px] pt-3 border-t border-outline-variant/60">
                 <span>Giờ server: {record.checkOut.serverTime}</span>
                 {record.checkOut.accuracy && <span>Độ chính xác: ±{record.checkOut.accuracy}m</span>}
               </div>
@@ -371,15 +394,16 @@ export const DayDetailView: React.FC<DayDetailViewProps> = ({
       </div>
 
       {/* Audit Trail Timeline */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-sm">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 space-y-3 shadow-card-sm">
         <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">
           Lịch sử xử lý &amp; Ghi nhận
         </h4>
         <AuditTimeline logs={record.auditTrail} />
       </div>
 
-      {/* Adjustment Request Placeholder */}
-      <div className="pt-2">
+
+      {/* Adjustment Request Placeholder - tagged strictly with Proposed/Phase sau */}
+      <div className="mt-3">
         <button
           id="btn-open-adjustment-request"
           type="button"

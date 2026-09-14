@@ -1,6 +1,11 @@
 # CodeGraph local index — generated, machine-specific
 .codegraph/
 
+# Local agent/skill tooling — never part of the product repo
+.agents/
+.claude/
+skills-lock.json
+
 node_modules/
 dist/
 build/

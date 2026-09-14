@@ -107,6 +107,20 @@ export interface EmployeeProfile {
 /* itself (SRS BR-NET-01: never trust an IP the FE sends).             */
 /* ------------------------------------------------------------------ */
 
+export interface MockGpsLocation {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  address: string;
+  capturedAtClient: string;
+}
+
+export interface SelfieEvidenceResponse {
+  source: 'MOCK_BACKEND';
+  photoUrl: string;
+  location: MockGpsLocation;
+}
+
 export interface AttendanceSignals {
   workMode: WorkMode;
   /**
@@ -118,7 +132,9 @@ export interface AttendanceSignals {
   /** GPS distance/accuracy; undefined when not yet fixed. */
   gpsDistance?: number;
   gpsAccuracy?: number;
-  /** Selfie photo (data URL) when the OUT flow captured one. */
+  /** Mock backend location attached to a SELFIE submission. */
+  location?: MockGpsLocation;
+  /** Mock evidence URL selected after the live camera capture gesture. */
   photoUrl?: string;
 }
 

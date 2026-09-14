@@ -80,7 +80,7 @@ export const ApproverDashboard: React.FC<ApproverDashboardProps> = ({
         <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
             <span>Tổng yêu cầu chờ duyệt</span>
-            <Clock className="w-4 h-4 text-amber-500" />
+            <Clock className="w-4 h-4 text-on-secondary-container" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="font-mono text-2xl font-bold text-on-surface">
@@ -157,7 +157,7 @@ export const ApproverDashboard: React.FC<ApproverDashboardProps> = ({
               placeholder="Tìm theo tên nhân viên, mã nhân viên (TVS-0248), mã yêu cầu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-outline focus:outline-hidden focus:ring-2 focus:ring-slate-900 bg-surface-container-lowest"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-outline focus:outline-hidden focus:ring-2 focus:ring-primary/40 bg-surface-container-lowest"
             />
           </div>
 
@@ -371,7 +371,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-on-success"></span>
               <h4 className="text-xs font-bold text-on-surface">1. Ảnh Selfie Check-in</h4>
             </div>
             <span className="font-mono text-xs font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant">
@@ -387,7 +387,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
             />
             {/* Watermark */}
             <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent text-white text-[10px] font-mono space-y-0.5">
-              <div className="text-amber-300 font-bold text-[11px] flex justify-between">
+              <div className="font-bold text-[11px] flex justify-between">
                 <span>CHECK-IN VERIFIED</span>
                 <span>{request.checkIn?.serverTime}</span>
               </div>
@@ -412,7 +412,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-on-success"></span>
               <h4 className="text-xs font-bold text-on-surface">2. Ảnh Selfie Check-out</h4>
             </div>
             <span className="font-mono text-xs font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant">
@@ -428,7 +428,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
             />
             {/* Watermark */}
             <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent text-white text-[10px] font-mono space-y-0.5">
-              <div className="text-amber-300 font-bold text-[11px] flex justify-between">
+              <div className="font-bold text-[11px] flex justify-between">
                 <span>CHECK-OUT VERIFIED</span>
                 <span>{request.checkOut?.serverTime}</span>
               </div>

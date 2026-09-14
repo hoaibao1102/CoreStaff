@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, 'Segoe UI', Arial, sans-serif;
+  line-height: 1.6;
+}
+
+body {
+  margin: 0;
+  background: #f4f7fb;
+  color: #122036;
+}
+
+.shell {
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.brand small {
+  color: #66758b;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 14px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.muted {
+  color: #9aabc0;
+  font-weight: 400;
+}
+
+.badge {
+  color: #b3261e;
+}
+
+.foot {
+  color: #9aabc0;
+  font-size: 12px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  row-gap: 6px;
+}
+
+dt {
+  font-weight: 700;
+  color: #66758b;
+}
+
+dd {
+  margin: 0;
+}

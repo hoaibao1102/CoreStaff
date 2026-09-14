@@ -44,12 +44,12 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   };
 
   return (
-    <div id="action-button-container" className="space-y-2 pt-2">
+    <div id="action-button-container" className="mt-3 space-y-2">
       {/* Reason why button is disabled placed directly above button */}
       {!isEnabled && disabledReason && (
         <div
           id="disabled-button-reason-banner"
-          className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant text-xs shadow-sm"
+          className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant text-xs shadow-card-sm"
         >
           <Lock className="w-4 h-4 shrink-0" />
           <span className="text-[11px] leading-tight">

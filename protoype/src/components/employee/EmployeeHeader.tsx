@@ -89,7 +89,7 @@ export const EmployeeHeader: React.FC<EmployeeHeaderProps> = ({
           {/* Synchronized Server Clock Widget */}
           <div
             id="server-clock-widget"
-            className="text-right bg-surface-container-lowest p-2 rounded-lg border border-outline-variant shadow-sm min-w-[96px]"
+            className="text-right bg-surface-container-lowest p-2 rounded-lg border border-outline-variant shadow-card-sm min-w-[96px]"
           >
             <div className="flex items-center justify-end gap-1 text-[10px] font-medium text-on-surface-variant uppercase tracking-wider">
               <RefreshCw className="w-3 h-3 text-secondary" />
@@ -122,7 +122,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   return (
     <div
       id="card-shift-info"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] relative overflow-hidden"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm relative overflow-hidden"
     >
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-surface-tint"></div>
       <div className="flex items-center justify-between pl-1">
@@ -137,7 +137,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         </span>
       </div>
 
-      <div className="flex items-start gap-2 pt-2 pl-1 mt-2 border-t border-surface-variant text-xs text-on-surface-variant">
+      <div className="flex items-start gap-2 pt-3 pl-1 border-t border-surface-variant text-xs text-on-surface-variant">
         <Building2 className="w-3.5 h-3.5 text-on-surface-variant shrink-0 mt-0.5" />
         <div>
           <p className="font-medium text-on-surface">{workplace}</p>
@@ -164,7 +164,7 @@ export const TodayStatusCard: React.FC<TodayStatusCardProps> = ({
   return (
     <div
       id="card-today-status"
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)] relative overflow-hidden"
+      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-card-sm relative overflow-hidden"
     >
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
       <div className="flex items-center justify-between mb-3 pl-1">
@@ -188,7 +188,7 @@ export const TodayStatusCard: React.FC<TodayStatusCardProps> = ({
       </div>
 
       {totalHoursFormatted && (
-        <div className="mt-2.5 pt-2 pl-1 border-t border-surface-variant flex items-center justify-between text-xs">
+        <div className="flex items-start gap-2 pt-3 pl-1 border-t border-surface-variant text-xs text-on-surface-variant">
           <span className="text-on-surface-variant">Tổng thời gian làm việc:</span>
           <span className="font-semibold text-secondary">{totalHoursFormatted}</span>
         </div>
