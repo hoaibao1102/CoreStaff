@@ -11,6 +11,8 @@ import { CURRENT_EMPLOYEE } from '../data/mockData';
 import { DayAttendance, EmployeeTab } from '../types';
 import { methodLabel } from '../hooks/useAttendance';
 import { resolveMethod } from '../services/attendanceService';
+import { loadActiveWorkplace } from '../services/adminService';
+import { MOCK_SELFIE_EVIDENCE } from '../services/evidenceService';
 import { inSignals } from './useSimulation';
 import { UseAttendance, UseSimulation, SubmitParams } from './types';
 
@@ -45,19 +47,24 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
   const isCheckInAction = todayRecord.status === 'NOT_CHECKED_IN';
   const isCompleted = todayRecord.status === 'COMPLETED';
 
-  // Build the raw submit signals + what method BE will decide.
+  // Build the raw submit signals + what method BE will decide, validating
+  // against the tenant's admin-configured Workplace (same read the service does).
+  const workplace = loadActiveWorkplace();
   const signals = {
     workMode: sim.workMode,
-    ...inSignals(sim.workMode, sim.inCondition, sim.gpsDistance, sim.gpsAccuracy),
+    ...inSignals(sim.workMode, sim.inCondition, sim.gpsDistance, sim.gpsAccuracy, sim.networkSource),
   };
-  const resolvedMethod = resolveMethod(signals);
+  const resolvedMethod = resolveMethod(signals, workplace);
   const needsCamera = resolvedMethod === 'SELFIE';
+  const matchedNetwork = workplace?.networks.find(
+    (n) => n.active && signals.observedBssid && n.bssid.toUpperCase() === signals.observedBssid.toUpperCase(),
+  );
 
   const isButtonEnabled = !isCompleted && sim.simulatedSystemState === 'NORMAL';
 
   const buildParams = (photoUrl?: string): SubmitParams => ({
     workMode: sim.workMode,
-    ...inSignals(sim.workMode, sim.inCondition, sim.gpsDistance, sim.gpsAccuracy),
+    ...inSignals(sim.workMode, sim.inCondition, sim.gpsDistance, sim.gpsAccuracy, sim.networkSource),
     photoUrl,
   });
 
@@ -156,10 +163,12 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
               * Quản lý hợp đồng, phép năm và chế độ thuộc cổng ERP tập trung.
             </div>
           </div>
-        ) : attendance.previewPhotoUrl ? (
+        ) : attendance.previewEvidence ? (
           <SelfiePreview
-            photoUrl={attendance.previewPhotoUrl}
+            photoUrl={attendance.previewEvidence.photoUrl}
             mode={attendance.cameraMode}
+            address={attendance.previewEvidence.location.address}
+            accuracy={attendance.previewEvidence.location.accuracyMeters}
             onRetake={attendance.retakeSelfiePhoto}
             onConfirmUse={() => attendance.confirmSelfiePhoto(buildParams())}
             isSubmitting={attendance.isSubmitting}
@@ -236,7 +245,7 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
                     ? 'Đang ghi nhận VÀO CA...'
                     : 'Đang ghi nhận RA CA...'
                 }
-                methodBadge={methodLabel(resolvedMethod, sim.gpsDistance)}
+                methodBadge={methodLabel(resolvedMethod, sim.gpsDistance, matchedNetwork?.ssid ?? matchedNetwork?.name)}
                 onClick={handlePrimaryAction}
               />
             ) : (
@@ -263,8 +272,12 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
       {attendance.isCameraOpen && (
         <CameraCapture
           mode={attendance.cameraMode}
+          mockLocation={{
+            ...MOCK_SELFIE_EVIDENCE[attendance.cameraMode].location,
+            capturedAtClient: new Date().toISOString(),
+          }}
           onClose={attendance.closeCamera}
-          onPhotoCaptured={attendance.onPhotoCaptured}
+          onCapture={attendance.captureSelfie}
         />
       )}
     </div>

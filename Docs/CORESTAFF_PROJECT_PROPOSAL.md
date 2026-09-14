@@ -1,7 +1,7 @@
-# TimeLock — Employee Attendance & Timesheet Closing System
+# CoreStaff — Human Resource, Attendance & Payroll Management System
 
-> **Tên tiếng Việt:** Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên  
-> **Tên tiếng Anh:** TimeLock — Employee Attendance, Approval & Timesheet Closing System  
+> **Tên tiếng Việt:** CoreStaff — Hệ thống Quản trị Nhân sự, Chấm công và Tiền lương  
+> **Tên tiếng Anh:** CoreStaff — Human Resource, Attendance & Payroll Management System  
 > **Loại dự án:** Nền tảng web multi-tenant, responsive, mobile-first  
 > **Đối tượng mục tiêu:** Văn phòng và doanh nghiệp nhỏ khoảng 10–50 nhân viên/Organization; không phải giới hạn kỹ thuật  
 > **Môn học:** SWP391 — Software Development Project  
@@ -18,21 +18,23 @@
 |---|---|
 | No. | `TBD` |
 | Lecturers | `TBD` |
-| Project Name (VI) | **TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên** |
-| Project Name (EN) | **TimeLock — Employee Attendance, Approval & Timesheet Closing System** |
+| Project Name (VI) | **CoreStaff — Hệ thống Quản trị Nhân sự, Chấm công và Tiền lương** |
+| Project Name (EN) | **CoreStaff — Human Resource, Attendance & Payroll Management System** |
 
-> `Lecturers` và số thứ tự chưa có thông tin nên được để `TBD`, tránh tự gán sai giảng viên phụ trách. TimeLock là đề xuất mới theo cấu trúc cột của bảng FA26_SWP391, không phải một dòng đã tồn tại trong bản Excel tham chiếu.
+> `Lecturers` và số thứ tự chưa có thông tin nên được để `TBD`, tránh tự gán sai giảng viên phụ trách. CoreStaff là đề xuất mới theo cấu trúc cột của bảng FA26_SWP391, không phải một dòng đã tồn tại trong bản Excel tham chiếu.
 
 ### Actors
 
-1. **Employee**
-2. **Approver / Department Manager**
-3. **HR / Timekeeping Officer**
-4. **System Administrator**
+1. **Employee** (`EMPLOYEE`)
+2. **Department Manager** (`DEPARTMENT_MANAGER`, alias Approver)
+3. **HR** (`HR`, alias Payroll Officer)
+4. **System Administrator** (`SYSTEM_ADMIN`)
+
+> Xem chi tiết luồng dữ liệu tại [CoreStaff_Context_Diagram.md](./CoreStaff_Context_Diagram.md) và sơ đồ ca sử dụng tại [Use case diagram.md](./Use case diagram.md).
 
 ### Main Features
 
-Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng, GPS và ca làm; chấm công tại văn phòng bằng Network/GPS; chấm công ngoài văn phòng bằng Selfie + GPS; quản lý bằng chứng; phê duyệt ngoại lệ; giải trình; lịch sử ngày công; tổng hợp và chốt kỳ công; báo cáo và audit log.
+Quản lý hồ sơ nhân viên, chức danh, hợp đồng và tài liệu; cấu hình ca Full-time hành chính; chấm công Network/GPS/Selfie; Employee gửi phép → Manager duyệt → HR apply; điều chỉnh và OT; kiểm soát giờ làm theo policy; chốt công; tạo PayrollInputSnapshot; tính Gross, bảo hiểm, PIT, Net Salary, employer cost và phát hành Payslip.
 
 ### Must Have
 
@@ -42,13 +44,18 @@ Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng,
 | Flow 2 | Employee Check-in/Check-out & Evidence Management | REQUIRED |
 | Flow 3 | Attendance Approval & Clarification Workflow | REQUIRED |
 | Flow 4 | Monthly Timesheet Review & Closing | REQUIRED |
+| Flow 4A | Employee, Contract & Payroll | REQUIRED |
+| Flow 4B | Overtime Request & Automatic Classification | REQUIRED |
+| Adjustment | Adjustment Request (before close) | REQUIRED |
+| Leave | Employee request → Manager approve → HR apply | REQUIRED |
+| Compensation Policy | Attendance Bonus template + Allowance hybrid | REQUIRED |
 
 ### Nice to Have
 
 | Flow | Nội dung | Mức ưu tiên |
 |---|---|---|
-| Flow 5 | Adjustment Request After Closing | OPTIONAL |
-| Flow 6 | Dashboard, Notification & Export | OPTIONAL |
+| Flow 5 | Adjustment Request After Closing (reopen-based) | OPTIONAL |
+| Flow 6 | Dashboard, Notification & Custom Report Export | OPTIONAL |
 | Flow 7 | Advanced Security and Analytics | OPTIONAL |
 
 ---
@@ -57,16 +64,16 @@ Quản lý tài khoản và phân quyền; cấu hình nơi làm việc, mạng,
 
 ### Tên chính thức
 
-**TimeLock — Hệ thống Chấm công, Phê duyệt và Chốt công Nhân viên**
+**CoreStaff — Hệ thống Quản trị Nhân sự, Chấm công và Tiền lương**
 
 ### Tên tiếng Anh
 
-**TimeLock — Employee Attendance, Approval & Timesheet Closing System**
+**CoreStaff — Human Resource, Attendance & Payroll Management System**
 
 ### Tagline
 
-> **Chấm công. Duyệt công. Chốt công.**  
-> *Track every minute. Close every period with confidence.*
+> **Quản trị nhân sự. Chấm công. Tính lương.**  
+> *From employee records to trusted payroll.*
 
 ---
 
@@ -82,13 +89,13 @@ Các tổ chức nhỏ thường quản lý chấm công bằng bảng tính, bi
 - Bộ phận nhân sự mất nhiều thời gian rà soát, tổng hợp và khóa bảng công cuối tháng.
 - Khó truy vết ai đã tạo, duyệt, từ chối hoặc chỉnh sửa một bản ghi.
 
-TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm công đến khi dữ liệu được quản lý phê duyệt và bộ phận nhân sự chốt kỳ công.
+CoreStaff giải quyết toàn bộ vòng đời từ lúc nhân viên chấm công đến khi dữ liệu được quản lý phê duyệt và bộ phận nhân sự chốt kỳ công.
 
 ---
 
 ## 4. Project Objectives
 
-- Xây dựng hệ thống chấm công độc lập có đăng nhập và phân quyền theo vai trò.
+- Xây dựng CoreStaff multi-tenant có quản lý nhân viên, hợp đồng, chấm công và tiền lương.
 - Hỗ trợ nhân viên chấm công tại văn phòng và ngoài văn phòng.
 - Xác minh bản ghi bằng Network, GPS hoặc Selfie kết hợp vị trí.
 - Quản lý bằng chứng chấm công có kiểm soát truy cập.
@@ -97,9 +104,9 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Tổng hợp dữ liệu theo tháng và thực hiện chốt/khóa kỳ công.
 - Bảo đảm dữ liệu đã chốt không bị thay đổi tùy ý.
 - Lưu audit log cho các thao tác quan trọng.
-- Tạo một sản phẩm responsive có thể trình diễn trên điện thoại, tablet và desktop.
-- Hỗ trợ full-time/part-time bằng lịch do HR cấu hình, không hard-code giờ ca hành chính.
-- Cho phép đăng ký ca, đổi ca có đồng thuận và OT được hệ thống tự phân loại/tính từ lịch thực tế.
+- ReactJS responsive là Web MVP cho toàn bộ role; React Native là SHOULD, chỉ phục vụ Employee hero flow.
+- Chỉ hỗ trợ Full-time giờ hành chính; HR cấu hình ca và giờ nghỉ, không hard-code 08:00–17:00.
+- Tự phân loại OT, kiểm soát giới hạn giờ theo policy và tính lương từ snapshot bất biến.
 
 ---
 
@@ -116,10 +123,10 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Xem lịch sử chấm công theo tháng.
 - Xem chi tiết từng ngày công.
 - Xem trạng thái phê duyệt và lý do bị từ chối.
-- Gửi giải trình khi quản lý yêu cầu.
+- Gửi giải trình, LeaveRequest và OT/adjustment cá nhân.
 - Xem bảng tổng hợp công cá nhân trước và sau khi kỳ công được chốt.
 
-### 5.2. Approver / Department Manager — Người phê duyệt / Quản lý phòng ban
+### 5.2. Department Manager (`DEPARTMENT_MANAGER`) — Quản lý phòng ban
 
 - Là nhân viên có thêm quyền quản lý và sử dụng cùng một tài khoản cho cả hai phạm vi.
 - Check-in/check-out, xem lịch sử và điều chỉnh công cá nhân qua mục **Công của tôi** khi có assignment hợp lệ.
@@ -132,10 +139,11 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Từ chối và bắt buộc nhập lý do.
 - Yêu cầu nhân viên giải trình.
 - Xem phản hồi của nhân viên và đưa ra quyết định cuối cùng.
+- Approve/reject LeaveRequest đúng department scope; không tự duyệt.
 - Theo dõi audit timeline của yêu cầu.
 - Xác nhận dữ liệu phòng ban đã sẵn sàng để chốt công.
 
-### 5.3. HR / Timekeeping Officer — Nhân sự / Nhân viên chấm công
+### 5.3. HR (`HR`) — Nhân sự / Payroll Officer
 
 - Có thể check-in/check-out và xem **Công của tôi** nếu được cấp assignment như một nhân viên nội bộ.
 - Nếu không có assignment, tài khoản HR chỉ dùng nghiệp vụ quản trị/chốt công và không hiển thị action chấm công.
@@ -147,14 +155,15 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Kiểm tra điều kiện trước khi chốt kỳ.
 - Chốt và khóa kỳ công.
 - Mở lại kỳ công khi có lý do hợp lệ và lưu audit log.
-- Xuất bảng tổng hợp CSV/Excel phục vụ xử lý lương bên ngoài.
-- Xử lý hoặc phối hợp xử lý yêu cầu điều chỉnh ngày công.
+- Xuất bảng công CSV/Excel; tính lương nội bộ qua PayrollRun/Payslip (xem Flow 4A).
+- Apply LeaveRequest đã duyệt thành PAID/UNPAID override; xử lý AdjustmentRequest.
+- Cấu hình AttendanceBonusPolicy từ template và Allowance hybrid catalog/custom.
 
-### 5.4. System Administrator — Quản trị viên hệ thống
+### 5.4. System Administrator (`SYSTEM_ADMIN`) — Quản trị viên hệ thống
 
 - Không thuộc workforce của tenant và không có chức năng check-in/check-out.
 - Quản lý tài khoản người dùng.
-- Gán vai trò Employee, Approver, HR và Administrator.
+- Gán vai trò `EMPLOYEE`, `DEPARTMENT_MANAGER`, `HR`, `SYSTEM_ADMIN`.
 - Khóa, mở khóa hoặc vô hiệu hóa tài khoản.
 - Đặt lại mật khẩu tạm thời.
 - Quản lý workplace và thông tin geofence.
@@ -188,13 +197,24 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Quản lý ca làm, giờ bắt đầu, giờ kết thúc, thời gian nghỉ và grace period.
 - Gán nhân viên vào workplace, shift và approver.
 
-### 6.2A. Full-time, Part-time and Scheduling
+### 6.2A. Full-time Office Scheduling
 
-- HR tạo và cấu hình ShiftTemplate; ca 08:00–17:00 chỉ là dữ liệu seed/demo.
-- Full-time sử dụng lịch lặp RecurringSchedule.
-- Part-time đăng ký ca theo ngày; Department Manager duyệt trước khi tạo WorkSchedule chính thức.
-- MVP chỉ hỗ trợ ca trong cùng ngày, một lịch/ngày và không hỗ trợ ca qua đêm.
-- Đổi ca cần người nhận đồng ý, sau đó Department Manager phê duyệt và hệ thống cập nhật cả hai lịch trong một transaction.
+- MVP chỉ hỗ trợ nhân viên Full-time và ca hành chính trong cùng ngày.
+- HR cấu hình ShiftTemplate gồm start/end/break/grace/weekdays; 08:00–17:00 chỉ là seed.
+- Không hỗ trợ Part-time, đăng ký/đổi ca, ca đêm, ca qua ngày hoặc nhiều ca/ngày.
+- Scheduled working minutes được tính sau khi trừ break do HR nhập.
+
+### 6.2B. Leave Request Management
+
+- Employee gửi LeaveRequest nguyên ngày (`PAID_LEAVE` hoặc `UNPAID_LEAVE`).
+- Department Manager approve/reject đúng scope; HR apply thành EmployeeDayOverride.
+- Quota/accrual, half-day, hourly leave, carry-over và balance đầy đủ là LATER.
+
+### 6.2C. Attendance Bonus & Allowance
+
+- Platform seed AttendanceBonusTemplate tier 100/70/50; HR clone/custom tiers và conditions theo Organization.
+- Allowance dùng hybrid: catalog seed (ăn trưa, xăng xe, điện thoại) + custom allowance tenant.
+- Payroll chỉ đọc policy/allowance version trong PayrollInputSnapshot.
 
 ### 6.3. Employee Check-in/Check-out
 
@@ -223,7 +243,7 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 
 - Selfie tạo yêu cầu phê duyệt tự động.
 - GPS bất thường có thể tạo yêu cầu xem xét.
-- Approver xem danh sách yêu cầu trong phạm vi quản lý.
+- Department Manager xem danh sách yêu cầu trong phạm vi quản lý.
 - Approve, Reject hoặc Request Clarification.
 - Reject bắt buộc có lý do.
 - Request Clarification bắt buộc có nội dung.
@@ -246,7 +266,17 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
 - Backend tự phân loại `OT_WORKING_DAY`, `OT_WEEKLY_OFF`, `OT_PUBLIC_HOLIDAY` từ WorkCalendar và WorkSchedule.
 - Hệ thống lưu requested, approved, actual và eligible minutes; check-out muộn không tự động thành OT.
 - Eligible OT là phần được duyệt giao với attendance thực tế và nằm ngoài lịch chính thức.
-- HR rà soát và hệ thống tính lại kết quả FINAL khi chốt kỳ; không tính tiền/hệ số lương.
+- HR rà soát và hệ thống tính lại kết quả FINAL khi chốt kỳ; Payroll dùng OvertimePayPolicy có hiệu lực để tính tiền OT.
+
+### 6.6B. Employee, Contract and Payroll Management
+
+- HR quản lý EmployeeProfile, Position, hợp đồng thử việc/chính thức và tài liệu private.
+- Lương thử việc do HR nhập, không thấp hơn minimum policy; seed 85% mức lương công việc.
+- HR cấu hình SalaryProfile, lương đóng bảo hiểm, phụ cấp, chuyên cần và KPI.
+- Các policy lao động, OT, bảo hiểm và PIT có version/ngày hiệu lực/căn cứ pháp lý.
+- Timesheet CLOSED tạo PayrollInputSnapshot; payroll tính Gross Income, BHXH/BHYT/BHTN, PIT, Net Salary và Employer Cost.
+- Payroll đi qua DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID.
+- Employee xem Payslip cá nhân sau phát hành; Manager/System Admin không xem lương ngoài quyền.
 
 ### 6.7. Monthly Timesheet Closing
 
@@ -258,7 +288,7 @@ TimeLock giải quyết toàn bộ vòng đời từ lúc nhân viên chấm cô
   - Yêu cầu phê duyệt chưa xử lý.
   - Yêu cầu giải trình chưa hoàn tất.
   - Ngày công chưa xác định trạng thái cuối.
-- Approver xác nhận bảng công của phòng ban.
+- Department Manager xác nhận bảng công của phòng ban.
 - HR chốt kỳ sau khi các điều kiện bắt buộc được đáp ứng.
 - Khóa dữ liệu thuộc kỳ đã chốt.
 - Mở lại kỳ phải có lý do và audit log.
@@ -284,8 +314,8 @@ Admin đăng nhập
 → tạo Workplace và cấu hình geofence
 → cấu hình Network/IP được phép
 → tạo Shift
-→ tạo Employee/Approver/HR
-→ gán Workplace + Shift + Approver
+→ tạo Employee/Department Manager/HR
+→ gán Workplace + Shift + Department Manager
 → cấp tài khoản và mật khẩu tạm thời
 → người dùng đăng nhập và đổi mật khẩu
 ```
@@ -310,44 +340,45 @@ Employee đăng nhập
 ### Flow 3 — Attendance Approval & Clarification Workflow (REQUIRED)
 
 ```text
-Employee gửi Selfie hoặc phát sinh ngoại lệ GPS
+Employee gửi Selfie (tự tạo ApprovalRequest)
 → hệ thống tạo ApprovalRequest
-→ Approver xem bằng chứng
-→ Approver chọn Approve / Reject / Request Clarification
+→ Department Manager xem bằng chứng
+→ Department Manager chọn Approve / Reject / Request Clarification
 → nếu cần, Employee gửi giải trình
 → yêu cầu trở lại Pending
-→ Approver đưa ra quyết định cuối cùng
+→ Department Manager đưa ra quyết định cuối cùng
 → Employee thấy trạng thái mới sau khi tải lại
 ```
 
 **Kết quả:** Bản ghi bất thường được xử lý minh bạch và có audit trail.
+
+> MVP chỉ tự tạo ApprovalRequest cho **SELFIE**; GPS anomaly là SHOULD (geo-verification ngoài bán kính hiển thị cảnh báo, không tự tạo request duyệt).
 
 ### Flow 4 — Monthly Timesheet Review & Closing (REQUIRED)
 
 ```text
 HR mở kỳ công tháng
 → hệ thống tổng hợp dữ liệu của từng nhân viên
-→ Approver rà soát dữ liệu phòng ban
+→ Department Manager rà soát dữ liệu phòng ban
 → xử lý hết bản ghi thiếu hoặc Pending
-→ Approver xác nhận phòng ban sẵn sàng
+→ Department Manager xác nhận phòng ban sẵn sàng
 → HR kiểm tra điều kiện chốt
 → HR chốt và khóa kỳ công
 → hệ thống tạo snapshot tổng hợp
 → HR xuất CSV/Excel
 ```
 
-**Kết quả:** Kỳ công được khóa, dữ liệu có thể dùng làm đầu vào cho quy trình tính lương bên ngoài.
+**Kết quả:** Kỳ công được khóa và tạo PayrollInputSnapshot làm nguồn duy nhất cho tính lương.
 
-### Flow 4A — Full-time/Part-time Schedule & Shift Swap (REQUIRED)
+### Flow 4A — Employee, Contract & Payroll (REQUIRED)
 
 ```text
-HR cấu hình ShiftTemplate
-→ sinh lịch Full-time hoặc mở đăng ký Part-time
-→ Manager duyệt đăng ký
-→ Employee A đề nghị đổi ca
-→ Employee B đồng ý
-→ Manager duyệt
-→ hệ thống cập nhật lịch có audit
+HR tạo EmployeeProfile + Position + Contract
+→ cấu hình Salary/Insurance/Tax profiles
+→ chốt Timesheet
+→ tạo PayrollInputSnapshot
+→ tính/review/approve/lock Payroll
+→ phát hành Payslip cho Employee
 ```
 
 ### Flow 4B — Overtime Request & Automatic Classification (REQUIRED)
@@ -369,7 +400,7 @@ Employee gửi OT không chọn loại
 
 - Employee hoặc HR tạo yêu cầu điều chỉnh ngày công.
 - Bắt buộc nêu lý do và đính kèm bằng chứng nếu cần.
-- Approver/HR xem xét yêu cầu.
+- Department Manager/HR xem xét yêu cầu.
 - Nếu được chấp nhận, hệ thống tạo phiên bản điều chỉnh thay vì ghi đè dữ liệu cũ.
 - Lưu giá trị trước/sau và người phê duyệt trong audit log.
 
@@ -377,7 +408,7 @@ Employee gửi OT không chọn loại
 
 - Dashboard theo ngày, tháng và phòng ban.
 - Thông báo trong ứng dụng khi yêu cầu được xử lý.
-- Nhắc Approver về yêu cầu sắp quá hạn.
+- Nhắc Department Manager về yêu cầu sắp quá hạn.
 - Nhắc HR khi kỳ công sẵn sàng chốt.
 - Export CSV/Excel theo biểu mẫu tùy chỉnh.
 - Gửi email thông báo sau khi chốt công.
@@ -400,7 +431,7 @@ Employee gửi OT không chọn loại
 | BR-AUTH-01 | Mọi API ngoài login/reset password phải yêu cầu session hợp lệ. |
 | BR-RBAC-01 | Backend kiểm tra quyền trên từng API và từng resource. |
 | BR-SCOPE-01 | Employee chỉ xem và thao tác dữ liệu của chính mình. |
-| BR-APV-01 | Approver chỉ xử lý nhân viên được phân công. |
+| BR-MGR-01 | Department Manager chỉ xử lý nhân viên được phân công. |
 | BR-DAY-01 | Một nhân viên chỉ có một AttendanceDay cho mỗi ngày làm việc. |
 | BR-ORDER-01 | Không được check-out trước check-in. |
 | BR-DUP-01 | Không tạo hai check-in hoặc hai check-out hợp lệ trong cùng ngày. |
@@ -424,13 +455,15 @@ Employee gửi OT không chọn loại
 
 - `User`
 - `UserSession`
+- `EmployeeProfile`
+- `Position`
+- `EmploymentContract`
+- `EmployeeDocument`
 - `Workplace`
 - `AllowedNetwork`
 - `ShiftTemplate`
 - `RecurringSchedule`
-- `ShiftRegistration`
 - `WorkSchedule`
-- `ShiftSwapRequest`
 - `EmployeeAssignment`
 - `AttendanceDay`
 - `AttendanceEvent`
@@ -443,6 +476,12 @@ Employee gửi OT không chọn loại
 - `AdjustmentRequest`
 - `OvertimeRequest`
 - `OvertimeResult`
+- `SalaryProfile`
+- `LaborCompliancePolicy`
+- `OvertimePayPolicy`
+- `InsuranceProfile`, `InsurancePolicy`
+- `TaxProfile`, `TaxPolicy`, `DependentRegistration`
+- `PayrollInputSnapshot`, `PayrollRun`, `Payslip`
 - `AuditLog`
 - `IdempotencyRecord`
 
@@ -452,13 +491,14 @@ Employee gửi OT không chọn loại
 
 | Layer | Suggested Technology |
 |---|---|
-| Frontend | React + TypeScript + Vite + responsive CSS/Tailwind CSS |
-| Backend | Node.js with NestJS/Express hoặc Spring Boot |
-| Database | PostgreSQL |
-| Authentication | HttpOnly cookie session hoặc access/refresh token có rotation |
-| File storage | Private local storage cho demo; có abstraction để chuyển sang S3-compatible storage |
-| Testing | Unit test, integration/API test và end-to-end test |
-| Deployment | Docker + HTTPS hosting |
+| Web MVP | ReactJS + TypeScript + Vite + responsive CSS/Tailwind CSS |
+| Mobile 【SHOULD】 | React Native + Expo + TypeScript; chỉ Employee hero flow |
+| Backend | NestJS + TypeScript + Mongoose + Swagger/OpenAPI |
+| Database | MongoDB replica set; transaction và compound indexes tenant-scoped |
+| Authentication | HttpOnly cookie cho web; SecureStore cho mobile; refresh/session rotation |
+| File storage | Private local cho demo hoặc S3-compatible storage |
+| Testing | Jest/Supertest, Vitest, Playwright; unit, integration/API và E2E |
+| Deployment | MongoDB Atlas (replica set) + HTTPS hosting; không dùng Docker |
 
 ---
 
@@ -469,26 +509,28 @@ Employee gửi OT không chọn loại
 - Authentication và RBAC.
 - Admin quản lý tài khoản và cấu hình chấm công.
 - Employee check-in/check-out.
-- Full-time recurring schedule và part-time shift registration.
-- Shift swap có target consent và manager approval.
+- Full-time office scheduling do HR cấu hình.
 - Overtime request, automatic classification và eligible calculation.
 - Network/GPS/Selfie evidence.
 - Approval và clarification workflow.
 - Lịch sử và chi tiết ngày công.
-- Tổng hợp và chốt kỳ công.
+- Tổng hợp/chốt kỳ công và tạo PayrollInputSnapshot.
+- Quản lý Employee/Position/Contract/Document.
+- Salary/Insurance/Tax profiles và policy versioning.
+- Tính Gross, OT pay, BHXH/BHYT/BHTN, PIT, Net Salary, Employer Cost và Payslip.
 - Audit log cho nghiệp vụ chính.
 - Mock data/seed data phục vụ demo.
 
 ### Ngoài phạm vi MVP
 
-- Tính lương, thuế và bảo hiểm.
-- Quản lý nghỉ phép hoàn chỉnh.
+- Chuyển khoản ngân hàng, quyết toán PIT năm và kê khai điện tử BHXH/thuế.
+- Leave nâng cao (quota/accrual/half-day/hourly/carry-over/balance; **không** bao gồm flow request→Manager→HR apply thuộc MVP).
 - Nhận diện khuôn mặt bằng AI.
 - Theo dõi vị trí liên tục trong nền.
 - Chấm công offline và đồng bộ sau.
 - Máy chấm công vân tay.
 - Ứng dụng native iOS/Android.
-- Multi-tenant SaaS.
+- Billing/subscription SaaS.
 
 ---
 
@@ -496,25 +538,25 @@ Employee gửi OT không chọn loại
 
 | Account | Password | Role | Demo Scenario |
 |---|---|---|---|
-| `TVS-0248` | `Employee@123` | Employee A | Check-in/check-out bằng GPS hợp lệ: cách workplace 24m, accuracy ±16m. |
-| `TVS-0312` | `Employee@123` | Employee C | Làm ngoài văn phòng, chấm công bằng Selfie + GPS và tạo yêu cầu phê duyệt. |
-| `TVS-0102` | `Approver@123` | Approver B | Xem và xử lý danh sách yêu cầu Selfie/GPS; approve, reject hoặc yêu cầu giải trình. |
-| `TVS-0001` | `Admin@123` | Administrator | Xem dashboard và quản lý dữ liệu/cấu hình hệ thống. |
+| `CS-EMP-01` | `Employee@123` | Employee (`EMPLOYEE`) | Check-in/check-out GPS/Selfie, gửi OT/adjustment, xem Payslip cá nhân. |
+| `CS-MGR-01` | `Manager@123` | Department Manager (`DEPARTMENT_MANAGER`) | Duyệt Selfie/OT/adjustment và xác nhận bảng công phòng ban. |
+| `CS-HR-01` | `HR@123` | HR / Payroll Officer (`HR`) | Quản lý hồ sơ, policy, chốt công, tính/khóa Payroll và phát hành Payslip. |
+| `CS-SYS-01` | `SystemAdmin@123` | System Administrator (`SYSTEM_ADMIN`) | Quản lý Organization và HR đầu tiên; không xem dữ liệu lương tenant. |
 
 ---
 
 ## 14. Hero Demo Flow
 
 ```text
-Admin đăng nhập
-→ xem cấu hình Workplace, Shift và tài khoản đã seed
-→ Employee A đăng nhập và check-in bằng GPS
-→ Employee C đăng nhập và check-in ngoài văn phòng bằng Selfie
-→ Approver B đăng nhập, xem ảnh/vị trí và yêu cầu giải trình
-→ Employee C phản hồi
-→ Approver B phê duyệt
-→ HR rà soát kỳ công và chốt tháng
-→ hệ thống khóa dữ liệu và xuất bảng tổng hợp
+System Admin tạo Organization + HR
+→ HR tạo Employee/Position/Contract và ca Full-time
+→ Employee check-in/out, gửi LeaveRequest/OT/adjustment
+→ Manager duyệt; HR apply leave vào ngày công
+→ Manager xử lý yêu cầu
+→ HR chốt công
+→ hệ thống tạo PayrollInputSnapshot
+→ HR tính/review/lock Payroll
+→ Employee xem Payslip có Gross, bảo hiểm, PIT và Net Salary
 ```
 
 ---
@@ -528,9 +570,9 @@ Sau khi hoàn thành dự án, nhóm sinh viên có thể chứng minh:
 - Xây dựng API, database và authentication thực tế.
 - Áp dụng RBAC và resource-level authorization.
 - Xử lý upload file và dữ liệu GPS an toàn.
-- Thiết kế state machine cho attendance, schedule registration/swap, overtime, approval và timesheet period.
+- Thiết kế state machine cho attendance, overtime, approval, adjustment, timesheet period và payroll.
 - Áp dụng transaction, idempotency và unique constraints.
-- Xây dựng báo cáo và quy trình khóa dữ liệu cuối kỳ.
+- Xây dựng chốt công, snapshot payroll, insurance/PIT engine và Payslip có thể đối chiếu.
 - Viết unit test, integration test và end-to-end test.
 - Triển khai một ứng dụng full-stack có thể demo hoàn chỉnh.
 
@@ -541,58 +583,59 @@ Sau khi hoàn thành dự án, nhóm sinh viên có thể chứng minh:
 ### Actors
 
 ```text
-Employee
-Approver / Department Manager
-HR / Timekeeping Officer
-System Administrator
+Employee (EMPLOYEE)
+Department Manager (DEPARTMENT_MANAGER, alias Approver)
+HR / Payroll Officer (HR)
+System Administrator (SYSTEM_ADMIN)
 ```
 
 ### Main Features
 
 ```text
 Employee:
-+ Login using email/employee code and password.
-+ View today’s shift, workplace and attendance status.
-+ Check in/out at the office using Network or GPS.
-+ Check in/out outside the office using Selfie and GPS evidence.
-+ View attendance history, day details and approval status.
-+ Submit clarification when requested.
-+ View monthly timesheet summary and closing status.
++ View/update permitted profile and contract information.
++ Check in/out via Network, GPS or Selfie + GPS.
++ View schedule, attendance history, timesheet and released Payslip.
++ Submit LeaveRequest, OT, clarification and adjustment-before-close requests.
 
-Approver / Department Manager:
-+ View attendance requests of assigned employees.
-+ Review Selfie, GPS, server time, location accuracy and warnings.
-+ Approve or reject attendance records.
-+ Request employee clarification and review responses.
-+ Confirm department timesheets are ready for monthly closing.
+Department Manager:
++ View employees and attendance in assigned departments.
++ Approve/reject/clarify Selfie, Leave, OT and adjustment requests.
++ Confirm department timesheet; cannot self-approve requests.
++ View own Payslip only, not department salary data.
 
-HR / Timekeeping Officer:
-+ Review monthly attendance summaries by employee and department.
-+ Detect missing check-in/out and unresolved approval requests.
-+ Open, review, close and reopen timesheet periods with audit logs.
-+ Lock data after closing and export CSV/Excel summaries.
+HR / Payroll Officer:
++ Manage EmployeeProfile, Position, Contract, Document and Full-time schedules.
++ Apply approved LeaveRequest into attendance days (sole path for PAID/UNPAID leave overrides).
++ Resolve attendance blockers.
++ Configure versioned Labor/OT/Insurance/Tax policies and salary profiles.
++ Clone/custom AttendanceBonus templates and enable/create Allowances.
++ Close/reopen timesheets and create immutable PayrollInputSnapshot.
++ Calculate/review/approve/lock Payroll and release Payslips.
 
 System Administrator:
-+ Manage users, roles and account status.
-+ Manage workplaces, geofences, allowed networks and shifts.
-+ Assign workplace, shift and approver to employees.
-+ Configure attendance policies and evidence retention.
-+ View system-wide audit logs.
++ Manage Organizations and initial HR accounts.
++ Monitor platform health/audit; cannot process attendance/payroll or view tenant salaries.
 ```
 
 ### Must Have
 
 ```text
-Flow 1: User, Role & Attendance Configuration Management (REQUIRED)
+Flow 1: User, Role & HR Configuration Management (REQUIRED)
 Flow 2: Employee Check-in/Check-out & Evidence Management (REQUIRED)
 Flow 3: Attendance Approval & Clarification Workflow (REQUIRED)
 Flow 4: Monthly Timesheet Review & Closing (REQUIRED)
+Flow 4A: Employee, Contract & Payroll (REQUIRED)
+Flow 4B: Overtime Request & Automatic Classification (REQUIRED)
+Adjustment: Adjustment Request before close (REQUIRED)
+Leave: Employee request → Manager approve → HR apply (REQUIRED)
+Compensation: Attendance Bonus templates + Allowance hybrid (REQUIRED)
 ```
 
 ### Nice to Have
 
 ```text
-Flow 5: Adjustment Request After Closing (OPTIONAL)
-Flow 6: Dashboard, Notification & Export (OPTIONAL)
+Flow 5: Adjustment Request After Closing via Reopen (OPTIONAL)
+Flow 6: Dashboard, Notification & Custom Report Export (OPTIONAL)
 Flow 7: Advanced Security and Analytics (OPTIONAL)
 ```

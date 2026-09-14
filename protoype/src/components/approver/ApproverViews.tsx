@@ -80,7 +80,7 @@ export const ApproverDashboard: React.FC<ApproverDashboardProps> = ({
         <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
             <span>Tổng yêu cầu chờ duyệt</span>
-            <Clock className="w-4 h-4 text-amber-500" />
+            <Clock className="w-4 h-4 text-on-secondary-container" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="font-mono text-2xl font-bold text-on-surface">
@@ -157,7 +157,7 @@ export const ApproverDashboard: React.FC<ApproverDashboardProps> = ({
               placeholder="Tìm theo tên nhân viên, mã nhân viên (TVS-0248), mã yêu cầu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-outline focus:outline-hidden focus:ring-2 focus:ring-slate-900 bg-surface-container-lowest"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-outline focus:outline-hidden focus:ring-2 focus:ring-primary/40 bg-surface-container-lowest"
             />
           </div>
 
@@ -310,7 +310,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
   onClarify,
 }) => {
   return (
-    <div id="approver-selfie-detail-a02" className="space-y-6 pb-20">
+    <div id="approver-selfie-detail-a02" className="space-y-6 pb-24">
       {/* Top Breadcrumb & Title */}
       <div className="flex items-center justify-between pb-4 border-b border-outline-variant">
         <button
@@ -371,7 +371,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-on-success"></span>
               <h4 className="text-xs font-bold text-on-surface">1. Ảnh Selfie Check-in</h4>
             </div>
             <span className="font-mono text-xs font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant">
@@ -387,7 +387,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
             />
             {/* Watermark */}
             <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent text-white text-[10px] font-mono space-y-0.5">
-              <div className="text-amber-300 font-bold text-[11px] flex justify-between">
+              <div className="font-bold text-[11px] flex justify-between">
                 <span>CHECK-IN VERIFIED</span>
                 <span>{request.checkIn?.serverTime}</span>
               </div>
@@ -412,7 +412,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-on-success"></span>
               <h4 className="text-xs font-bold text-on-surface">2. Ảnh Selfie Check-out</h4>
             </div>
             <span className="font-mono text-xs font-bold text-on-surface bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant">
@@ -428,7 +428,7 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
             />
             {/* Watermark */}
             <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent text-white text-[10px] font-mono space-y-0.5">
-              <div className="text-amber-300 font-bold text-[11px] flex justify-between">
+              <div className="font-bold text-[11px] flex justify-between">
                 <span>CHECK-OUT VERIFIED</span>
                 <span>{request.checkOut?.serverTime}</span>
               </div>
@@ -474,40 +474,42 @@ export const ApproverSelfieDetail: React.FC<ApproverSelfieDetailProps> = ({
       {/* STICKY BOTTOM ACTION BAR FOR APPROVER */}
       <div
         id="approver-sticky-action-bar"
-        className="fixed bottom-0 inset-x-0 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant p-4 shadow-xl z-30 flex items-center justify-between max-w-7xl mx-auto"
+        className="fixed bottom-0 inset-x-0 z-30 border-t border-blue-950/30 bg-[#071c3b]/95 backdrop-blur-md shadow-xl"
       >
-        <div className="text-xs text-on-surface-variant">
-          Đang xem xét: <strong>{request.employee.name}</strong> ({request.date})
-        </div>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="text-xs text-blue-200 hidden sm:block">
+            Đang xem xét: <strong className="text-white">{request.employee.name}</strong> ({request.date})
+          </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            id="btn-approver-reject"
-            type="button"
-            onClick={() => onReject(request)}
-            className="px-4 py-2.5 text-xs font-bold text-error bg-error-container hover:bg-error-container border border-error-container rounded-xl transition-colors shadow-sm"
-          >
-            Từ chối (Bắt buộc lý do)
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+            <button
+              id="btn-approver-reject"
+              type="button"
+              onClick={() => onReject(request)}
+              className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs font-bold text-red-300 bg-red-950/60 hover:bg-red-900/70 border border-red-800/50 rounded-xl transition-colors shadow-sm"
+            >
+              Từ chối
+            </button>
 
-          <button
-            id="btn-approver-clarify"
-            type="button"
-            onClick={() => onClarify(request)}
-            className="px-4 py-2.5 text-xs font-bold text-primary bg-primary-fixed hover:bg-primary-container border border-outline-variant rounded-xl transition-colors shadow-sm"
-          >
-            Yêu cầu giải trình
-          </button>
+            <button
+              id="btn-approver-clarify"
+              type="button"
+              onClick={() => onClarify(request)}
+              className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs font-bold text-blue-200 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors shadow-sm"
+            >
+              Yêu cầu giải trình
+            </button>
 
-          <button
-            id="btn-approver-approve"
-            type="button"
-            onClick={() => onApprove(request)}
-            className="px-6 py-2.5 text-xs font-bold text-white bg-primary hover:bg-primary rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
-          >
-            <CheckCircle2 className="w-4 h-4 text-secondary" />
-            Duyệt ngày công
-          </button>
+            <button
+              id="btn-approver-approve"
+              type="button"
+              onClick={() => onApprove(request)}
+              className="px-4 py-2 sm:px-6 sm:py-2.5 text-xs font-bold text-white bg-secondary hover:bg-secondary/90 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Duyệt ngày công
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -530,7 +532,7 @@ export const ApproverGPSDetail: React.FC<ApproverGPSDetailProps> = ({
   onClarify,
 }) => {
   return (
-    <div id="approver-gps-detail-a03" className="space-y-6 pb-20">
+    <div id="approver-gps-detail-a03" className="space-y-6 pb-24">
       {/* Top Bar */}
       <div className="flex items-center justify-between pb-4 border-b border-outline-variant">
         <button
@@ -644,37 +646,39 @@ export const ApproverGPSDetail: React.FC<ApproverGPSDetailProps> = ({
       {/* Sticky Bottom Actions */}
       <div
         id="approver-gps-sticky-bar"
-        className="fixed bottom-0 inset-x-0 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant p-4 shadow-xl z-30 flex items-center justify-between max-w-7xl mx-auto"
+        className="fixed bottom-0 inset-x-0 z-30 border-t border-blue-950/30 bg-[#071c3b]/95 backdrop-blur-md shadow-xl"
       >
-        <div className="text-xs text-on-surface-variant">
-          Xem xét ngoại lệ GPS: <strong>{request.employee.name}</strong>
-        </div>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="text-xs text-blue-200 hidden sm:block">
+            Xem xét ngoại lệ GPS: <strong className="text-white">{request.employee.name}</strong>
+          </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => onReject(request)}
-            className="px-4 py-2.5 text-xs font-bold text-error bg-error-container hover:bg-error-container border border-error-container rounded-xl transition-colors shadow-sm"
-          >
-            Từ chối
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+            <button
+              type="button"
+              onClick={() => onReject(request)}
+              className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs font-bold text-red-300 bg-red-950/60 hover:bg-red-900/70 border border-red-800/50 rounded-xl transition-colors shadow-sm"
+            >
+              Từ chối
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onClarify(request)}
-            className="px-4 py-2.5 text-xs font-bold text-primary bg-primary-fixed hover:bg-primary-container border border-outline-variant rounded-xl transition-colors shadow-sm"
-          >
-            Yêu cầu giải trình thêm
-          </button>
+            <button
+              type="button"
+              onClick={() => onClarify(request)}
+              className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs font-bold text-blue-200 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors shadow-sm"
+            >
+              Yêu cầu giải trình thêm
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onApprove(request)}
-            className="px-6 py-2.5 text-xs font-bold text-white bg-primary hover:bg-primary rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
-          >
-            <CheckCircle2 className="w-4 h-4 text-secondary" />
-            Duyệt ngoại lệ GPS
-          </button>
+            <button
+              type="button"
+              onClick={() => onApprove(request)}
+              className="px-4 py-2 sm:px-6 sm:py-2.5 text-xs font-bold text-white bg-secondary hover:bg-secondary/90 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Duyệt ngoại lệ GPS
+            </button>
+          </div>
         </div>
       </div>
     </div>

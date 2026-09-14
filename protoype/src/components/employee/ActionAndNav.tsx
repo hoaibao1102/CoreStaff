@@ -44,12 +44,12 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   };
 
   return (
-    <div id="action-button-container" className="space-y-2 pt-2">
+    <div id="action-button-container" className="mt-3 space-y-2">
       {/* Reason why button is disabled placed directly above button */}
       {!isEnabled && disabledReason && (
         <div
           id="disabled-button-reason-banner"
-          className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant text-xs shadow-sm"
+          className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant text-xs shadow-card-sm"
         >
           <Lock className="w-4 h-4 shrink-0" />
           <span className="text-[11px] leading-tight">
@@ -129,43 +129,52 @@ export const BottomNavigation: React.FC<BottomNavProps> = ({
   return (
     <nav
       id="bottom-navigation-bar"
-      className="bg-surface border-t border-outline-variant px-4 py-2 flex items-center justify-around z-20 h-16 shadow-md"
+      className="fixed bottom-0 inset-x-0 z-30 h-[68px] drop-shadow-xl"
     >
-      <button
-        id="nav-tab-today"
-        type="button"
-        onClick={() => onTabChange('TODAY')}
-        className={`flex flex-col items-center justify-center px-4 py-1 text-xs font-medium transition-colors ${tabClass(activeTab === 'TODAY')}`}
-      >
-        <Calendar className={`w-5 h-5 mb-0.5 ${activeTab === 'TODAY' ? 'stroke-[2.5]' : ''}`} />
-        <span>Hôm nay</span>
-      </button>
+      <div className="mx-auto flex h-full max-w-6xl items-center justify-around
+        rounded-t-2xl
+        border border-b-0 border-white/40
+        bg-gradient-to-b from-white/70 to-[#f5f2ee]/80
+        backdrop-blur-lg
+        px-4
+        shadow-[0_-4px_24px_rgba(0,0,0,0.08)]
+      ">
+        <button
+          id="nav-tab-today"
+          type="button"
+          onClick={() => onTabChange('TODAY')}
+          className={`flex flex-col items-center justify-center px-6 py-1 text-xs font-medium transition-colors ${tabClass(activeTab === 'TODAY')}`}
+        >
+          <Calendar className={`w-5 h-5 mb-0.5 ${activeTab === 'TODAY' ? 'stroke-[2.5]' : ''}`} />
+          <span>Hôm nay</span>
+        </button>
 
-      <button
-        id="nav-tab-history"
-        type="button"
-        onClick={() => onTabChange('HISTORY')}
-        className={`flex flex-col items-center justify-center px-4 py-1 text-xs font-medium relative ${tabClass(activeTab === 'HISTORY')}`}
-      >
-        <History className={`w-5 h-5 mb-0.5 ${activeTab === 'HISTORY' ? 'stroke-[2.5]' : ''}`} />
-        <span>Lịch sử</span>
-        {pendingCount > 0 && (
-          <span className="absolute top-0.5 right-2 w-2 h-2 rounded-full bg-tertiary-container"></span>
-        )}
-      </button>
+        <button
+          id="nav-tab-history"
+          type="button"
+          onClick={() => onTabChange('HISTORY')}
+          className={`flex flex-col items-center justify-center px-6 py-1 text-xs font-medium relative ${tabClass(activeTab === 'HISTORY')}`}
+        >
+          <History className={`w-5 h-5 mb-0.5 ${activeTab === 'HISTORY' ? 'stroke-[2.5]' : ''}`} />
+          <span>Lịch sử</span>
+          {pendingCount > 0 && (
+            <span className="absolute top-0.5 right-2 w-2 h-2 rounded-full bg-tertiary-container"></span>
+          )}
+        </button>
 
-      <button
-        id="nav-tab-profile"
-        type="button"
-        onClick={() => onTabChange('PROFILE')}
-        className={`flex flex-col items-center justify-center px-4 py-1 text-xs font-medium ${tabClass(activeTab === 'PROFILE')}`}
-      >
-        <User className={`w-5 h-5 mb-0.5 ${activeTab === 'PROFILE' ? 'stroke-[2.5]' : ''}`} />
-        <span className="flex items-center gap-1">
-          Cá nhân
-          <span className="text-[9px] bg-surface-variant text-on-surface-variant px-1 rounded border border-outline-variant">ERP</span>
-        </span>
-      </button>
+        <button
+          id="nav-tab-profile"
+          type="button"
+          onClick={() => onTabChange('PROFILE')}
+          className={`flex flex-col items-center justify-center px-6 py-1 text-xs font-medium ${tabClass(activeTab === 'PROFILE')}`}
+        >
+          <User className={`w-5 h-5 mb-0.5 ${activeTab === 'PROFILE' ? 'stroke-[2.5]' : ''}`} />
+          <span className="flex items-center gap-1">
+            Cá nhân
+            <span className="text-[9px] bg-surface-variant text-on-surface-variant px-1 rounded border border-outline-variant">ERP</span>
+          </span>
+        </button>
+      </div>
     </nav>
   );
 };

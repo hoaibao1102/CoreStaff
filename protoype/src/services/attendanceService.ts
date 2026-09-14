@@ -14,16 +14,19 @@
 import {
   DayAttendance,
   MethodType,
-  WorkMode,
   AttendanceEvent,
+  Workplace,
+  AttendanceSignals,
 } from '../types';
 import { CURRENT_EMPLOYEE, INITIAL_TODAY_ATTENDANCE } from '../data/mockData';
+import { loadActiveWorkplace } from './adminService';
 
 /* ------------------------------------------------------------------ *
- * Client-side "server store" persisted to localStorage.
+ * In-memory "server store" for the session only — deliberately NOT
+ * persisted (no localStorage). Reloading the page resets today's
+ * attendance so the same scenario can be tested check-in/check-out
+ * as many times as needed instead of being locked after one run.
  * ------------------------------------------------------------------ */
-
-const STORAGE_KEY = 'tvs-timekeeping-mock-v1';
 
 interface MockDb {
   today: DayAttendance;
@@ -33,25 +36,24 @@ function clone<T>(x: T): T {
   return JSON.parse(JSON.stringify(x));
 }
 
+let db: MockDb = { today: clone(INITIAL_TODAY_ATTENDANCE) };
+
 function loadDb(): MockDb {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as MockDb;
-  } catch {
-    /* fall through */
-  }
-  return { today: clone(INITIAL_TODAY_ATTENDANCE) };
+  return db;
 }
 
-function saveDb(db: MockDb): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  } catch {
-    /* storage may be unavailable — fail silently */
-  }
+function saveDb(next: MockDb): void {
+  db = next;
 }
 
 const simulateLatency = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+/** "HH:MM" → minutes since midnight, for computing a real elapsed duration. */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
 
 export class AttendanceError extends Error {
   code: string;
@@ -73,34 +75,40 @@ const nowTime = (): { time: string; serverTime: string } => {
  * Signals + method resolution (the BE-decision core)
  * ------------------------------------------------------------------ */
 
-export interface AttendanceSignals {
-  workMode: WorkMode;
-  /** Whether the device is on the company network. */
-  networkValid: boolean;
-  /** GPS distance/accuracy; undefined when not yet fixed. */
-  gpsDistance?: number;
-  gpsAccuracy?: number;
-  /** Selfie photo (data URL) when the OUT flow captured one. */
-  photoUrl?: string;
-}
-
 /**
- * Decide the actual attendance method for a submission. This mirrors exactly
- * what the backend does — FE never picks NETWORK/GPS/SELFIE on its own.
+ * Decide the actual attendance method for a submission — what the backend does;
+ * the FE never picks NETWORK/GPS/SELFIE on its own (SRS BR-METHOD-01).
+ *
+ * `workplace` is the tenant's admin-configured Workplace; thresholds come from
+ * it, not from the employee record. `undefined` (no config) ⇒ neither NETWORK
+ * nor GPS can be satisfied ⇒ SELFIE evidence.
  */
-export function resolveMethod(signals: AttendanceSignals): MethodType {
+export function resolveMethod(
+  signals: AttendanceSignals,
+  workplace: Workplace | undefined,
+): MethodType {
   if (signals.workMode === 'OUT_OFFICE') return 'SELFIE';
 
-  // IN_OFFICE
-  if (signals.networkValid) return 'NETWORK';
+  // IN_OFFICE — is the observed router one this tenant registered?
+  // The !! guard is deliberate: tsconfig has no `strict`, so an
+  // `undefined.toUpperCase()` comparison would compile and silently degrade.
+  const bssid = signals.observedBssid;
   if (
+    !!bssid &&
+    workplace?.allowNetworkAttendance &&
+    workplace.networks.some((n) => n.active && n.bssid.toUpperCase() === bssid.toUpperCase())
+  ) {
+    return 'NETWORK';
+  }
+  if (
+    workplace?.allowGpsAttendance &&
     signals.gpsDistance != null &&
-    signals.gpsDistance <= CURRENT_EMPLOYEE.allowedRadius &&
-    (signals.gpsAccuracy == null || signals.gpsAccuracy <= CURRENT_EMPLOYEE.maximumAccuracy)
+    signals.gpsDistance <= workplace.allowedRadiusMeters &&
+    (signals.gpsAccuracy == null || signals.gpsAccuracy <= workplace.maximumAccuracyMeters)
   ) {
     return 'GPS';
   }
-  // Both network and GPS failed → fallback to selfie evidence.
+  // Network and GPS both failed/unavailable → selfie evidence fallback.
   return 'SELFIE';
 }
 
@@ -115,32 +123,47 @@ function assertEvidence(method: MethodType, signals: AttendanceSignals): void {
 
 function buildEvent(
   method: MethodType,
-  params: { time: string; serverTime: string; isCheckIn: boolean; signals: AttendanceSignals }
+  params: {
+    time: string;
+    serverTime: string;
+    isCheckIn: boolean;
+    signals: AttendanceSignals;
+    /** Present unless SELFIE — resolveMethod never returns NETWORK/GPS without it. */
+    workplace?: Workplace;
+  }
 ): AttendanceEvent {
   const { time, serverTime, isCheckIn, signals } = params;
 
   if (method === 'SELFIE') {
+    if (!signals.location) {
+      throw new AttendanceError('LOCATION_UNAVAILABLE', 'Không có dữ liệu vị trí đi kèm bằng chứng Selfie.');
+    }
     return {
       time,
       serverTime,
       method,
-      workplace: isCheckIn ? 'Thị trường Quận 7' : 'Thị trường TP. Thủ Đức',
-      address: isCheckIn
-        ? 'Khu dân cư Him Lam, Phường Tân Hưng, Quận 7, TP.HCM'
-        : 'Khu Công nghệ cao, Phường Tân Phú, TP. Thủ Đức, TP.HCM',
-      accuracy: isCheckIn ? 18 : 15,
+
+      workplace: isCheckIn ? 'Điểm làm việc ngoài văn phòng — Check-in' : 'Điểm làm việc ngoài văn phòng — Check-out',
+      address: signals.location.address,
+      coordinates: {
+        lat: signals.location.latitude,
+        lng: signals.location.longitude,
+      },
+      accuracy: signals.location.accuracyMeters,
       selfieUrl: signals.photoUrl,
       approvalStatus: 'PENDING',
+      auditNote: `Mock backend GPS captured at ${signals.location.capturedAtClient}`,
     };
   }
 
   if (method === 'GPS') {
+    const wp = requireWorkplace(params.workplace);
     return {
       time,
       serverTime,
       method,
-      workplace: CURRENT_EMPLOYEE.workplace,
-      address: `123 đường mẫu, Quận 8, TP.HCM (GPS, cách ${signals.gpsDistance ?? 0}m)`,
+      workplace: wp.name,
+      address: `${wp.address} (GPS, cách ${signals.gpsDistance ?? 0}m)`,
       accuracy: signals.gpsAccuracy,
       distanceFromWorkplace: signals.gpsDistance,
       approvalStatus: 'NOT_REQUIRED',
@@ -148,14 +171,24 @@ function buildEvent(
   }
 
   // NETWORK
+  const wp = requireWorkplace(params.workplace);
+  const matched = wp.networks.find(
+    (n) => n.active && signals.observedBssid && n.bssid.toUpperCase() === signals.observedBssid.toUpperCase(),
+  );
   return {
     time,
     serverTime,
     method,
-    workplace: CURRENT_EMPLOYEE.workplace,
-    address: 'Mạng TVS_OFFICE_Q8 (LAN)',
+    workplace: wp.name,
+    address: `Mạng ${matched?.ssid ?? matched?.name ?? 'văn phòng'} · ${matched?.bssid ?? signals.observedBssid}`,
     approvalStatus: 'NOT_REQUIRED',
   };
+}
+
+/** Mirrors SRS NETWORK_NOT_CONFIGURED (409) — unreachable via resolveMethod. */
+function requireWorkplace(wp: Workplace | undefined): Workplace {
+  if (!wp) throw new AttendanceError('WORKPLACE_NOT_CONFIGURED', 'Tổ chức chưa cấu hình văn phòng / mạng chấm công.');
+  return wp;
 }
 
 /* ------------------------------------------------------------------ *
@@ -179,18 +212,14 @@ export function resetToday(): DayAttendance {
   return clone(fresh);
 }
 
-export interface CheckInParams {
-  workMode: WorkMode;
-  networkValid: boolean;
-  gpsDistance?: number;
-  gpsAccuracy?: number;
-  photoUrl?: string;
-}
+/** @deprecated alias — the shape lives in types.ts as AttendanceSignals. */
+export type CheckInParams = AttendanceSignals;
 
 /** POST /api/attendance/check-in */
 export async function submitCheckIn(prev: DayAttendance, params: CheckInParams): Promise<DayAttendance> {
   const signals: AttendanceSignals = { ...params };
-  const method = resolveMethod(signals);
+  const workplace = loadActiveWorkplace();
+  const method = resolveMethod(signals, workplace);
   await simulateLatency(800);
 
   const db = loadDb();
@@ -200,7 +229,7 @@ export async function submitCheckIn(prev: DayAttendance, params: CheckInParams):
   assertEvidence(method, signals);
 
   const { time, serverTime } = nowTime();
-  const checkIn = buildEvent(method, { time, serverTime, isCheckIn: true, signals });
+  const checkIn = buildEvent(method, { time, serverTime, isCheckIn: true, signals, workplace });
 
   const next: DayAttendance = {
     ...db.today,
@@ -228,7 +257,8 @@ export async function submitCheckIn(prev: DayAttendance, params: CheckInParams):
 /** POST /api/attendance/check-out */
 export async function submitCheckOut(prev: DayAttendance, params: CheckInParams): Promise<DayAttendance> {
   const signals: AttendanceSignals = { ...params };
-  const method = resolveMethod(signals);
+  const workplace = loadActiveWorkplace();
+  const method = resolveMethod(signals, workplace);
   await simulateLatency(800);
 
   const db = loadDb();
@@ -241,17 +271,21 @@ export async function submitCheckOut(prev: DayAttendance, params: CheckInParams)
   assertEvidence(method, signals);
 
   const { time, serverTime } = nowTime();
-  const checkOut = buildEvent(method, { time, serverTime, isCheckIn: false, signals });
+  const checkOut = buildEvent(method, { time, serverTime, isCheckIn: false, signals, workplace });
+
+  const totalWorkingMinutes = db.today.checkIn
+    ? Math.max(0, timeToMinutes(checkOut.time) - timeToMinutes(db.today.checkIn.time))
+    : 0;
 
   const next: DayAttendance = {
     ...db.today,
     status: 'COMPLETED',
-    totalWorkingMinutes: 545,
+    totalWorkingMinutes,
     overallApprovalStatus: method === 'SELFIE' ? 'PENDING' : db.today.overallApprovalStatus,
     checkOut,
     warningNote:
       method === 'SELFIE'
-        ? 'Check-in và Check-out cách nhau 18,4 km (Đã gắn cờ tham khảo cho Approver).'
+        ? `Check-in và Check-out cách nhau ${(randomInt(15, 250) / 10).toFixed(1)} km (Đã gắn cờ tham khảo cho Approver).`
         : db.today.warningNote,
     auditTrail: [
       ...db.today.auditTrail,

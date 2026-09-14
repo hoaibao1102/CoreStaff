@@ -1,4 +1,4 @@
-export type MockRole = 'EMPLOYEE' | 'APPROVER' | 'ADMIN';
+export type MockRole = 'EMPLOYEE' | 'APPROVER' | 'HR' | 'ADMIN';
 
 export interface MockAccount {
   id: string;
@@ -27,6 +27,7 @@ export const MOCK_ACCOUNTS: MockAccount[] = [
   { id: 'usr-employee-a', fullName: 'Nguyễn Văn An', employeeCode: 'TVS-0248', email: 'an.nguyen@timelock.demo', password: 'Employee@123', role: 'EMPLOYEE', department: 'Phòng Kinh doanh' },
   { id: 'usr-approver-b', fullName: 'Lê Hoàng Hải', employeeCode: 'TVS-0102', email: 'hai.le@timelock.demo', password: 'Approver@123', role: 'APPROVER', department: 'Phòng Kinh doanh' },
   { id: 'usr-admin', fullName: 'Trần Minh Anh', employeeCode: 'TVS-0001', email: 'admin@timelock.demo', password: 'Admin@123', role: 'ADMIN', department: 'Quản trị hệ thống' },
+  { id: 'usr-hr', fullName: 'Phạm Thị Thu Hà', employeeCode: 'TVS-0008', email: 'ha.phan@timelock.demo', password: 'Hr@123', role: 'HR', department: 'Phòng Nhân sự' },
   { id: 'usr-employee-c', fullName: 'Trần Thị Bích Ngọc', employeeCode: 'TVS-0312', email: 'ngoc.tran@timelock.demo', password: 'Employee@123', role: 'EMPLOYEE', department: 'Phòng Dự án ERP' },
 ];
 

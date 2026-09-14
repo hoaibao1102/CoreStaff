@@ -3,6 +3,13 @@ import {
   DayAttendance,
   ApproverRequest,
   FrameMetadata,
+  Organization,
+  PlatformUserAccount,
+  AccountingPeriod,
+  OrganizationStructure,
+  ShiftTemplate,
+  Workplace,
+  DepartmentTeamMember,
 } from '../types';
 
 export const CURRENT_EMPLOYEE: EmployeeProfile = {
@@ -16,8 +23,20 @@ export const CURRENT_EMPLOYEE: EmployeeProfile = {
   shiftHours: '08:00 – 17:00',
   manager: 'Lê Hoàng Hải (Trưởng phòng Kinh doanh)',
   defaultMethod: 'NETWORK',
-  allowedRadius: 100, // 100 meters
-  maximumAccuracy: 80, // 80 meters
+};
+
+/** Profile shown on the DEPARTMENT_MANAGER's own "Chấm công của tôi" tab — SRS §8 (same account checks in too). */
+export const MANAGER_EMPLOYEE: EmployeeProfile = {
+  name: 'Lê Hoàng Hải',
+  code: 'TVS-0102',
+  department: 'Phòng Kinh doanh',
+  title: 'Trưởng phòng Kinh doanh',
+  workplace: 'Văn phòng TVS Quận 8',
+  workplaceAddress: '123 đường mẫu, Quận 8, TP.HCM',
+  shift: 'Ca hành chính',
+  shiftHours: '08:00 – 17:00',
+  manager: 'Phạm Thị Thu Hà (HR)',
+  defaultMethod: 'NETWORK',
 };
 
 export const INITIAL_TODAY_ATTENDANCE: DayAttendance = {
@@ -510,6 +529,19 @@ export const MOCK_APPROVER_REQUESTS: ApproverRequest[] = [
   },
 ];
 
+/**
+ * Department roster for the DEPARTMENT_MANAGER team view — SRS use case
+ * DEPT_EMPLOYEE/DEPT_ATTENDANCE. Manager account usr-approver-b (Lê Hoàng Hải)
+ * is scoped to Phòng Kinh doanh, matching MOCK_ACCOUNTS.
+ */
+export const MOCK_TEAM_MEMBERS: DepartmentTeamMember[] = [
+  { id: 'tm-1', name: 'Nguyễn Văn An', code: 'TVS-0248', title: 'Chuyên viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'CHECKED_IN', checkInTime: '08:15', approvalStatus: 'PENDING' },
+  { id: 'tm-2', name: 'Võ Thị Kim Chi', code: 'TVS-0255', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'COMPLETED', checkInTime: '07:58', checkOutTime: '17:05', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-3', name: 'Bùi Anh Tuấn', code: 'TVS-0261', title: 'Trưởng nhóm Kinh doanh', department: 'Phòng Kinh doanh', status: 'LATE', checkInTime: '08:42', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-4', name: 'Hoàng Thu Trang', code: 'TVS-0270', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'NOT_CHECKED_IN', approvalStatus: 'NOT_REQUIRED' },
+  { id: 'tm-5', name: 'Đỗ Minh Quân', code: 'TVS-0288', title: 'Nhân viên Kinh doanh', department: 'Phòng Kinh doanh', status: 'HOLIDAY', approvalStatus: 'NOT_REQUIRED' },
+];
+
 export const FRAME_METADATA_LIST: FrameMetadata[] = [
   {
     id: 'E01_A',
@@ -702,5 +734,190 @@ export const FRAME_METADATA_LIST: FrameMetadata[] = [
     primaryAction: 'Duyệt ngoại lệ / Yêu cầu giải trình thêm / Từ chối ghi nhận.',
     nextNavigation: 'Cập nhật bản ghi và trở về A01.',
     tags: ['GPS Geofence Anomaly', 'Distance Radar', 'Manager Decision'],
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* Platform (SYSTEM_ADMIN) seeds — SRS §3/§8                            */
+/* ------------------------------------------------------------------ */
+
+export const MOCK_ORGANIZATIONS: Organization[] = [
+  { id: 'org-tvs', name: 'Công ty TNHH TVS', code: 'TVS', status: 'ACTIVE', createdAt: '01/01/2026', userCount: 48 },
+  { id: 'org-abc', name: 'Công ty CP Xây dựng ABC', code: 'ABC', status: 'LOCKED', createdAt: '15/06/2026', userCount: 0 },
+];
+
+/**
+ * Tenant of the simulated logged-in employee (CURRENT_EMPLOYEE). The check-in
+ * loop resolves this tenant's Workplace to validate signals against — in
+ * production the org id comes from the session, not a constant.
+ */
+export const TENANT_ORG_ID = 'org-tvs';
+
+/**
+ * Workplace seed. Values match the literals this prototype previously hardcoded
+ * in resolveMethod/buildEvent, so default behaviour is unchanged.
+ * org-abc deliberately has none — that's the empty-state + SELFIE-fallback demo.
+ */
+export const MOCK_WORKPLACES: Workplace[] = [
+  {
+    id: 'wp-tvs-hq',
+    organizationId: 'org-tvs',
+    code: 'TVS-HQ',
+    name: 'Văn phòng TVS Quận 8',
+    address: '123 đường mẫu, Quận 8, TP.HCM',
+    latitude: 10.7512,
+    longitude: 106.6974,
+    allowedRadiusMeters: 100,
+    maximumAccuracyMeters: 80,
+    allowNetworkAttendance: true,
+    allowGpsAttendance: true,
+    allowSelfieFallback: true,
+    networks: [
+      { id: 'net-tvs-hq-1', name: 'Mạng văn phòng', ssid: 'TVS_OFFICE_Q8', bssid: 'AA:BB:CC:DD:EE:01', active: true },
+    ],
+    active: true,
+    createdAt: '01/01/2026',
+  },
+];
+
+export const MOCK_PLATFORM_ACCOUNTS: PlatformUserAccount[] = [
+  { id: 'acct-hr', fullName: 'Phạm Thị Thu Hà', email: 'ha.phan@timelock.demo', employeeCode: 'TVS-0008', role: 'HR', organizationId: 'org-tvs', organizationName: 'Công ty TNHH TVS', status: 'ACTIVE', mustChangePassword: false, lastLoginAt: '21/08/2026 07:40' },
+  { id: 'acct-mgr', fullName: 'Lê Hoàng Hải', email: 'hai.le@timelock.demo', employeeCode: 'TVS-0102', role: 'DEPARTMENT_MANAGER', organizationId: 'org-tvs', organizationName: 'Công ty TNHH TVS', status: 'ACTIVE', mustChangePassword: false, lastLoginAt: '21/08/2026 08:02' },
+  { id: 'acct-emp-a', fullName: 'Nguyễn Văn An', email: 'an.nguyen@timelock.demo', employeeCode: 'TVS-0248', role: 'EMPLOYEE', organizationId: 'org-tvs', organizationName: 'Công ty TNHH TVS', status: 'ACTIVE', mustChangePassword: false, lastLoginAt: '21/08/2026 07:55' },
+  { id: 'acct-emp-c', fullName: 'Trần Thị Bích Ngọc', email: 'ngoc.tran@timelock.demo', employeeCode: 'TVS-0312', role: 'EMPLOYEE', organizationId: 'org-tvs', organizationName: 'Công ty TNHH TVS', status: 'LOCKED', mustChangePassword: true },
+];
+
+/* ------------------------------------------------------------------ */
+/* HR seeds — lean structure overview + period closing ceremony         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ShiftTemplate seed — SRS §6. Ca hành chính 08:00–17:00 is *data*, explicitly
+ * editable by HR (§6.1), not a hard-coded office-hours constant.
+ */
+export const MOCK_SHIFT_TEMPLATES: ShiftTemplate[] = [
+  {
+    id: 'shift-tvs-office',
+    organizationId: TENANT_ORG_ID,
+    code: 'OFFICE',
+    name: 'Ca hành chính',
+    startTime: '08:00',
+    endTime: '17:00',
+    breakMinutes: 60,
+    gracePeriodMinutes: 15,
+    active: true,
+    createdAt: '01/01/2026',
+  },
+  {
+    id: 'shift-tvs-sat',
+    organizationId: TENANT_ORG_ID,
+    code: 'SAT-AM',
+    name: 'Ca thứ Bảy',
+    startTime: '08:00',
+    endTime: '12:00',
+    breakMinutes: 0,
+    gracePeriodMinutes: 10,
+    active: true,
+    createdAt: '01/01/2026',
+  },
+];
+
+export const MOCK_HR_ORG: OrganizationStructure = {
+  organizationId: 'org-tvs',
+  organizationName: 'Công ty TNHH TVS',
+  departments: ['Phòng Kinh doanh', 'Phòng Dự án ERP', 'Phòng Kỹ thuật', 'Phòng Marketing'],
+  // ponytail: static display text, not the admin-owned Workplace config below —
+  // 'Chi nhánh Quận 7' is the out-of-office SELFIE region, not a configured
+  // geofence. Derive from MOCK_WORKPLACES once HR reads the tenant config.
+  workplaces: ['Văn phòng TVS Quận 8', 'Chi nhánh Quận 7'],
+  shifts: ['Ca hành chính (08:00 – 17:00)', 'Ca thứ Bảy (08:00 – 12:00)'],
+  employeeCount: 48,
+};
+
+export const MOCK_PERIODS: AccountingPeriod[] = [
+  {
+    id: 'KP-2026-08',
+    organizationId: 'org-tvs',
+    organizationName: 'Công ty TNHH TVS',
+    month: '2026-08',
+    label: 'Kỳ công Tháng 08/2026',
+    status: 'REVIEWING',
+    version: 1,
+    blockers: [
+      {
+        id: 'blk-1',
+        type: 'PENDING_APPROVAL',
+        employee: { code: 'TVS-0248', name: 'Nguyễn Văn An', department: 'Phòng Kinh doanh' },
+        date: '20/08/2026',
+        note: 'Selfie Full-day (APV-8821) còn PENDING — cấp trên chưa duyệt.',
+      },
+      {
+        id: 'blk-2',
+        type: 'MISSING_CHECK_OUT',
+        employee: { code: 'TVS-0312', name: 'Trần Thị Bích Ngọc', department: 'Phòng Dự án ERP' },
+        date: '21/08/2026',
+        note: 'Đã check-in, chưa có check-out trong ngày.',
+      },
+    ],
+    confirmations: [
+      { department: 'Phòng Kỹ thuật', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '22/08/2026 09:15', employeeCount: 12 },
+      { department: 'Phòng Marketing', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '22/08/2026 09:20', employeeCount: 8 },
+      { department: 'Phòng Kinh doanh', required: true, employeeCount: 18 },
+      { department: 'Phòng Dự án ERP', required: true, employeeCount: 10 },
+    ],
+    summaries: [],
+    summary: { employeeCount: 0, totalWorkingMinutes: 0, totalLateMinutes: 0, totalEarlyLeaveMinutes: 0 },
+    auditTrail: [
+      { id: 'p8-a1', timestamp: '21/08/2026 08:00', actor: 'Hệ thống', action: 'Mở kỳ công Tháng 08/2026 (OPEN → REVIEWING).' },
+    ],
+  },
+  {
+    id: 'KP-2026-07',
+    organizationId: 'org-tvs',
+    organizationName: 'Công ty TNHH TVS',
+    month: '2026-07',
+    label: 'Kỳ công Tháng 07/2026',
+    status: 'READY_TO_CLOSE',
+    version: 2,
+    blockers: [],
+    confirmations: [
+      { department: 'Phòng Kinh doanh', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '28/07/2026 16:40', employeeCount: 18 },
+      { department: 'Phòng Dự án ERP', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '28/07/2026 16:45', employeeCount: 10 },
+      { department: 'Phòng Kỹ thuật', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '28/07/2026 16:50', employeeCount: 12 },
+      { department: 'Phòng Marketing', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '28/07/2026 16:52', employeeCount: 8 },
+    ],
+    summaries: [],
+    summary: { employeeCount: 0, totalWorkingMinutes: 0, totalLateMinutes: 0, totalEarlyLeaveMinutes: 0 },
+    auditTrail: [
+      { id: 'p7-a1', timestamp: '26/07/2026 08:00', actor: 'Hệ thống', action: 'Mở kỳ công Tháng 07/2026.' },
+      { id: 'p7-a2', timestamp: '28/07/2026 16:52', actor: 'Phạm Thị Thu Hà (HR)', action: 'Toàn bộ phòng ban đã xác nhận — kỳ sẵn sàng chốt (READY_TO_CLOSE).' },
+    ],
+  },
+  {
+    id: 'KP-2026-06',
+    organizationId: 'org-tvs',
+    organizationName: 'Công ty TNHH TVS',
+    month: '2026-06',
+    label: 'Kỳ công Tháng 06/2026',
+    status: 'CLOSED',
+    version: 3,
+    blockers: [],
+    confirmations: [
+      { department: 'Phòng Kinh doanh', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '27/06/2026 15:00', employeeCount: 18 },
+      { department: 'Phòng Dự án ERP', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '27/06/2026 15:05', employeeCount: 10 },
+      { department: 'Phòng Kỹ thuật', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '27/06/2026 15:10', employeeCount: 12 },
+      { department: 'Phòng Marketing', required: true, confirmedBy: 'Lê Hoàng Hải', confirmedAt: '27/06/2026 15:12', employeeCount: 8 },
+    ],
+    summaries: [
+      { employeeCode: 'TVS-0248', employeeName: 'Nguyễn Văn An', department: 'Phòng Kinh doanh', workingDays: 25, workingMinutes: 12650, lateMinutes: 40, earlyMinutes: 15 },
+      { employeeCode: 'TVS-0312', employeeName: 'Trần Thị Bích Ngọc', department: 'Phòng Dự án ERP', workingDays: 26, workingMinutes: 13120, lateMinutes: 0, earlyMinutes: 0 },
+      { employeeCode: 'TVS-0102', employeeName: 'Lê Hoàng Hải', department: 'Phòng Kinh doanh', workingDays: 25, workingMinutes: 12700, lateMinutes: 10, earlyMinutes: 0 },
+    ],
+    exportedAt: '28/06/2026 09:30',
+    summary: { employeeCount: 48, totalWorkingMinutes: 245800, totalLateMinutes: 1260, totalEarlyLeaveMinutes: 430, generatedAt: '27/06/2026 16:20' },
+    auditTrail: [
+      { id: 'p6-a1', timestamp: '27/06/2026 16:20', actor: 'Phạm Thị Thu Hà (HR)', action: 'Chốt kỳ công Tháng 06/2026 — tạo snapshot tổng hợp cho 48 nhân viên.' },
+      { id: 'p6-a2', timestamp: '28/06/2026 09:30', actor: 'Phạm Thị Thu Hà (HR)', action: 'Xuất bảng tổng hợp CSV (phiên bản kỳ v3).' },
+    ],
   },
 ];
