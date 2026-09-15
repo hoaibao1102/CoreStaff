@@ -19,7 +19,7 @@ export function canViewEmployees(user: AuthUser) {
   return user.role === 'HR' && !!user.organizationId;
 }
 export function canViewProfile(user: AuthUser) {
-  return ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'].includes(user.role) && !!user.organizationId;
+  return !!(user._id ?? user.id);
 }
 export function directoryPage(rows: EmployeeView[], organizationId: string, query: string,
   department: string, status: string, page: number) {

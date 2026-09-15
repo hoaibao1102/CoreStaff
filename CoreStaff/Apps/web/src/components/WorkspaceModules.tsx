@@ -31,11 +31,11 @@ import {
 } from '@/components/table';
 import { AuthUser } from '@/services/auth';
 import { AppLink } from './AppLink';
-import { canViewEmployees, canViewProfile } from '../lib/employee';
 
 type ModuleStatus = 'ready' | 'planned' | 'ui';
 
 interface WorkspaceModule {
+  id: string;
   title: string;
   description: string;
   route: string;
@@ -46,80 +46,99 @@ interface WorkspaceModule {
 
 const modules: WorkspaceModule[] = [
   {
-    title: 'Hồ sơ của tôi',
-    description: 'Thông tin tài khoản và phân công công việc của bạn.',
-    route: '/app/profile',
+    id: 'dashboard',
+    title: 'Tổng quan',
+    description: 'Trang chủ với thông tin phiên làm việc và các module truy cập nhanh.',
+    route: '/overview',
     status: 'ui',
-    icon: Users,
+    icon: CheckCircle2,
     roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
   },
   {
-    title: 'Cham cong hom nay',
-    description: 'Check-in/out, bang chung Network/GPS/Selfie va trang thai ngay hien tai.',
-    route: '/app/attendance',
+    id: 'profile',
+    title: 'Hồ sơ của tôi',
+    description: 'Thông tin tài khoản, hồ sơ cá nhân và phân công công việc.',
+    route: '/app/profile',
     status: 'ready',
+    icon: Users,
+    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR', 'SYSTEM_ADMIN'],
+  },
+  {
+    id: 'attendance-today',
+    title: 'Chấm công hôm nay',
+    description: 'Check-in/out, xác thực Network/GPS/Selfie và trạng thái ngay hiện tại.',
+    route: '/app/attendance',
+    status: 'ui',
     icon: Clock3,
     roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
   },
   {
-    title: 'Lich su cong',
-    description: 'Lich su thang, chi tiet ngay, evidence va audit ca nhan.',
+    id: 'attendance-history',
+    title: 'Lịch sử công',
+    description: 'Lịch sử tháng, chi tiết ngày, evidence và audit ca nhân.',
     route: '/app/attendance/history',
-    status: 'ready',
+    status: 'planned',
     icon: CalendarDays,
     roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
   },
   {
-    title: 'Nghi phep va OT',
-    description: 'Gui LeaveRequest, OT va theo doi trang thai phe duyet.',
+    id: 'leave-ot',
+    title: 'Nghỉ phép & OT',
+    description: 'Gửi LeaveRequest, OT và theo dõi trạng thái phê duyệt.',
     route: '/app/leave',
-    status: 'ready',
+    status: 'planned',
     icon: FileText,
     roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
   },
   {
-    title: 'Queue phe duyet',
-    description: 'Manager xu ly attendance exception, leave, OT va adjustment dung scope.',
+    id: 'approvals',
+    title: 'Queue phê duyệt',
+    description: 'Manager xử lý attendance exception, leave, OT và adjustment đúng scope.',
     route: '/manager/approvals',
     status: 'planned',
     icon: ClipboardCheck,
     roles: ['DEPARTMENT_MANAGER'],
   },
   {
+    id: 'directory',
     title: 'Danh bạ nhân viên',
     description: 'Tra cứu nhân viên theo tên, mã, phòng ban và trạng thái.',
     route: '/hr/employees',
-    status: 'ui',
+    status: 'ready',
     icon: Users,
     roles: ['HR'],
   },
   {
-    title: 'Chot ky cong',
-    description: 'Review blockers, department confirmation, close/reopen va export snapshot.',
+    id: 'periods',
+    title: 'Chốt kỳ công',
+    description: 'Review blockers, department confirmation, close/reopen và export snapshot.',
     route: '/hr/periods',
     status: 'planned',
     icon: CheckCircle2,
     roles: ['HR'],
   },
   {
-    title: 'Payroll va Payslip',
-    description: 'Tinh, review, approve, lock PayrollRun va phat hanh payslip.',
+    id: 'payroll',
+    title: 'Payroll & Payslip',
+    description: 'Tính, review, approve, lock PayrollRun và phát hành payslip.',
     route: '/hr/payroll-runs',
     status: 'planned',
     icon: WalletCards,
     roles: ['HR'],
   },
   {
+    id: 'organizations',
     title: 'Organizations',
-    description: 'Quan ly Organization, HR dau tien, tenant status va audit platform.',
+    description: 'Quản lý Organization, HR đầu tiên, tenant status và audit platform.',
     route: '/platform/organizations',
     status: 'planned',
     icon: Building2,
     roles: ['SYSTEM_ADMIN'],
   },
   {
+    id: 'audit-logs',
     title: 'Platform audit',
-    description: 'Theo doi audit nen tang va support mode theo phan quyen System Admin.',
+    description: 'Theo dõi audit nền tảng và support mode theo phần quyền System Admin.',
     route: '/platform/audit-logs',
     status: 'planned',
     icon: ShieldCheck,
@@ -129,9 +148,9 @@ const modules: WorkspaceModule[] = [
 
 const roleHome: Record<AuthUser['role'], string> = {
   EMPLOYEE: '/app/attendance',
-  DEPARTMENT_MANAGER: '/manager/approvals',
-  HR: '/hr/dashboard',
-  SYSTEM_ADMIN: '/platform/organizations',
+  DEPARTMENT_MANAGER: '/app/attendance',
+  HR: '/hr/employees',
+  SYSTEM_ADMIN: '/',
 };
 
 interface WorkspaceModulesProps {
@@ -140,9 +159,7 @@ interface WorkspaceModulesProps {
 
 export function WorkspaceModules({ user }: WorkspaceModulesProps) {
   const role = user.role;
-  const visibleModules = modules.filter((module) => module.roles.includes(role)
-    && (module.route !== '/hr/employees' || canViewEmployees(user))
-    && (module.route !== '/app/profile' || canViewProfile(user)));
+  const visibleModules = modules.filter((module) => module.roles.includes(role) && (module.route !== '/hr/employees' || !!user.organizationId));
 
   return (
     <section id="workspace" className="mt-6 space-y-4">
@@ -160,7 +177,7 @@ export function WorkspaceModules({ user }: WorkspaceModulesProps) {
           const Icon = module.icon;
 
           return (
-            <Card key={module.route} className="border-[#d9dee8] shadow-sm">
+            <Card key={module.id} className="border-[#d9dee8] shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-[#111827]">
                   <span className="grid size-9 place-items-center rounded-lg bg-[#eef4ff] text-[#174ea6]">
@@ -177,7 +194,7 @@ export function WorkspaceModules({ user }: WorkspaceModulesProps) {
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-3">
                 <code className="rounded-md bg-[#f3f6fb] px-2 py-1 text-xs text-[#5c6170]">{module.route}</code>
-                {module.status === 'ui' ? <AppLink className="text-sm font-medium text-[#174ea6]" href={module.route}>{module.route === '/hr/employees' ? 'Mở danh bạ' : 'Mở hồ sơ'}</AppLink> : <Button variant="outline" size="sm" disabled={module.status !== 'ready'}>
+                {(module.status === 'ui' || module.id === 'profile' || module.id === 'directory') ? <AppLink className="text-sm font-medium text-[#174ea6]" href={module.route}>{module.route === '/hr/employees' ? 'Mở danh bạ' : 'Mở hồ sơ'}</AppLink> : <Button variant="outline" size="sm" disabled={module.status !== 'ready'}>
                   Mo
                 </Button>}
               </CardContent>

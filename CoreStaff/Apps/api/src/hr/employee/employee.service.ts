@@ -50,19 +50,20 @@ export class EmployeeService {
 		const query: Record<string, unknown> = { organizationId };
 		if (filter.status) query.employmentStatus = filter.status;
 		if (filter.departmentId) query.departmentId = filter.departmentId;
-		return this.profileModel.find(query).sort({ employeeCode: 1 }).lean();
+		const rows = await this.profileModel.find(query).sort({ employeeCode: 1 }).lean();
+		return this.resolveNames(organizationId, rows);
 	}
 
 	async findOne(organizationId: string, id: string) {
 		const doc = await this.profileModel.findOne({ _id: id, organizationId }).lean();
 		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		return doc;
+		return (await this.resolveNames(organizationId, [doc]))[0];
 	}
 
 	async findByUserId(organizationId: string, userId: string) {
 		const doc = await this.profileModel.findOne({ organizationId, userId }).lean();
 		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		return doc;
+		return (await this.resolveNames(organizationId, [doc]))[0];
 	}
 
 	async update(organizationId: string, id: string, dto: UpdateEmployeeProfileDto) {
@@ -133,6 +134,26 @@ export class EmployeeService {
 	async listHistory(organizationId: string, employeeProfileId: string) {
 		await this.findOne(organizationId, employeeProfileId);
 		return this.historyModel.find({ organizationId, employeeProfileId }).sort({ createdAt: -1 }).lean();
+	}
+
+	/** Add display names without changing reference IDs or exposing auth fields. */
+	private async resolveNames<T extends { userId: unknown; departmentId?: unknown; positionId?: unknown; directManagerId?: unknown }>(organizationId: string, rows: T[]) {
+		if (!rows.length) return [];
+		const ids = (values: unknown[]) => [...new Set(values.filter(Boolean).map(String))];
+		const [users, departments, positions] = await Promise.all([
+			this.userModel.find({ organizationId, _id: { $in: ids(rows.flatMap(r => [r.userId, r.directManagerId])) } }).select('_id fullName').lean(),
+			this.departmentModel.find({ organizationId, _id: { $in: ids(rows.map(r => r.departmentId)) } }).select('_id name').lean(),
+			this.positionModel.find({ organizationId, _id: { $in: ids(rows.map(r => r.positionId)) } }).select('_id name').lean(),
+		]);
+		const userNames = new Map(users.map(r => [String(r._id), r.fullName]));
+		const departmentNames = new Map(departments.map(r => [String(r._id), r.name]));
+		const positionNames = new Map(positions.map(r => [String(r._id), r.name]));
+		return rows.map(row => ({ ...row,
+			fullName: userNames.get(String(row.userId)) ?? null,
+			departmentName: departmentNames.get(String(row.departmentId)) ?? null,
+			positionName: positionNames.get(String(row.positionId)) ?? null,
+			managerName: userNames.get(String(row.directManagerId)) ?? null,
+		}));
 	}
 
 	private async assertUserAvailable(organizationId: string, userId: string): Promise<void> {

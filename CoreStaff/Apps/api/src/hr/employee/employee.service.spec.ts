@@ -121,6 +121,9 @@ function buildHistoryModel(rows: HistoryRow[]) {
 /** `Department`/`Position`/`User` are only used for `.exists()` referential checks here. */
 function buildRefModel(ids: Record<string, string[]>) {
 	return {
+        find({ organizationId, _id }: { organizationId: string; _id: { $in: string[] } }) {
+            return { select: () => ({ lean: async () => (ids[organizationId] ?? []).filter(id => _id.$in.includes(id)).map(id => ({ _id: id, name: `Name ${id}`, fullName: `User ${id}` })) }) };
+        },
 		async exists({ _id, organizationId }: { _id: string; organizationId: string }) {
 			return ids[organizationId]?.includes(_id) ? { _id } : null;
 		},
@@ -329,3 +332,22 @@ describe('EmployeeService.listHistory (TASK-023)', () => {
 		expect(result.map((h) => h.newStatus)).toEqual([EmploymentStatus.ON_LEAVE, EmploymentStatus.ACTIVE]);
 	});
 });
+
+ describe('TASK-025/026 read profiles', () => {
+    const row = { _id: 'p1', organizationId: 'org1', userId: 'user1', employeeCode: 'E001', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', joinDate: '2026-09-16', departmentId: 'd1', positionId: 'pos1', directManagerId: 'user2' };
+    it('resolves names on list and me without replacing reference IDs', async () => {
+        const svc = buildService([row], [], { departments: { org1: ['d1'] }, positions: { org1: ['pos1'] } });
+        const expected = { userId: 'user1', departmentId: 'd1', fullName: 'User user1', departmentName: 'Name d1', positionName: 'Name pos1', managerName: 'User user2' };
+        expect(await svc.findByUserId('org1', 'user1')).toMatchObject(expected);
+        expect(await svc.findAll('org1', { status: 'ACTIVE', departmentId: 'd1' })).toEqual([expect.objectContaining(expected)]);
+        expect(await svc.findAll('org1', { status: 'PROBATION' })).toEqual([]);
+        expect(await svc.findAll('org2')).toEqual([]);
+        await expect(svc.findByUserId('org2', 'user1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+    it('does not resolve foreign tenant references or expose user credentials', async () => {
+        const svc = buildService([row], [], { users: { org2: ['user1', 'user2'] }, departments: { org2: ['d1'] }, positions: { org2: ['pos1'] } });
+        const result = await svc.findOne('org1', 'p1');
+        expect(result).toMatchObject({ fullName: null, departmentName: null, positionName: null, managerName: null });
+        expect(result).not.toHaveProperty('passwordHash');
+    });
+ });

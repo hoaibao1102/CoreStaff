@@ -1,3 +1,35 @@
+# Cập nhật 2026-09-16 — tích hợp TASK-025 / TASK-026
+
+Phần này thay thế trạng thái “chờ API” của nhật ký lịch sử bên dưới.
+
+## Phạm vi đã triển khai
+
+- TASK-025: danh bạ HR theo tổ chức, dữ liệu thật từ GET `/api/hr/employees`; lọc server bằng `status` và `departmentId`; tìm tên/mã và phân trang 10 dòng tại client, không giới hạn tổng bản ghi. Không gửi `q`/`page` chưa được backend hỗ trợ.
+- Danh bạ hiển thị họ tên, mã hồ sơ, email, phòng ban, chức danh, trạng thái; dropdown phòng ban gồm cả phòng ban không còn active để tra cứu hồ sơ cũ. Có loading, empty, error, thông báo 401/403 và retry.
+- TASK-026: GET `/api/hr/employees/me`, không truyền ID từ URL, không HR-only. Tài khoản đăng nhập vẫn hiển thị khi hồ sơ chưa tồn tại hoặc lỗi; 404 `EMPLOYEE_PROFILE_NOT_FOUND` có trạng thái riêng. Mã nhân viên lấy từ EmployeeProfile, không lấy mã AuthUser thay thế. Hồ sơ chỉ đọc; dữ liệu khác user/tenant bị từ chối.
+- Bỏ qua phản hồi cũ khi đổi tài khoản, nguồn API, bộ lọc hoặc rời màn hình. Tìm kiếm/phân trang không gọi lại API.
+- GET list/detail/me giữ nguyên reference IDs và bổ sung `fullName`, `departmentName`, `positionName`, `managerName` nullable. Backend resolve theo lô, giới hạn organizationId, chỉ select tên; không trả password/session/auth fields. Swagger read examples đã cập nhật. Không tạo endpoint mới.
+- Detail có sẵn được sửa để PATCH không gửi employeeCode/userId/employmentStatus/endDate; lịch sử có loading/error/retry riêng. Detail dùng profile ID và HR guard. Hosting rewrite hỗ trợ URL detail.
+- Workspace/header nối đúng route; hồ sơ cá nhân cho mọi user đã đăng nhập. System Admin không có tenant vẫn có thể xem thông tin tài khoản, API nhân sự trả lỗi tenant theo backend hiện hành.
+
+## Acceptance và kiểm chứng
+
+- Web tests gọi qua fetch boundary: HR-only directory; tenant isolation; tìm kiếm/phân trang/lọc; empty/loading/401/403/error/retry; `/me` cho các role; hồ sơ khác user/tenant; 404 riêng; phản hồi đến muộn; payload update không có trường bất biến; lỗi history.
+- Navigation tests: login, password-change guard, URL trực tiếp, Back, logout và không gọi lại auth khi chuyển màn hình. Tests cũ dùng props `state` đã thay bằng network fixtures; fixtures chỉ nằm trong tests.
+- Backend tests: read list/me, bộ lọc, resolve tên, tham chiếu khác tenant và hồ sơ không tồn tại.
+- `npm test`: backend 10 suites / 83 tests; web 3 suites / 32 tests và 1 proxy test. Xem kết quả chạy cuối cùng trong phản hồi bàn giao.
+- `npm run lint`: TypeScript API + web. `npm run build`: NestJS + Vite.
+
+## Giới hạn dữ liệu và triển khai
+
+- Backend hiện chưa có schema/API phân công nơi làm việc, ca làm hoặc department manager. UI không suy diễn ID thành tên; hiển thị “Chưa có thông tin” cho nơi làm việc/ca làm. `managerName` là quản lý trực tiếp từ `directManagerId`, không phải trưởng phòng. Chưa thể nghiệm thu dữ liệu phân công thực tế của FR-EMP-11 cho đến khi module nguồn tồn tại.
+- Cần triển khai đồng thời API và web để tên hiển thị có dữ liệu. Chưa deploy, chưa kiểm tra bằng tài khoản thật trên môi trường remote, chưa chạy kiểm tra trình duyệt/viewport thực tế.
+- CRUD Position, tạo nhân viên, hợp đồng và lương không thuộc hai task UI này. Không đánh dấu đóng backlog/milestone đóng băng.
+
+---
+
+## Nhật ký lịch sử (trước tích hợp API)
+
 # TASK-025 / TASK-026 — Nhật ký triển khai UI
 
 Ngày: 2026-09-15. Phạm vi được người dùng điều chỉnh: **chưa tích hợp API; chờ cập nhật docs API**.

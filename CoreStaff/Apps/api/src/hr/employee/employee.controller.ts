@@ -8,6 +8,7 @@ import {
 	ApiErrorExamples,
 	ApiSuccess,
 	employeeExample,
+	employeeReadExample,
 	employmentHistoryExample,
 } from '../../common/swagger-responses';
 import { EmployeeService } from './employee.service';
@@ -37,7 +38,7 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get()
 	@ApiOperation({ summary: 'List employee profiles in the current tenant.' })
-	@ApiSuccess('Employee profiles in the current tenant.', [employeeExample])
+	@ApiSuccess('Employee profiles in the current tenant.', [employeeReadExample])
 	@ApiErrorExamples()
 	async findAll(
 		@Tenant() organizationId: string | null,
@@ -51,7 +52,7 @@ export class EmployeeController {
 
 	@Get('me')
 	@ApiOperation({ summary: "Current user's own EmployeeProfile." })
-	@ApiSuccess("Current user's employee profile.", employeeExample)
+	@ApiSuccess("Current user's employee profile.", employeeReadExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async me(@Tenant() organizationId: string | null, @CurrentUser() user: SessionUser) {
@@ -64,7 +65,7 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get(':id')
 	@ApiOperation({ summary: 'Get an employee profile by id.' })
-	@ApiSuccess('Employee profile detail.', employeeExample)
+	@ApiSuccess('Employee profile detail.', employeeReadExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {

@@ -1,5 +1,8 @@
+import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
+import { EmployeeDetailScreen } from '../screens/EmployeeDetail/EmployeeDetailScreen';
+import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { AppLink } from '../components/AppLink';
 import { AppFooter } from '../components/AppFooter';
@@ -18,46 +21,8 @@ interface WorkspaceRoutesProps {
   onLogout: () => void;
 }
 
-/** Path switch for the authenticated app. Header/footer chrome is per route. */
-export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogout }: WorkspaceRoutesProps) {
-  const route = path.replace(/\/$/, '');
-  const header = <AppHeader roleLabel={roleLabel(user.role)} user={user} onLogout={onLogout} />;
-
-  if (route === '/hr/employees' || route === '/app/profile') {
-    return (
-      <main className="flex min-h-screen flex-col bg-[#f5f7fb] text-[#172033]">
-        {header}
-        <section className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-          <AppLink href="/" className="mb-6 inline-block text-sm text-[#174ea6]">← Tổng quan</AppLink>
-          {route === '/hr/employees'
-            ? <EmployeeDirectoryScreen user={user} />
-            : <EmployeeProfileScreen user={user} />}
-        </section>
-      </main>
-    );
-  }
-
-  if (user.role === 'HR') {
-    return (
-      <div className="flex min-h-dvh flex-col bg-[#f7f8fa] text-slate-900">
-        {header}
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-          <HrOverviewScreen user={user} />
-        </main>
-        <footer className="mx-auto w-full max-w-7xl px-4 py-6 text-xs text-slate-400 sm:px-6 lg:px-8">
-          © {new Date().getFullYear()} CoreStaff · Quản lý nhân sự
-        </footer>
-      </div>
-    );
-  }
-
-  return <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} onLogout={onLogout} />;
-}
-
-type StaffOverviewProps = Omit<WorkspaceRoutesProps, 'path'>;
-
 /** Default route: session summary cards plus the workspace modules. */
-function StaffOverview({ user, apiBase, apiSource, health, onLogout }: StaffOverviewProps) {
+function StaffOverview({ user, apiBase, apiSource, health, onLogout }: Omit<WorkspaceRoutesProps, 'path'>) {
   const cards: { label: string; value: string; hint?: string | null }[] = [
     { label: 'Vai trò', value: roleLabel(user.role) },
     { label: 'Mã nhân viên', value: user.employeeCode || 'Không áp dụng' },
@@ -118,4 +83,85 @@ function StaffOverview({ user, apiBase, apiSource, health, onLogout }: StaffOver
       />
     </main>
   );
+}
+
+/** Path switch for the authenticated app. Header/footer chrome is per route. */
+export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogout }: WorkspaceRoutesProps) {
+  const route = path.replace(/\/$/, '') || '/';
+
+  // ── Dashboard / Tổng quan (staff overview with module cards) ─────────
+  if (route === '/' || route === '/dashboard' || route === '/overview') {
+    return (
+      <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} onLogout={onLogout} />
+    );
+  }
+
+  // ── Employee routes ──────────────────────────────────────────────────
+  if (route === '/app/profile') {
+    const header = <AppHeader roleLabel={roleLabel(user.role)} user={user} onLogout={onLogout} />;
+    return (
+      <main className="flex min-h-screen flex-col bg-[#f5f7fb] text-[#172033]">
+        {header}
+        <section className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <AppLink href="/overview" className="mb-6 inline-block text-sm text-[#174ea6]">← Tổng quan</AppLink>
+          <EmployeeProfileScreen user={user} apiBase={apiBase} />
+        </section>
+      </main>
+    );
+  }
+
+  if (route.startsWith('/hr/employees/') && (user.role !== 'HR' || !user.organizationId)) return <EmployeeDataState status="forbidden" />;
+
+  // ── HR routes ────────────────────────────────────────────────────────
+  if (user.role === 'HR') {
+    const header = <AppHeader roleLabel={roleLabel(user.role)} user={user} onLogout={onLogout} />;
+    return (
+      <div className="flex min-h-dvh flex-col bg-[#f7f8fa] text-slate-900">
+        {header}
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+          {route === '/hr/employees' ? (
+            <EmployeeDirectoryScreen user={user} apiBase={apiBase} />
+          ) : route.startsWith('/hr/employees/') ? (
+            <EmployeeDetailScreen user={user} apiBase={apiBase} employeeId={route.split('/').pop() ?? ''} />
+          ) : (
+            <HrOverviewScreen user={user} />
+          )}
+        </main>
+        <footer className="mx-auto w-full max-w-7xl px-4 py-6 text-xs text-slate-400 sm:px-6 lg:px-8">
+          © {new Date().getFullYear()} CoreStaff · Quản lý nhân sự
+        </footer>
+      </div>
+    );
+  }
+
+  // ── Employee Directory (shared access) ───────────────────────────────
+  if (route === '/hr/employees') {
+    const header = <AppHeader roleLabel={roleLabel(user.role)} user={user} onLogout={onLogout} />;
+    return (
+      <main className="flex min-h-screen flex-col bg-[#f5f7fb] text-[#172033]">
+        {header}
+        <section className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <AppLink href="/overview" className="mb-6 inline-block text-sm text-[#174ea6]">← Tổng quan</AppLink>
+          <EmployeeDirectoryScreen user={user} apiBase={apiBase} />
+        </section>
+      </main>
+    );
+  }
+
+  // ── Attendance (EMPLOYEE / DEPARTMENT_MANAGER) ───────────────────────
+  if (route === '/app/attendance' && (user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER')) {
+    const header = <AppHeader roleLabel={roleLabel(user.role)} user={user} onLogout={onLogout} />;
+    return (
+      <main className="flex min-h-screen flex-col bg-[#f5f7fb] text-[#172033]">
+        {header}
+        <section className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <AppLink href="/overview" className="mb-6 inline-block text-sm text-[#174ea6]">← Tổng quan</AppLink>
+          <AttendanceScreen user={user} />
+        </section>
+      </main>
+    );
+  }
+
+  // ── Fallback: show dashboard ─────────────────────────────────────────
+  return <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} onLogout={onLogout} />;
 }

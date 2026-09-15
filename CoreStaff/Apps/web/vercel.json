@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/hr/employees",
+      "source": "/hr/employees/:path*",
       "destination": "/index.html"
     },
     {

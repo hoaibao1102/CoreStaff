@@ -76,12 +76,22 @@ export function AuthScreen({
       rememberSession();
       setAuthView('login');
       onSession(result.user, result.mustChangePassword);
+
+      // Navigate to the appropriate route after successful login
+      const route = getRouteForRole(result.user.role);
+      window.history.pushState({}, '', route);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     } catch (err: unknown) {
       setError(friendlyAuthError(err));
     } finally {
       setSubmitting(false);
     }
   };
+
+  function getRouteForRole(role: string): string {
+    // Redirect to overview dashboard after login, let WorkspaceRoutes handle role-based redirects
+    return '/overview';
+  }
 
   const handleLogout = async () => {
     if (apiBase) await logout(apiBase);

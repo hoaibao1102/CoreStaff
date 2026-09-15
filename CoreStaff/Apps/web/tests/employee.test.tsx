@@ -1,61 +1,123 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+/** @jest-environment jsdom */
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { EmployeeDirectoryScreen } from '../src/screens/EmployeeDirectory/EmployeeDirectoryScreen';
 import { EmployeeProfileScreen } from '../src/screens/EmployeeProfile/EmployeeProfileScreen';
-import { canViewEmployees, directoryPage, type EmployeeView } from '../src/lib/employee';
+import { EmployeeDetailScreen } from '../src/screens/EmployeeDetail/EmployeeDetailScreen';
 import type { AuthUser } from '../src/services/auth';
-
-const user: AuthUser = { id: 'u1', organizationId: 'org1', role: 'HR', fullName: 'Session Name', email: 'session@example.test', employeeCode: 'E001', status: 'ACTIVE' };
-const employee: EmployeeView = { id: 'p1', userId: 'u1', organizationId: 'org1', employeeCode: 'E001', fullName: 'Test Employee', employmentStatus: 'ACTIVE', department: 'Engineering', workplace: 'Office', shift: 'Morning', manager: 'Manager' };
-
-describe('TASK-025 directory', () => {
-  test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN'] as const)('denies %s', role => {
-    const html = renderToStaticMarkup(<EmployeeDirectoryScreen user={{ ...user, role }} state={{ status: 'ready', data: [employee] }} />);
-    expect(html).toContain('Bạn không có quyền');
-    expect(html).not.toContain('Test Employee');
+import type { EmployeeProfile } from '../src/services/hrService';
+jest.mock('../src/config/api', () => ({ apiUrl: (base: string, path: string) => base + path }));
+const user: AuthUser = { id: 'u1', organizationId: 'org1', role: 'HR', fullName: 'Session Name', email: 'session@example.test', employeeCode: 'AUTH-CODE', status: 'ACTIVE' };
+const profile: EmployeeProfile = { _id: 'p1', userId: 'u1', organizationId: 'org1', employeeCode: 'E001', fullName: 'Test Employee', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', departmentId: 'd1', departmentName: 'Engineering', positionName: 'Developer', managerName: 'Manager', joinDate: '2026-09-16' };
+let root: Root;
+let container: HTMLDivElement;
+let fetchMock: jest.Mock;
+let rows: EmployeeProfile[];
+let own: EmployeeProfile;
+let status: number;
+let code: string;
+const response = (data: unknown, http = 200, errorCode = '') => ({ ok: http === 200, status: http, text: async () => JSON.stringify(http === 200 ? { success: true, data } : { success: false, error: { code: errorCode } }) });
+beforeEach(() => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+  rows = [profile]; own = profile; status = 200; code = '';
+  fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    const path = new URL(url);
+    if (path.pathname.endsWith('/departments')) return response([{ _id: 'd1', name: 'Engineering' }, { _id: 'd2', name: 'Sales' }]);
+    if (path.pathname.endsWith('/me')) return response(own, status, code);
+    if (path.pathname.endsWith('/history')) return response([], status, code);
+    if (init?.method === 'PATCH') return response({ ...profile, ...JSON.parse(String(init.body)) });
+    if (path.pathname.endsWith('/p1')) return response(profile);
+    const filtered = rows.filter(row => (!path.searchParams.get('status') || row.employmentStatus === path.searchParams.get('status')) && (!path.searchParams.get('departmentId') || row.departmentId === path.searchParams.get('departmentId')));
+    return response(filtered, status, code);
   });
-  test('requires tenant and displays HR rows with nullable fields', () => {
-    expect(canViewEmployees({ ...user, organizationId: undefined })).toBe(false);
-    const html = renderToStaticMarkup(<EmployeeDirectoryScreen user={user} state={{ status: 'ready', data: [employee] }} />);
-    expect(html).toContain('Test Employee'); expect(html).toContain('Đang làm việc');
-    expect(html).toContain('Engineering'); expect(html).toContain('—');
-  });
-  test('search, combined filters, tenant isolation, pagination and shrinking results', () => {
-    const rows = Array.from({ length: 23 }, (_, i) => ({ ...employee, id: String(i), employeeCode: `E${i}` }));
-    rows.push({ ...employee, organizationId: 'other' });
-    expect(directoryPage(rows, 'org1', '', '', '', 2).rows).toHaveLength(10);
-    expect(directoryPage(rows, 'org1', '', '', '', 3).rows).toHaveLength(3);
-    expect(directoryPage(rows, 'org1', ' e22 ', 'Engineering', 'ACTIVE', 9)).toMatchObject({ total: 1, current: 1 });
-    expect(directoryPage(rows, 'org1', 'test employee', '', '', 1).total).toBe(23);
-    expect(directoryPage(rows, 'org1', '', '', 'PROBATION', 1).total).toBe(0);
-    expect(directoryPage(rows, 'org1', '', 'Other', '', 1).total).toBe(0);
-  });
-  test('empty and unavailable are distinct', () => {
-    expect(renderToStaticMarkup(<EmployeeDirectoryScreen user={user} />)).toContain('Dữ liệu nhân sự chưa khả dụng');
-    expect(renderToStaticMarkup(<EmployeeDirectoryScreen user={user} state={{ status: 'ready', data: [] }} />)).toContain('Chưa có nhân viên trong tổ chức');
-  });
+  globalThis.fetch = fetchMock;
 });
-describe('TASK-026 self profile', () => {
-  test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'] as const)('uses authenticated %s identity and own assignment', role => {
-    const html = renderToStaticMarkup(<EmployeeProfileScreen user={{ ...user, role }} state={{ status: 'ready', data: employee }} />);
-    expect(html).toContain('Session Name'); expect(html).toContain('session@example.test');
-    expect(html).toContain('Office'); expect(html).toContain('Morning'); expect(html).toContain('Manager');
-    expect(html).not.toContain('<input'); expect(html).not.toContain('Test Employee');
-  });
-  test.each([{ userId: 'other' }, { organizationId: 'other' }])('rejects foreign profile %j', change => {
-    const html = renderToStaticMarkup(<EmployeeProfileScreen user={user} state={{ status: 'ready', data: { ...employee, ...change } }} />);
-    expect(html).toContain('Bạn không có quyền'); expect(html).not.toContain('Office');
-  });
-  test('handles absent profile, missing identity and null assignments', () => {
-    expect(renderToStaticMarkup(<EmployeeProfileScreen user={user} state={{ status: 'ready', data: null }} />)).toContain('Bạn chưa có hồ sơ nhân viên');
-    expect(renderToStaticMarkup(<EmployeeProfileScreen user={user} state={{ status: 'ready', data: { ...employee, shift: null } }} />)).toContain('Chưa có thông tin');
-    expect(renderToStaticMarkup(<EmployeeProfileScreen user={{ ...user, id: undefined }} state={{ status: 'ready', data: employee }} />)).toContain('Bạn không có quyền');
-    expect(renderToStaticMarkup(<EmployeeProfileScreen user={{ ...user, role: 'SYSTEM_ADMIN' }} />)).toContain('Bạn không có quyền');
-  });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); jest.restoreAllMocks(); });
+async function render(screen: React.ReactNode) { await act(async () => root.render(screen)); }
+async function clickText(text: string) { const button = [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text)); expect(button).toBeDefined(); await act(async () => button!.click()); }
+async function search(value: string) { await act(async () => { const input = container.querySelector('input')!; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); }); }
+const directory = () => <EmployeeDirectoryScreen user={user} apiBase="https://api.test" />;
+const self = (current = user) => <EmployeeProfileScreen user={current} apiBase="https://api.test" />;
+
+test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN'] as const)('directory denies %s without requests', async role => {
+  await render(<EmployeeDirectoryScreen user={{ ...user, role }} apiBase="https://api.test" />);
+  expect(container.textContent).toContain('Bạn không có quyền'); expect(fetchMock).not.toHaveBeenCalled();
 });
-test.each(['loading', 'error', 'forbidden', 'unavailable'] as const)('both screens render %s without employee data', status => {
-  for (const Screen of [EmployeeDirectoryScreen, EmployeeProfileScreen]) {
-    const html = renderToStaticMarkup(<Screen user={user} state={{ status }} />);
-    expect(html).toContain(status === 'error' || status === 'forbidden' ? 'role="alert"' : 'role="status"');
-    expect(html).not.toContain('Test Employee');
-  }
+test('directory requires organization and handles unavailable API', async () => {
+  await render(<EmployeeDirectoryScreen user={{ ...user, organizationId: undefined }} apiBase="https://api.test" />);
+  expect(fetchMock).not.toHaveBeenCalled();
+  await render(<EmployeeDirectoryScreen user={user} apiBase={null} />);
+  expect(container.textContent).toContain('chưa khả dụng');
+});
+test('directory searches names/codes locally, paginates, filters by IDs and isolates tenants', async () => {
+  rows = Array.from({ length: 23 }, (_, i) => ({ ...profile, _id: `p${i}`, employeeCode: `E${i}`, fullName: `Person ${i}`, departmentId: i === 22 ? 'd2' : 'd1' }));
+  rows.push({ ...profile, organizationId: 'other', fullName: 'Foreign Secret' });
+  await render(directory());
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(10);
+  expect(container.textContent).not.toContain('Foreign Secret');
+  const calls = fetchMock.mock.calls.length;
+  const next = container.querySelectorAll('button');
+  const nextButton = [...next].find(button => button.querySelector('.lucide-chevron-right'))!;
+  await act(async () => nextButton.click());
+  expect(container.textContent).toContain('Person 10');
+  await search(' person 22 ');
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(1); expect(container.textContent).toContain('Person 22');
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
+  await search('E21'); expect(container.textContent).toContain('Person 21');
+  await search('');
+  await act(async () => { const select = container.querySelectorAll('select')[0]; select.value = 'd2'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('departmentId=d2'))).toBe(true);
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+  expect(fetchMock.mock.calls.every(([url]) => !new URL(String(url)).searchParams.has('q') && !new URL(String(url)).searchParams.has('page'))).toBe(true);
+});
+test('directory empty and loading states', async () => {
+  rows = []; await render(directory()); expect(container.textContent).toContain('Không tìm thấy nhân viên');
+  fetchMock.mockImplementation(() => new Promise(() => {}));
+  await render(<EmployeeDirectoryScreen user={user} apiBase="https://other.test" />);
+  expect(container.querySelector('[role="status"]')).not.toBeNull();
+});
+test.each([401, 403, 500])('directory handles HTTP %s and retries', async http => {
+  status = http; await render(directory()); expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  status = 200; await clickText('Thử lại'); expect(container.textContent).toContain('Test Employee');
+});
+test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR', 'SYSTEM_ADMIN'] as const)('self uses me for authenticated %s and is read-only', async role => {
+  await render(self({ ...user, role }));
+  expect(fetchMock).toHaveBeenCalledWith('https://api.test/api/hr/employees/me', expect.objectContaining({ method: 'GET', credentials: 'include' }));
+  expect(container.textContent).toContain('Session Name'); expect(container.textContent).toContain('E001');
+  expect(container.textContent).toContain('Engineering'); expect(container.textContent).toContain('Developer');
+  expect(container.textContent).toContain('Manager'); expect(container.textContent).toContain('Ca làm việc');
+  expect(container.querySelector('input')).toBeNull();
+});
+test.each([{ userId: 'other' }, { organizationId: 'other' }])('self rejects foreign response %j', async change => {
+  own = { ...profile, ...change }; await render(self());
+  expect(container.textContent).toContain('Bạn không có quyền'); expect(container.textContent).not.toContain('Engineering');
+});
+test('self 404 keeps account data and displays dedicated empty state', async () => {
+  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self());
+  expect(container.textContent).toContain('chưa có hồ sơ nhân sự'); expect(container.textContent).toContain('session@example.test');
+});
+test.each([401, 403, 500])('self handles HTTP %s with retry', async http => {
+  status = http; await render(self()); expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(container.textContent).toContain('session@example.test'); status = 200; await clickText('Thử lại');
+  expect(container.textContent).toContain('Engineering');
+});
+test('late responses from an old account cannot replace current profile', async () => {
+  let resolveOld!: (value: unknown) => void;
+  fetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+  await render(self());
+  own = { ...profile, userId: 'u2', departmentName: 'New Department' };
+  await render(self({ ...user, id: 'u2' }));
+  await act(async () => resolveOld(response(profile)));
+  expect(container.textContent).toContain('New Department'); expect(container.textContent).not.toContain('Engineering');
+});
+test('detail update excludes immutable fields and history failure offers retry', async () => {
+  status = 500;
+  await render(<EmployeeDetailScreen user={user} apiBase="https://api.test" employeeId="p1" />);
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  await clickText('Chỉnh sửa'); await clickText('Lưu');
+  const request = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+  expect(request).toBeDefined();
+  const body = JSON.parse(request![1].body);
+  for (const field of ['employeeCode', 'userId', 'employmentStatus', 'endDate']) expect(body).not.toHaveProperty(field);
 });
