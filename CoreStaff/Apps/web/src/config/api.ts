@@ -27,17 +27,17 @@ async function isHealthy(base: string, timeoutMs = 4000): Promise<boolean> {
 }
 
 /**
- * Dev: thử API remote (Vercel), hỏng thì fallback local.
+ * Dev: use same-origin Vite proxies so the browser can retain session cookies.
  * Production build: chỉ dùng VITE_API_URL (không trỏ localhost của máy user).
  */
 export async function resolveApiBase(): Promise<{ base: string; source: 'remote' | 'local' }> {
   if (import.meta.env.PROD) {
     return { base: REMOTE_API_URL, source: 'remote' };
   }
-  if (await isHealthy(REMOTE_API_URL)) {
-    return { base: REMOTE_API_URL, source: 'remote' };
+  if (await isHealthy('')) {
+    return { base: window.location.origin, source: 'remote' };
   }
-  return { base: FALLBACK_API_URL, source: 'local' };
+  return { base: `${window.location.origin}/local-api`, source: 'local' };
 }
 
 export function apiUrl(base: string, path: string): string {

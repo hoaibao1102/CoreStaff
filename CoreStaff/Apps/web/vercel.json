@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/hr/employees",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/app/profile",
+      "destination": "/index.html"
+    }
+  ]
+}
