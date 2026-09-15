@@ -7,13 +7,12 @@ interface LoginScreenProps {
   error?: string | null;
   onLogin: (identifier: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
-  onGmailLogin: () => void;
 }
 
 const inputClass =
   'h-11 w-full rounded-lg border border-[#cfd6e3] bg-white px-3.5 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9aa4b2] hover:border-[#aeb8c8] focus:border-[#174ea6] focus:ring-3 focus:ring-[#174ea6]/15';
 
-export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword, onGmailLogin }: LoginScreenProps) {
+export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword }: LoginScreenProps) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -89,27 +88,6 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
           onClick={onForgotPassword}
         >
           Quên mật khẩu?
-        </button>
-
-        <div className="flex items-center gap-3 text-xs font-semibold text-[#98a2b3]">
-          <span className="h-px flex-1 bg-[#e4e7ec]" />
-          <span>hoặc</span>
-          <span className="h-px flex-1 bg-[#e4e7ec]" />
-        </div>
-
-        <button
-          type="button"
-          className="inline-flex min-h-11 items-center justify-center gap-3 rounded-lg border border-[#cfd6e3] bg-white px-4 text-sm font-semibold text-[#344054] shadow-sm transition hover:border-[#aeb8c8] hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#174ea6] disabled:cursor-not-allowed disabled:opacity-55"
-          disabled={disabled}
-          onClick={onGmailLogin}
-        >
-          <svg aria-hidden="true" className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M21.6 12.23c0-.74-.07-1.45-.19-2.13H12v4.03h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.43Z" />
-            <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.34l-3.24-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.81-1.76-5.6-4.13H3.06v2.59A10 10 0 0 0 12 22Z" />
-            <path fill="#FBBC05" d="M6.4 13.97a6 6 0 0 1 0-3.94V7.44H3.06a10 10 0 0 0 0 9.12l3.34-2.59Z" />
-            <path fill="#EA4335" d="M12 5.9c1.47 0 2.79.51 3.83 1.5l2.86-2.86C16.96 2.93 14.7 2 12 2a10 10 0 0 0-8.94 5.44l3.34 2.59C7.19 7.66 9.4 5.9 12 5.9Z" />
-          </svg>
-          Tiếp tục với Gmail
         </button>
       </form>
     </AuthLayout>

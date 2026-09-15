@@ -13,6 +13,15 @@ export const FALLBACK_API_URL = stripSlash(
   import.meta.env.VITE_API_FALLBACK_URL || DEFAULT_LOCAL,
 );
 
+export type ApiSource = 'remote' | 'local';
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  mongo: 'configured' | 'missing';
+  timezone: string;
+}
+
 async function isHealthy(base: string, timeoutMs = 4000): Promise<boolean> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);

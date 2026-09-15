@@ -86,10 +86,6 @@ export function login(base: string, identifier: string, password: string): Promi
   });
 }
 
-export function gmailLoginUrl(base: string): string {
-  return apiUrl(base, '/api/auth/google');
-}
-
 export function me(base: string): Promise<AuthUser> {
   return request<AuthUser>(base, '/api/auth/me');
 }
