@@ -7,6 +7,7 @@ import { EmploymentHistorySchema } from '../../database/schemas/employment-histo
 import { DepartmentSchema } from '../../database/schemas/department.schema';
 import { PositionSchema } from '../../database/schemas/position.schema';
 import { UserSchema } from '../../database/schemas/user.schema';
+import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { EmployeeController } from './employee.controller';
 import { EmployeeService } from './employee.service';
 
@@ -19,6 +20,7 @@ import { EmployeeService } from './employee.service';
 			{ name: 'Department', schema: DepartmentSchema },
 			{ name: 'Position', schema: PositionSchema },
 			{ name: 'User', schema: UserSchema },
+			{ name: 'UserSession', schema: UserSessionSchema },
 		]),
 	],
 	controllers: [EmployeeController],
