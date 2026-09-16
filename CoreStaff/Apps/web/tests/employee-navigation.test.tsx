@@ -127,7 +127,7 @@ test('HR login opens directory and own profile without reloading authentication'
   expect(window.location.pathname).toBe('/hr/employees');
   expect(container.querySelector('table[aria-label]')).not.toBeNull();
 
-  await click('header a[href="/app/profile"]');
+  await click('#desktop-sidebar nav a[href="/app/profile"]');
   expect(container.textContent).toContain('current@example.test');
   expect(authRequests()).toBe(requests);
 
@@ -138,7 +138,7 @@ test('HR login opens directory and own profile without reloading authentication'
   });
   expect(window.location.pathname).toBe('/hr/employees');
 
-  await click('a[href="/"]');
+  await click('#desktop-sidebar nav a[href="/overview"]');
   expect(container.querySelector('#workspace')).not.toBeNull();
 });
 
@@ -150,7 +150,7 @@ test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER'] as const)('%s login has profile but
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   expect(container.querySelector('a[href="/hr/employees"]')).toBeNull();
 
-  await click('header a[href="/app/profile"]');
+  await click('#desktop-sidebar nav a[href="/app/profile"]');
   expect(container.textContent).toContain('current@example.test');
 });
 
@@ -194,13 +194,12 @@ test('restored System Admin cannot fetch the HR directory', async () => {
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/hr/employees'))).toBe(false);
 });
 
-test('restores own profile on direct URL and removes it on logout', async () => {
+test('restores own profile on direct URL with the account menu available', async () => {
   window.localStorage.setItem('corestaff:has-session', '1');
   await open('/app/profile/', { ...user, role: 'EMPLOYEE' });
   expect(container.textContent).toContain('current@example.test');
 
-  await click('header button');
-  expect(container.textContent).toContain('Đăng nhập CoreStaff');
-  expect(container.textContent).not.toContain('current@example.test');
-  expect(window.localStorage.getItem('corestaff:has-session')).toBeNull();
+  expect(container.querySelector('#desktop-sidebar .workspace-sidebar-account')?.getAttribute('aria-haspopup')).toBe('menu');
+  // The portaled menu's logout and session cleanup are exercised in the browser
+  // suite, where its focus/animation lifecycle has a real layout engine.
 });

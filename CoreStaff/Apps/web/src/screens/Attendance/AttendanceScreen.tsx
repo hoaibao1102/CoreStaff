@@ -358,7 +358,7 @@ function ActionButton({ actionType, isEnabled, isLoading, method, onClick }: Act
     return (
         <div className="space-y-2">
             {!isEnabled && !isLoading && (
-                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <div className="flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2 text-xs text-amber-800">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>Hôm nay bạn đã hoàn thành chấm công.</span>
                 </div>

@@ -10,7 +10,7 @@ interface LoginScreenProps {
 }
 
 const inputClass =
-  'h-11 w-full rounded-lg border border-[#cfd6e3] bg-white px-3.5 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9aa4b2] hover:border-[#aeb8c8] focus:border-[#174ea6] focus:ring-3 focus:ring-[#174ea6]/15';
+  'h-11 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/20';
 
 export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword }: LoginScreenProps) {
   const [identifier, setIdentifier] = useState('');
@@ -36,7 +36,7 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
     >
       <form className="grid gap-4" onSubmit={submit}>
         <label className="grid gap-2">
-          <span className="text-xs font-bold text-[#374151]">Email hoặc mã nhân viên</span>
+          <span className="text-xs font-semibold text-foreground">Email hoặc mã nhân viên</span>
           <input
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
@@ -47,7 +47,7 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
         </label>
 
         <label className="grid gap-2">
-          <span className="text-xs font-bold text-[#374151]">Mật khẩu</span>
+          <span className="text-xs font-semibold text-foreground">Mật khẩu</span>
           <div className="relative h-11">
             <input
               type={showPassword ? 'text' : 'password'}
@@ -58,7 +58,7 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
             />
             <button
               type="button"
-              className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-md text-[#667085] transition hover:bg-[#f3f6fb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#174ea6]"
+              className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               aria-pressed={showPassword}
               aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
               title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
@@ -70,13 +70,13 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
         </label>
 
         {(localError || error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-semibold text-red-800" role="alert">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm font-semibold text-destructive" role="alert">
             {localError || error}
           </div>
         )}
 
         <button
-          className="mt-1 min-h-11 rounded-lg border-0 bg-[#174ea6] font-bold text-white shadow-sm transition hover:bg-[#0f3b82] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55"
+          className="mt-1 min-h-11 rounded-lg border-0 bg-primary font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55"
           disabled={disabled}
         >
           {disabled ? 'Đang xác thực...' : 'Đăng nhập'}
@@ -84,7 +84,7 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
 
         <button
           type="button"
-          className="justify-self-center text-xs font-bold text-[#174ea6] transition hover:text-[#0f3b82] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#174ea6]"
+          className="justify-self-center text-xs font-semibold text-primary transition hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           onClick={onForgotPassword}
         >
           Quên mật khẩu?

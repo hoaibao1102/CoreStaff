@@ -11,7 +11,7 @@ interface ChangePasswordScreenProps {
 }
 
 const inputClass =
-  'min-h-11 w-full rounded-lg border border-[#cfd6e3] bg-white px-3.5 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9aa4b2] hover:border-[#aeb8c8] focus:border-[#174ea6] focus:ring-3 focus:ring-[#174ea6]/15';
+  'min-h-11 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/20';
 
 export function ChangePasswordScreen({ disabled = false, error, user, onLogout, onSubmit }: ChangePasswordScreenProps) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -41,7 +41,7 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
     >
       <form className="grid gap-4" onSubmit={submit}>
         <label className="grid gap-2">
-          <span className="text-xs font-bold text-[#374151]">Mật khẩu hiện tại</span>
+          <span className="text-xs font-semibold text-foreground">Mật khẩu hiện tại</span>
           <input
             type="password"
             value={currentPassword}
@@ -52,7 +52,7 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
         </label>
 
         <label className="grid gap-2">
-          <span className="text-xs font-bold text-[#374151]">Mật khẩu mới</span>
+          <span className="text-xs font-semibold text-foreground">Mật khẩu mới</span>
           <input
             type="password"
             value={newPassword}
@@ -63,7 +63,7 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
         </label>
 
         <label className="grid gap-2">
-          <span className="text-xs font-bold text-[#374151]">Xác nhận mật khẩu mới</span>
+          <span className="text-xs font-semibold text-foreground">Xác nhận mật khẩu mới</span>
           <input
             type="password"
             value={confirmPassword}
@@ -74,13 +74,13 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
         </label>
 
         {(localError || error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-semibold text-red-800" role="alert">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm font-semibold text-destructive" role="alert">
             {localError || error}
           </div>
         )}
 
         <button
-          className="min-h-11 rounded-lg border-0 bg-[#174ea6] font-bold text-white shadow-sm transition hover:bg-[#0f3b82] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55"
+          className="min-h-11 rounded-lg border-0 bg-primary font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55"
           disabled={disabled}
         >
           {disabled ? 'Đang đổi mật khẩu...' : 'Đổi mật khẩu'}
@@ -88,7 +88,7 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
 
         <button
           type="button"
-          className="justify-self-center text-xs font-bold text-[#174ea6] transition hover:text-[#0f3b82] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#174ea6] disabled:cursor-not-allowed disabled:opacity-55"
+          className="justify-self-center text-xs font-semibold text-primary transition hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-55"
           disabled={disabled}
           onClick={onLogout}
         >

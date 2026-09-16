@@ -364,15 +364,13 @@ export function EmployeeDirectoryScreen({
   if (error && !loading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
-              Quản lý nhân sự
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Danh bạ nhân viên
-            </h1>
-          </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Danh bạ nhân viên
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Tra cứu hồ sơ và thông tin công việc của nhân viên trong tổ chức.
+          </p>
         </div>
         <EmployeeDataState
           status="error"
@@ -385,16 +383,13 @@ export function EmployeeDirectoryScreen({
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      {/* Page Header — follows Design Master D */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
-            Quản lý nhân sự
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Danh bạ nhân viên
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Tra cứu hồ sơ và thông tin công việc của nhân viên trong tổ chức.
           </p>
         </div>

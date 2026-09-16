@@ -1,10 +1,10 @@
-import type { ComponentProps } from 'react';
+import { forwardRef, type ComponentProps } from 'react';
 
 export const navigationEvent = 'corestaff:navigate';
 
 /** Keep the existing authenticated session when opening a workspace screen. */
-export function AppLink({ href, onClick, ...props }: ComponentProps<'a'> & { href: string }) {
-  return <a {...props} href={href} onClick={event => {
+export const AppLink = forwardRef<HTMLAnchorElement, ComponentProps<'a'> & { href: string }>(function AppLink({ href, onClick, ...props }, ref) {
+  return <a {...props} ref={ref} href={href} onClick={event => {
     onClick?.(event);
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey
       || event.shiftKey || event.altKey || props.target || props.download != null) return;
@@ -15,4 +15,4 @@ export function AppLink({ href, onClick, ...props }: ComponentProps<'a'> & { hre
     window.history.pushState(null, '', destination);
     window.dispatchEvent(new Event(navigationEvent));
   }} />;
-}
+});

@@ -294,15 +294,13 @@ function EmployeeDetailContent({
     if (error && !loading) {
         return (
             <div className="space-y-6">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
-                            Quản lý nhân sự
-                        </p>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                            Chi tiết nhân viên
-                        </h1>
-                    </div>
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                        Chi tiết nhân viên
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                        Thông tin chi tiết và lịch sử nhân sự.
+                    </p>
                 </div>
                 <EmployeeDataState
                     status="error"
@@ -324,25 +322,20 @@ function EmployeeDetailContent({
 
     return (
         <div className="space-y-6">
-            {/* Page header */}
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            {/* Page Header — follows Design Master D */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary">
-                        Quản lý nhân sự
-                    </p>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                         Chi tiết nhân viên
                     </h1>
-                    <p className="mt-1.5 text-sm text-muted-foreground">
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                         Thông tin chi tiết và lịch sử nhân sự.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <AppLink href="/hr/employees" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                        <ChevronLeft className="h-4 w-4" />
-                        Danh bạ nhân viên
-                    </AppLink>
-                </div>
+                <AppLink href="/hr/employees" className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline sm:mt-0">
+                    <ChevronLeft className="h-4 w-4" />
+                    Danh bạ nhân viên
+                </AppLink>
             </div>
 
             {/* Loading state */}
@@ -403,14 +396,14 @@ function EmployeeDetailContent({
 
                     {/* Action error */}
                     {actionError && (
-                        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                             <AlertCircle className="h-4 w-4 shrink-0" />
                             {actionError}
                         </div>
                     )}
 
                     {/* Profile Summary */}
-                    <Card>
+                    <Card className="rounded-xl border-border shadow-none">
                         <CardContent className="flex items-center gap-4 p-6">
                             <div className="rounded-full bg-primary/10 p-4 text-primary">
                                 <User className="h-8 w-8" />
@@ -431,7 +424,7 @@ function EmployeeDetailContent({
 
                     {/* Personal Information */}
                     {editMode ? (
-                        <Card>
+                        <Card className="rounded-xl border-border shadow-none">
                             <CardHeader className="pb-3">
                                 <div className="flex items-center gap-2">
                                     <div className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -556,7 +549,7 @@ function EmployeeDetailContent({
                     </ProfileSection>
 
                     {/* Employment History */}
-                    <Card>
+                    <Card className="rounded-xl border-border shadow-none">
                         <CardHeader className="pb-3">
                             <div className="flex items-center gap-2">
                                 <div className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -571,7 +564,7 @@ function EmployeeDetailContent({
                             ) : (
                                 <div className="space-y-3">
                                     {history.map((record) => (
-                                        <div key={record._id} className="flex items-start gap-3 rounded-lg border p-3">
+                                        <div key={record._id} className="flex items-start gap-3 rounded-lg border border-border/60 bg-card p-3">
                                             <div className="flex-1">
                                                 <p className="text-sm font-medium text-foreground">
                                                     {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[record.previousStatus]} → {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[record.newStatus]}
@@ -596,7 +589,7 @@ function EmployeeDetailContent({
 
                     {/* Status Change Modal */}
                     {statusChangeMode && (
-                        <Card>
+                        <Card className="rounded-xl border-border shadow-none">
                             <CardHeader className="pb-3">
                                 <div className="flex items-center gap-2">
                                     <div className="rounded-lg bg-primary/10 p-2 text-primary">
