@@ -1,11 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEmail, IsEnum, IsMongoId, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsMongoId, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { EmploymentType, Gender } from '../../../database/schemas/enums';
 
+/**
+ * Two modes (SRS §4.1, TASK-120): with `userId` the profile links to an existing
+ * account; without it the server provisions a new EMPLOYEE account from
+ * `email`/`fullName` and returns its one-time password. `role` is deliberately
+ * NOT a field — HR may not mint any other role (§16.6), and the global
+ * whitelist + forbidNonWhitelisted pipe 400s anything not declared here.
+ */
 export class CreateEmployeeProfileDto {
-	@ApiProperty({ description: 'Existing User._id (same organization) to attach this HR profile to.' })
+	@ApiProperty({ required: false, description: 'Existing User._id (same organization) to attach this HR profile to. Omit to create the account.' })
+	@IsOptional()
 	@IsMongoId()
-	userId: string;
+	userId?: string;
+
+	@ApiProperty({ required: false, example: 'Nguyễn Văn An', description: 'Required only when creating a new account — enforced by the service, since the self route (/me) also sends no userId.' })
+	@IsOptional()
+	@IsString()
+	@MaxLength(256)
+	fullName?: string;
 
 	@ApiProperty({ example: 'TVS-0248' })
 	@IsString()

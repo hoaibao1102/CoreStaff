@@ -1,6 +1,6 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RolesGuard, ROLES_KEY } from './rbac.decorator';
+import { RolesGuard, PlatformOnly, ROLES_KEY, PLATFORM_ONLY_KEY } from './rbac.decorator';
 
 function ctx(user: { role: string } | undefined): ExecutionContext {
 	return {
@@ -12,9 +12,11 @@ function ctx(user: { role: string } | undefined): ExecutionContext {
 }
 
 describe('RolesGuard (TASK-018)', () => {
-	function guardWith(allowed: string[] | undefined) {
+	// Key-aware: the guard reads @Roles and @PlatformOnly from the same reflector.
+	function guardWith(allowed: string[] | undefined, platformOnly = false) {
 		const reflector = {
-			getAllAndOverride: (_key: string, _args: unknown[]) => allowed,
+			getAllAndOverride: (key: string, _args: unknown[]) =>
+				key === ROLES_KEY ? allowed : platformOnly,
 		} as unknown as Reflector;
 		return new RolesGuard(reflector);
 	}
@@ -41,5 +43,32 @@ describe('RolesGuard (TASK-018)', () => {
 
 	it('exposes the metadata key used by @Roles', () => {
 		expect(ROLES_KEY).toBe('rbac:allowedRoles');
+	});
+
+	// AC-SYS-01: a platform route is closed to tenant roles, and the admin bypass
+	// above is not a licence to reach tenant routes — @PlatformOnly is what makes
+	// the bypass directional.
+	describe('@PlatformOnly', () => {
+		it('lets the platform admin through with no @Roles list', () => {
+			expect(guardWith(undefined, true).canActivate(ctx({ role: 'SYSTEM_ADMIN' }))).toBe(true);
+		});
+
+		it.each(['HR', 'EMPLOYEE', 'DEPARTMENT_MANAGER'])('rejects %s → PLATFORM_ONLY', (role) => {
+			expect(() => guardWith(undefined, true).canActivate(ctx({ role }))).toThrow(/PLATFORM_ONLY/);
+		});
+
+		it('still rejects a tenant role on a platform route that also names roles', () => {
+			expect(() => guardWith(['HR'], true).canActivate(ctx({ role: 'HR' }))).toThrow(/PLATFORM_ONLY/);
+		});
+
+		it('rejects an anonymous request before the platform check', () => {
+			expect(() => guardWith(undefined, true).canActivate(ctx(undefined))).toThrow(/FORBIDDEN/);
+		});
+
+		it('writes the marker the guard reads', () => {
+			const target = {} as Record<string, unknown>;
+			(PlatformOnly() as unknown as (t: object) => void)(target);
+			expect(Reflect.getMetadata(PLATFORM_ONLY_KEY, target)).toBe(true);
+		});
 	});
 });

@@ -2,8 +2,9 @@
  * Seed data — TASK-019 Organizations/HR accounts plus the TASK-020..023 demo
  * catalog (departments, positions, employees) so the employee API and the UIs
  * have rows to exercise without hand-inserting documents.
- * Plaintext temp passwords are hashed at seed time by `seed.ts`;
- * nothing secret is committed here beyond demo-only local credentials.
+ *
+ * No passwords here (DoD §:2352): `seed.ts` hashes one env-supplied temp
+ * password per org, with a dev-only default. See `SEED_PASSWORD` in .env.example.
  */
 
 import { Gender, Role } from '../schemas/enums';
@@ -17,8 +18,6 @@ export interface HrSeed {
 	email: string;
 	fullName: string;
 	employeeCode: string;
-	/** Demo-only temp password; hashed before persist. User must change on first login. */
-	tempPassword: string;
 	/** Which OrgSeed.code this HR belongs to. */
 	orgCode: string;
 	/** joinDate for the HR's own EmployeeProfile (HR staff are employees too). */
@@ -38,7 +37,6 @@ export interface EmployeeSeed {
 	email: string;
 	fullName: string;
 	employeeCode: string;
-	tempPassword: string;
 	orgCode: string;
 	/** Role only — `Role`'s type alias shadows its const, so no member types here. */
 	role: 'DEPARTMENT_MANAGER' | 'EMPLOYEE';
@@ -62,8 +60,8 @@ export const ORGS: OrgSeed[] = [
 ];
 
 export const HRS: HrSeed[] = [
-	{ email: 'hr-a@tvs.local', fullName: 'HR A — TVS', employeeCode: 'HR-A', tempPassword: 'TvsAdmin1!', orgCode: 'TVS', joinDate: '2025-01-02', activeDate: '2025-04-02' },
-	{ email: 'hr-b@abc.local', fullName: 'HR B — ABC', employeeCode: 'HR-B', tempPassword: 'AbcAdmin1!', orgCode: 'ABC', joinDate: '2025-01-02', activeDate: '2025-04-02' },
+	{ email: 'hr-a@tvs.local', fullName: 'HR A — TVS', employeeCode: 'HR-A', orgCode: 'TVS', joinDate: '2025-01-02', activeDate: '2025-04-02' },
+	{ email: 'hr-b@abc.local', fullName: 'HR B — ABC', employeeCode: 'HR-B', orgCode: 'ABC', joinDate: '2025-01-02', activeDate: '2025-04-02' },
 ];
 
 export const DEPARTMENTS: CatalogSeed[] = [
@@ -89,62 +87,62 @@ export const EMPLOYEES: EmployeeSeed[] = [
 	// --- TVS ---
 	{
 		email: 'an.nguyen@tvs.local', fullName: 'Nguyễn Văn An', employeeCode: 'TVS-0001',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.DEPARTMENT_MANAGER,
+		orgCode: 'TVS', role: Role.DEPARTMENT_MANAGER,
 		departmentCode: 'ENG', positionCode: 'DLEAD',
 		joinDate: '2025-03-03', activeDate: '2025-06-15', dateOfBirth: '1990-05-14',
 		gender: Gender.MALE, phone: '0901000001',
 	},
 	{
 		email: 'binh.tran@tvs.local', fullName: 'Trần Thị Bình', employeeCode: 'TVS-0002',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.EMPLOYEE,
+		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'ENG', positionCode: 'DEV', managerCode: 'TVS-0001',
 		joinDate: '2025-06-02', activeDate: '2025-09-01', dateOfBirth: '1995-11-08',
 		gender: Gender.FEMALE, phone: '0901000002',
 	},
 	{
 		email: 'cuong.le@tvs.local', fullName: 'Lê Văn Cường', employeeCode: 'TVS-0003',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.EMPLOYEE,
+		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'ENG', positionCode: 'DEV', managerCode: 'TVS-0001',
 		joinDate: '2026-08-03', dateOfBirth: '1999-01-20', gender: Gender.MALE, phone: '0901000003',
 	},
 	{
 		email: 'dung.pham@tvs.local', fullName: 'Phạm Thị Dung', employeeCode: 'TVS-0004',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.EMPLOYEE,
+		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'ENG', positionCode: 'QA', managerCode: 'TVS-0001',
 		joinDate: '2025-09-01', activeDate: '2025-12-01', dateOfBirth: '1997-07-30',
 		gender: Gender.FEMALE, phone: '0901000004',
 	},
 	{
 		email: 'em.hoang@tvs.local', fullName: 'Hoàng Văn Em', employeeCode: 'TVS-0005',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.EMPLOYEE,
+		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'FIN', positionCode: 'ACC',
 		joinDate: '2024-11-11', activeDate: '2025-02-10', dateOfBirth: '1992-03-25',
 		gender: Gender.MALE, phone: '0901000005',
 	},
 	{
 		email: 'giang.vu@tvs.local', fullName: 'Vũ Thị Giang', employeeCode: 'TVS-0006',
-		tempPassword: 'TvsEmp1!', orgCode: 'TVS', role: Role.EMPLOYEE,
+		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'OPS', positionCode: 'OPS',
 		joinDate: '2026-09-01', dateOfBirth: '2000-10-12', gender: Gender.FEMALE, phone: '0901000006',
 	},
 	// --- ABC ---
 	{
 		email: 'ha.tran@abc.local', fullName: 'Trần Văn Hà', employeeCode: 'ABC-0001',
-		tempPassword: 'AbcEmp1!', orgCode: 'ABC', role: Role.DEPARTMENT_MANAGER,
+		orgCode: 'ABC', role: Role.DEPARTMENT_MANAGER,
 		departmentCode: 'SAL', positionCode: 'SLM',
 		joinDate: '2025-01-15', activeDate: '2025-04-15', dateOfBirth: '1988-12-02',
 		gender: Gender.MALE, phone: '0902000001',
 	},
 	{
 		email: 'my.ngo@abc.local', fullName: 'Ngô Thị Mỹ', employeeCode: 'ABC-0002',
-		tempPassword: 'AbcEmp1!', orgCode: 'ABC', role: Role.EMPLOYEE,
+		orgCode: 'ABC', role: Role.EMPLOYEE,
 		departmentCode: 'SAL', positionCode: 'SLS', managerCode: 'ABC-0001',
 		joinDate: '2025-05-05', activeDate: '2025-08-05', dateOfBirth: '1996-06-18',
 		gender: Gender.FEMALE, phone: '0902000002',
 	},
 	{
 		email: 'nam.duong@abc.local', fullName: 'Dương Văn Nam', employeeCode: 'ABC-0003',
-		tempPassword: 'AbcEmp1!', orgCode: 'ABC', role: Role.EMPLOYEE,
+		orgCode: 'ABC', role: Role.EMPLOYEE,
 		departmentCode: 'FIN', positionCode: 'ACC',
 		joinDate: '2026-07-01', dateOfBirth: '1998-09-09', gender: Gender.MALE, phone: '0902000003',
 	},
@@ -156,3 +154,10 @@ export interface AdminSeed {
 	fullName: string;
 	tempPassword: string;
 }
+
+/**
+ * Temp password for every seeded account when `SEED_PASSWORD` is unset. Local
+ * demo data only — `seed.ts` refuses this default outside a dev environment, so a
+ * real run must supply SEED_PASSWORD (DoD §:2352: no committed credentials).
+ */
+export const DEV_SEED_PASSWORD = 'TvsAdmin1!';

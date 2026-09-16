@@ -1,3 +1,4 @@
+import type { AuthUser } from '../../services/auth';
 import type { EmployeeProfile, Department, Position, EmployeeCreateDto, EligibleEmployeeAccount } from '../../services/hrService';
 
 export type { EmployeeProfile, Department, Position };
@@ -9,6 +10,7 @@ export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 /** State của form tạo nhân viên */
 export interface EmployeeFormState {
     userId: string;
+    fullName: string;
     employeeCode: string;
     employmentType: EmploymentType | '';
     joinDate: string;
@@ -30,6 +32,7 @@ export interface EmployeeFormState {
 /** Validation errors của từng field trong form */
 export interface EmployeeFormErrors {
     userId?: string | null;
+    fullName?: string | null;
     employeeCode?: string | null;
     employmentType?: string | null;
     joinDate?: string | null;
@@ -56,6 +59,11 @@ export type EmployeeCreatePayload = EmployeeCreateDto;
 export interface EmployeeCreateDialogProps {
     apiBase: string;
     open: boolean;
+    /** Phase C: render the form for the caller's own profile (`/hr/employees/me`).
+     * No account picker, no mode toggle; fullName is locked to the session name
+     * and the server copies email/phone from the account. Requires `user`. */
+    meMode?: boolean;
+    user?: AuthUser;
     departments: Department[];
     positions: Position[];
     accounts: EligibleEmployeeAccount[];
@@ -63,7 +71,18 @@ export interface EmployeeCreateDialogProps {
     accountsFailed?: boolean;
     onRetryAccounts?: () => void;
     onOpenChange: (open: boolean) => void;
-    onCreated: (employee: EmployeeProfile) => void;
+    /** Result: link mode → the profile; provisioning mode → profile + tempPassword (once). */
+    onCreated: (employee: EmployeeProfile & { tempPassword?: string }) => void;
+}
+
+/** Props của dialog tự tạo hồ sơ (Phase C) — dùng chung form, chặn mode tài
+ * khoản. Tự tải danh mục (phòng ban/chức danh/manager) khi mở. */
+export interface SelfProvisionDialogProps {
+    apiBase: string;
+    open: boolean;
+    user: AuthUser;
+    onOpenChange: (open: boolean) => void;
+    onCreated: () => void;
 }
 
 /** Props của dialog chỉnh sửa nhân viên */

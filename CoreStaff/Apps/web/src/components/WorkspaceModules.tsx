@@ -131,7 +131,7 @@ const modules: WorkspaceModule[] = [
     title: 'Organizations',
     description: 'Quản lý Organization, HR đầu tiên, tenant status và audit platform.',
     route: '/platform/organizations',
-    status: 'planned',
+    status: 'ready',
     icon: Building2,
     roles: ['SYSTEM_ADMIN'],
   },
@@ -194,7 +194,7 @@ export function WorkspaceModules({ user }: WorkspaceModulesProps) {
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-3">
                 <code className="rounded-md bg-[#f3f6fb] px-2 py-1 text-xs text-[#5c6170]">{module.route}</code>
-                {(module.status === 'ui' || module.id === 'profile' || module.id === 'directory') ? <AppLink className="text-sm font-medium text-[#174ea6]" href={module.route}>{module.route === '/hr/employees' ? 'Mở danh bạ' : 'Mở hồ sơ'}</AppLink> : <Button variant="outline" size="sm" disabled={module.status !== 'ready'}>
+                {(module.status === 'ui' || module.status === 'ready') ? <AppLink className="text-sm font-medium text-[#174ea6]" href={module.route}>{module.status === 'ready' ? 'Mở' : module.route === '/app/profile' ? 'Mở hồ sơ' : module.route === '/hr/employees' ? 'Mở danh bạ' : 'Mở'}</AppLink> : <Button variant="outline" size="sm" disabled>
                   Mo
                 </Button>}
               </CardContent>

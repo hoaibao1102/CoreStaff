@@ -63,3 +63,14 @@ export function normalizeEmail(email: string): string {
 export function normalizeCode(code: string): string {
   return code.trim();
 }
+
+/**
+ * Canonical form for `EmployeeProfile.employeeCode`. Case-folded because login
+ * matches the code case-insensitively (SRS §4.2): with a trim-only normalizer,
+ * `TVS-0001` and `tvs-0001` would be two distinct rows in one tenant that no
+ * login could disambiguate. `EmployeeProfile` is the sole owner of this
+ * identifier (see TASK-120 in Docs/DOCS_DECISION_LOG.md).
+ */
+export function normalizeEmployeeCode(code: string): string {
+  return normalizeCode(code).toUpperCase();
+}

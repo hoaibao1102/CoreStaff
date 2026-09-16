@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { EmploymentStatus, EmploymentType, Gender, normalizeCode } from './enums';
+import { EmploymentStatus, EmploymentType, Gender, normalizeEmployeeCode } from './enums';
 
 export type EmployeeProfileDocument = HydratedDocument<EmployeeProfile>;
 
@@ -16,6 +16,7 @@ export class EmployeeProfile {
   @Prop({ type: 'ObjectId', ref: 'User', required: true, index: true })
   userId: string;
 
+  /** Sole owner of the identifier across the tenant (SRS §15.2A, TASK-120). */
   @Prop({ required: true })
   employeeCode: string;
 
@@ -88,7 +89,7 @@ EmployeeProfileSchema.index({ organizationId: 1, employmentStatus: 1 });
 
 EmployeeProfileSchema.pre('validate', function (next) {
   if (this.employeeCode) {
-    this.employeeCode = normalizeCode(this.employeeCode);
+    this.employeeCode = normalizeEmployeeCode(this.employeeCode);
   }
   next();
 });

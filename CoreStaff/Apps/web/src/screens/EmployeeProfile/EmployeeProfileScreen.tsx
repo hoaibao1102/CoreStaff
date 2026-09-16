@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -10,6 +10,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   ShieldCheck,
   UserRound,
   UsersRound,
@@ -30,6 +31,7 @@ import {
 import { roleLabel } from '../../lib/labels';
 import type { AuthUser } from '../../services/auth';
 import { getMyEmployeeProfile, hrErrorMessage, type EmployeeProfile } from '../../services/hrService';
+import { SelfProvisionDialog } from '../EmployeeDirectory/components/SelfProvisionDialog';
 
 /* ───────── Helpers ───────── */
 
@@ -329,6 +331,7 @@ export function EmployeeProfileScreen({
   user: AuthUser;
   apiBase: string | null;
 }) {
+  const [selfProvisionOpen, setSelfProvisionOpen] = useState(false);
   const loader = useCallback(async () => {
     const data = await getMyEmployeeProfile(apiBase!);
     if (!user.organizationId || data.organizationId !== user.organizationId || data.userId !== (user._id ?? user.id)) {
@@ -343,6 +346,9 @@ export function EmployeeProfileScreen({
   const detail = resource.error as { status?: number; code?: string } | undefined;
   const missingProfile = detail?.status === 404 && detail.code === 'EMPLOYEE_PROFILE_NOT_FOUND';
   const error = missingProfile ? null : resource.error ? hrErrorMessage(resource.error) : null;
+  // FR-SYS-02 gap: HR and Department Manager have no producing flow — they create
+  // their own profile. A plain employee has no rights and is told to contact HR.
+  const canSelfProvision = missingProfile && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER');
 
   /* ── Field definitions ── */
 
@@ -412,8 +418,20 @@ export function EmployeeProfileScreen({
         <StateBanner kind="unavailable" message="API nhân sự chưa khả dụng. Thông tin tài khoản vẫn được hiển thị từ phiên đăng nhập." />
       )}
       {error && <StateBanner kind="error" message={error} onRetry={resource.retry} />}
-      {missingProfile && (
+      {missingProfile && !canSelfProvision && (
         <StateBanner kind="empty" message="Tài khoản của bạn chưa có hồ sơ nhân sự. Vui lòng liên hệ HR để bổ sung hồ sơ." />
+      )}
+      {canSelfProvision && (
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Tài khoản của bạn chưa có hồ sơ nhân sự. Hãy tự tạo hồ sơ nghiệp vụ của bạn ngay — chỉ cần nhập các thông tin
+            như mã nhân viên, ngày vào làm và phòng ban.
+          </span>
+          <Button type="button" variant="default" className="w-full sm:w-auto" onClick={() => setSelfProvisionOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Tạo hồ sơ của tôi
+          </Button>
+        </div>
       )}
 
       {/* Content */}
@@ -456,6 +474,20 @@ export function EmployeeProfileScreen({
             </div>
           </div>
         </>
+      )}
+
+      {/* Phase C — HR / Department Manager self-provisioning CTA */}
+      {apiBase && canSelfProvision && (
+        <SelfProvisionDialog
+          apiBase={apiBase}
+          open={selfProvisionOpen}
+          user={user}
+          onOpenChange={setSelfProvisionOpen}
+          onCreated={() => {
+            setSelfProvisionOpen(false);
+            resource.retry();
+          }}
+        />
       )}
     </div>
   );

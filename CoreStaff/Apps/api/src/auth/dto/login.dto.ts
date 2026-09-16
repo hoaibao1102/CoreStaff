@@ -7,7 +7,7 @@ export class LoginDto {
 	@IsNotEmpty()
 	identifier: string;
 
-	@ApiProperty({ example: 'TvsAdmin1!', format: 'password' })
+	@ApiProperty({ example: 'N3wSecurePass!', format: 'password' })
 	@IsString()
 	@IsNotEmpty()
 	password: string;

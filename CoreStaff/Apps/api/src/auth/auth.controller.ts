@@ -35,9 +35,9 @@ export class AuthController {
 		user: userExample,
 		mustChangePassword: false,
 	})
-	@ApiResponse({ status: 401, description: 'AUTH_INVALID_CREDENTIALS' })
+	@ApiResponse({ status: 401, description: 'AUTH_INVALID_CREDENTIALS | AUTH_AMBIGUOUS_IDENTIFIER' })
 	@ApiResponse({ status: 403, description: 'AUTH_ACCOUNT_DISABLED' })
-	@ApiResponse({ status: 423, description: 'AUTH_ACCOUNT_LOCKED' })
+	@ApiResponse({ status: 423, description: 'AUTH_ACCOUNT_LOCKED | TENANT_SUSPENDED' })
 	@ApiErrorExamples()
 	async login(
 		@Res({ passthrough: true }) res: Response,

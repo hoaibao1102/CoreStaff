@@ -63,11 +63,11 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                 ],
             },
             {
+                // Attendance for HR is gated on work assignments that don't exist
+                // yet (TASK-024, Sprint 4) — kept out until then so the sidebar
+                // matches the routes (§16.2 / AC-HR-SELF-01).
                 title: 'Nhân sự',
                 items: [
-                    { href: '/app/attendance', label: 'Chấm công', icon: Clock3 },
-                    { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
-                    { href: '/app/leave', label: 'Nghỉ phép & OT', icon: FileText },
                     { href: '/hr/periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
                     { href: '/hr/payroll-runs', label: 'Payroll & Payslip', icon: WalletCards },
                 ],
