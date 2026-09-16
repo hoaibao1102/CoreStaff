@@ -3,6 +3,13 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
 import { CurrentUser, SessionUser, Tenant, requireOrganizationId } from '../../common/tenant-context';
+import {
+	ApiCreatedSuccess,
+	ApiErrorExamples,
+	ApiSuccess,
+	employeeExample,
+	employmentHistoryExample,
+} from '../../common/swagger-responses';
 import { EmployeeService } from './employee.service';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
@@ -16,9 +23,11 @@ export class EmployeeController {
 
 	@Roles('HR')
 	@Post()
-	@ApiOperation({ summary: 'Create an EmployeeProfile for an existing User (TASK-020, SRS §15.2A).' })
+	@ApiOperation({ summary: 'Create an EmployeeProfile for an existing User (TASK-020, SRS 15.2A).' })
+	@ApiCreatedSuccess('Employee profile created.', employeeExample)
 	@ApiResponse({ status: 404, description: 'USER_NOT_FOUND | DEPARTMENT_NOT_FOUND | POSITION_NOT_FOUND | MANAGER_NOT_FOUND' })
 	@ApiResponse({ status: 409, description: 'EMPLOYEE_CODE_TAKEN | EMPLOYEE_PROFILE_ALREADY_EXISTS' })
+	@ApiErrorExamples()
 	async create(@Tenant() organizationId: string | null, @Body() dto: CreateEmployeeProfileDto) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.employees.create(orgId, dto);
@@ -28,6 +37,8 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get()
 	@ApiOperation({ summary: 'List employee profiles in the current tenant.' })
+	@ApiSuccess('Employee profiles in the current tenant.', [employeeExample])
+	@ApiErrorExamples()
 	async findAll(
 		@Tenant() organizationId: string | null,
 		@Query('status') status?: string,
@@ -40,7 +51,9 @@ export class EmployeeController {
 
 	@Get('me')
 	@ApiOperation({ summary: "Current user's own EmployeeProfile." })
+	@ApiSuccess("Current user's employee profile.", employeeExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiErrorExamples()
 	async me(@Tenant() organizationId: string | null, @CurrentUser() user: SessionUser) {
 		const orgId = requireOrganizationId(organizationId);
 		const uid = String(user._id ?? user.id);
@@ -51,7 +64,9 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get(':id')
 	@ApiOperation({ summary: 'Get an employee profile by id.' })
+	@ApiSuccess('Employee profile detail.', employeeExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiErrorExamples()
 	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.employees.findOne(orgId, id);
@@ -61,6 +76,8 @@ export class EmployeeController {
 	@Roles('HR')
 	@Patch(':id')
 	@ApiOperation({ summary: 'Update HR business fields on an employee profile.' })
+	@ApiSuccess('Employee profile updated.', employeeExample)
+	@ApiErrorExamples()
 	async update(
 		@Tenant() organizationId: string | null,
 		@Param('id') id: string,
@@ -76,7 +93,9 @@ export class EmployeeController {
 	@ApiOperation({
 		summary: 'Transition employmentStatus and append an EmploymentHistory record (TASK-023, BR-HIST-01).',
 	})
+	@ApiSuccess('Employment status changed.', { ...employeeExample, employmentStatus: 'ACTIVE' })
 	@ApiResponse({ status: 409, description: 'EMPLOYMENT_STATUS_TRANSITION_INVALID' })
+	@ApiErrorExamples()
 	async changeStatus(
 		@Tenant() organizationId: string | null,
 		@Param('id') id: string,
@@ -92,6 +111,8 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get(':id/history')
 	@ApiOperation({ summary: 'Employment status history for an employee (TASK-023).' })
+	@ApiSuccess('Employment status history for an employee.', [employmentHistoryExample])
+	@ApiErrorExamples()
 	async history(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.employees.listHistory(orgId, id);
