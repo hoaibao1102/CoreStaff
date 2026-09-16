@@ -1,7 +1,6 @@
-import { hrErrorMessage } from '../../services/hrService';
+import { hrErrorMessage, mapHrError } from '../../services/hrService';
 import { useState, useCallback, useEffect } from 'react';
 import {
-    ChevronLeft,
     User,
     Briefcase,
     Shield,
@@ -12,6 +11,7 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -19,7 +19,8 @@ import { Label } from '../../components/label';
 import { Select } from '../../components/select';
 import { Skeleton } from '../../components/skeleton';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
-import { AppLink } from '../../components/AppLink';
+import { FormLabel } from '../../components/form/FormLabel';
+import { FormError } from '../../components/form/FormError';
 import {
     EMPLOYMENT_STATUS_LABELS,
     EMPLOYMENT_STATUS_BADGE,
@@ -35,12 +36,18 @@ import {
     updateEmployee,
     changeEmploymentStatus,
     getEmployeeHistory,
-    mapHrError,
     type EmployeeProfile,
     type EmploymentHistoryRecord,
 } from '../../services/hrService';
+import {
+    validateEditPhone,
+    validateEditEmail,
+    validateEditDateOfBirth,
+    validateEditJoinDate,
+    validateStatusEffectiveDate,
+} from './validation';
 
-/* ───────── Field Row ───────── */
+/* ───────── Field Row (display mode) ───────── */
 interface FieldRowProps {
     label: string;
     value: string | null | undefined;
@@ -100,48 +107,87 @@ function ProfileSection({ title, description, icon: Icon, children, loading }: P
     );
 }
 
-/* ───────── Edit Mode Fields ───────── */
+/* ───────── Edit Field (edit mode) ───────── */
 interface EditFieldProps {
     label: string;
+    required?: boolean;
     value: string | undefined;
     onChange: (value: string) => void;
+    onBlur?: () => void;
     disabled?: boolean;
     type?: string;
+    error?: string | null;
+    helperText?: string;
+    inputMode?: string;
+    maxLength?: number;
 }
 
-function EditField({ label, value, onChange, disabled = false, type = 'text' }: EditFieldProps) {
+function EditField({ label, required, value, onChange, onBlur, disabled, type = 'text', error, helperText, inputMode, maxLength }: EditFieldProps) {
+    const fieldId = `edit-${label}`;
     return (
         <div className="space-y-1.5">
-            <Label htmlFor={`edit-${label}`} className="text-xs font-medium text-muted-foreground">
+            <FormLabel htmlFor={fieldId} required={required}>
                 {label}
-            </Label>
+            </FormLabel>
             <Input
-                id={`edit-${label}`}
+                id={fieldId}
                 className="h-10"
                 value={value ?? ''}
                 onChange={(e) => onChange(e.target.value)}
+                onBlur={onBlur}
                 disabled={disabled}
                 type={type}
+                inputMode={inputMode}
+                maxLength={maxLength}
+                aria-invalid={!!error}
+                aria-describedby={helperText ? `${fieldId}-hint` : undefined}
             />
+            {helperText && !error && (
+                <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">
+                    {helperText}
+                </p>
+            )}
+            <FormError message={error} />
         </div>
     );
 }
 
-/* ───────── Main Screen ───────── */
-export function EmployeeDetailScreen(props: { user: AuthUser; apiBase: string | null; employeeId: string }) {
-    if (props.user.role !== 'HR' || !props.user.organizationId) return <EmployeeDataState status="forbidden" />;
-    if (!props.apiBase) return <EmployeeDataState status="unavailable" />;
-    return <EmployeeDetailContent key={`${props.apiBase}:${props.employeeId}:${props.user.organizationId}:${props.user._id ?? props.user.id}`} {...props} />;
+/* ───────── Detail Modal ───────── */
+export function EmployeeDetailDialog(props: {
+    user: AuthUser;
+    apiBase: string;
+    employeeId: string;
+    onClose: () => void;
+    onChanged?: () => void;
+}) {
+    return (
+        <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }}>
+            <DialogContent className="max-w-4xl gap-0" initialFocus={() => document.getElementById('employee-detail-edit')}>
+                <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
+                    <DialogTitle className="text-xl font-semibold">Chi tiết nhân viên</DialogTitle>
+                    <DialogDescription className="mt-1.5">
+                        Thông tin hồ sơ, công việc và lịch sử trạng thái nhân sự.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+                    <EmployeeDetailContent key={`${props.apiBase}:${props.employeeId}:${props.user.organizationId}:${props.user._id ?? props.user.id}`} {...props} />
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
+/* ───────── Main Content ───────── */
 function EmployeeDetailContent({
     user,
     apiBase,
     employeeId,
+    onChanged,
 }: {
     user: AuthUser;
-    apiBase: string | null;
+    apiBase: string;
     employeeId: string;
+    onChanged?: () => void;
 }) {
     const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
     const [history, setHistory] = useState<EmploymentHistoryRecord[]>([]);
@@ -174,12 +220,18 @@ function EmployeeDetailContent({
         workplaceId: '',
     });
 
+    /* Edit validation errors */
+    const [editErrors, setEditErrors] = useState<Record<string, string | null>>({});
+
     /* Status change form state */
     const [statusForm, setStatusForm] = useState({
         newStatus: '' as EmploymentStatus | '',
         effectiveDate: '',
         reason: '',
     });
+
+    /* Status validation errors */
+    const [statusErrors, setStatusErrors] = useState<Record<string, string | null>>({});
 
     const loadEmployee = useCallback(async () => {
         if (!apiBase || !employeeId) return;
@@ -241,8 +293,56 @@ function EmployeeDetailContent({
         loadHistory();
     }, [loadEmployee, loadHistory]);
 
+    /* ── Edit Validation ── */
+    const validateEditField = useCallback((field: string, value: string): string | null => {
+        switch (field) {
+            case 'phone':
+                return validateEditPhone(value);
+            case 'email':
+                return validateEditEmail(value);
+            case 'dateOfBirth':
+                return validateEditDateOfBirth(value);
+            case 'joinDate':
+                return validateEditJoinDate(value);
+            default:
+                return null;
+        }
+    }, []);
+
+    const handleEditBlur = useCallback((field: string) => {
+        const value = formData[field as keyof typeof formData] as string;
+        const error = validateEditField(field, value);
+        setEditErrors(prev => ({
+            ...prev,
+            [field]: error,
+        }));
+    }, [formData, validateEditField]);
+
     const handleSave = async () => {
         if (!apiBase || !employeeId) return;
+
+        // Validate all editable fields
+        const errors: Record<string, string | null> = {};
+        const phoneError = validateEditPhone(formData.phone);
+        if (phoneError) errors.phone = phoneError;
+
+        const emailError = validateEditEmail(formData.email);
+        if (emailError) errors.email = emailError;
+
+        const dobError = validateEditDateOfBirth(formData.dateOfBirth);
+        if (dobError) errors.dateOfBirth = dobError;
+
+        const joinDateError = validateEditJoinDate(formData.joinDate);
+        if (joinDateError) errors.joinDate = joinDateError;
+
+        if (Object.keys(errors).length > 0) {
+            setEditErrors(errors);
+            const firstErrorField = Object.keys(errors)[0];
+            setTimeout(() => document.getElementById(`edit-${firstErrorField}`)?.focus(), 0);
+            return;
+        }
+
+        setEditErrors({});
         setSaving(true);
         setActionError(null);
         try {
@@ -255,15 +355,44 @@ function EmployeeDetailContent({
             const updated = await updateEmployee(apiBase, employeeId, updates as any);
             setEmployee(previous => previous ? { ...previous, ...updated } : updated);
             setEditMode(false);
+            onChanged?.();
         } catch (err: unknown) {
-            setActionError(mapHrError((err as any)?.code, 'Không thể cập nhật hồ sơ nhân viên.'));
+            const code = (err as any)?.code;
+            if (code === 'EMPLOYEE_CODE_TAKEN') {
+                setActionError('Mã nhân viên này đã được sử dụng. Vui lòng nhập mã khác.');
+            } else if (code === 'DEPARTMENT_NOT_FOUND') {
+                setActionError('Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.');
+            } else if (code === 'POSITION_NOT_FOUND') {
+                setActionError('Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.');
+            } else {
+                setActionError(mapHrError(code, 'Không thể cập nhật hồ sơ nhân viên lúc này. Vui lòng thử lại.'));
+            }
         } finally {
             setSaving(false);
         }
     };
 
+    /* ── Status Change Validation ── */
+    const validateStatusChange = useCallback((): boolean => {
+        const errors: Record<string, string | null> = {};
+
+        if (!statusForm.newStatus) {
+            errors.newStatus = 'Vui lòng chọn trạng thái mới.';
+        }
+
+        const effectiveDateError = validateStatusEffectiveDate(statusForm.effectiveDate);
+        if (effectiveDateError) errors.effectiveDate = effectiveDateError;
+
+        setStatusErrors(errors);
+        return Object.keys(errors).length === 0;
+    }, [statusForm]);
+
     const handleStatusChange = async () => {
+        if (!validateStatusChange()) return;
+
         if (!apiBase || !employeeId || !statusForm.newStatus || !statusForm.effectiveDate) return;
+
+        setStatusErrors({});
         setSaving(true);
         setActionError(null);
         try {
@@ -276,14 +405,14 @@ function EmployeeDetailContent({
             );
             setEmployee(previous => previous ? { ...previous, ...updated } : updated);
             setStatusChangeMode(false);
-            // Reload history to show new entry
+            onChanged?.();
             loadHistory();
         } catch (err: unknown) {
             const code = (err as any)?.code;
             if (code === 'EMPLOYMENT_STATUS_TRANSITION_INVALID') {
                 setActionError('Trạng thái không thể chuyển đổi theo quy định. Vui lòng kiểm tra lại.');
             } else {
-                setActionError(mapHrError(code, 'Không thể thay đổi trạng thái employment.'));
+                setActionError(mapHrError(code, 'Không thể thay đổi trạng thái nhân sự lúc này. Vui lòng thử lại.'));
             }
         } finally {
             setSaving(false);
@@ -322,22 +451,6 @@ function EmployeeDetailContent({
 
     return (
         <div className="space-y-6">
-            {/* Page Header — follows Design Master D */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                        Chi tiết nhân viên
-                    </h1>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                        Thông tin chi tiết và lịch sử nhân sự.
-                    </p>
-                </div>
-                <AppLink href="/hr/employees" className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline sm:mt-0">
-                    <ChevronLeft className="h-4 w-4" />
-                    Danh bạ nhân viên
-                </AppLink>
-            </div>
-
             {/* Loading state */}
             {loading ? (
                 <div className="space-y-6">
@@ -358,7 +471,7 @@ function EmployeeDetailContent({
                     <div className="flex flex-wrap gap-2">
                         {!editMode && !statusChangeMode && (
                             <>
-                                <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                                <Button id="employee-detail-edit" variant="outline" size="sm" onClick={() => setEditMode(true)}>
                                     <Pencil className="mr-1.5 h-4 w-4" />
                                     Chỉnh sửa
                                 </Button>
@@ -372,9 +485,9 @@ function EmployeeDetailContent({
                             <>
                                 <Button size="sm" onClick={handleSave} disabled={saving}>
                                     <Save className="mr-1.5 h-4 w-4" />
-                                    Lưu
+                                    {saving ? 'Đang lưu…' : 'Lưu'}
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setActionError(null); }}>
+                                <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setActionError(null); setEditErrors({}); }}>
                                     <X className="mr-1.5 h-4 w-4" />
                                     Hủy
                                 </Button>
@@ -384,9 +497,9 @@ function EmployeeDetailContent({
                             <>
                                 <Button size="sm" onClick={handleStatusChange} disabled={saving || !statusForm.newStatus || !statusForm.effectiveDate}>
                                     <Save className="mr-1.5 h-4 w-4" />
-                                    Xác nhận
+                                    {saving ? 'Đang xử lý…' : 'Xác nhận'}
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => { setStatusChangeMode(false); setActionError(null); }}>
+                                <Button variant="outline" size="sm" onClick={() => { setStatusChangeMode(false); setActionError(null); setStatusErrors({}); }}>
                                     <X className="mr-1.5 h-4 w-4" />
                                     Hủy
                                 </Button>
@@ -396,7 +509,7 @@ function EmployeeDetailContent({
 
                     {/* Action error */}
                     {actionError && (
-                        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
                             <AlertCircle className="h-4 w-4 shrink-0" />
                             {actionError}
                         </div>
@@ -443,27 +556,30 @@ function EmployeeDetailContent({
                                     />
                                     <EditField
                                         label="Ngày vào làm"
+                                        required
                                         value={formData.joinDate}
                                         onChange={(v) => setFormData(prev => ({ ...prev, joinDate: v }))}
+                                        onBlur={() => handleEditBlur('joinDate')}
                                         type="date"
+                                        error={editErrors.joinDate}
                                     />
                                     <EditField
                                         label="Ngày sinh"
                                         value={formData.dateOfBirth}
                                         onChange={(v) => setFormData(prev => ({ ...prev, dateOfBirth: v }))}
+                                        onBlur={() => handleEditBlur('dateOfBirth')}
                                         type="date"
+                                        error={editErrors.dateOfBirth}
                                     />
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="edit-gender" className="text-xs font-medium text-muted-foreground">
-                                            Giới tính
-                                        </Label>
+                                        <FormLabel htmlFor="edit-gender">Giới tính</FormLabel>
                                         <Select
                                             id="edit-gender"
                                             value={formData.gender}
                                             onValueChange={(v) => setFormData(prev => ({ ...prev, gender: v as Gender }))}
                                             disabled={false}
                                         >
-                                            <option value="">Chọn</option>
+                                            <option value="">Chọn giới tính</option>
                                             {Object.entries(GENDER_LABELS).map(([key, label]) => (
                                                 <option key={key} value={key}>{label}</option>
                                             ))}
@@ -472,13 +588,20 @@ function EmployeeDetailContent({
                                     <EditField
                                         label="Số điện thoại"
                                         value={formData.phone}
-                                        onChange={(v) => setFormData(prev => ({ ...prev, phone: v }))}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, phone: v.replace(/[^\d]/g, '').slice(0, 10) }))}
+                                        onBlur={() => handleEditBlur('phone')}
+                                        inputMode="numeric"
+                                        maxLength={10}
+                                        error={editErrors.phone}
+                                        helperText={editErrors.phone ? undefined : 'Chỉ nhập số, đủ 10 chữ số.'}
                                     />
                                     <EditField
                                         label="Email"
                                         value={formData.email}
                                         onChange={(v) => setFormData(prev => ({ ...prev, email: v }))}
+                                        onBlur={() => handleEditBlur('email')}
                                         type="email"
+                                        error={editErrors.email}
                                     />
                                     <EditField
                                         label="Địa chỉ"
@@ -488,48 +611,46 @@ function EmployeeDetailContent({
                                     <EditField
                                         label="CCCD/CMND"
                                         value={formData.citizenId}
-                                        onChange={(v) => setFormData(prev => ({ ...prev, citizenId: v }))}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, citizenId: v.replace(/[^\d]/g, '').slice(0, 12) }))}
                                     />
                                     <EditField
                                         label="Mã số thuế"
                                         value={formData.taxCode}
-                                        onChange={(v) => setFormData(prev => ({ ...prev, taxCode: v }))}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, taxCode: v.replace(/[^\d]/g, '').slice(0, 12) }))}
                                     />
                                     <EditField
                                         label="Số BHXH"
                                         value={formData.socialInsuranceCode}
-                                        onChange={(v) => setFormData(prev => ({ ...prev, socialInsuranceCode: v }))}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, socialInsuranceCode: v.replace(/[^\d]/g, '').slice(0, 12) }))}
                                     />
                                     <EditField
                                         label="Tài khoản ngân hàng"
                                         value={formData.bankAccount}
-                                        onChange={(v) => setFormData(prev => ({ ...prev, bankAccount: v }))}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, bankAccount: v.replace(/[^\d]/g, '').slice(0, 17) }))}
                                     />
                                 </div>
                             </CardContent>
                         </Card>
                     ) : (
-                        <>
-                            <ProfileSection
-                                title="Thông tin cá nhân"
-                                description="Thông tin cá nhân của nhân viên"
-                                icon={User}
-                            >
-                                <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    <FieldRow label="Mã nhân viên" value={employee.employeeCode} />
-                                    <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
-                                    <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('vi-VN') : undefined} />
-                                    <FieldRow label="Giới tính" value={employee.gender ? (GENDER_LABELS as Record<string, string>)[employee.gender] : undefined} />
-                                    <FieldRow label="Số điện thoại" value={employee.phone} />
-                                    <FieldRow label="Email" value={employee.email} />
-                                    <FieldRow label="Địa chỉ" value={employee.address} />
-                                    <FieldRow label="CCCD/CMND" value={employee.citizenId} />
-                                    <FieldRow label="Mã số thuế" value={employee.taxCode} />
-                                    <FieldRow label="Số BHXH" value={employee.socialInsuranceCode} />
-                                    <FieldRow label="Tài khoản ngân hàng" value={employee.bankAccount} />
-                                </dl>
-                            </ProfileSection>
-                        </>
+                        <ProfileSection
+                            title="Thông tin cá nhân"
+                            description="Thông tin cá nhân của nhân viên"
+                            icon={User}
+                        >
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <FieldRow label="Mã nhân viên" value={employee.employeeCode} />
+                                <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
+                                <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('vi-VN') : undefined} />
+                                <FieldRow label="Giới tính" value={employee.gender ? (GENDER_LABELS as Record<string, string>)[employee.gender] : undefined} />
+                                <FieldRow label="Số điện thoại" value={employee.phone} />
+                                <FieldRow label="Email" value={employee.email} />
+                                <FieldRow label="Địa chỉ" value={employee.address} />
+                                <FieldRow label="CCCD/CMND" value={employee.citizenId} />
+                                <FieldRow label="Mã số thuế" value={employee.taxCode} />
+                                <FieldRow label="Số BHXH" value={employee.socialInsuranceCode} />
+                                <FieldRow label="Tài khoản ngân hàng" value={employee.bankAccount} />
+                            </dl>
+                        </ProfileSection>
                     )}
 
                     {/* Employment Information */}
@@ -587,7 +708,7 @@ function EmployeeDetailContent({
                         </CardContent>
                     </Card>
 
-                    {/* Status Change Modal */}
+                    {/* Status Change Form */}
                     {statusChangeMode && (
                         <Card className="rounded-xl border-border shadow-none">
                             <CardHeader className="pb-3">
@@ -595,15 +716,15 @@ function EmployeeDetailContent({
                                     <div className="rounded-lg bg-primary/10 p-2 text-primary">
                                         <Shield className="h-4 w-4" />
                                     </div>
-                                    <CardTitle className="text-base">Thay đổi trạng thái employment</CardTitle>
+                                    <CardTitle className="text-base">Thay đổi trạng thái nhân sự</CardTitle>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="status-new" className="text-xs font-medium text-muted-foreground">
+                                        <FormLabel htmlFor="status-new" required>
                                             Trạng thái mới
-                                        </Label>
+                                        </FormLabel>
                                         <Select
                                             id="status-new"
                                             value={statusForm.newStatus}
@@ -622,12 +743,19 @@ function EmployeeDetailContent({
                                                 Không có trạng thái nào có thể chuyển đổi từ {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}.
                                             </p>
                                         )}
+                                        <FormError message={statusErrors.newStatus} />
                                     </div>
                                     <EditField
                                         label="Ngày hiệu lực"
+                                        required
                                         value={statusForm.effectiveDate}
                                         onChange={(v) => setStatusForm(prev => ({ ...prev, effectiveDate: v }))}
+                                        onBlur={() => {
+                                            const error = validateStatusEffectiveDate(statusForm.effectiveDate);
+                                            setStatusErrors(prev => ({ ...prev, effectiveDate: error }));
+                                        }}
                                         type="date"
+                                        error={statusErrors.effectiveDate}
                                     />
                                     <div className="space-y-1.5 sm:col-span-2">
                                         <Label htmlFor="status-reason" className="text-xs font-medium text-muted-foreground">

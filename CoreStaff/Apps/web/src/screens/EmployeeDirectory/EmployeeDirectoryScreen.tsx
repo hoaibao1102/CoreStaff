@@ -1,5 +1,3 @@
-import { useHrResource } from '../../lib/useHrResource';
-import { listEmployees, paginateEmployees, hrErrorMessage } from '../../services/hrService';
 import { useState, useCallback } from 'react';
 import {
   Search,
@@ -9,9 +7,7 @@ import {
   Building2,
   SlidersHorizontal,
   X,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
+  Plus,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { navigationEvent } from '../../components/AppLink';
@@ -19,17 +15,14 @@ import { Card, CardContent } from '../../components/card';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { Skeleton } from '../../components/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '../../components/alert';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
-import { AppLink } from '../../components/AppLink';
-import {
-  EMPLOYMENT_STATUS_LABELS,
-  EMPLOYMENT_STATUS_BADGE,
-} from '../../lib/types';
-import {
-  getDepartments,
-  type EmployeeProfile,
-  type Department,
-} from '../../services/hrService';
+import { EMPLOYMENT_STATUS_LABELS } from '../../lib/types';
+import { hrErrorMessage, paginateEmployees } from '../../services/hrService';
+import { useHrResource } from '../../lib/useHrResource';
+import { EmployeeTable } from './components/EmployeeTable';
+import { EmployeeCreateDialog } from './components/EmployeeCreateDialog';
+import { EmployeeDetailDialog } from '@/screens/EmployeeDetail/EmployeeDetailDialog';
 
 /* ───────── Stat Card ───────── */
 interface StatCardProps {
@@ -65,7 +58,7 @@ interface FilterBarProps {
   query: string;
   departmentId: string;
   status: string;
-  departments: Department[];
+  departments: any[];
   ready: boolean;
   filtered: boolean;
   onQueryChange: (v: string) => void;
@@ -134,7 +127,7 @@ function FilterBar({
               onChange={(e) => onDepartmentChange(e.target.value)}
             >
               <option value="">Tất cả phòng ban</option>
-              {departments.map((dept) => (
+              {departments.map((dept: any) => (
                 <option key={dept._id} value={dept._id}>
                   {dept.name}
                 </option>
@@ -168,131 +161,6 @@ function FilterBar({
   );
 }
 
-/* ───────── Table ───────── */
-interface TableProps {
-  rows: EmployeeProfile[];
-  total: number;
-  current: number;
-  pages: number;
-  onNavigate: (page: number) => void;
-  onViewDetail: (id: string) => void;
-}
-
-function EmployeeTable({ rows, total, current, pages, onNavigate, onViewDetail }: TableProps) {
-  return (
-    <Card>
-      <CardContent className="p-0">
-        {/* Header bar */}
-        <div className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
-          <p className="text-sm text-muted-foreground">{total} nhân viên</p>
-          {/* Pagination */}
-          {pages > 1 && (
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                disabled={current <= 1}
-                aria-label="Trang trước"
-                onClick={() => onNavigate(current - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="min-w-[3rem] text-center text-sm text-muted-foreground">
-                {current} / {pages}
-              </span>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                disabled={current >= pages}
-                aria-label="Trang sau"
-                onClick={() => onNavigate(current + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table aria-label="Danh bạ nhân viên" className="w-full caption-bottom text-sm">
-            <thead className="[&_tr]:border-b">
-              <tr className="border-b bg-muted/30">
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-4">
-                  Mã NV
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground">
-                  Họ tên
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell">
-                  Email
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell">
-                  Phòng ban
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell">
-                  Chức danh
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground">
-                  Trạng thái
-                </th>
-                <th className="h-11 px-4 text-left align-middle font-medium text-muted-foreground">
-                  Hành động
-                </th>
-              </tr>
-            </thead>
-            <tbody className="[&_tr:last-child]:border-0">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                    Không tìm thấy nhân viên phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row._id} className="border-b transition-colors hover:bg-muted/50">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {row.employeeCode}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {row.fullName || 'Chưa có thông tin'}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                      {row.email || '—'}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {row.departmentName || '—'}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {row.positionName || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[row.employmentStatus] ?? 'bg-slate-100 text-slate-600'}`}>
-                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[row.employmentStatus]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onViewDetail(row._id)}
-                        aria-label={`Xem hồ sơ ${row.fullName || row.employeeCode}`}
-                        title="Xem chi tiết"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ───────── Loading Rows ───────── */
 function LoadingRows() {
   return (
@@ -320,31 +188,45 @@ function LoadingRows() {
 export function EmployeeDirectoryScreen({
   user,
   apiBase,
+  employeeId,
 }: {
   user: AuthUser;
   apiBase: string | null;
+  employeeId?: string;
 }) {
   const allowed = user.role === 'HR' && !!user.organizationId;
   const [query, setQuery] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [notice, setNotice] = useState('');
+
   const loader = useCallback(async () => {
-    const [rows, departments] = await Promise.all([
-      listEmployees(apiBase!, status, departmentId), getDepartments(apiBase!)
+    const [employees, departments, positions] = await Promise.all([
+      import('../../services/hrService').then(m => m.listEmployees(apiBase!, status, departmentId)),
+      import('../../services/hrService').then(m => m.getDepartments(apiBase!, true)),
+      import('../../services/hrService').then(m => m.getPositions(apiBase!, true)),
     ]);
-    return { rows: rows.filter(row => row.organizationId === user.organizationId), departments };
-  }, [apiBase, status, departmentId, user.organizationId, user._id, user.id]);
+    return {
+      rows: employees.filter(row => row.organizationId === user.organizationId),
+      departments,
+      positions,
+    };
+  }, [apiBase, status, departmentId, user.organizationId]);
+
   const resource = useHrResource(allowed && apiBase ? loader : null);
   const loading = resource.loading;
   const error = resource.error ? hrErrorMessage(resource.error) : null;
   const loadEmployees = resource.retry;
   const employees = resource.data?.rows ?? [];
   const departments = resource.data?.departments ?? [];
+  const positions = resource.data?.positions ?? [];
   const result = paginateEmployees(employees, query, page);
   const total = result.total;
   const totalPages = result.totalPages;
   const filtered = !!(query || departmentId || status);
+
   if (!allowed) return <EmployeeDataState status="forbidden" />;
   if (!apiBase) return <EmployeeDataState status="unavailable" />;
 
@@ -357,6 +239,11 @@ export function EmployeeDirectoryScreen({
 
   const handleViewDetail = (id: string) => {
     window.history.pushState(null, '', `/hr/employees/${id}`);
+    window.dispatchEvent(new Event(navigationEvent));
+  };
+
+  const handleCloseDetail = () => {
+    window.history.replaceState(null, '', '/hr/employees');
     window.dispatchEvent(new Event(navigationEvent));
   };
 
@@ -383,7 +270,7 @@ export function EmployeeDirectoryScreen({
 
   return (
     <div className="space-y-6">
-      {/* Page Header — follows Design Master D */}
+      {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
@@ -393,11 +280,19 @@ export function EmployeeDirectoryScreen({
             Tra cứu hồ sơ và thông tin công việc của nhân viên trong tổ chức.
           </p>
         </div>
-        <AppLink href="/" className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline sm:mt-0">
-          <ChevronLeft className="h-4 w-4" />
-          Tổng quan
-        </AppLink>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button className="min-h-11" onClick={() => { setNotice(''); setCreateOpen(true); }}>
+            <Plus className="h-4 w-4" />
+            Tạo hồ sơ
+          </Button>
+        </div>
       </div>
+
+      {notice && (
+        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+          {notice}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -433,6 +328,32 @@ export function EmployeeDirectoryScreen({
 
       {/* Table or loading */}
       {loading ? <div role="status" aria-label="Đang tải danh bạ"><LoadingRows /></div> : <EmployeeTable rows={result.employees} total={total} current={result.page} pages={totalPages} onNavigate={setPage} onViewDetail={handleViewDetail} />}
+
+      {apiBase && (
+        <>
+          <EmployeeCreateDialog
+            apiBase={apiBase}
+            open={createOpen}
+            departments={departments}
+            positions={positions}
+            onOpenChange={setCreateOpen}
+            onCreated={() => {
+              setCreateOpen(false);
+              setNotice('Đã tạo hồ sơ nhân sự. API đặt trạng thái ban đầu là thử việc.');
+              loadEmployees();
+            }}
+          />
+          {employeeId && (
+            <EmployeeDetailDialog
+              user={user}
+              apiBase={apiBase}
+              employeeId={employeeId}
+              onClose={handleCloseDetail}
+              onChanged={loadEmployees}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

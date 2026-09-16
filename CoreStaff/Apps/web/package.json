@@ -10,7 +10,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "test:e2e": "playwright test",
-    "test": "jest --config jest.config.cjs --runInBand && node --test tests/auth-proxy.test.mjs"
+    "test": "jest --config jest.config.cjs --runInBand && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

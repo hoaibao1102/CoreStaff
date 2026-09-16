@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
   server: {
     port: 5173,
     proxy: {
-      '/api': authProxy(env.VITE_API_URL || 'https://becorestaff.vercel.app'),
+      '/api': authProxy(env.VITE_API_URL || 'https://18-141-68-40.sslip.io'),
       '/local-api': authProxy(env.VITE_API_FALLBACK_URL || 'http://localhost:3000', true),
     },
   },

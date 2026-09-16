@@ -57,6 +57,8 @@ export interface Department {
     name: string;
     active: boolean;
     organizationId: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface Position {
@@ -67,23 +69,99 @@ export interface Position {
     organizationId: string;
 }
 
+export interface EmployeeCreateDto {
+    userId: string;
+    employeeCode: string;
+    employmentType?: EmploymentType;
+    joinDate: string;
+    dateOfBirth?: string;
+    gender?: Gender;
+    phone?: string;
+    email?: string;
+    address?: string;
+    citizenId?: string;
+    taxCode?: string;
+    socialInsuranceCode?: string;
+    bankAccount?: string;
+    departmentId?: string;
+    positionId?: string;
+    directManagerId?: string;
+    workplaceId?: string;
+}
+
 // ───────── API Error Codes ─────────
 
+/**
+ * HR_ERROR_CODES — ánh xạ lỗi kỹ thuật từ API sang ngôn ngữ nghiệp vụ HR.
+ * Tuyệt đối không hiển thị thông báo kỹ thuật cho người dùng cuối.
+ */
 export const HR_ERROR_CODES: Record<string, string> = {
-    USER_NOT_FOUND: 'Không tìm thấy người dùng.',
-    DEPARTMENT_NOT_FOUND: 'Không tìm thấy phòng ban.',
-    POSITION_NOT_FOUND: 'Không tìm thấy chức danh.',
-    MANAGER_NOT_FOUND: 'Không tìm thấy quản lý trực tiếp.',
-    EMPLOYEE_PROFILE_ALREADY_EXISTS: 'Hồ sơ nhân viên đã tồn tại cho người dùng này.',
-    EMPLOYEE_CODE_TAKEN: 'Mã nhân viên đã được sử dụng.',
+    // User / Auth errors
+    USER_NOT_FOUND: 'Không tìm thấy tài khoản đăng nhập này trong tổ chức.',
+    AUTHENTICATION_REQUIRED: 'Vui lòng đăng nhập để tiếp tục.',
+    INSUFFICIENT_PERMISSIONS: 'Bạn không có quyền thực hiện thao tác này.',
+
+    // Employee profile errors
+    EMPLOYEE_PROFILE_ALREADY_EXISTS: 'Tài khoản này đã được liên kết với một hồ sơ nhân sự khác.',
+    EMPLOYEE_CODE_TAKEN: 'Mã nhân viên này đã được sử dụng. Vui lòng nhập mã khác.',
     EMPLOYEE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân viên.',
-    EMPLOYMENT_STATUS_TRANSITION_INVALID: 'Trạng thái không thể chuyển đổi theo quy định.',
-    POSITION_CODE_TAKEN: 'Mã chức danh đã được sử dụng.',
-    DEPARTMENT_CODE_TAKEN: 'Mã phòng ban đã được sử dụng.',
+
+    // Reference entity errors
+    DEPARTMENT_NOT_FOUND: 'Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.',
+    DEPARTMENT_CODE_TAKEN: 'Mã phòng ban này đã tồn tại trong tổ chức. Vui lòng chọn mã khác.',
+    POSITION_NOT_FOUND: 'Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.',
+    POSITION_CODE_TAKEN: 'Mã chức danh này đã tồn tại. Vui lòng chọn mã khác.',
+    MANAGER_NOT_FOUND: 'Không tìm thấy quản lý trực tiếp này trong tổ chức.',
+    WORKPLACE_NOT_FOUND: 'Nơi làm việc đã chọn không còn tồn tại.',
+
+    // Status transition errors
+    EMPLOYMENT_STATUS_TRANSITION_INVALID: 'Trạng thái không thể chuyển đổi theo quy định nhân sự.',
+
+    // Validation errors
+    VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
+
+    // System errors
+    SERVER_ERROR: 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.',
+    SERVICE_UNAVAILABLE: 'Dịch vụ tạm thời không khả dụng. Vui lòng thử lại.',
 };
 
+/**
+ * mapHrError — chuyển lỗi kỹ thuật từ API thành thông báo HR thân thiện.
+ * @param code — Mã lỗi từ API (ví dụ: 'EMPLOYEE_CODE_TAKEN')
+ * @param fallback — Thông báo mặc định nếu không tìm thấy code
+ */
 export function mapHrError(code?: string, fallback?: string): string {
-    return code && HR_ERROR_CODES[code] ? HR_ERROR_CODES[code] : fallback ?? 'Đã xảy ra lỗi.';
+    if (code && HR_ERROR_CODES[code]) return HR_ERROR_CODES[code];
+    return fallback ?? 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.';
+}
+
+/**
+ * hrErrorMessage — xử lý lỗi chung từ fetch/axios response.
+ * Tự động phân biệt client error và server error.
+ */
+export function hrErrorMessage(error: unknown): string {
+    const err = error as { code?: string; status?: number; message?: string };
+
+    // Ưu tiên code lỗi từ backend
+    if (err.code && HR_ERROR_CODES[err.code]) return HR_ERROR_CODES[err.code];
+
+    // Xử lý theo HTTP status
+    if (err.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    if (err.status === 403) return 'Bạn không có quyền truy cập tính năng này.';
+    if (err.status === 404) return 'Không tìm thấy dữ liệu bạn yêu cầu.';
+    if (err.status === 409) return 'Dữ liệu bạn nhập trùng với dữ liệu hiện có. Vui lòng kiểm tra lại.';
+    if (err.status === 422) return 'Thông tin bạn nhập không hợp lệ. Vui lòng kiểm tra lại các trường bắt buộc.';
+    if (err.status && err.status >= 500) return 'Máy chủ đang bảo trì. Vui lòng thử lại sau 5 phút.';
+
+    // Fallback: nếu là string đơn thuần
+    if (typeof error === 'string' && error.length > 0) {
+        if (error.includes('Network') || error.includes('fetch')) {
+            return 'Không thể kết nối máy chủ. Vui lòng kiểm tra mạng internet.';
+        }
+        return error;
+    }
+
+    return 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.';
 }
 
 // ───────── API Service Functions ─────────
@@ -169,25 +247,7 @@ export async function getEmployeeById(base: string, id: string): Promise<Employe
 
 export async function createEmployee(
     base: string,
-    dto: {
-        userId: string;
-        employeeCode: string;
-        employmentType?: EmploymentType;
-        joinDate: string;
-        dateOfBirth?: string;
-        gender?: Gender;
-        phone?: string;
-        email?: string;
-        address?: string;
-        citizenId?: string;
-        taxCode?: string;
-        socialInsuranceCode?: string;
-        bankAccount?: string;
-        departmentId?: string;
-        positionId?: string;
-        directManagerId?: string;
-        workplaceId?: string;
-    },
+    dto: EmployeeCreateDto,
 ): Promise<EmployeeProfile> {
     // NOTE: employmentStatus is NOT sent — backend sets it to PROBATION automatically
     return hrRequest<EmployeeProfile>(base, '/api/hr/employees', {
@@ -201,10 +261,7 @@ export async function createEmployee(
 export async function updateEmployee(
     base: string,
     id: string,
-    dto: Partial<Omit<
-        Parameters<typeof createEmployee>[1],
-        'userId' | 'employeeCode' // immutable after creation
-    >>,
+    dto: Partial<Omit<EmployeeCreateDto, 'userId' | 'employeeCode'>>,
 ): Promise<EmployeeProfile> {
     return hrRequest<EmployeeProfile>(base, `/api/hr/employees/${id}`, {
         method: 'PATCH',
@@ -245,9 +302,29 @@ export async function getDepartments(base: string, activeOnly?: boolean): Promis
     if (activeOnly !== undefined) params.set('active', String(activeOnly));
     return hrRequest<Department[]>(
         base,
-        `/api/hr/departments?${params.toString()}`,
+        `/api/hr/departments${params.size ? `?${params}` : ''}`,
         { method: 'GET' },
     );
+}
+
+export async function getDepartmentById(base: string, id: string): Promise<Department> {
+    return hrRequest<Department>(base, `/api/hr/departments/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createDepartment(base: string, dto: Pick<Department, 'code' | 'name'>): Promise<Department> {
+    return hrRequest<Department>(base, '/api/hr/departments', { method: 'POST', body: JSON.stringify(dto) });
+}
+
+export async function updateDepartment(base: string, id: string, dto: Partial<Pick<Department, 'code' | 'name'>>): Promise<Department> {
+    return hrRequest<Department>(base, `/api/hr/departments/${encodeURIComponent(id)}`, {
+        method: 'PATCH', body: JSON.stringify(dto),
+    });
+}
+
+export async function setDepartmentActive(base: string, id: string, active: boolean): Promise<Department> {
+    return hrRequest<Department>(base, `/api/hr/departments/${encodeURIComponent(id)}/${active ? 'activate' : 'deactivate'}`, {
+        method: 'PATCH',
+    });
 }
 
 // ── Positions (public within tenant) ──────────────────────────────────
@@ -275,11 +352,4 @@ export async function listEmployees(base: string, status: string, departmentId: 
     if (status) params.set('status', status);
     if (departmentId) params.set('departmentId', departmentId);
     return hrRequest<EmployeeProfile[]>(base, `/api/hr/employees?${params}`, { method: 'GET' });
-}
-
-export function hrErrorMessage(error: unknown) {
-    const detail = error as { status?: number; code?: string };
-    if (detail?.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-    if (detail?.status === 403) return 'Bạn không có quyền xem dữ liệu này.';
-    return mapHrError(detail?.code, 'Không thể tải dữ liệu nhân sự. Vui lòng thử lại.');
 }

@@ -1,19 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { apiUrl, resolveApiBase } from './src/config';
-
-interface HealthResponse {
-  status: string;
-  service: string;
-  mongo: 'configured' | 'missing';
-  timezone: string;
-}
+import { resolveApiBase, type ApiSource, type HealthResponse } from './src/config';
 
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [apiSource, setApiSource] = useState<'remote' | 'local' | null>(null);
+  const [apiSource, setApiSource] = useState<ApiSource | null>(null);
   const [apiBase, setApiBase] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,10 +17,7 @@ export default function App() {
         if (cancelled) return;
         setApiSource(resolved.source);
         setApiBase(resolved.base);
-        const res = await fetch(apiUrl(resolved.base, '/api/healthz'));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as HealthResponse;
-        if (!cancelled) setHealth(body);
+        setHealth(resolved.health);
       } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));

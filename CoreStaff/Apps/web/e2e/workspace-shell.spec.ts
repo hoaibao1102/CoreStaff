@@ -10,8 +10,13 @@ async function openApp(page: Page, role = 'HR', path = '/overview') {
     let data: unknown = [];
     if (url.pathname.endsWith('/auth/me')) data = { ...user, role };
     if (url.pathname.endsWith('/employees/me')) data = { _id: 'employee', userId: user.id, employmentStatus: 'ACTIVE' };
+    if (url.pathname.endsWith('/employees/employee')) data = {
+      _id: 'employee', userId: user.id, organizationId: user.organizationId,
+      employeeCode: 'NV-001', fullName: user.fullName, employmentType: 'FULL_TIME',
+      employmentStatus: 'ACTIVE', joinDate: '2026-01-01',
+    };
     await route.fulfill({ json: url.pathname.endsWith('/healthz')
-      ? { status: 'ok', mongo: 'configured', service: 'test', timezone: 'Asia/Ho_Chi_Minh' }
+      ? { status: 'ok', mongo: 'configured', service: 'corestaff-api', timezone: 'Asia/Ho_Chi_Minh' }
       : { success: true, data } });
   });
   await page.goto(path);
@@ -187,6 +192,14 @@ for (const role of ['HR', 'EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN']) {
     await expect(nav.locator('a[href="/manager/approvals"]')).toHaveCount(role === 'DEPARTMENT_MANAGER' ? 1 : 0);
     await expect(nav.locator('a[href="/platform/organizations"]')).toHaveCount(role === 'SYSTEM_ADMIN' ? 1 : 0);
     if (role !== 'SYSTEM_ADMIN') await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', role === 'HR' ? '/hr/employees' : '/app/attendance/history');
+    if (role === 'HR') {
+      const detail = page.getByRole('dialog', { name: 'Chi tiết nhân viên' });
+      await expect(detail).toBeVisible();
+      await expect(detail.getByRole('heading', { name: 'NV-001' })).toBeVisible();
+      await detail.getByRole('button', { name: 'Đóng hộp thoại' }).click();
+      await expect(page).toHaveURL(/\/hr\/employees$/);
+      await expect(detail).toHaveCount(0);
+    }
     await noOverflow(page);
   });
 }

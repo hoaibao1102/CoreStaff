@@ -49,6 +49,9 @@ function getNavGroups(user: AuthUser): NavGroup[] {
         { href: '/overview', label: 'Tổng quan', icon: LayoutDashboard },
         { href: '/app/profile', label: 'Hồ sơ của tôi', icon: UserRound },
     ];
+    if (user.organizationId) {
+        common.push({ href: '/hr/departments', label: 'Phòng ban', icon: Building2 });
+    }
 
     if (role === 'HR') {
         return [

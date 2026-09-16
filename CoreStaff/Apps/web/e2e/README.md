@@ -18,6 +18,13 @@ Tests start Vite on port 4173 and intercept API requests with test fixtures. The
 exercise the actual app, routing, components and CSS without a live account or
 backend writes. Screenshots and failure traces are saved in `test-results/`.
 
+`departments.spec.ts` covers `/hr/departments`: create/edit, duplicate codes,
+partial update payloads, activation/deactivation without a body, status filters,
+read-only tenant roles, missing tenant, 401/403/404/500 responses, retry, and
+responsive list/form layouts with keyboard focus restoration. Run it alone with
+`npm run test:e2e --workspace @corestaff/web -- departments.spec.ts`.
+Installed Edge is also supported via `$env:PLAYWRIGHT_CHANNEL = 'msedge'`.
+
 Coverage includes 375/768/1024/1440px layouts, all four roles, nested active routes,
 icon and logo geometry, rapid toggles, persistence, tooltips on hover/focus, account
 navigation/logout, drawer focus trapping/restoration, backdrop/Escape/route close,

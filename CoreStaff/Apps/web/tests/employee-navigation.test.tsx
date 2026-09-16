@@ -7,7 +7,10 @@ import { EmployeeDirectoryScreen } from '../src/screens/EmployeeDirectory/Employ
 import type { EmployeeView } from '../src/lib/employee';
 
 jest.mock('../src/config/api', () => ({
-  resolveApiBase: async () => ({ base: 'https://api.example.test', source: 'remote' }),
+  resolveApiBase: async () => ({
+    base: 'https://api.example.test', source: 'remote',
+    health: { status: 'ok', service: 'corestaff-api', mongo: 'configured', timezone: 'Asia/Ho_Chi_Minh' },
+  }),
   apiUrl: (base: string, path: string) => base + path,
 }));
 

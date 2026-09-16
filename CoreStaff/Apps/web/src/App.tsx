@@ -3,7 +3,7 @@ import { AuthScreen } from './screens/Auth/AuthScreen';
 import { WorkspaceRoutes } from './routes/WorkspaceRoutes';
 import { CoreStaffLogo } from './components/CoreStaffLogo';
 import { navigationEvent } from './components/AppLink';
-import { apiUrl, resolveApiBase, type ApiSource, type HealthResponse } from './config/api';
+import { resolveApiBase, type ApiSource, type HealthResponse } from './config/api';
 import { type AuthUser, me } from './services/auth';
 import { forgetSession, hasRememberedSession } from './lib/session';
 
@@ -55,11 +55,7 @@ export default function App() {
         setApiSource(resolved.source);
         setApiBase(resolved.base);
 
-        const healthRes = await fetch(apiUrl(resolved.base, '/api/healthz'));
-        if (healthRes.ok) {
-          const body = (await healthRes.json()) as HealthResponse;
-          if (!cancelled) setHealth(body);
-        }
+        setHealth(resolved.health);
 
         if (hasRememberedSession()) {
           try {

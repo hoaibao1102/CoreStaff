@@ -1,8 +1,8 @@
 import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
-import { EmployeeDetailScreen } from '../screens/EmployeeDetail/EmployeeDetailScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
+import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
@@ -104,15 +104,28 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
+  // Department reads are available to every authenticated tenant member.
+  if (route === '/hr/departments') {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <DepartmentScreen user={user} apiBase={apiBase} />
+        </section>
+      </WorkspaceShell>
+    );
+  }
+
   // ── HR routes ────────────────────────────────────────────────────────
   if (user.role === 'HR') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-          {route === '/hr/employees' ? (
-            <EmployeeDirectoryScreen user={user} apiBase={apiBase} />
-          ) : route.startsWith('/hr/employees/') ? (
-            <EmployeeDetailScreen user={user} apiBase={apiBase} employeeId={route.split('/').pop() ?? ''} />
+          {route === '/hr/employees' || route.startsWith('/hr/employees/') ? (
+            <EmployeeDirectoryScreen
+              user={user}
+              apiBase={apiBase}
+              employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
+            />
           ) : (
             <HrOverviewScreen user={user} />
           )}

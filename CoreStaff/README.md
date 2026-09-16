@@ -73,10 +73,12 @@ Mở `Apps/api/.env` và điền:
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `VITE_API_URL` / `EXPO_PUBLIC_API_URL` | `https://becorestaff.vercel.app` | API remote (Vercel) |
+| `VITE_API_URL` / `EXPO_PUBLIC_API_URL` | `https://18-141-68-40.sslip.io` | API remote dùng chung cho web và mobile |
 | `VITE_API_FALLBACK_URL` / `EXPO_PUBLIC_API_FALLBACK_URL` | `http://localhost:3000` | Fallback khi remote healthz fail (**chỉ dev**). Android emulator đổi `localhost` → `10.0.2.2`. |
 
-Dev (`npm run dev:web` / Expo `__DEV__`): thử remote ~4s; 500/timeout thì tự gọi API local. Production/release **không** fallback localhost.
+Dev (`npm run dev:web` / Expo `__DEV__`): gọi `GET /api/healthz` với timeout 4 giây; lỗi HTTP, mạng hoặc JSON không đúng contract thì thử API local (timeout 4 giây). Web gọi qua proxy Vite để giữ cookie phiên đăng nhập. Kết quả health được dùng ngay khi khởi động, không gọi lặp. Production/release **không** fallback localhost.
+
+Health trả object trực tiếp gồm `status`, `service`, `mongo`, `timezone`; `mongo: missing` vẫn là phản hồi hợp lệ, chỉ báo chưa cấu hình MongoDB. Smoke test server hiện tại: `https://18-141-68-40.sslip.io/api/healthz`. Swagger UI: `/docs`; OpenAPI JSON: `/docs-json` trên cùng server.
 
 **Không commit** `.env`. Chỉ commit `.env.example`.
 
@@ -103,7 +105,7 @@ npm run dev:mobile    # Expo Dev Tools — quét QR / mở emulator
 Kiểm tra:
 
 - API: [http://localhost:3000/api/healthz](http://localhost:3000/api/healthz) — `mongo` là `configured` khi đã có URI.
-- Web: [http://localhost:5173](http://localhost:5173) — thử Vercel trước, fail thì local; card hiện `remote` hoặc `local fallback`.
+- Web: [http://localhost:5173](http://localhost:5173) — thử remote trước, fail thì local; card hiện `remote` hoặc `local fallback`.
 - Mobile: cùng logic; màn hình hiện `remote` / `local fallback` + URL.
 
 API vẫn start khi thiếu URI (Mongo no-op). Login / chấm công / leave chưa có ở shell hiện tại.
@@ -120,13 +122,13 @@ API vẫn start khi thiếu URI (Mongo no-op). Login / chấm công / leave chư
 | `cd Apps/mobile && npm run ios` | Mở iOS simulator (macOS) |
 | `cd Apps/mobile && npm run web` | Expo web (không thay `Apps/web`) |
 
-Dev thử `EXPO_PUBLIC_API_URL` (Vercel) trước; hỏng thì `EXPO_PUBLIC_API_FALLBACK_URL`.
+Dev thử `EXPO_PUBLIC_API_URL` trước; hỏng thì `EXPO_PUBLIC_API_FALLBACK_URL`.
 
 | Môi trường | Fallback local |
 |---|---|
 | Android emulator | `http://10.0.2.2:3000` (localhost trong env được rewrite) |
 | iOS simulator / Expo web | `http://localhost:3000` |
-| Máy thật (Expo Go) | Remote Vercel, hoặc đổi fallback thành IP LAN máy chạy API |
+| Máy thật (Expo Go) | API remote, hoặc đổi fallback thành IP LAN máy chạy API |
 
 Máy thật + fallback local: điện thoại phải gọi được máy dev (cùng Wi‑Fi, firewall mở cổng 3000). CORS API `origin: true`.
 
@@ -184,7 +186,7 @@ Trong project Vercel (BE):
 
 Sau deploy: `GET https://<domain>/api/healthz` phải trả JSON `status: ok`.
 
-Web trên Vercel: project riêng, Root Directory `CoreStaff/Apps/web`, env build-time `VITE_API_URL=https://becorestaff.vercel.app` (Vite bake lúc build, không fallback localhost).
+Web trên Vercel: project riêng, Root Directory `CoreStaff/Apps/web`, env build-time `VITE_API_URL=https://18-141-68-40.sslip.io` (Vite bake lúc build, không fallback localhost).
 
 ## Ghi chú
 
