@@ -1,20 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MinLength, Matches, IsNotEmpty } from 'class-validator';
+import { PASSWORD_MIN_LENGTH, PASSWORD_POLICY_PATTERN, PASSWORD_POLICY_MESSAGE } from '../strategies/password-policy';
 
 export class ChangePasswordDto {
-	@ApiProperty({ example: 'TvsAdmin1!' })
+	@ApiProperty({ example: 'CurrentP4ss!' })
 	@IsString()
 	@IsNotEmpty()
 	currentPassword: string;
 
 	@ApiProperty({
 		example: 'N3wSecurePass!',
-		minLength: 8,
+		minLength: PASSWORD_MIN_LENGTH,
 		description: 'At least 8 characters, one letter and one number (SRS §4.3).',
 	})
 	@IsString()
-	@MinLength(8)
-	@Matches(/(?=.*[a-zA-Z])(?=.*\d)/, { message: 'At least 8 characters, one letter and one number required.' })
+	@MinLength(PASSWORD_MIN_LENGTH)
+	@Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE })
 	newPassword: string;
 
 	@ApiProperty({ example: 'N3wSecurePass!' })

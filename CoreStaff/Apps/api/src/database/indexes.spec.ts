@@ -7,7 +7,7 @@ import { DepartmentSchema } from './schemas/department.schema';
 import { PositionSchema } from './schemas/position.schema';
 import { EmployeeProfileSchema } from './schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from './schemas/employment-history.schema';
-import { normalizeEmail, normalizeCode } from './schemas/enums';
+import { normalizeEmail, normalizeCode, normalizeEmployeeCode } from './schemas/enums';
 
 describe('mongodb index contracts (TASK-015)', () => {
   it('Organization: unique platform code', () => {
@@ -16,10 +16,6 @@ describe('mongodb index contracts (TASK-015)', () => {
 
   it('User: tenant-scoped unique email (case-insensitive via emailN)', () => {
     expect(hasCompoundIndex(UserSchema, ['organizationId', 'emailN'], true)).toBe(true);
-  });
-
-  it('User: tenant-scoped unique employeeCode (sparse, nullable for System Admin)', () => {
-    expect(hasCompoundIndex(UserSchema, ['organizationId', 'employeeCode'], true)).toBe(true);
   });
 
   it('UserSession: unique token hash + user lookup + tenant scope', () => {
@@ -41,10 +37,12 @@ describe('mongodb index contracts (TASK-015)', () => {
     expect(hasCompoundIndex(PositionSchema, ['organizationId', 'code'], true)).toBe(true);
   });
 
-  it('EmployeeProfile: tenant-scoped unique userId and employeeCode (TASK-020)', () => {
+  it('EmployeeProfile: sole owner of tenant-scoped unique employeeCode (TASK-120)', () => {
     expect(hasCompoundIndex(EmployeeProfileSchema, ['organizationId', 'userId'], true)).toBe(true);
     expect(hasCompoundIndex(EmployeeProfileSchema, ['organizationId', 'employeeCode'], true)).toBe(true);
     expect(hasCompoundIndex(EmployeeProfileSchema, ['organizationId', 'employmentStatus'])).toBe(true);
+    // The code must exist in exactly one index, or the two can drift apart.
+    expect(hasCompoundIndex(UserSchema, ['organizationId', 'employeeCode'])).toBe(false);
   });
 
   it('EmploymentHistory: tenant/employee-scoped chronological lookup (TASK-023)', () => {
@@ -59,7 +57,12 @@ describe('identifier normalization (TASK-015)', () => {
     expect(normalizeEmail('  Admin@Example.COM ')).toBe('admin@example.com');
   });
 
-  it('trims employee code without lowercasing', () => {
+  it('trims department/position codes without lowercasing', () => {
     expect(normalizeCode('  TVS-0248  ')).toBe('TVS-0248');
+  });
+
+  it('case-folds employee codes so login cannot see two tenants-identical rows', () => {
+    expect(normalizeEmployeeCode('  tvs-0001  ')).toBe('TVS-0001');
+    expect(normalizeEmployeeCode('TVS-0001')).toBe(normalizeEmployeeCode('tvs-0001'));
   });
 });

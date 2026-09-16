@@ -11,8 +11,11 @@ import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UserDocument } from '../database/schemas/user.schema';
 import { UserSessionDocument } from '../database/schemas/user-session.schema';
-import { UserStatus, normalizeEmail } from '../database/schemas/enums';
+import { EmployeeProfileDocument } from '../database/schemas/employee-profile.schema';
+import { OrganizationDocument } from '../database/schemas/organization.schema';
+import { OrganizationStatus, UserStatus, normalizeEmail, normalizeEmployeeCode } from '../database/schemas/enums';
 import { comparePassword, hashPassword } from './strategies/bcrypt.strategy';
+import { isWeakPassword } from './strategies/password-policy';
 import { generateSessionToken, hashToken } from './strategies/token-strategy';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -25,15 +28,15 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 /** FR-AUTH-05 / SRS §4.8: one-time reset tokens expire after 15 minutes. */
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
 
-/** Escape a string for safe embedding in a RegExp (prevents regex injection). */
-function escapeRegex(s: string): string {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Convert a User doc to a plain object with passwordHash stripped. */
-function toSafeUser(doc: UserDocument): Record<string, unknown> {
+/**
+ * Convert a User doc to a plain object with passwordHash stripped.
+ * `employeeCode` is passed in rather than read off the User: the identifier is
+ * owned by EmployeeProfile (TASK-120), and clients still expect it on the
+ * account payload (attendance bar, profile header, directory filters).
+ */
+function toSafeUser(doc: UserDocument, employeeCode?: string): Record<string, unknown> {
 	const { passwordHash, ...rest } = doc.toObject();
-	return rest;
+	return { ...rest, employeeCode };
 }
 
 @Injectable()
@@ -42,6 +45,8 @@ export class AuthService {
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('UserSession') private readonly sessionModel: Model<UserSessionDocument>,
 		@InjectModel('PasswordResetToken') private readonly resetTokenModel: Model<PasswordResetTokenDocument>,
+		@InjectModel('EmployeeProfile') private readonly profileModel: Model<EmployeeProfileDocument>,
+		@InjectModel('Organization') private readonly orgModel: Model<OrganizationDocument>,
 		@Inject(RESET_MAILER) private readonly resetMailer: ResetMailer,
 	) {}
 
@@ -50,17 +55,8 @@ export class AuthService {
 		mustChangePassword: boolean;
 		sessionId: string;
 	}> {
-		const normalizedId = dto.identifier.trim().toLowerCase();
-
-		// Match by normalized email OR case-insensitive exact employeeCode
-		// (SRS §4.2). Identifier is regex-escaped so user input can't inject.
-		const candidate = await this.userModel.findOne({
-			$or: [
-				{ emailN: normalizedId },
-				{ employeeCode: { $regex: `^${escapeRegex(dto.identifier.trim())}$`, $options: 'i' } },
-			],
-		}).exec();
-
+		const resolved = await this.resolveLoginUser(dto.identifier);
+		const candidate = resolved?.user;
 		if (!candidate) throw new UnauthorizedException('AUTH_INVALID_CREDENTIALS');
 
 		if (candidate.status === UserStatus.DISABLED) {
@@ -70,6 +66,14 @@ export class AuthService {
 		if (candidate.status === UserStatus.LOCKED && candidate.lockedUntil && candidate.lockedUntil > new Date()) {
 			throw new HttpException('AUTH_ACCOUNT_LOCKED', HttpStatus.LOCKED); // SRS §17 → 423
 		}
+
+		// AC-SYS-02 / BR-AUTH-03 — a suspended tenant cannot start a new session.
+		// Its live sessions were already revoked by the suspend route, so this
+		// lookup is the other half of that switch. Checked before the password so
+		// the login screen can show SRS §17.2's "Organization đã bị khóa" without
+		// burning bcrypt on a tenant that is closed anyway; that ordering is a
+		// deliberate, spec-requested disclosure.
+		await this.assertNotTenantLocked(candidate.organizationId);
 
 		const valid = await comparePassword(dto.password, candidate.passwordHash);
 
@@ -95,10 +99,55 @@ export class AuthService {
 		});
 
 		return {
-			user: toSafeUser(candidate),
+			user: toSafeUser(candidate, resolved.employeeCode),
 			mustChangePassword: !!candidate.mustChangePassword,
 			sessionId: rawToken,
 		};
+	}
+
+	/**
+	 * SRS §4.2 — resolve a login identifier to exactly one User.
+	 * Email matches on User.emailN; employeeCode matches on EmployeeProfile,
+	 * which owns the code (TASK-120), then loads the linked User scoped to the
+	 * profile's tenant. LoginDto carries no tenant yet (OQ-02), so an address
+	 * shared across tenants fails closed instead of picking an arbitrary row.
+	 */
+	private async resolveLoginUser(identifier: string): Promise<{ user: UserDocument; employeeCode?: string } | null> {
+		const trimmed = identifier.trim();
+
+		const byEmail = await this.userModel.find({ emailN: normalizeEmail(trimmed) }).exec();
+		if (byEmail.length > 1) throw new UnauthorizedException('AUTH_AMBIGUOUS_IDENTIFIER');
+		if (byEmail.length === 1) {
+			const profile = await this.profileModel
+				.findOne({ organizationId: byEmail[0].organizationId, userId: byEmail[0]._id })
+				.lean()
+				.exec();
+			return { user: byEmail[0], employeeCode: profile?.employeeCode };
+		}
+
+		const profile = await this.profileModel.findOne({ employeeCode: normalizeEmployeeCode(trimmed) }).lean().exec();
+		if (!profile) return null;
+		const user = await this.userModel.findOne({ _id: profile.userId, organizationId: profile.organizationId }).exec();
+		return user ? { user, employeeCode: profile.employeeCode } : null;
+	}
+
+	/**
+	 * One `_id` lookup, only on the login path — no per-request cost (the plan's
+	 * explicit trim of AC-SYS-02). A platform-local session has no
+	 * organizationId, so it is never tenant-locked. Anything not ACTIVE counts:
+	 * SRS §17.2 gives SUSPENDED the code, and a DISABLED tenant is strictly
+	 * harder, so it gets the same refusal rather than a second error code.
+	 */
+	private async assertNotTenantLocked(organizationId: unknown): Promise<void> {
+		if (!organizationId) return;
+		const org = await this.orgModel
+			.findOne({ _id: organizationId })
+			.select('status')
+			.lean()
+			.exec();
+		if (org && org.status !== OrganizationStatus.ACTIVE) {
+			throw new HttpException('TENANT_SUSPENDED', HttpStatus.LOCKED); // SRS §17.2 → 423
+		}
 	}
 
 	async logout(sessionId: string): Promise<void> {
@@ -113,7 +162,11 @@ export class AuthService {
 		if (!doc || doc.status !== UserStatus.ACTIVE) {
 			throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 		}
-		return toSafeUser(doc);
+		const profile = await this.profileModel
+			.findOne({ organizationId: doc.organizationId, userId: doc._id })
+			.lean()
+			.exec();
+		return toSafeUser(doc, profile?.employeeCode);
 	}
 
 	async changePassword(userId: string, dto: ChangePasswordDto, keepToken?: string): Promise<{ success: true }> {
@@ -202,8 +255,7 @@ export class AuthService {
 
 		// Same policy as the DTO (§4.3), enforced server-side — a reset is not
 		// a bypass around it. Reuse of the current hash is also a policy fail.
-		const weak = newPassword.length < 8 || !/(?=.*[a-zA-Z])(?=.*\d)/.test(newPassword);
-		if (weak || (await comparePassword(newPassword, user.passwordHash))) {
+		if (isWeakPassword(newPassword) || (await comparePassword(newPassword, user.passwordHash))) {
 			throw new BadRequestException('AUTH_PASSWORD_POLICY_FAILED');
 		}
 

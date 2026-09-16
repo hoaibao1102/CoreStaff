@@ -4,6 +4,7 @@ import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfil
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
+import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
 import type { ApiSource, HealthResponse } from '../config/api';
@@ -80,7 +81,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   const route = path.replace(/\/$/, '') || '/';
 
   // ── Forbidden guard ──────────────────────────────────────────────────
-  if (route.startsWith('/hr/employees/') && (user.role !== 'HR' || !user.organizationId)) {
+  // Every HR directory read requires an HR with a tenant; the route never
+  // renders for anyone else. The SYSTEM_ADMIN branch below must be skipped for
+  // these paths, so it also sits behind the role check.
+  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees')) {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -126,6 +130,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               apiBase={apiBase}
               employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
             />
+          ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
+            // Sprint 3+ — built in later phases; pronounced instead of landing
+            // silently on the dashboard.
+            <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : (
             <HrOverviewScreen user={user} />
           )}
@@ -134,12 +142,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  // ── Employee Directory (shared access) ───────────────────────────────
-  if (route === '/hr/employees') {
+  // ── Platform (SYSTEM_ADMIN) ─────────────────────────────────────────
+  if (route === '/platform/organizations' && user.role === 'SYSTEM_ADMIN') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <EmployeeDirectoryScreen user={user} apiBase={apiBase} />
+          <PlatformOrganizationsScreen user={user} apiBase={apiBase} />
         </section>
       </WorkspaceShell>
     );

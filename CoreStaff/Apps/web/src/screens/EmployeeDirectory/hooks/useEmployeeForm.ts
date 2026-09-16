@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { EmployeeFormState, EmployeeFormErrors, EmployeeCreatePayload } from '../types';
 import { DEFAULT_EMPLOYEE_FORM_VALUES } from '../constants';
 import {
+    validateFullName,
     validatePhone,
     sanitizePhone,
     validateEmail,
@@ -17,17 +18,32 @@ import {
     validateAddress,
 } from '../validation';
 
-function validateField(field: keyof EmployeeFormState, form: EmployeeFormState): string | null {
+/** Phase C: `link` = attach an existing account (userId from the picker);
+ * `new` = provision a new EMPLOYEE account, needs fullName + email (TASK-120). */
+export type CreateAccountMode = 'link' | 'new';
+
+/** The fields whose empty value the link/new modes validate differently. */
+export function modeRequiredFields(mode: CreateAccountMode): (keyof EmployeeFormState)[] {
+    return mode === 'new' ? ['fullName', 'email', 'employeeCode', 'joinDate'] : ['userId', 'employeeCode', 'joinDate'];
+}
+
+function validateField(field: keyof EmployeeFormState, form: EmployeeFormState, mode: CreateAccountMode): string | null {
     let errorMessage: string | null = null;
+    const newAccount = mode === 'new';
     switch (field) {
         case 'userId':
-            errorMessage = form.userId.trim() ? null : 'Vui lòng chọn tài khoản nhân viên.';
+            errorMessage = newAccount ? null : (form.userId.trim() ? null : 'Vui lòng chọn tài khoản nhân viên.');
+            break;
+        case 'fullName':
+            // In new mode the name is required (it creates the account) — and
+            // touching the field validates the format even when it was optional.
+            errorMessage = newAccount || form.fullName.trim() ? validateFullName(form.fullName) : null;
+            break;
+        case 'email':
+            errorMessage = newAccount || form.email.trim() ? validateEmail(form.email) : null;
             break;
         case 'phone':
             errorMessage = form.phone.trim() ? validatePhone(form.phone) : null;
-            break;
-        case 'email':
-            errorMessage = form.email.trim() ? validateEmail(form.email) : null;
             break;
         case 'joinDate':
             errorMessage = validateJoinDate(form.joinDate);
@@ -68,7 +84,7 @@ function validateField(field: keyof EmployeeFormState, form: EmployeeFormState):
  * useFormEmployee — hook quản lý state và validation cho form tạo/sửa nhân viên.
  * Tách biệt hoàn toàn logic validation khỏi UI component.
  */
-export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
+export function useFormEmployee(initialValues?: Partial<EmployeeFormState>, mode: CreateAccountMode = 'link') {
     const [form, setForm] = useState<EmployeeFormState>({
         ...DEFAULT_EMPLOYEE_FORM_VALUES,
         ...initialValues,
@@ -81,15 +97,15 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
         setForm((prev) => ({ ...prev, [field]: value }));
 
         // Chỉ xóa lỗi khi giá trị đã hợp lệ; chưa tương tác thì chưa báo lỗi.
-        setErrors((prev) => ({ ...prev, [field]: touched[field] || prev[field] ? validateField(field, { ...form, [field]: value }) : null }));
-    }, [form, touched]);
+        setErrors((prev) => ({ ...prev, [field]: touched[field] || prev[field] ? validateField(field, { ...form, [field]: value }, mode) : null }));
+    }, [form, touched, mode]);
 
     const blurField = useCallback((field: keyof EmployeeFormState) => {
         setTouched((prev) => ({ ...prev, [field]: true }));
 
         // Validate field khi blur
-        setErrors(prev => ({ ...prev, [field]: validateField(field, form) }));
-    }, [form]);
+        setErrors(prev => ({ ...prev, [field]: validateField(field, form, mode) }));
+    }, [form, mode]);
 
     const sanitizeForm = useCallback(() => {
         return {
@@ -97,6 +113,7 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
             phone: sanitizePhone(form.phone),
             employeeCode: form.employeeCode.trim(),
             userId: form.userId.trim(),
+            fullName: form.fullName.trim(),
             joinDate: form.joinDate,
         };
     }, [form]);
@@ -105,7 +122,7 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
         const validationErrors: EmployeeFormErrors = {};
 
         for (const field of Object.keys(form) as (keyof EmployeeFormState)[]) {
-            const message = validateField(field, form);
+            const message = validateField(field, form, mode);
             if (message) validationErrors[field] = message;
         }
 
@@ -113,12 +130,11 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
         setTouched(Object.keys(form).reduce((acc, key) => ({ ...acc, [key]: true }), {} as Record<string, boolean>));
 
         return Object.keys(validationErrors).length === 0;
-    }, [form]);
+    }, [form, mode]);
 
     const buildPayload = useCallback((): EmployeeCreatePayload => {
         const sanitized = sanitizeForm();
-        return {
-            userId: sanitized.userId,
+        const payload: EmployeeCreatePayload = {
             employeeCode: sanitized.employeeCode,
             employmentType: sanitized.employmentType || undefined,
             joinDate: sanitized.joinDate,
@@ -136,7 +152,13 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
             directManagerId: sanitized.directManagerId.trim() || undefined,
             workplaceId: sanitized.workplaceId.trim() || undefined,
         };
-    }, [sanitizeForm]);
+        if (mode === 'link') payload.userId = sanitized.userId;
+        // 'new' mode provisions the account — the server mints the EMPLOYEE login
+        // from fullName/email and must NOT receive a userId; the whitelist pipe
+        // would 400 an '' either way.
+        if (mode === 'new') payload.fullName = sanitized.fullName;
+        return payload;
+    }, [sanitizeForm, mode]);
 
     const resetForm = useCallback(() => {
         setForm({ ...DEFAULT_EMPLOYEE_FORM_VALUES, ...initialValues });

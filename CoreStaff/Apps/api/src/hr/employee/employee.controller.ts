@@ -24,10 +24,17 @@ export class EmployeeController {
 
 	@Roles('HR')
 	@Post()
-	@ApiOperation({ summary: 'Create an EmployeeProfile for an existing User (TASK-020, SRS 15.2A).' })
-	@ApiCreatedSuccess('Employee profile created.', employeeExample)
+	@ApiOperation({
+		summary: 'Add an employee: link an existing account, or create the EMPLOYEE account (TASK-020, SRS §4.1).',
+		description:
+			'With `userId` this only attaches a profile. Without it the server creates the login account ' +
+			'(role EMPLOYEE, mustChangePassword) in the same transaction and returns `tempPassword` once — ' +
+			'it is not stored and must be relayed out-of-band.',
+	})
+	@ApiCreatedSuccess('Employee profile created (plus `tempPassword` when the account was created).', employeeExample)
+	@ApiResponse({ status: 400, description: 'EMAIL_REQUIRED | FULLNAME_REQUIRED' })
 	@ApiResponse({ status: 404, description: 'USER_NOT_FOUND | DEPARTMENT_NOT_FOUND | POSITION_NOT_FOUND | MANAGER_NOT_FOUND' })
-	@ApiResponse({ status: 409, description: 'EMPLOYEE_CODE_TAKEN | EMPLOYEE_PROFILE_ALREADY_EXISTS' })
+	@ApiResponse({ status: 409, description: 'EMAIL_TAKEN | EMPLOYEE_CODE_TAKEN | EMPLOYEE_PROFILE_ALREADY_EXISTS' })
 	@ApiErrorExamples()
 	async create(@Tenant() organizationId: string | null, @Body() dto: CreateEmployeeProfileDto) {
 		const orgId = requireOrganizationId(organizationId);
@@ -55,9 +62,37 @@ export class EmployeeController {
 	@ApiOperation({ summary: 'List active tenant accounts that can be linked to a new employee profile.' })
 	@ApiSuccess('Eligible accounts for employee profile creation.', [])
 	@ApiErrorExamples()
-	async eligibleUsers(@Tenant() organizationId: string | null) {
+	async eligibleUsers(@Tenant() organizationId: string | null, @CurrentUser() user: SessionUser) {
 		const orgId = requireOrganizationId(organizationId);
-		const data = await this.employees.listEligibleUsers(orgId);
+		const data = await this.employees.listEligibleUsers(orgId, String(user._id ?? user.id));
+		return { success: true, data };
+	}
+
+	/**
+	 * Deliberately no `@Roles`: HR and Department Manager have the same gap —
+	 * nobody else is allowed to create their profile (FR-HRCFG-02 names only
+	 * Employee and Department Manager as HR's to create). An EMPLOYEE calling it
+	 * is harmless rather than privileged: they get their own record, which they
+	 * could otherwise not have at all. A SYSTEM_ADMIN cannot, because there is no
+	 * tenant to attach it to.
+	 */
+	@Post('me')
+	@ApiOperation({
+		summary: 'Create my own EmployeeProfile (Phase C — HR / Department Manager self-provisioning).',
+		description:
+			'The profile is attached to the calling account; `userId` may not be sent. Only the HR record is written ' +
+			'(the login already exists), so no account or password is involved. The caller starts on PROBATION and ' +
+			'cannot approve their own status change — see PATCH /:id/status.',
+	})
+	@ApiCreatedSuccess('Own employee profile created.', employeeReadExample)
+	@ApiResponse({ status: 400, description: 'USER_ID_NOT_ALLOWED' })
+	@ApiResponse({ status: 403, description: 'TENANT_CONTEXT_REQUIRED' })
+	@ApiResponse({ status: 404, description: 'USER_NOT_FOUND | DEPARTMENT_NOT_FOUND | POSITION_NOT_FOUND | MANAGER_NOT_FOUND' })
+	@ApiResponse({ status: 409, description: 'EMPLOYEE_CODE_TAKEN | EMPLOYEE_PROFILE_ALREADY_EXISTS' })
+	@ApiErrorExamples()
+	async createMe(@Tenant() organizationId: string | null, @CurrentUser() user: SessionUser, @Body() dto: CreateEmployeeProfileDto) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.createSelf(orgId, String(user._id ?? user.id), dto);
 		return { success: true, data };
 	}
 

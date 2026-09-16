@@ -14,6 +14,7 @@ export const EMPLOYEE_CODE_PREFIXES: Record<string, string> = {
 
 export const DEFAULT_EMPLOYEE_FORM_VALUES = {
     userId: '',
+    fullName: '',
     employeeCode: '',
     employmentType: 'FULL_TIME' as const,
     joinDate: new Date().toISOString().slice(0, 10),
@@ -34,6 +35,7 @@ export const DEFAULT_EMPLOYEE_FORM_VALUES = {
 
 export const EMPLOYEE_FORM_FIELDS = [
     { key: 'userId', label: 'Tài khoản nhân viên', required: true },
+    { key: 'fullName', label: 'Họ và tên', required: false },
     { key: 'employeeCode', label: 'Mã nhân viên', required: true },
     { key: 'joinDate', label: 'Ngày vào làm', required: true },
     { key: 'dateOfBirth', label: 'Ngày sinh', required: false },

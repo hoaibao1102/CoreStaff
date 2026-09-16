@@ -79,7 +79,11 @@ export interface EligibleEmployeeAccount {
 }
 
 export interface EmployeeCreateDto {
-    userId: string;
+    /** Present = link an existing account (link mode). Omitted = provision a new
+     * EMPLOYEE login (TASK-120); then `fullName` is required and the server
+     * returns `tempPassword` once. */
+    userId?: string;
+    fullName?: string;
     employeeCode: string;
     employmentType?: EmploymentType;
     joinDate: string;
@@ -114,6 +118,9 @@ export const HR_ERROR_CODES: Record<string, string> = {
     EMPLOYEE_PROFILE_ALREADY_EXISTS: 'Tài khoản này đã được liên kết với một hồ sơ nhân sự khác.',
     EMPLOYEE_CODE_TAKEN: 'Mã nhân viên này đã được sử dụng. Vui lòng nhập mã khác.',
     EMPLOYEE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân viên.',
+    EMAIL_TAKEN: 'Email này đã được sử dụng trong tổ chức.',
+    FULLNAME_REQUIRED: 'Vui lòng nhập họ và tên khi tạo tài khoản mới.',
+    USER_ID_NOT_ALLOWED: 'Route cá nhân không chấp nhận mã tài khoản nhập từ biểu mẫu.',
 
     // Reference entity errors
     DEPARTMENT_NOT_FOUND: 'Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.',
@@ -199,7 +206,7 @@ interface ApiFailure {
     };
 }
 
-async function hrRequest<T>(base: string, path: string, options?: RequestInit): Promise<T> {
+export async function hrRequest<T>(base: string, path: string, options?: RequestInit): Promise<T> {
     const res = await fetch(apiUrl(base, path), {
         ...options,
         credentials: 'include',
@@ -256,12 +263,29 @@ export async function getEmployeeById(base: string, id: string): Promise<Employe
 
 // ── Create Employee (HR-only) ─────────────────────────────────────────
 
+export interface EmployeeCreateResult extends EmployeeProfile {
+    tempPassword?: string;
+}
+
 export async function createEmployee(
     base: string,
     dto: EmployeeCreateDto,
-): Promise<EmployeeProfile> {
+): Promise<EmployeeCreateResult> {
     // NOTE: employmentStatus is NOT sent — backend sets it to PROBATION automatically
-    return hrRequest<EmployeeProfile>(base, '/api/hr/employees', {
+    return hrRequest<EmployeeCreateResult>(base, '/api/hr/employees', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+/** Phase C — the caller creates their own profile. `userId` comes from the
+ * session server-side; the payload carries only the business fields. Returns
+ * the profile, never a password (no account is created). */
+export async function createMyEmployeeProfile(
+    base: string,
+    dto: Omit<EmployeeCreateDto, 'userId' | 'fullName'>,
+): Promise<EmployeeProfile> {
+    return hrRequest<EmployeeProfile>(base, '/api/hr/employees/me', {
         method: 'POST',
         body: JSON.stringify(dto),
     });

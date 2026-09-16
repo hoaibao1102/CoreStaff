@@ -1,14 +1,15 @@
-import { useState, useCallback, useRef } from 'react';
-import { LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { CheckCircle2, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
 import { FormInputField } from '../../../components/form/FormInputField';
 import { FormSelectField } from '../../../components/form/FormSelectField';
-import { useFormEmployee } from '../hooks/useEmployeeForm';
-import type { EmployeeCreateDialogProps } from '../types';
+import { FormLabel } from '../../../components/form/FormLabel';
+import { useFormEmployee, type CreateAccountMode } from '../hooks/useEmployeeForm';
+import type { EmployeeCreateDialogProps, SelfProvisionDialogProps } from '../types';
 import { EMPLOYMENT_TYPE_LABELS, GENDER_LABELS, type EmploymentType, type Gender } from '../../../lib/types';
-import { createEmployee } from '../../../services/hrService';
+import { createEmployee, createMyEmployeeProfile } from '../../../services/hrService';
 import { mapEmployeeValidationErrors } from '../apiErrors';
 import { toast } from '../../../components/toast';
 
@@ -99,6 +100,8 @@ function managerOptions(managers: EmployeeCreateDialogProps['managers']) {
 
 export function EmployeeCreateDialog({
     apiBase,
+    meMode = false,
+    user,
     open,
     departments,
     positions,
@@ -111,6 +114,12 @@ export function EmployeeCreateDialog({
 }: EmployeeCreateDialogProps) {
     const formRef = useRef<HTMLFormElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [tempPassword, setTempPassword] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    // 'link' is the default so the existing eligible-accounts flow (and its
+    // tests/e2e) is untouched; 'new' provisions an EMPLOYEE account (TASK-120).
+    const [mode, setMode] = useState<CreateAccountMode>(meMode ? 'new' : 'link');
+    const modeRef = useRef(mode); // the submit callback reads the value it was built with
     const {
         form,
         errors,
@@ -121,11 +130,40 @@ export function EmployeeCreateDialog({
         buildPayload,
         resetForm,
         setErrors,
-    } = useFormEmployee();
+    } = useFormEmployee(
+        // In meMode the caller cannot change identity: prefill fullName/email
+        // from the session so the 'new' validation (which omits userId from the
+        // payload — the server takes it from the session) passes untouched.
+        meMode ? { fullName: user?.fullName ?? '', email: user?.email ?? '' } : undefined,
+        meMode ? 'new' : mode,
+    );
+
+    const fillFromAccount = useCallback((userId: string, current: typeof form) => {
+        const account = accounts.find(item => item._id === userId);
+        // Only fill contact fields the user hasn't changed.
+        const next: Partial<typeof form> = { userId };
+        if (!current.email || current.email === accounts.find(item => item._id === current.userId)?.email) next.email = account?.email ?? '';
+        if (!current.phone || current.phone === accounts.find(item => item._id === current.userId)?.phone) next.phone = account?.phone ?? '';
+        return { ...current, ...next };
+    }, [accounts]);
 
     const handleCreated = useCallback(async () => {
-        onCreated(await createEmployee(apiBase, buildPayload()));
-    }, [apiBase, buildPayload, onCreated]);
+        // meMode wraps the whole form; it never swaps the mode toggle under the
+        // form after mount, so the hook's live mode is the right one here.
+        if (meMode) return createMyEmployeeProfile(apiBase, buildPayload());
+        return createEmployee(apiBase, buildPayload());
+    }, [apiBase, buildPayload, meMode]);
+
+    // The errored field is disabled while isSubmitting is true, so focus() during
+    // the catch is a no-op and the dialog trap keeps the first slot (the mode
+    // toggle). Focus the field after the state settles instead.
+    const pendingFocusRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (isSubmitting || !pendingFocusRef.current) return;
+        const field = document.getElementById(`create-${pendingFocusRef.current}`);
+        pendingFocusRef.current = null;
+        field?.focus?.();
+    }, [isSubmitting]);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -133,11 +171,9 @@ export function EmployeeCreateDialog({
 
         if (!validateAll()) {
             toast.warning('Vui lòng kiểm tra thông tin', 'Một số trường chưa đầy đủ hoặc chưa đúng.');
-            requestAnimationFrame(() => {
-                const field = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
-                field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                field?.focus();
-            });
+            const field = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+            field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+            field?.focus();
             return;
         }
 
@@ -145,25 +181,39 @@ export function EmployeeCreateDialog({
         submitting.current = true;
         setIsSubmitting(true);
         try {
-            await handleCreated();
+            const created = await handleCreated();
             resetForm();
+            // One-time password (provisioning mode) is rendered in the panel once
+            // and never stored — not in a toast, not in localStorage, not in a data
+            // holder on the parent. The panel dies with the dialog.
+            const password = (created as { tempPassword?: string } | undefined)?.tempPassword;
+            setTempPassword(password ?? null);
+            setCopied(false);
             toast.success('Tạo hồ sơ thành công', 'Hồ sơ nhân sự đã được tạo.');
+            onCreated(created);
         } catch (err) {
             const apiError = mapApiError(err);
             const fieldErrors = mapEmployeeValidationErrors(err);
             const firstField = Object.keys(fieldErrors)[0] || apiError.field;
             setErrors((prev: typeof errors) => ({ ...prev, [apiError.field || 'general']: apiError.message, ...fieldErrors }));
             toast.error(apiError.title, apiError.message);
-            if (firstField) requestAnimationFrame(() => {
-                const field = document.getElementById(`create-${firstField}`);
-                field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                field?.focus();
-            });
+            if (firstField) pendingFocusRef.current = firstField;
         } finally {
             submitting.current = false;
             setIsSubmitting(false);
         }
-    }, [validateAll, handleCreated, resetForm, setErrors, submitting]);
+    }, [validateAll, handleCreated, resetForm, setErrors, submitting, onCreated]);
+
+    const copyPassword = useCallback(async () => {
+        if (!tempPassword) return;
+        try {
+            await navigator.clipboard.writeText(tempPassword);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // Clipboard may be unavailable in restricted contexts; the code is select-all by hand.
+        }
+    }, [tempPassword]);
 
 
     return (
@@ -171,28 +221,92 @@ export function EmployeeCreateDialog({
             open={open}
             onOpenChange={(next: boolean) => {
                 if (!submitting.current) {
-                    if (!next) resetForm();
+                    if (!next) {
+                        resetForm();
+                        // The one-time password dies with the dialog — never kept
+                        // after close (not in localStorage, not in any holder).
+                        setTempPassword(null);
+                        setCopied(false);
+                    }
                     onOpenChange(next);
                 }
             }}
         >
             <DialogContent className="max-w-3xl gap-0">
                 <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
-                    <DialogTitle className="text-xl font-semibold">Tạo hồ sơ nhân sự</DialogTitle>
+                    <DialogTitle className="text-xl font-semibold">{meMode ? 'Tạo hồ sơ của tôi' : 'Tạo hồ sơ nhân sự'}</DialogTitle>
                     <DialogDescription className="mt-1.5 max-w-xl">
-                        Liên kết tài khoản đăng nhập với hồ sơ nghiệp vụ. Hồ sơ mới sẽ bắt đầu ở trạng thái Thử việc.
+                        {meMode
+                            ? 'Nhập các thông tin nghiệp vụ của chính bạn. Hồ sơ sẽ bắt đầu ở trạng thái Thử việc và không tạo tài khoản mới.'
+                            : 'Chọn tạo tài khoản mới hoặc liên kết tài khoản đã có. Hồ sơ mới sẽ bắt đầu ở trạng thái Thử việc.'}
                     </DialogDescription>
                 </DialogHeader>
 
+                {tempPassword !== null ? (
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-6 sm:px-6">
+                            <Alert>
+                                <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4" />
+                                <AlertTitle>{meMode ? 'Đã tạo hồ sơ của bạn' : 'Đã tạo hồ sơ và tài khoản mới'}</AlertTitle>
+                                <AlertDescription className="mt-0.5">
+                                    Mật khẩu tạm thời bên dưới chỉ hiển thị đúng một lần. Hãy chép ngay và chuyển cho nhân viên ngoài hệ thống; mật khẩu sẽ phải đổi khi đăng nhập lần đầu.
+                                </AlertDescription>
+                            </Alert>
+                            <div>
+                                <FormLabel htmlFor="create-temp-password">Mật khẩu tạm thời (một lần)</FormLabel>
+                                <div className="flex gap-2">
+                                    <code id="create-temp-password" className="min-h-11 select-all rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-base font-semibold tracking-wide">{tempPassword}</code>
+                                    <Button type="button" variant="outline" className="min-h-11" onClick={() => void copyPassword()}>
+                                        {copied ? 'Đã chép' : 'Chép'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-popover px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+                            <Button type="button" className="min-h-11" onClick={() => onOpenChange(false)}>Đóng</Button>
+                        </div>
+                    </div>
+                ) : (
                 <form ref={formRef} className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
                     <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-6">
                         <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Các trường có dấu <span className="font-semibold text-destructive">*</span> là bắt buộc. Những trường còn lại có thể bổ sung sau.</p>
+                        {/* Phase C self-service note */}
+                        {meMode && (
+                            <Alert className="border-primary/30 bg-primary/5 text-foreground">
+                                <UserRoundPlus aria-hidden="true" className="mt-0.5 size-4 text-primary" />
+                                <div className="min-w-0">
+                                    <AlertTitle>Hồ sơ nghiệp vụ của bạn</AlertTitle>
+                                    <AlertDescription className="mt-0.5">
+                                        Email và số điện thoại được lấy từ tài khoản đăng nhập — bạn không cần nhập lại.
+                                    </AlertDescription>
+                                </div>
+                            </Alert>
+                        )}
                         {/* Account & Code Section */}
                         <section className="space-y-4">
                             <div>
                                 <h3 className="font-semibold text-foreground">Tài khoản và mã nhân viên</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">Chọn tài khoản đã tồn tại trong tổ chức và nhập mã nhân viên duy nhất.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {meMode ? 'Mã của bạn, gắn với tài khoản đã đăng nhập.' : 'Chọn tạo mới hoặc liên kết tài khoản đã tồn tại, rồi nhập mã nhân viên duy nhất.'}
+                                </p>
                             </div>
+                            {/* Mode toggle — link is the default; provisioning needs a name + email */}
+                            {!meMode && (
+                                <div role="tablist" aria-label="Cách tạo hồ sơ" className="inline-flex rounded-lg border border-border bg-muted p-1">
+                                    {(['link', 'new'] as const).map(modeKey => (
+                                        <button
+                                            key={modeKey}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={mode === modeKey}
+                                            className={`min-h-9 rounded-md px-3 text-sm font-medium ${mode === modeKey ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                            onClick={() => { setMode(modeKey); setErrors({ general: null }); }}
+                                        >
+                                            {modeKey === 'link' ? 'Liên kết tài khoản' : 'Tạo tài khoản mới'}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             {accountsFailed && (
                                 <Alert className="border-amber-300 bg-amber-50/70 px-3 py-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                                     <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 text-amber-600 dark:text-amber-400" />
@@ -214,23 +328,38 @@ export function EmployeeCreateDialog({
                                 </Alert>
                             )}
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <FormSelectField
-                                    id="create-userId"
-                                    label="Tài khoản nhân viên"
-                                    required
-                                    value={form.userId}
-                                    onChange={(e) => {
-                                        const account = accounts.find(item => item._id === e.target.value);
-                                        updateField('userId', e.target.value);
-                                        if (!form.email || form.email === accounts.find(item => item._id === form.userId)?.email) updateField('email', account?.email ?? '');
-                                        if (!form.phone || form.phone === accounts.find(item => item._id === form.userId)?.phone) updateField('phone', account?.phone ?? '');
-                                    }}
-                                    onBlur={() => blurField('userId')}
-                                    options={accountOptions(accounts)}
-                                    placeholder={accountsFailed ? 'Không thể tải danh sách tài khoản' : accounts.length ? 'Chọn tài khoản nhân viên' : 'Không có tài khoản phù hợp'}
-                                    disabled={isSubmitting || accountsFailed}
-                                    error={errors.userId}
-                                />
+                                {meMode || mode === 'new' ? (
+                                    <FormInputField
+                                        id="create-fullName"
+                                        label="Họ và tên"
+                                        required={mode === 'new'}
+                                        value={meMode ? user?.fullName ?? '' : form.fullName}
+                                        onChange={(e) => updateField('fullName', e.target.value)}
+                                        onBlur={() => blurField('fullName')}
+                                        placeholder="Ví dụ: Nguyễn Văn An"
+                                        disabled={meMode || isSubmitting}
+                                        error={meMode ? null : errors.fullName}
+                                    />
+                                ) : (
+                                    <FormSelectField
+                                        id="create-userId"
+                                        label="Tài khoản nhân viên"
+                                        required
+                                        value={form.userId}
+                                        onChange={(e) => {
+                                            const userId = e.target.value;
+                                            updateField('userId', userId);
+                                            const next = fillFromAccount(userId, { ...form, userId });
+                                            if (next.email !== form.email) updateField('email', next.email);
+                                            if (next.phone !== form.phone) updateField('phone', next.phone);
+                                        }}
+                                        onBlur={() => blurField('userId')}
+                                        options={accountOptions(accounts)}
+                                        placeholder={accountsFailed ? 'Không thể tải danh sách tài khoản' : accounts.length ? 'Chọn tài khoản nhân viên' : 'Không có tài khoản phù hợp'}
+                                        disabled={isSubmitting || accountsFailed}
+                                        error={errors.userId}
+                                    />
+                                )}
                                 <FormInputField
                                     id="create-employeeCode"
                                     label="Mã nhân viên"
@@ -326,10 +455,10 @@ export function EmployeeCreateDialog({
 
                         {/* Contact Section */}
                         <section className="space-y-4 border-t border-border pt-6">
-                            <div><h3 className="font-semibold text-foreground">Thông tin liên hệ</h3><p className="mt-1 text-sm text-muted-foreground">Thông tin liên hệ nghiệp vụ; email và số điện thoại được gợi ý từ tài khoản đã chọn.</p></div>
+                            <div><h3 className="font-semibold text-foreground">Thông tin liên hệ</h3><p className="mt-1 text-sm text-muted-foreground">{meMode ? 'Email và số điện thoại được lấy từ tài khoản đăng nhập của bạn.' : 'Thông tin liên hệ nghiệp vụ; email và số điện thoại được gợi ý từ tài khoản đã chọn.'}</p></div>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <FormInputField id="create-phone" label="Số điện thoại" inputMode="numeric" maxLength={10} value={form.phone} onChange={(e) => updateField('phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} onBlur={() => blurField('phone')} placeholder="Ví dụ: 0912345678" disabled={submitting.current} error={errors.phone} helperText="Chỉ nhập số, đủ 10 chữ số." />
-                                <FormInputField id="create-email" label="Email nhân sự" type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} onBlur={() => blurField('email')} placeholder="nhanvien@company.com" disabled={submitting.current} error={errors.email} />
+                                <FormInputField id="create-phone" label="Số điện thoại" inputMode="numeric" maxLength={10} value={form.phone} onChange={(e) => updateField('phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} onBlur={() => blurField('phone')} placeholder="Ví dụ: 0912345678" disabled={meMode || submitting.current} error={meMode ? null : errors.phone} helperText={meMode ? 'Sẽ hiển thị từ tài khoản của bạn.' : 'Chỉ nhập số, đủ 10 chữ số.'} />
+                                <FormInputField id="create-email" label="Email nhân sự" type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} onBlur={() => blurField('email')} placeholder="nhanvien@company.com" disabled={meMode || submitting.current} error={meMode ? null : errors.email} />
                                 <div className="sm:col-span-2"><FormInputField id="create-address" label="Địa chỉ" value={form.address} onChange={(e) => updateField('address', e.target.value)} onBlur={() => blurField('address')} maxLength={256} disabled={submitting.current} error={errors.address} /></div>
                             </div>
                         </section>
@@ -426,6 +555,7 @@ export function EmployeeCreateDialog({
                         </Button>
                     </div>
                 </form>
+                )}
             </DialogContent>
         </Dialog>
     );

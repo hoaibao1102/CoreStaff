@@ -287,6 +287,35 @@ test('self 404 keeps account data and displays dedicated empty state', async () 
   status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self());
   expect(container.textContent).toContain('chưa có hồ sơ nhân sự'); expect(container.textContent).toContain('session@example.test');
 });
+test.each(['HR', 'DEPARTMENT_MANAGER'] as const)('self 404 offers self-provisioning to %s', async role => {
+  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user, role }));
+  expect(container.textContent).toContain('Tạo hồ sơ của tôi');
+});
+test('self 404 keeps the contact-HR message for EMPLOYEE', async () => {
+  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user, role: 'EMPLOYEE' }));
+  expect(container.textContent).toContain('liên hệ HR'); expect(container.textContent).not.toContain('Tạo hồ sơ của tôi');
+});
+test('HR self-provision posts /me with business fields only and locks identity', async () => {
+  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user }));
+  await clickText('Tạo hồ sơ của tôi');
+  // meMode: name locked from the session, no account picker, no mode toggle
+  const name = document.getElementById('create-fullName') as HTMLInputElement;
+  expect(name).not.toBeNull(); expect(name.disabled).toBe(true); expect(name.value).toBe('Session Name');
+  expect(document.getElementById('create-create-userId')).toBeNull();
+  expect(document.getElementById('create-userId')).toBeNull();
+  expect(document.body.textContent).not.toContain('Tạo tài khoản mới');
+  await setCreateField('employeeCode', 'HR-001');
+  status = 200;
+  await submitCreate();
+  const me = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/api/hr/employees/me') && init?.method === 'POST');
+  expect(me).toBeDefined();
+  const body = JSON.parse(String(me![1].body));
+  expect(body).toMatchObject({ employeeCode: 'HR-001' });
+  expect(body).not.toHaveProperty('userId');
+  expect(body).not.toHaveProperty('role');
+  // self-provisioning never creates an account → no one-time password panel
+  expect(document.getElementById('create-temp-password')).toBeNull();
+});
 test.each([401, 403, 500])('self handles HTTP %s with retry', async http => {
   status = http; await render(self()); expect(container.querySelector('[role="alert"]')).not.toBeNull();
   expect(container.textContent).toContain('session@example.test'); status = 200; await clickText('Thử lại');

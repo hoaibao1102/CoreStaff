@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
@@ -6,10 +6,13 @@ import { PositionDocument } from '../../database/schemas/position.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { EmploymentHistoryDocument } from '../../database/schemas/employment-history.schema';
-import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus } from '../../database/schemas/enums';
+import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
+import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
+import { generateTempPassword } from '../../auth/strategies/password-policy';
+import { provisionAccount, attachProfile, type AccountInput } from '../../database/seed/provision';
 
 const DUPLICATE_KEY_ERROR = 11000;
 
@@ -30,9 +33,19 @@ export class EmployeeService {
 		@InjectConnection() private readonly connection: Connection,
 	) {}
 
-	async create(organizationId: string, dto: CreateEmployeeProfileDto) {
-		await this.assertUserAvailable(organizationId, dto.userId);
+	/**
+	 * Link mode returns the profile; provisioning mode additionally returns
+	 * `tempPassword` (once — it is never persisted, only its hash is).
+	 */
+	async create(organizationId: string, dto: CreateEmployeeProfileDto): Promise<Record<string, unknown>> {
 		await this.assertRefsInTenant(organizationId, dto);
+		if (dto.userId) return this.linkProfile(organizationId, dto);
+		return this.provisionProfile(organizationId, dto);
+	}
+
+	/** SRS §15.2A — attach a profile to an account that already exists. */
+	private async linkProfile(organizationId: string, dto: CreateEmployeeProfileDto): Promise<Record<string, unknown>> {
+		await this.assertUserAvailable(organizationId, dto.userId as string);
 
 		try {
 			const doc = await this.profileModel.create({
@@ -40,7 +53,125 @@ export class EmployeeService {
 				organizationId,
 				employmentStatus: EmploymentStatus.PROBATION,
 			});
-			return doc.toObject();
+			return doc.toObject() as unknown as Record<string, unknown>;
+		} catch (err) {
+			throw mapDuplicateKey(err);
+		}
+	}
+
+	/**
+	 * SRS §4.1:263-270 — HR adds an employee, which *creates the login account*
+	 * (role EMPLOYEE) in the same call. The account and the HR record are one
+	 * event: a user without a profile cannot be found in the directory, and a
+	 * profile without a user owns an unusable login.
+	 *
+	 * The temporary password is returned once and never persisted or logged —
+	 * only its hash reaches the database. The employee always starts on PROBATION
+	 * because that is the state the promotion flow in changeStatus expects.
+	 */
+	/**
+	 * `fullName` / `email` are required here rather than by the DTO because the same
+	 * DTO also serves `createSelf`, which creates no account at all: its `userId`
+	 * is the caller's and comes from the session, so a `!userId` condition in the
+	 * validator would demand a name the route must not need.
+	 */
+	private async provisionProfile(organizationId: string, dto: CreateEmployeeProfileDto): Promise<Record<string, unknown>> {
+		const email = dto.email?.trim();
+		if (!email) throw new BadRequestException('EMAIL_REQUIRED');
+		const fullName = dto.fullName?.trim();
+		if (!fullName) throw new BadRequestException('FULLNAME_REQUIRED');
+		// Pre-flight checks give a clear 409 on the common double-submit; the
+		// unique indexes remain the source of truth under real concurrency.
+		if (await this.userModel.exists({ organizationId, emailN: normalizeEmail(email) })) {
+			throw new ConflictException('EMAIL_TAKEN');
+		}
+		if (await this.profileModel.exists({ organizationId, employeeCode: normalizeEmployeeCode(dto.employeeCode) })) {
+			throw new ConflictException('EMPLOYEE_CODE_TAKEN');
+		}
+
+		// Generated and hashed outside the session: bcrypt is deliberately slow and
+		// must not hold a transaction open.
+		const tempPassword = generateTempPassword();
+		const input: AccountInput = {
+			organizationId,
+			email,
+			// Validated above: required whenever an account is created.
+			fullName,
+			phone: dto.phone,
+			employeeCode: dto.employeeCode,
+			passwordHash: await hashPassword(tempPassword),
+			role: Role.EMPLOYEE,
+			joinDate: dto.joinDate,
+			employmentStatus: EmploymentStatus.PROBATION,
+			departmentId: dto.departmentId,
+			positionId: dto.positionId,
+			directManagerId: dto.directManagerId,
+			dateOfBirth: dto.dateOfBirth,
+			gender: dto.gender,
+			profileExtras: extraProfileFields(dto),
+		};
+
+		const session = await this.connection.startSession();
+		try {
+			let profile: Record<string, unknown> | undefined;
+			await session.withTransaction(async () => {
+				profile = (await provisionAccount(this.userModel, this.profileModel, input, session)).profile;
+			});
+			return { ...profile, tempPassword };
+		} catch (err) {
+			throw mapDuplicateKey(err);
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	/**
+	 * Phase C — self-provisioning. HR and Department Manager are workforce-capable
+	 * but nobody else can fill their record in: FR-SYS-02:631 mints only their
+	 * login `User`, and FR-HRCFG-02:648 lets HR create "Employee và Department
+	 * Manager" — not HR. So the account owner creates their own profile.
+	 *
+	 * `userId` is the caller's own, taken from the session by the controller and
+	 * never from the body. Only one document is written (their `User` already
+	 * exists), so no transaction is needed — unlike `provisionProfile`.
+	 * `email`/`phone` are copied from the account, never from the payload: this is
+	 * how the two documents stay consistent (TASK-120/A3) when the writer cannot
+	 * supply the login fields.
+	 */
+	async createSelf(organizationId: string, userId: string, dto: CreateEmployeeProfileDto) {
+		// The point of this route is that the profile is attached to *you*.
+		if (dto.userId) throw new BadRequestException('USER_ID_NOT_ALLOWED');
+		const user = await this.userModel.findOne({ _id: userId, organizationId }).lean().exec();
+		if (!user) throw new NotFoundException('USER_NOT_FOUND');
+		if (await this.profileModel.exists({ organizationId, userId })) {
+			throw new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
+		}
+		await this.assertRefsInTenant(organizationId, dto);
+		if (await this.profileModel.exists({ organizationId, employeeCode: normalizeEmployeeCode(dto.employeeCode) })) {
+			throw new ConflictException('EMPLOYEE_CODE_TAKEN');
+		}
+
+		try {
+			const { profile } = await attachProfile(
+				this.profileModel,
+				{
+					organizationId,
+					email: user.email,
+					phone: user.phone,
+					employeeCode: dto.employeeCode,
+					joinDate: dto.joinDate,
+					// Same starting state as provisioning an employee.
+					employmentStatus: EmploymentStatus.PROBATION,
+					departmentId: dto.departmentId,
+					positionId: dto.positionId,
+					directManagerId: dto.directManagerId,
+					dateOfBirth: dto.dateOfBirth,
+					gender: dto.gender,
+					profileExtras: extraProfileFields(dto),
+				},
+				userId,
+			);
+			return profile;
 		} catch (err) {
 			throw mapDuplicateKey(err);
 		}
@@ -55,12 +186,16 @@ export class EmployeeService {
 	}
 
 	/** Accounts in the tenant that do not have an employee profile yet. */
-	async listEligibleUsers(organizationId: string) {
+	async listEligibleUsers(organizationId: string, excludeUserId?: string) {
 		const linked = await this.profileModel.find({ organizationId }).select('userId').lean();
 		const linkedIds = linked.map(row => row.userId);
+		// HR appears in their own link picker otherwise — and once they have made
+		// their own profile via /me they drop out anyway, so this only hides the
+		// self-link option that Phase C exists to replace.
+		if (excludeUserId) linkedIds.push(excludeUserId);
 		return this.userModel
 			.find({ organizationId, _id: { $nin: linkedIds }, status: 'ACTIVE' })
-			.select('_id fullName email phone employeeCode')
+			.select('_id fullName email phone')
 			.sort({ fullName: 1 })
 			.lean();
 	}
@@ -105,6 +240,15 @@ export class EmployeeService {
 			await session.withTransaction(async () => {
 				const profile = await this.profileModel.findOne({ _id: id, organizationId }).session(session);
 				if (!profile) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+
+				// AC-SELF-APPROVAL-01 / :249 — needed the moment an HR can hold a
+				// profile they could promote themselves (Phase C self-provisioning).
+				// The honest half of the fix: it refuses the violation rather than
+				// routing it to "the org's shared HR queue", which in a single-HR
+				// tenant is the same person.
+				if (String(profile.userId) === String(changedBy)) {
+					throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
+				}
 
 				const previousStatus = profile.employmentStatus;
 				const allowed = EMPLOYMENT_STATUS_TRANSITIONS[previousStatus];
@@ -191,11 +335,41 @@ export class EmployeeService {
 	}
 }
 
+/**
+ * EmployeeProfile fields the shared `AccountInput` shape doesn't name — seeded so
+ * provisioning writes exactly the columns the link path would, and neither can
+ * gain a field the other lacks. `userId`/`email`/`fullName` are excluded: they are
+ * owned by the account half (or the whole point of this branch).
+ */
+const EXTRA_PROFILE_FIELDS = [
+	'employmentType',
+	'address',
+	'citizenId',
+	'taxCode',
+	'socialInsuranceCode',
+	'bankAccount',
+	'workplaceId',
+] as const;
+
+function extraProfileFields(dto: CreateEmployeeProfileDto): Record<string, unknown> {
+	const extras: Record<string, unknown> = {};
+	for (const key of EXTRA_PROFILE_FIELDS) {
+		if (dto[key] !== undefined) extras[key] = dto[key];
+	}
+	return extras;
+}
+
+/**
+ * Turns a Mongo duplicate-key error into the tenant's business code. `keyPattern`
+ * names the index that fired, so the two unique keys a single provisioning
+ * transaction can trip (User.emailN and the profile's employeeCode/userId) each
+ * get their own message instead of one generic conflict.
+ */
 function mapDuplicateKey(err: unknown): unknown {
 	if (err && typeof err === 'object' && (err as { code?: number }).code === DUPLICATE_KEY_ERROR) {
-		if ((err as { keyPattern?: Record<string, unknown> }).keyPattern?.userId) {
-			return new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
-		}
+		const keyPattern = (err as { keyPattern?: Record<string, unknown> }).keyPattern;
+		if (keyPattern?.emailN) return new ConflictException('EMAIL_TAKEN');
+		if (keyPattern?.userId) return new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
 		return new ConflictException('EMPLOYEE_CODE_TAKEN');
 	}
 	return err;
