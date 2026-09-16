@@ -41,6 +41,7 @@ export interface EmployeeProfile {
 
 export interface EmploymentHistoryRecord {
     _id: string;
+    organizationId: string;
     employeeProfileId: string;
     previousStatus: EmploymentStatus;
     newStatus: EmploymentStatus;
@@ -67,6 +68,14 @@ export interface Position {
     name: string;
     active: boolean;
     organizationId: string;
+}
+
+export interface EligibleEmployeeAccount {
+    _id: string;
+    fullName: string;
+    email: string;
+    phone?: string;
+    employeeCode?: string;
 }
 
 export interface EmployeeCreateDto {
@@ -186,6 +195,7 @@ interface ApiFailure {
     error?: {
         code?: string;
         message?: string;
+        details?: unknown;
     };
 }
 
@@ -207,6 +217,7 @@ async function hrRequest<T>(base: string, path: string, options?: RequestInit): 
         const error = new Error(message);
         (error as any).code = code;
         (error as any).status = res.status;
+        (error as any).details = body?.success === false ? body.error?.details : undefined;
         throw error;
     }
 
@@ -254,6 +265,10 @@ export async function createEmployee(
         method: 'POST',
         body: JSON.stringify(dto),
     });
+}
+
+export async function listEligibleEmployeeAccounts(base: string): Promise<EligibleEmployeeAccount[]> {
+    return hrRequest<EligibleEmployeeAccount[]>(base, '/api/hr/employees/eligible-users');
 }
 
 // ── Update Employee (HR-only) ─────────────────────────────────────────

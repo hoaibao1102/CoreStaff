@@ -33,7 +33,7 @@ export const DEFAULT_EMPLOYEE_FORM_VALUES = {
 } as const;
 
 export const EMPLOYEE_FORM_FIELDS = [
-    { key: 'userId', label: 'User ID', required: true },
+    { key: 'userId', label: 'Tài khoản nhân viên', required: true },
     { key: 'employeeCode', label: 'Mã nhân viên', required: true },
     { key: 'joinDate', label: 'Ngày vào làm', required: true },
     { key: 'dateOfBirth', label: 'Ngày sinh', required: false },

@@ -27,8 +27,9 @@ export const FormInputField = forwardRef<HTMLInputElement, FormInputFieldProps>(
                     id={id}
                     ref={ref}
                     type={type}
+                    required={required}
                     aria-invalid={!!error}
-                    aria-describedby={helperText ? `${id}-hint` : undefined}
+                    aria-describedby={[error ? `${id}-error` : null, helperText && !error ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined}
                     {...props}
                 />
                 {helperText && !error && (
@@ -36,7 +37,7 @@ export const FormInputField = forwardRef<HTMLInputElement, FormInputFieldProps>(
                         {helperText}
                     </p>
                 )}
-                <FormError message={error} />
+                <FormError id={`${id}-error`} message={error} />
             </div>
         );
     },

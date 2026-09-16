@@ -17,16 +17,8 @@ export function validatePhone(value: string): string | null {
         return 'Số điện thoại chỉ được chứa chữ số.';
     }
 
-    if (trimmed.length < 9) {
-        return 'Số điện thoại phải gồm đủ 10 chữ số.';
-    }
-
-    if (trimmed.length > 10) {
-        return 'Số điện thoại tối đa 10 chữ số.';
-    }
-
-    if (trimmed.length === 9) {
-        return 'Số điện thoại phải gồm đủ 10 chữ số.';
+    if (trimmed.length !== 10) {
+        return 'Số điện thoại phải gồm đúng 10 chữ số.';
     }
 
     return null;
@@ -62,6 +54,8 @@ export function validateFullName(value: string): string | null {
 export function validateEmail(value: string): string | null {
     const trimmed = value.trim();
 
+    if (trimmed.length > 256) return 'Email nhân sự tối đa 256 ký tự.';
+
     if (!trimmed) {
         return 'Vui lòng nhập email.';
     }
@@ -74,6 +68,14 @@ export function validateEmail(value: string): string | null {
     }
 
     return null;
+}
+
+export function validateOptionalDateOfBirth(value: string): string | null {
+    return value.trim() ? validateDateNotFuture(value, 'ngày sinh') : null;
+}
+
+export function validateAddress(value: string): string | null {
+    return value.trim().length > 256 ? 'Địa chỉ tối đa 256 ký tự.' : null;
 }
 
 // ───────── Date Validation ─────────
@@ -132,7 +134,8 @@ export function validateJoinDate(value: string): string | null {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (Number.isNaN(date.getTime())) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime())
+        || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
         return 'Ngày vào làm không hợp lệ.';
     }
 
@@ -223,7 +226,7 @@ export function validateCitizenId(value: string): string | null {
     }
 
     if (!/^\d{9,12}$/.test(trimmed)) {
-        return 'CCCD/CMND phải gồm 9 đến 12 chữ số.';
+        return 'CCCD/CMND phải gồm từ 9 đến 12 chữ số.';
     }
 
     return null;

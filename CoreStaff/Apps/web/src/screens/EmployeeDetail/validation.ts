@@ -70,16 +70,10 @@ export function validateStatusEffectiveDate(value: string): string | null {
         return 'Vui lòng chọn ngày hiệu lực.';
     }
 
-    const date = new Date(value);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const date = new Date(`${value}T00:00:00`);
 
     if (Number.isNaN(date.getTime())) {
         return 'Ngày hiệu lực không hợp lệ.';
-    }
-
-    if (date > today) {
-        return 'Ngày hiệu lực không thể lớn hơn ngày hiện tại.';
     }
 
     return null;

@@ -8,7 +8,6 @@ import {
     Save,
     X,
     History,
-    AlertCircle,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
@@ -16,11 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/card'
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { Label } from '../../components/label';
-import { Select } from '../../components/select';
 import { Skeleton } from '../../components/skeleton';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
 import { FormLabel } from '../../components/form/FormLabel';
 import { FormError } from '../../components/form/FormError';
+import { toast } from '../../components/toast';
 import {
     EMPLOYMENT_STATUS_LABELS,
     EMPLOYMENT_STATUS_BADGE,
@@ -164,14 +163,14 @@ export function EmployeeDetailDialog(props: {
 }) {
     return (
         <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }}>
-            <DialogContent className="max-w-4xl gap-0" initialFocus={() => document.getElementById('employee-detail-edit')}>
+            <DialogContent className="group/detail max-h-[90dvh] max-w-4xl gap-0" initialFocus={() => document.getElementById('employee-detail-edit')}>
                 <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
                     <DialogTitle className="text-xl font-semibold">Chi tiết nhân viên</DialogTitle>
                     <DialogDescription className="mt-1.5">
                         Thông tin hồ sơ, công việc và lịch sử trạng thái nhân sự.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+                <div data-slot="employee-detail-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 group-data-[nested-dialog-open]/detail:overflow-hidden sm:px-6">
                     <EmployeeDetailContent key={`${props.apiBase}:${props.employeeId}:${props.user.organizationId}:${props.user._id ?? props.user.id}`} {...props} />
                 </div>
             </DialogContent>
@@ -200,7 +199,6 @@ function EmployeeDetailContent({
     const [editMode, setEditMode] = useState(false);
     const [statusChangeMode, setStatusChangeMode] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [actionError, setActionError] = useState<string | null>(null);
 
     /* Edit form state */
     const [formData, setFormData] = useState({
@@ -353,13 +351,17 @@ function EmployeeDetailContent({
         if (Object.keys(errors).length > 0) {
             setEditErrors(errors);
             const firstErrorField = Object.keys(errors)[0];
-            setTimeout(() => document.getElementById(`edit-${firstErrorField}`)?.focus(), 0);
+            toast.warning('Vui lòng kiểm tra thông tin', 'Một số trường chưa đầy đủ hoặc chưa đúng.');
+            requestAnimationFrame(() => {
+                const field = document.getElementById(`edit-${firstErrorField}`);
+                field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                field?.focus();
+            });
             return;
         }
 
         setEditErrors({});
         setSaving(true);
-        setActionError(null);
         try {
             const updates: Record<string, string | undefined> = {};
             for (const [key, value] of Object.entries(formData)) {
@@ -371,17 +373,20 @@ function EmployeeDetailContent({
             setEmployee(previous => previous ? { ...previous, ...updated } : updated);
             setEditMode(false);
             onChanged?.();
+            toast.success('Cập nhật hồ sơ thành công', 'Thông tin hồ sơ nhân sự đã được cập nhật.');
         } catch (err: unknown) {
             const code = (err as any)?.code;
+            let message: string;
             if (code === 'EMPLOYEE_CODE_TAKEN') {
-                setActionError('Mã nhân viên này đã được sử dụng. Vui lòng nhập mã khác.');
+                message = 'Mã nhân viên này đã được sử dụng. Vui lòng nhập mã khác.';
             } else if (code === 'DEPARTMENT_NOT_FOUND') {
-                setActionError('Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.');
+                message = 'Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.';
             } else if (code === 'POSITION_NOT_FOUND') {
-                setActionError('Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.');
+                message = 'Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.';
             } else {
-                setActionError(mapHrError(code, 'Không thể cập nhật hồ sơ nhân viên lúc này. Vui lòng thử lại.'));
+                message = mapHrError(code, 'Không thể cập nhật hồ sơ nhân viên lúc này. Vui lòng thử lại.');
             }
+            toast.error('Không thể cập nhật hồ sơ', message);
         } finally {
             setSaving(false);
         }
@@ -403,13 +408,16 @@ function EmployeeDetailContent({
     }, [statusForm]);
 
     const handleStatusChange = async () => {
-        if (!validateStatusChange()) return;
+        if (!validateStatusChange()) {
+            toast.warning('Vui lòng kiểm tra thông tin', 'Hãy hoàn tất các trường được đánh dấu.');
+            requestAnimationFrame(() => document.querySelector<HTMLElement>('#status-new[aria-invalid="true"], #status-effective-date[aria-invalid="true"]')?.focus());
+            return;
+        }
 
         if (!apiBase || !employeeId || !statusForm.newStatus || !statusForm.effectiveDate) return;
 
         setStatusErrors({});
         setSaving(true);
-        setActionError(null);
         try {
             const updated = await changeEmploymentStatus(
                 apiBase,
@@ -420,18 +428,26 @@ function EmployeeDetailContent({
             );
             setEmployee(previous => previous ? { ...previous, ...updated } : updated);
             setStatusChangeMode(false);
+            setStatusForm({ newStatus: '', effectiveDate: '', reason: '' });
             onChanged?.();
-            loadHistory();
+            await loadHistory();
+            toast.success('Cập nhật trạng thái thành công', 'Trạng thái nhân sự và lịch sử thay đổi đã được cập nhật.');
         } catch (err: unknown) {
             const code = (err as any)?.code;
-            if (code === 'EMPLOYMENT_STATUS_TRANSITION_INVALID') {
-                setActionError('Trạng thái không thể chuyển đổi theo quy định. Vui lòng kiểm tra lại.');
-            } else {
-                setActionError(mapHrError(code, 'Không thể thay đổi trạng thái nhân sự lúc này. Vui lòng thử lại.'));
-            }
+            const message = code === 'EMPLOYMENT_STATUS_TRANSITION_INVALID'
+                ? 'Trạng thái không thể chuyển đổi theo quy định. Vui lòng kiểm tra lại.'
+                : mapHrError(code, 'Không thể thay đổi trạng thái nhân sự lúc này. Vui lòng thử lại.');
+            toast.error('Không thể chuyển trạng thái', message);
         } finally {
             setSaving(false);
         }
+    };
+
+    const closeStatusDialog = () => {
+        if (saving) return;
+        setStatusChangeMode(false);
+        setStatusForm({ newStatus: '', effectiveDate: '', reason: '' });
+        setStatusErrors({});
     };
 
     /* Error state */
@@ -464,7 +480,7 @@ function EmployeeDetailContent({
         ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[employee.employmentStatus] || []
         : [];
 
-    return (
+    return <>
         <div className="space-y-6">
             {/* Loading state */}
             {loading ? (
@@ -484,13 +500,20 @@ function EmployeeDetailContent({
                 <>
                     {/* Action buttons */}
                     <div className="flex flex-wrap gap-2">
-                        {!editMode && !statusChangeMode && (
+                        {!editMode && (
                             <>
                                 <Button id="employee-detail-edit" variant="outline" size="sm" onClick={() => setEditMode(true)}>
                                     <Pencil className="mr-1.5 h-4 w-4" />
                                     Chỉnh sửa
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => setStatusChangeMode(true)}>
+                                <Button
+                                    id="employee-status-trigger"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setStatusChangeMode(true)}
+                                    disabled={!validTransitions.length}
+                                    title={!validTransitions.length ? 'Nhân viên đang ở trạng thái kết thúc và không thể chuyển tiếp.' : undefined}
+                                >
                                     <Shield className="mr-1.5 h-4 w-4" />
                                     Thay đổi trạng thái
                                 </Button>
@@ -502,33 +525,13 @@ function EmployeeDetailContent({
                                     <Save className="mr-1.5 h-4 w-4" />
                                     {saving ? 'Đang lưu…' : 'Lưu'}
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setActionError(null); setEditErrors({}); }}>
-                                    <X className="mr-1.5 h-4 w-4" />
-                                    Hủy
-                                </Button>
-                            </>
-                        )}
-                        {statusChangeMode && (
-                            <>
-                                <Button size="sm" onClick={handleStatusChange} disabled={saving || !statusForm.newStatus || !statusForm.effectiveDate}>
-                                    <Save className="mr-1.5 h-4 w-4" />
-                                    {saving ? 'Đang xử lý…' : 'Xác nhận'}
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => { setStatusChangeMode(false); setActionError(null); setStatusErrors({}); }}>
+                                <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setEditErrors({}); }}>
                                     <X className="mr-1.5 h-4 w-4" />
                                     Hủy
                                 </Button>
                             </>
                         )}
                     </div>
-
-                    {/* Action error */}
-                    {actionError && (
-                        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
-                            <AlertCircle className="h-4 w-4 shrink-0" />
-                            {actionError}
-                        </div>
-                    )}
 
                     {/* Profile Summary */}
                     <Card className="rounded-xl border-border shadow-none">
@@ -588,17 +591,18 @@ function EmployeeDetailContent({
                                     />
                                     <div className="space-y-1.5">
                                         <FormLabel htmlFor="edit-gender">Giới tính</FormLabel>
-                                        <Select
+                                        <select
                                             id="edit-gender"
+                                            className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                             value={formData.gender}
-                                            onValueChange={(v) => setFormData(prev => ({ ...prev, gender: v as Gender }))}
+                                            onChange={(event) => setFormData(prev => ({ ...prev, gender: event.target.value as Gender }))}
                                             disabled={false}
                                         >
                                             <option value="">Chọn giới tính</option>
                                             {Object.entries(GENDER_LABELS).map(([key, label]) => (
                                                 <option key={key} value={key}>{label}</option>
                                             ))}
-                                        </Select>
+                                        </select>
                                     </div>
                                     <EditField
                                         label="Số điện thoại"
@@ -677,6 +681,7 @@ function EmployeeDetailContent({
                         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <FieldRow label="Loại lao động" value={(EMPLOYMENT_TYPE_LABELS as Record<string, string>)[employee.employmentType]} />
                             <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]} />
+                            <FieldRow label="Ngày kết thúc" value={employee.endDate ? new Date(employee.endDate).toLocaleDateString('vi-VN') : undefined} />
                             <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
                             <FieldRow label="Chức danh" value={employee.positionName || undefined} />
                             <FieldRow label="Quản lý trực tiếp" value={employee.managerName || undefined} />
@@ -711,7 +716,7 @@ function EmployeeDetailContent({
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-xs text-muted-foreground">Bởi {record.changedBy}</p>
+                                                <p className="text-xs text-muted-foreground">Bởi {record.changedByName || record.changedBy}</p>
                                                 <p className="text-xs text-muted-foreground">
                                                     {new Date(record.createdAt).toLocaleDateString('vi-VN')}
                                                 </p>
@@ -723,74 +728,93 @@ function EmployeeDetailContent({
                         </CardContent>
                     </Card>
 
-                    {/* Status Change Form */}
-                    {statusChangeMode && (
-                        <Card className="rounded-xl border-border shadow-none">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                                        <Shield className="h-4 w-4" />
-                                    </div>
-                                    <CardTitle className="text-base">Thay đổi trạng thái nhân sự</CardTitle>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <div className="space-y-1.5">
-                                        <FormLabel htmlFor="status-new" required>
-                                            Trạng thái mới
-                                        </FormLabel>
-                                        <Select
-                                            id="status-new"
-                                            value={statusForm.newStatus}
-                                            onValueChange={(v) => setStatusForm(prev => ({ ...prev, newStatus: v as EmploymentStatus }))}
-                                            disabled={!validTransitions.length}
-                                        >
-                                            <option value="">Chọn trạng thái mới</option>
-                                            {validTransitions.map((status) => (
-                                                <option key={status} value={status}>
-                                                    {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[status]}
-                                                </option>
-                                            ))}
-                                        </Select>
-                                        {!validTransitions.length && (
-                                            <p className="text-xs text-muted-foreground">
-                                                Không có trạng thái nào có thể chuyển đổi từ {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}.
-                                            </p>
-                                        )}
-                                        <FormError message={statusErrors.newStatus} />
-                                    </div>
-                                    <EditField
-                                        label="Ngày hiệu lực"
-                                        required
-                                        value={statusForm.effectiveDate}
-                                        onChange={(v) => setStatusForm(prev => ({ ...prev, effectiveDate: v }))}
-                                        onBlur={() => {
-                                            const error = validateStatusEffectiveDate(statusForm.effectiveDate);
-                                            setStatusErrors(prev => ({ ...prev, effectiveDate: error }));
-                                        }}
-                                        type="date"
-                                        error={statusErrors.effectiveDate}
-                                    />
-                                    <div className="space-y-1.5 sm:col-span-2">
-                                        <Label htmlFor="status-reason" className="text-xs font-medium text-muted-foreground">
-                                            Lý do
-                                        </Label>
-                                        <textarea
-                                            id="status-reason"
-                                            className="block w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                                            rows={3}
-                                            value={statusForm.reason}
-                                            onChange={(e) => setStatusForm(prev => ({ ...prev, reason: e.target.value }))}
-                                            placeholder="Nhập lý do thay đổi trạng thái..."
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
                 </>
             ) : null}
         </div>
-    );
+
+        <Dialog open={statusChangeMode} onOpenChange={(open) => { if (!open) closeStatusDialog(); }}>
+            <DialogContent
+                className="max-w-[520px] gap-0"
+                backdropClassName="bg-black/35 backdrop-blur-[5px]"
+                showCloseButton={!saving}
+                initialFocus={() => document.getElementById('status-new')}
+                finalFocus={() => document.getElementById('employee-status-trigger')}
+            >
+                <DialogHeader className="border-b border-border px-5 py-5 pr-14">
+                    <div className="flex items-start gap-3">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Shield className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <DialogTitle>Thay đổi trạng thái</DialogTitle>
+                            <DialogDescription className="mt-1.5">
+                                Trạng thái hiện tại: {employee ? (EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus] : '—'}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-6">
+                    <div className="space-y-1.5">
+                        <FormLabel htmlFor="status-new" required>Trạng thái mới</FormLabel>
+                        <select
+                            id="status-new"
+                            className="block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            value={statusForm.newStatus}
+                            onChange={(event) => {
+                                setStatusForm(prev => ({ ...prev, newStatus: event.target.value as EmploymentStatus }));
+                                setStatusErrors(prev => ({ ...prev, newStatus: null }));
+                            }}
+                            disabled={saving || !validTransitions.length}
+                            aria-invalid={!!statusErrors.newStatus}
+                        >
+                            <option value="">Chọn trạng thái mới</option>
+                            {validTransitions.map((status) => <option key={status} value={status}>{(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[status]}</option>)}
+                        </select>
+                        <FormError message={statusErrors.newStatus} />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <FormLabel htmlFor="status-effective-date" required>Ngày hiệu lực</FormLabel>
+                        <Input
+                            id="status-effective-date"
+                            type="date"
+                            className="h-11"
+                            value={statusForm.effectiveDate}
+                            onChange={(event) => {
+                                setStatusForm(prev => ({ ...prev, effectiveDate: event.target.value }));
+                                setStatusErrors(prev => ({ ...prev, effectiveDate: null }));
+                            }}
+                            onBlur={() => setStatusErrors(prev => ({ ...prev, effectiveDate: validateStatusEffectiveDate(statusForm.effectiveDate) }))}
+                            disabled={saving}
+                            aria-invalid={!!statusErrors.effectiveDate}
+                        />
+                        <FormError message={statusErrors.effectiveDate} />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label htmlFor="status-reason" className="text-sm font-medium">Lý do</Label>
+                        <textarea
+                            id="status-reason"
+                            className="block min-h-24 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                            value={statusForm.reason}
+                            onChange={(event) => setStatusForm(prev => ({ ...prev, reason: event.target.value }))}
+                            maxLength={500}
+                            disabled={saving}
+                            placeholder="Nhập lý do thay đổi trạng thái..."
+                        />
+                        <p className="text-right text-xs text-muted-foreground">{statusForm.reason.length}/500</p>
+                    </div>
+                </div>
+
+                <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">
+                    <Button type="button" variant="outline" onClick={closeStatusDialog} disabled={saving}>Hủy</Button>
+                    <Button type="button" onClick={handleStatusChange} disabled={saving || !validTransitions.length}>
+                        {saving ? 'Đang xử lý…' : 'Xác nhận'}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+
+    </>;
 }

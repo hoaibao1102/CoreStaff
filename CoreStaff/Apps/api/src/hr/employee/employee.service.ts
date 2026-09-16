@@ -54,6 +54,17 @@ export class EmployeeService {
 		return this.resolveNames(organizationId, rows);
 	}
 
+	/** Accounts in the tenant that do not have an employee profile yet. */
+	async listEligibleUsers(organizationId: string) {
+		const linked = await this.profileModel.find({ organizationId }).select('userId').lean();
+		const linkedIds = linked.map(row => row.userId);
+		return this.userModel
+			.find({ organizationId, _id: { $nin: linkedIds }, status: 'ACTIVE' })
+			.select('_id fullName email phone employeeCode')
+			.sort({ fullName: 1 })
+			.lean();
+	}
+
 	async findOne(organizationId: string, id: string) {
 		const doc = await this.profileModel.findOne({ _id: id, organizationId }).lean();
 		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
@@ -182,6 +193,9 @@ export class EmployeeService {
 
 function mapDuplicateKey(err: unknown): unknown {
 	if (err && typeof err === 'object' && (err as { code?: number }).code === DUPLICATE_KEY_ERROR) {
+		if ((err as { keyPattern?: Record<string, unknown> }).keyPattern?.userId) {
+			return new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
+		}
 		return new ConflictException('EMPLOYEE_CODE_TAKEN');
 	}
 	return err;

@@ -13,7 +13,56 @@ import {
     validateTaxCode,
     validateSocialInsuranceCode,
     validateBankAccount,
+    validateOptionalDateOfBirth,
+    validateAddress,
 } from '../validation';
+
+function validateField(field: keyof EmployeeFormState, form: EmployeeFormState): string | null {
+    let errorMessage: string | null = null;
+    switch (field) {
+        case 'userId':
+            errorMessage = form.userId.trim() ? null : 'Vui lòng chọn tài khoản nhân viên.';
+            break;
+        case 'phone':
+            errorMessage = form.phone.trim() ? validatePhone(form.phone) : null;
+            break;
+        case 'email':
+            errorMessage = form.email.trim() ? validateEmail(form.email) : null;
+            break;
+        case 'joinDate':
+            errorMessage = validateJoinDate(form.joinDate);
+            break;
+        case 'employeeCode':
+            errorMessage = validateEmployeeCode(form.employeeCode);
+            break;
+        case 'departmentId':
+            errorMessage = form.departmentId.trim() ? validateDepartmentId(form.departmentId) : null;
+            break;
+        case 'dateOfBirth':
+            errorMessage = validateOptionalDateOfBirth(form.dateOfBirth);
+            break;
+        case 'address':
+            errorMessage = validateAddress(form.address);
+            break;
+        case 'positionId':
+            errorMessage = form.positionId.trim() ? validatePositionId(form.positionId) : null;
+            break;
+        case 'citizenId':
+            errorMessage = validateCitizenId(form.citizenId);
+            break;
+        case 'taxCode':
+            errorMessage = validateTaxCode(form.taxCode);
+            break;
+        case 'socialInsuranceCode':
+            errorMessage = validateSocialInsuranceCode(form.socialInsuranceCode);
+            break;
+        case 'bankAccount':
+            errorMessage = validateBankAccount(form.bankAccount);
+            break;
+    }
+
+    return errorMessage;
+}
 
 /**
  * useFormEmployee — hook quản lý state và validation cho form tạo/sửa nhân viên.
@@ -31,58 +80,16 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
     const updateField = useCallback((field: keyof EmployeeFormState, value: string) => {
         setForm((prev) => ({ ...prev, [field]: value }));
 
-        // Xóa lỗi field khi người dùng sửa
-        setErrors((prev) => ({ ...prev, [field]: null, general: prev.general }));
-    }, []);
+        // Chỉ xóa lỗi khi giá trị đã hợp lệ; chưa tương tác thì chưa báo lỗi.
+        setErrors((prev) => ({ ...prev, [field]: touched[field] || prev[field] ? validateField(field, { ...form, [field]: value }) : null }));
+    }, [form, touched]);
 
     const blurField = useCallback((field: keyof EmployeeFormState) => {
         setTouched((prev) => ({ ...prev, [field]: true }));
 
         // Validate field khi blur
-        const newErrors = { ...errors };
-        let errorMessage: string | null = null;
-
-        switch (field) {
-            case 'phone':
-                errorMessage = validatePhone(form.phone);
-                break;
-            case 'email':
-                errorMessage = validateEmail(form.email);
-                break;
-            case 'joinDate':
-                errorMessage = validateJoinDate(form.joinDate);
-                break;
-            case 'employeeCode':
-                errorMessage = validateEmployeeCode(form.employeeCode);
-                break;
-            case 'departmentId':
-                errorMessage = validateDepartmentId(form.departmentId);
-                break;
-            case 'positionId':
-                errorMessage = validatePositionId(form.positionId);
-                break;
-            case 'citizenId':
-                errorMessage = validateCitizenId(form.citizenId);
-                break;
-            case 'taxCode':
-                errorMessage = validateTaxCode(form.taxCode);
-                break;
-            case 'socialInsuranceCode':
-                errorMessage = validateSocialInsuranceCode(form.socialInsuranceCode);
-                break;
-            case 'bankAccount':
-                errorMessage = validateBankAccount(form.bankAccount);
-                break;
-        }
-
-        if (errorMessage) {
-            newErrors[field as keyof EmployeeFormErrors] = errorMessage;
-        } else {
-            delete newErrors[field as keyof EmployeeFormErrors];
-        }
-
-        setErrors(newErrors);
-    }, [errors, form]);
+        setErrors(prev => ({ ...prev, [field]: validateField(field, form) }));
+    }, [form]);
 
     const sanitizeForm = useCallback(() => {
         return {
@@ -97,33 +104,10 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
     const validateAll = useCallback((): boolean => {
         const validationErrors: EmployeeFormErrors = {};
 
-        // Required fields
-        const userIdError = !form.userId.trim() ? 'Vui lòng nhập User ID.' : null;
-        const employeeCodeError = validateEmployeeCode(form.employeeCode);
-        const joinDateError = validateJoinDate(form.joinDate);
-        const phoneError = validatePhone(form.phone);
-        const emailError = validateEmail(form.email);
-        const departmentError = validateDepartmentId(form.departmentId);
-        const positionError = validatePositionId(form.positionId);
-
-        // Optional but validated fields
-        const citizenIdError = form.citizenId.trim() ? validateCitizenId(form.citizenId) : null;
-        const taxCodeError = form.taxCode.trim() ? validateTaxCode(form.taxCode) : null;
-        const socialInsuranceError = form.socialInsuranceCode.trim() ? validateSocialInsuranceCode(form.socialInsuranceCode) : null;
-        const bankAccountError = form.bankAccount.trim() ? validateBankAccount(form.bankAccount) : null;
-
-        // Collect all errors
-        if (userIdError) validationErrors.userId = userIdError;
-        if (employeeCodeError) validationErrors.employeeCode = employeeCodeError;
-        if (joinDateError) validationErrors.joinDate = joinDateError;
-        if (phoneError) validationErrors.phone = phoneError;
-        if (emailError) validationErrors.email = emailError;
-        if (departmentError) validationErrors.departmentId = departmentError;
-        if (positionError) validationErrors.positionId = positionError;
-        if (citizenIdError) validationErrors.citizenId = citizenIdError;
-        if (taxCodeError) validationErrors.taxCode = taxCodeError;
-        if (socialInsuranceError) validationErrors.socialInsuranceCode = socialInsuranceError;
-        if (bankAccountError) validationErrors.bankAccount = bankAccountError;
+        for (const field of Object.keys(form) as (keyof EmployeeFormState)[]) {
+            const message = validateField(field, form);
+            if (message) validationErrors[field] = message;
+        }
 
         setErrors(validationErrors);
         setTouched(Object.keys(form).reduce((acc, key) => ({ ...acc, [key]: true }), {} as Record<string, boolean>));
@@ -136,12 +120,12 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>) {
         return {
             userId: sanitized.userId,
             employeeCode: sanitized.employeeCode,
-            employmentType: sanitized.employmentType,
+            employmentType: sanitized.employmentType || undefined,
             joinDate: sanitized.joinDate,
             dateOfBirth: sanitized.dateOfBirth || undefined,
             gender: sanitized.gender || undefined,
             phone: sanitized.phone || undefined,
-            email: sanitized.email || undefined,
+            email: sanitized.email.trim() || undefined,
             address: sanitized.address.trim() || undefined,
             citizenId: sanitized.citizenId.trim() || undefined,
             taxCode: sanitized.taxCode.trim() || undefined,

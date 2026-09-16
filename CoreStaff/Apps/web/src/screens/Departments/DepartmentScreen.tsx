@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { AuthUser } from '@/services/auth';
 import { getDepartments, hrErrorMessage, type Department } from '@/services/hrService';
 import { DepartmentPanel } from './DepartmentPanel';
+import { toast } from '@/components/toast';
 
 export function DepartmentStatus({ active }: { active: boolean }) {
   return <Badge variant="secondary" className={active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'text-muted-foreground'}>
@@ -32,7 +33,6 @@ function DepartmentList({ apiBase, organizationId, canManage }: { apiBase: strin
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [panel, setPanel] = useState<{ id?: string } | null>(null);
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -60,10 +60,8 @@ function DepartmentList({ apiBase, organizationId, canManage }: { apiBase: strin
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Phòng ban</h1>
         <p className="mt-2 text-sm text-muted-foreground">{canManage ? 'Quản lý phòng ban và trạng thái hoạt động trong tổ chức.' : 'Tra cứu phòng ban trong tổ chức của bạn.'}</p>
       </div>
-      {canManage && <Button className="min-h-11" onClick={() => { setNotice(''); setPanel({}); }}><Plus aria-hidden="true" />Tạo phòng ban</Button>}
+      {canManage && <Button className="min-h-11" onClick={() => setPanel({})}><Plus aria-hidden="true" />Tạo phòng ban</Button>}
     </div>
-
-    {notice && <Alert role="status"><AlertDescription>{notice}</AlertDescription></Alert>}
 
     <div className="min-w-0 rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-end sm:p-6">
@@ -100,7 +98,7 @@ function DepartmentList({ apiBase, organizationId, canManage }: { apiBase: strin
               <TableCell className="pl-6 font-medium">{row.code}</TableCell>
               <TableCell className="min-w-48 max-w-sm whitespace-normal break-words">{row.name}</TableCell>
               <TableCell><DepartmentStatus active={row.active} /></TableCell>
-              <TableCell className="pr-6 text-right"><Button variant="ghost" className="min-h-11 text-primary" aria-label={`Xem phòng ban ${row.name}`} onClick={() => { setNotice(''); setPanel({ id: row._id }); }}>Xem chi tiết<ChevronRight aria-hidden="true" /></Button></TableCell>
+              <TableCell className="pr-6 text-right"><Button variant="ghost" className="min-h-11 text-primary" aria-label={`Xem phòng ban ${row.name}`} onClick={() => setPanel({ id: row._id })}>Xem chi tiết<ChevronRight aria-hidden="true" /></Button></TableCell>
             </TableRow>)}</TableBody>
           </Table>
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border p-4 sm:px-6">
@@ -114,7 +112,7 @@ function DepartmentList({ apiBase, organizationId, canManage }: { apiBase: strin
         </>}
     </div>
     {panel && <DepartmentPanel apiBase={apiBase} organizationId={organizationId} canManage={canManage} departmentId={panel.id} onClose={() => setPanel(null)} onSaved={message => {
-      setPanel(null); setNotice(message); setRevision(value => value + 1);
+      setPanel(null); toast.success(message); setRevision(value => value + 1);
     }} />}
   </div>;
 }

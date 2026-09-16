@@ -159,6 +159,16 @@ function buildService(
 }
 
 describe('EmployeeService.create (TASK-020)', () => {
+	it.each([
+		[{ organizationId: 1, userId: 1 }, 'EMPLOYEE_PROFILE_ALREADY_EXISTS'],
+		[{ organizationId: 1, employeeCode: 1 }, 'EMPLOYEE_CODE_TAKEN'],
+	])('maps concurrent unique-key conflicts to the correct field: %s', async (keyPattern, message) => {
+		const profiles = { exists: jest.fn().mockResolvedValue(null), create: jest.fn().mockRejectedValue({ code: 11000, keyPattern }) };
+		const users = { exists: jest.fn().mockResolvedValue({ _id: 'user1' }) };
+		const svc = new EmployeeService(profiles as never, {} as never, {} as never, {} as never, users as never, fakeConnection() as never);
+		await expect(svc.create('org1', { userId: 'user1', employeeCode: 'NV-001', joinDate: '2026-01-01' }))
+			.rejects.toThrow(message);
+	});
 	it('creates a profile defaulting to PROBATION (SRS §15.2A)', async () => {
 		const profiles: ProfileRow[] = [];
 		const svc = buildService(profiles, []);
@@ -205,6 +215,27 @@ describe('EmployeeService.create (TASK-020)', () => {
 				departmentId: 'missing',
 			} as never),
 		).rejects.toBeInstanceOf(NotFoundException);
+	});
+});
+
+describe('EmployeeService.listEligibleUsers', () => {
+	it('returns only safe account fields for active, unlinked users in the tenant', async () => {
+		const profileLean = jest.fn().mockResolvedValue([{ userId: 'user1' }]);
+		const profileSelect = jest.fn().mockReturnValue({ lean: profileLean });
+		const profileModel = { find: jest.fn().mockReturnValue({ select: profileSelect }) };
+		const userLean = jest.fn().mockResolvedValue([{ _id: 'user2', fullName: 'Nhân viên mới', email: 'new@example.com' }]);
+		const userSort = jest.fn().mockReturnValue({ lean: userLean });
+		const userSelect = jest.fn().mockReturnValue({ sort: userSort });
+		const userModel = { find: jest.fn().mockReturnValue({ select: userSelect }) };
+		const svc = new EmployeeService(profileModel as never, {} as never, {} as never, {} as never, userModel as never, fakeConnection() as never);
+
+		const result = await svc.listEligibleUsers('org1');
+
+		expect(profileModel.find).toHaveBeenCalledWith({ organizationId: 'org1' });
+		expect(userModel.find).toHaveBeenCalledWith({ organizationId: 'org1', _id: { $nin: ['user1'] }, status: 'ACTIVE' });
+		expect(userSelect).toHaveBeenCalledWith('_id fullName email phone employeeCode');
+		expect(result).toEqual([{ _id: 'user2', fullName: 'Nhân viên mới', email: 'new@example.com' }]);
+		expect(result[0]).not.toHaveProperty('passwordHash');
 	});
 });
 

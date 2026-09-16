@@ -6,6 +6,7 @@ import { navigationEvent } from './components/AppLink';
 import { resolveApiBase, type ApiSource, type HealthResponse } from './config/api';
 import { type AuthUser, me } from './services/auth';
 import { forgetSession, hasRememberedSession } from './lib/session';
+import { ToastViewport } from './components/toast';
 
 function BootScreen() {
   return (
@@ -91,7 +92,7 @@ export default function App() {
 
   if (booting) return <BootScreen />;
 
-  return (
+  return <>
     <AuthScreen
       apiBase={apiBase}
       bootError={bootError}
@@ -116,5 +117,6 @@ export default function App() {
         )
       }
     </AuthScreen>
-  );
+    <ToastViewport />
+  </>;
 }

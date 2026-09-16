@@ -18,7 +18,7 @@ import { Skeleton } from '../../components/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '../../components/alert';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
 import { EMPLOYMENT_STATUS_LABELS } from '../../lib/types';
-import { hrErrorMessage, paginateEmployees } from '../../services/hrService';
+import { hrErrorMessage, paginateEmployees, type EligibleEmployeeAccount } from '../../services/hrService';
 import { useHrResource } from '../../lib/useHrResource';
 import { EmployeeTable } from './components/EmployeeTable';
 import { EmployeeCreateDialog } from './components/EmployeeCreateDialog';
@@ -200,13 +200,22 @@ export function EmployeeDirectoryScreen({
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [notice, setNotice] = useState('');
 
   const loader = useCallback(async () => {
     const [employees, departments, positions] = await Promise.all([
       import('../../services/hrService').then(m => m.listEmployees(apiBase!, status, departmentId)),
       import('../../services/hrService').then(m => m.getDepartments(apiBase!, true)),
       import('../../services/hrService').then(m => m.getPositions(apiBase!, true)),
+    ]);
+    // Eligible accounts is non-critical — don't let a 500 break the whole page
+    const [accountResult, managers] = await Promise.all([
+      import('../../services/hrService')
+        .then(m => m.listEligibleEmployeeAccounts(apiBase!))
+        .then(accounts => ({ accounts, failed: false }))
+        .catch(() => ({ accounts: [] as EligibleEmployeeAccount[], failed: true })),
+      status || departmentId
+        ? import('../../services/hrService').then(m => m.listEmployees(apiBase!, '', ''))
+        : Promise.resolve(employees),
     ]);
     // Build lookup maps for client-side name resolution
     const deptMap = new Map(departments.map(d => [d._id, d.name]));
@@ -219,7 +228,8 @@ export function EmployeeDirectoryScreen({
         departmentName: row.departmentId ? (deptMap.get(row.departmentId) ?? row.departmentName) : undefined,
         positionName: row.positionId ? (posMap.get(row.positionId) ?? row.positionName) : undefined,
       }));
-    return { rows: enriched, departments, positions };
+    return { rows: enriched, departments, positions, accounts: accountResult.accounts, accountsFailed: accountResult.failed,
+      managers: managers.filter(row => row.organizationId === user.organizationId) };
   }, [apiBase, status, departmentId, user.organizationId]);
 
   const resource = useHrResource(allowed && apiBase ? loader : null);
@@ -229,6 +239,7 @@ export function EmployeeDirectoryScreen({
   const employees = resource.data?.rows ?? [];
   const departments = resource.data?.departments ?? [];
   const positions = resource.data?.positions ?? [];
+  const accounts = resource.data?.accounts ?? [];
   const result = paginateEmployees(employees, query, page);
   const total = result.total;
   const totalPages = result.totalPages;
@@ -288,18 +299,12 @@ export function EmployeeDirectoryScreen({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button className="min-h-11" onClick={() => { setNotice(''); setCreateOpen(true); }}>
+          <Button className="min-h-11" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             Tạo hồ sơ
           </Button>
         </div>
       </div>
-
-      {notice && (
-        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-          {notice}
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -343,10 +348,13 @@ export function EmployeeDirectoryScreen({
             open={createOpen}
             departments={departments}
             positions={positions}
+            accounts={accounts}
+            managers={resource.data?.managers ?? []}
+            accountsFailed={resource.data?.accountsFailed}
+            onRetryAccounts={loadEmployees}
             onOpenChange={setCreateOpen}
             onCreated={() => {
               setCreateOpen(false);
-              setNotice('Đã tạo hồ sơ nhân sự. API đặt trạng thái ban đầu là thử việc.');
               loadEmployees();
             }}
           />

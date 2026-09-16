@@ -1,4 +1,4 @@
-import type { EmployeeProfile, Department, Position, EmployeeCreateDto } from '../../services/hrService';
+import type { EmployeeProfile, Department, Position, EmployeeCreateDto, EligibleEmployeeAccount } from '../../services/hrService';
 
 export type { EmployeeProfile, Department, Position };
 
@@ -10,7 +10,7 @@ export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export interface EmployeeFormState {
     userId: string;
     employeeCode: string;
-    employmentType: EmploymentType;
+    employmentType: EmploymentType | '';
     joinDate: string;
     dateOfBirth: string;
     gender: Gender | '';
@@ -31,8 +31,11 @@ export interface EmployeeFormState {
 export interface EmployeeFormErrors {
     userId?: string | null;
     employeeCode?: string | null;
+    employmentType?: string | null;
     joinDate?: string | null;
     dateOfBirth?: string | null;
+    gender?: string | null;
+    address?: string | null;
     phone?: string | null;
     email?: string | null;
     citizenId?: string | null;
@@ -42,13 +45,12 @@ export interface EmployeeFormErrors {
     departmentId?: string | null;
     positionId?: string | null;
     directManagerId?: string | null;
+    workplaceId?: string | null;
     general?: string | null;
 }
 
 /** DTO gửi lên server khi tạo nhân viên */
-export interface EmployeeCreatePayload extends Omit<EmployeeCreateDto, 'employmentType'> {
-    employmentType: EmploymentType;
-}
+export type EmployeeCreatePayload = EmployeeCreateDto;
 
 /** Props của dialog tạo nhân viên */
 export interface EmployeeCreateDialogProps {
@@ -56,6 +58,10 @@ export interface EmployeeCreateDialogProps {
     open: boolean;
     departments: Department[];
     positions: Position[];
+    accounts: EligibleEmployeeAccount[];
+    managers: EmployeeProfile[];
+    accountsFailed?: boolean;
+    onRetryAccounts?: () => void;
     onOpenChange: (open: boolean) => void;
     onCreated: (employee: EmployeeProfile) => void;
 }

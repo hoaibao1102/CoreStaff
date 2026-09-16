@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/skeleton';
 import { FormLabel } from '@/components/form/FormLabel';
 import { FormError } from '@/components/form/FormError';
 import { createDepartment, getDepartmentById, hrErrorMessage, setDepartmentActive, updateDepartment, type Department } from '@/services/hrService';
+import { toast } from '@/components/toast';
 
 interface DepartmentPanelProps {
   apiBase: string;
@@ -66,6 +67,7 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
     setFieldErrors(errors); setError(null);
     if (errors.code || errors.name) {
       document.getElementById(errors.code ? 'department-code' : 'department-name')?.focus();
+      toast.warning('Vui lòng kiểm tra thông tin', 'Một số trường chưa đầy đủ hoặc chưa đúng.');
       return;
     }
     submitting.current = true;
@@ -86,7 +88,11 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
       if ((err as { code?: string })?.code === 'DEPARTMENT_CODE_TAKEN') {
         setFieldErrors({ code: 'Mã phòng ban đã tồn tại trong tổ chức. Vui lòng chọn mã khác.' });
         document.getElementById('department-code')?.focus();
-      } else setError(hrErrorMessage(err));
+        toast.error('Không thể lưu phòng ban', 'Mã phòng ban này đã được sử dụng.');
+      } else {
+        const message = hrErrorMessage(err);
+        toast.error('Không thể lưu phòng ban', message);
+      }
     } finally { submitting.current = false; setSaving(false); }
   }
 
@@ -97,7 +103,10 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
     try {
       await setDepartmentActive(apiBase, department._id, !department.active);
       onSaved(department.active ? 'Đã vô hiệu hóa phòng ban.' : 'Đã kích hoạt lại phòng ban.');
-    } catch (err) { setError(hrErrorMessage(err)); }
+    } catch (err) {
+      const message = hrErrorMessage(err);
+      toast.error('Không thể cập nhật trạng thái', message);
+    }
     finally { submitting.current = false; setSaving(false); }
   }
 

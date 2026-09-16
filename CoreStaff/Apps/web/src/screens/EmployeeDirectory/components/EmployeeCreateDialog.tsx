@@ -1,14 +1,16 @@
-import { useState, useCallback } from 'react';
-import { CircleAlert, LoaderCircle } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
-import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
 import { Button } from '../../../components/button';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
 import { FormInputField } from '../../../components/form/FormInputField';
 import { FormSelectField } from '../../../components/form/FormSelectField';
 import { useFormEmployee } from '../hooks/useEmployeeForm';
 import type { EmployeeCreateDialogProps } from '../types';
 import { EMPLOYMENT_TYPE_LABELS, GENDER_LABELS, type EmploymentType, type Gender } from '../../../lib/types';
 import { createEmployee } from '../../../services/hrService';
+import { mapEmployeeValidationErrors } from '../apiErrors';
+import { toast } from '../../../components/toast';
 
 /* ───────── API Error Mapping ───────── */
 
@@ -24,7 +26,7 @@ function mapApiError(error: unknown): ApiErrorInfo {
     const byCode: Record<string, ApiErrorInfo> = {
         USER_NOT_FOUND: {
             title: 'Không tìm thấy tài khoản',
-            message: 'User ID không tồn tại trong tổ chức hiện tại. Hãy kiểm tra lại ID của tài khoản đăng nhập.',
+            message: 'Tài khoản đã chọn không còn khả dụng trong tổ chức. Vui lòng chọn lại.',
             field: 'userId',
         },
         EMPLOYEE_PROFILE_ALREADY_EXISTS: {
@@ -49,12 +51,12 @@ function mapApiError(error: unknown): ApiErrorInfo {
         },
         MANAGER_NOT_FOUND: {
             title: 'Không tìm thấy quản lý trực tiếp',
-            message: 'User ID quản lý không tồn tại trong tổ chức. Hãy kiểm tra lại.',
+            message: 'Quản lý trực tiếp đã chọn không còn khả dụng. Vui lòng chọn lại.',
             field: 'directManagerId',
         },
         VALIDATION_FAILED: {
-            title: 'Thông tin chưa hợp lệ',
-            message: 'Hãy kiểm tra lại các trường có dấu * và sửa theo hướng dẫn.',
+            title: 'Vui lòng kiểm tra thông tin',
+            message: 'Một số thông tin chưa hợp lệ. Vui lòng kiểm tra lại thông tin đã nhập.',
         },
     };
 
@@ -85,6 +87,14 @@ function positionOptions(positions: EmployeeCreateDialogProps['positions']) {
     }));
 }
 
+function accountOptions(accounts: EmployeeCreateDialogProps['accounts']) {
+    return accounts.map(account => ({ value: account._id, label: `${account.fullName} — ${account.email}` }));
+}
+
+function managerOptions(managers: EmployeeCreateDialogProps['managers']) {
+    return managers.map(manager => ({ value: manager.userId, label: `${manager.fullName || manager.employeeCode} — ${manager.employeeCode}` }));
+}
+
 /* ───────── Main Dialog Component ───────── */
 
 export function EmployeeCreateDialog({
@@ -92,13 +102,18 @@ export function EmployeeCreateDialog({
     open,
     departments,
     positions,
+    accounts,
+    managers,
+    accountsFailed,
+    onRetryAccounts,
     onOpenChange,
     onCreated,
 }: EmployeeCreateDialogProps) {
+    const formRef = useRef<HTMLFormElement>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const {
         form,
         errors,
-        touched,
         submitting,
         updateField,
         blurField,
@@ -114,36 +129,51 @@ export function EmployeeCreateDialog({
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
+        if (submitting.current) return;
 
         if (!validateAll()) {
-            // Focus vào field lỗi đầu tiên
-            const firstErrorField = Object.keys(errors).find((key) => key !== 'general' && errors[key as keyof typeof errors]);
-            if (firstErrorField) {
-                setTimeout(() => document.getElementById(`create-${firstErrorField}`)?.focus(), 0);
-            }
+            toast.warning('Vui lòng kiểm tra thông tin', 'Một số trường chưa đầy đủ hoặc chưa đúng.');
+            requestAnimationFrame(() => {
+                const field = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+                field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                field?.focus();
+            });
             return;
         }
 
         setErrors({ general: null });
+        submitting.current = true;
+        setIsSubmitting(true);
         try {
             await handleCreated();
             resetForm();
+            toast.success('Tạo hồ sơ thành công', 'Hồ sơ nhân sự đã được tạo.');
         } catch (err) {
             const apiError = mapApiError(err);
-            setErrors((prev: typeof errors) => ({ ...prev, [apiError.field || 'general']: apiError.message }));
-            if (apiError.field) {
-                setTimeout(() => document.getElementById(`create-${apiError.field}`)?.focus(), 0);
-            }
+            const fieldErrors = mapEmployeeValidationErrors(err);
+            const firstField = Object.keys(fieldErrors)[0] || apiError.field;
+            setErrors((prev: typeof errors) => ({ ...prev, [apiError.field || 'general']: apiError.message, ...fieldErrors }));
+            toast.error(apiError.title, apiError.message);
+            if (firstField) requestAnimationFrame(() => {
+                const field = document.getElementById(`create-${firstField}`);
+                field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                field?.focus();
+            });
+        } finally {
+            submitting.current = false;
+            setIsSubmitting(false);
         }
-    }, [validateAll, errors, handleCreated, resetForm, setErrors]);
+    }, [validateAll, handleCreated, resetForm, setErrors, submitting]);
 
-    const selectClass = 'block min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm';
 
     return (
         <Dialog
             open={open}
             onOpenChange={(next: boolean) => {
-                if (!submitting.current) onOpenChange(next);
+                if (!submitting.current) {
+                    if (!next) resetForm();
+                    onOpenChange(next);
+                }
             }}
         >
             <DialogContent className="max-w-3xl gap-0">
@@ -154,34 +184,52 @@ export function EmployeeCreateDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate aria-busy={submitting.current}>
+                <form ref={formRef} className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
                     <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 py-6 sm:px-6">
-                        {/* General error */}
-                        {errors.general && (
-                            <Alert variant="destructive" tabIndex={-1} className="border-destructive/30 bg-destructive/5 px-4 py-3">
-                                <CircleAlert aria-hidden="true" />
-                                <AlertTitle>{errors.general}</AlertTitle>
-                                <AlertDescription>Hãy kiểm tra các trường có đánh dấu lỗi phía dưới.</AlertDescription>
-                            </Alert>
-                        )}
-
+                        <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">Các trường có dấu <span className="font-semibold text-destructive">*</span> là bắt buộc. Những trường còn lại có thể bổ sung sau.</p>
                         {/* Account & Code Section */}
                         <section className="space-y-4">
                             <div>
                                 <h3 className="font-semibold text-foreground">Tài khoản và mã nhân viên</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">Nhập tài khoản đã tồn tại trong tổ chức và mã nhân viên duy nhất.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">Chọn tài khoản đã tồn tại trong tổ chức và nhập mã nhân viên duy nhất.</p>
                             </div>
+                            {accountsFailed && (
+                                <Alert className="border-amber-300 bg-amber-50/70 px-3 py-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                                    <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 text-amber-600 dark:text-amber-400" />
+                                    <div className="min-w-0">
+                                        <AlertTitle>Chưa tải được tài khoản nhân viên</AlertTitle>
+                                        <AlertDescription className="mt-0.5 text-amber-800 dark:text-amber-200">
+                                            Kiểm tra kết nối với máy chủ rồi thử lại.
+                                        </AlertDescription>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="mt-3 min-h-9 border-amber-300 bg-background px-3 text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950"
+                                            onClick={onRetryAccounts}
+                                        >
+                                            <RefreshCw aria-hidden="true" className="size-4" />
+                                            Thử tải lại
+                                        </Button>
+                                    </div>
+                                </Alert>
+                            )}
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <FormInputField
+                                <FormSelectField
                                     id="create-userId"
-                                    label="User ID"
+                                    label="Tài khoản nhân viên"
                                     required
                                     value={form.userId}
-                                    onChange={(e) => updateField('userId', e.target.value)}
+                                    onChange={(e) => {
+                                        const account = accounts.find(item => item._id === e.target.value);
+                                        updateField('userId', e.target.value);
+                                        if (!form.email || form.email === accounts.find(item => item._id === form.userId)?.email) updateField('email', account?.email ?? '');
+                                        if (!form.phone || form.phone === accounts.find(item => item._id === form.userId)?.phone) updateField('phone', account?.phone ?? '');
+                                    }}
                                     onBlur={() => blurField('userId')}
-                                    placeholder="ObjectId tài khoản đăng nhập"
-                                    disabled={submitting.current}
-                                    error={touched.userId ? errors.userId : null}
+                                    options={accountOptions(accounts)}
+                                    placeholder={accountsFailed ? 'Không thể tải danh sách tài khoản' : accounts.length ? 'Chọn tài khoản nhân viên' : 'Không có tài khoản phù hợp'}
+                                    disabled={isSubmitting || accountsFailed}
+                                    error={errors.userId}
                                 />
                                 <FormInputField
                                     id="create-employeeCode"
@@ -192,7 +240,7 @@ export function EmployeeCreateDialog({
                                     onBlur={() => blurField('employeeCode')}
                                     placeholder="Ví dụ: TVS-0248"
                                     disabled={submitting.current}
-                                    error={touched.employeeCode ? errors.employeeCode : null}
+                                    error={errors.employeeCode}
                                 />
                             </div>
                         </section>
@@ -213,39 +261,36 @@ export function EmployeeCreateDialog({
                                     onChange={(e) => updateField('joinDate', e.target.value)}
                                     onBlur={() => blurField('joinDate')}
                                     disabled={submitting.current}
-                                    error={touched.joinDate ? errors.joinDate : null}
+                                    error={errors.joinDate}
                                 />
                                 <FormSelectField
                                     id="create-employmentType"
                                     label="Loại lao động"
-                                    required
                                     value={form.employmentType}
                                     onChange={(e) => updateField('employmentType', e.target.value as EmploymentType)}
                                     options={employmentTypeOptions}
                                     disabled={submitting.current}
-                                    error={touched.employmentType ? errors.employmentType : null}
+                                    error={errors.employmentType}
                                 />
                                 <FormSelectField
                                     id="create-departmentId"
                                     label="Phòng ban"
-                                    required
                                     value={form.departmentId}
                                     onChange={(e) => updateField('departmentId', e.target.value)}
                                     onBlur={() => blurField('departmentId')}
                                     options={departmentOptions(departments)}
                                     disabled={submitting.current}
-                                    error={touched.departmentId ? errors.departmentId : null}
+                                    error={errors.departmentId}
                                 />
                                 <FormSelectField
                                     id="create-positionId"
                                     label="Chức danh"
-                                    required
                                     value={form.positionId}
                                     onChange={(e) => updateField('positionId', e.target.value)}
                                     onBlur={() => blurField('positionId')}
                                     options={positionOptions(positions)}
                                     disabled={submitting.current}
-                                    error={touched.positionId ? errors.positionId : null}
+                                    error={errors.positionId}
                                 />
                             </div>
                         </section>
@@ -254,7 +299,7 @@ export function EmployeeCreateDialog({
                         <section className="space-y-4 border-t border-border pt-6">
                             <div>
                                 <h3 className="font-semibold text-foreground">Thông tin cá nhân</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">Thông tin liên hệ và nhận diện của nhân viên.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">Thông tin nhận diện cơ bản của nhân viên.</p>
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <FormInputField
@@ -263,57 +308,37 @@ export function EmployeeCreateDialog({
                                     type="date"
                                     value={form.dateOfBirth}
                                     onChange={(e) => updateField('dateOfBirth', e.target.value)}
+                                    onBlur={() => blurField('dateOfBirth')}
                                     disabled={submitting.current}
+                                    error={errors.dateOfBirth}
                                 />
                                 <FormSelectField
                                     id="create-gender"
                                     label="Giới tính"
+                                    error={errors.gender}
                                     value={form.gender}
                                     onChange={(e) => updateField('gender', e.target.value as Gender)}
                                     options={genderOptions}
                                     disabled={submitting.current}
                                 />
-                                <FormInputField
-                                    id="create-phone"
-                                    label="Số điện thoại"
-                                    inputMode="numeric"
-                                    maxLength={10}
-                                    value={form.phone}
-                                    onChange={(e) => updateField('phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
-                                    onBlur={() => blurField('phone')}
-                                    placeholder="Ví dụ: 0912345678"
-                                    disabled={submitting.current}
-                                    error={touched.phone ? errors.phone : null}
-                                    helperText={touched.phone && !errors.phone ? 'Chỉ nhập số, đủ 10 chữ số.' : undefined}
-                                />
-                                <FormInputField
-                                    id="create-email"
-                                    label="Email nhân sự"
-                                    type="email"
-                                    value={form.email}
-                                    onChange={(e) => updateField('email', e.target.value)}
-                                    onBlur={() => blurField('email')}
-                                    placeholder="nguyenvana@company.com"
-                                    disabled={submitting.current}
-                                    error={touched.email ? errors.email : null}
-                                />
-                                <div className="sm:col-span-2">
-                                    <FormInputField
-                                        id="create-address"
-                                        label="Địa chỉ"
-                                        value={form.address}
-                                        onChange={(e) => updateField('address', e.target.value)}
-                                        disabled={submitting.current}
-                                    />
-                                </div>
+                            </div>
+                        </section>
+
+                        {/* Contact Section */}
+                        <section className="space-y-4 border-t border-border pt-6">
+                            <div><h3 className="font-semibold text-foreground">Thông tin liên hệ</h3><p className="mt-1 text-sm text-muted-foreground">Thông tin liên hệ nghiệp vụ; email và số điện thoại được gợi ý từ tài khoản đã chọn.</p></div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormInputField id="create-phone" label="Số điện thoại" inputMode="numeric" maxLength={10} value={form.phone} onChange={(e) => updateField('phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} onBlur={() => blurField('phone')} placeholder="Ví dụ: 0912345678" disabled={submitting.current} error={errors.phone} helperText="Chỉ nhập số, đủ 10 chữ số." />
+                                <FormInputField id="create-email" label="Email nhân sự" type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} onBlur={() => blurField('email')} placeholder="nhanvien@company.com" disabled={submitting.current} error={errors.email} />
+                                <div className="sm:col-span-2"><FormInputField id="create-address" label="Địa chỉ" value={form.address} onChange={(e) => updateField('address', e.target.value)} onBlur={() => blurField('address')} maxLength={256} disabled={submitting.current} error={errors.address} /></div>
                             </div>
                         </section>
 
                         {/* Legal & Payroll Section */}
                         <section className="space-y-4 border-t border-border pt-6">
                             <div>
-                                <h3 className="font-semibold text-foreground">Pháp lý và thanh toán</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">Các mã định danh dùng cho nghiệp vụ nhân sự và lương.</p>
+                                <h3 className="font-semibold text-foreground">Pháp lý và bảo hiểm</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">Các mã định danh dùng cho nghiệp vụ nhân sự và bảo hiểm.</p>
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <FormInputField
@@ -323,8 +348,10 @@ export function EmployeeCreateDialog({
                                     onChange={(e) => updateField('citizenId', e.target.value.replace(/[^\d]/g, '').slice(0, 12))}
                                     onBlur={() => blurField('citizenId')}
                                     placeholder="9 đến 12 chữ số"
+                                    inputMode="numeric"
+                                    maxLength={12}
                                     disabled={submitting.current}
-                                    error={touched.citizenId ? errors.citizenId : null}
+                                    error={errors.citizenId}
                                 />
                                 <FormInputField
                                     id="create-taxCode"
@@ -334,7 +361,7 @@ export function EmployeeCreateDialog({
                                     onBlur={() => blurField('taxCode')}
                                     placeholder="10 đến 12 chữ số"
                                     disabled={submitting.current}
-                                    error={touched.taxCode ? errors.taxCode : null}
+                                    error={errors.taxCode}
                                 />
                                 <FormInputField
                                     id="create-socialInsuranceCode"
@@ -343,48 +370,36 @@ export function EmployeeCreateDialog({
                                     onChange={(e) => updateField('socialInsuranceCode', e.target.value.replace(/[^\d]/g, '').slice(0, 12))}
                                     onBlur={() => blurField('socialInsuranceCode')}
                                     disabled={submitting.current}
-                                    error={touched.socialInsuranceCode ? errors.socialInsuranceCode : null}
-                                />
-                                <FormInputField
-                                    id="create-bankAccount"
-                                    label="Tài khoản ngân hàng"
-                                    value={form.bankAccount}
-                                    onChange={(e) => updateField('bankAccount', e.target.value.replace(/[^\d]/g, '').slice(0, 17))}
-                                    onBlur={() => blurField('bankAccount')}
-                                    placeholder="6 đến 17 chữ số"
-                                    disabled={submitting.current}
-                                    error={touched.bankAccount ? errors.bankAccount : null}
+                                    error={errors.socialInsuranceCode}
                                 />
                             </div>
                         </section>
 
-                        {/* Advanced Section */}
-                        <details className="group rounded-xl border border-border">
-                            <summary className="cursor-pointer list-none px-4 py-3 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                                Liên kết nâng cao <span className="ml-1 text-sm font-normal text-muted-foreground">(không bắt buộc)</span>
-                            </summary>
-                            <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
-                                <FormInputField
+                        <section className="space-y-4 border-t border-border pt-6">
+                            <div><h3 className="font-semibold text-foreground">Thông tin ngân hàng</h3><p className="mt-1 text-sm text-muted-foreground">Thông tin phục vụ thanh toán lương, có thể bổ sung sau.</p></div>
+                            <div className="grid gap-4 sm:grid-cols-2"><FormInputField id="create-bankAccount" label="Tài khoản ngân hàng" value={form.bankAccount} onChange={(e) => updateField('bankAccount', e.target.value.replace(/[^\d]/g, '').slice(0, 17))} onBlur={() => blurField('bankAccount')} placeholder="6 đến 17 chữ số" disabled={submitting.current} error={errors.bankAccount} /></div>
+                        </section>
+
+                        {/* Management Section */}
+                        <section className="space-y-4 border-t border-border pt-6">
+                            <div>
+                                <h3 className="font-semibold text-foreground">Quản lý và nơi làm việc</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">Có thể chọn quản lý trực tiếp ngay bây giờ; nơi làm việc sẽ được bổ sung khi danh mục sẵn sàng.</p>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormSelectField
                                     id="create-directManagerId"
-                                    label="User ID quản lý trực tiếp"
+                                    label="Quản lý trực tiếp"
                                     value={form.directManagerId}
                                     onChange={(e) => updateField('directManagerId', e.target.value)}
                                     onBlur={() => blurField('directManagerId')}
-                                    placeholder="ObjectId tài khoản quản lý"
+                                    options={managerOptions(managers).filter(option => option.value !== form.userId)}
+                                    placeholder="Chọn quản lý trực tiếp"
                                     disabled={submitting.current}
-                                    error={touched.directManagerId ? errors.directManagerId : null}
-                                />
-                                <FormInputField
-                                    id="create-workplaceId"
-                                    label="Workplace ID"
-                                    value={form.workplaceId}
-                                    onChange={(e) => updateField('workplaceId', e.target.value)}
-                                    onBlur={() => blurField('workplaceId')}
-                                    placeholder="ObjectId nơi làm việc"
-                                    disabled={submitting.current}
+                                    error={errors.directManagerId}
                                 />
                             </div>
-                        </details>
+                        </section>
                     </div>
 
                     {/* Footer Actions */}
@@ -404,7 +419,7 @@ export function EmployeeCreateDialog({
                         <Button
                             type="submit"
                             className="min-h-11"
-                            disabled={submitting.current || !form.userId.trim() || !form.employeeCode.trim() || !form.joinDate}
+                            disabled={submitting.current}
                         >
                             {submitting.current && <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
                             {submitting.current ? 'Đang tạo…' : 'Tạo hồ sơ'}

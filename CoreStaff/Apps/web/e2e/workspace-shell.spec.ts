@@ -3,6 +3,49 @@ import { test, expect, type Page } from '@playwright/test';
 const user = { id: 'test-user', organizationId: 'test-org', role: 'HR', fullName: 'Nguyễn Thị Minh Anh', email: 'sidebar@example.test', status: 'ACTIVE' };
 const errors = new WeakMap<Page, string[]>();
 
+for (const viewport of [{ width: 1366, height: 768 }, { width: 1920, height: 1080 }, { width: 768, height: 1024 }, { width: 390, height: 844 }]) {
+  test(`nested employee modal ${viewport.width}: overlay, scroll and focus`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openApp(page, 'HR', '/hr/employees/employee');
+    const body = page.locator('[data-slot="employee-detail-body"]');
+    const trigger = page.locator('#employee-status-trigger');
+    for (const close of ['escape', 'backdrop']) {
+      await body.evaluate(element => { element.scrollTop = 180; });
+      const before = await body.evaluate(element => element.scrollTop);
+      // Programmatic activation keeps the scrolled position while exercising the same handler.
+      await trigger.evaluate((element: HTMLButtonElement) => element.click());
+      const popup = page.getByRole('dialog', { name: 'Thay đổi trạng thái', exact: true });
+      await expect(popup).toBeVisible();
+      await expect(page.locator('#status-new')).toBeFocused();
+      await expect(body).toHaveCSS('overflow-y', 'hidden');
+      expect(await popup.evaluate(element => element.closest('[data-slot="employee-detail-body"]'))).toBeNull();
+      await expect(popup).toHaveCSS('z-index', '1110');
+      const backdrop = page.locator('[data-slot="dialog-backdrop"]').last();
+      await expect(backdrop).toHaveCSS('z-index', '1100');
+      const box = (await popup.boundingBox())!;
+      expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(2);
+      expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(2);
+      expect(box.height).toBeLessThanOrEqual(viewport.height - 32);
+      for (let i = 0; i < 9; i++) {
+        await page.keyboard.press('Tab');
+        expect(await popup.evaluate(element => element.contains(document.activeElement))).toBe(true);
+      }
+      await page.mouse.move(30, 300);
+      await page.mouse.wheel(0, 500);
+      expect(await body.evaluate(element => element.scrollTop)).toBe(before);
+      if (close === 'escape') await page.keyboard.press('Escape');
+      else await backdrop.click({ position: { x: 5, y: 5 } });
+      await expect(popup).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(body).toHaveCSS('overflow-y', 'auto');
+      expect(await body.evaluate(element => element.scrollTop)).toBe(before);
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
+    await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+  });
+}
+
 async function openApp(page: Page, role = 'HR', path = '/overview') {
   await page.addInitScript(() => localStorage.setItem('corestaff:has-session', '1'));
   await page.route('**/api/**', async route => {
