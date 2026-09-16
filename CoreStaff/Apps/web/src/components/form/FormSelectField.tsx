@@ -33,8 +33,8 @@ export function FormSelectField({
                 aria-invalid={!!error}
                 {...props}
             >
-                <option value="">{options[0]?.label ?? 'Chọn'}</option>
-                {options.slice(1).map((opt) => (
+                <option value="">Chọn</option>
+                {options.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                         {opt.label}
                     </option>

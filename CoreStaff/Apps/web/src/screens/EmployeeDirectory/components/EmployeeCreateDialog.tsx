@@ -215,22 +215,16 @@ export function EmployeeCreateDialog({
                                     disabled={submitting.current}
                                     error={touched.joinDate ? errors.joinDate : null}
                                 />
-                                <div className="space-y-1.5">
-                                    <label htmlFor="create-employmentType" className="text-sm font-medium text-foreground">
-                                        Loại lao động
-                                    </label>
-                                    <select
-                                        id="create-employmentType"
-                                        className={selectClass}
-                                        value={form.employmentType}
-                                        disabled={submitting.current}
-                                        onChange={(e) => updateField('employmentType', e.target.value as EmploymentType)}
-                                    >
-                                        {employmentTypeOptions.map((opt) => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <FormSelectField
+                                    id="create-employmentType"
+                                    label="Loại lao động"
+                                    required
+                                    value={form.employmentType}
+                                    onChange={(e) => updateField('employmentType', e.target.value as EmploymentType)}
+                                    options={employmentTypeOptions}
+                                    disabled={submitting.current}
+                                    error={touched.employmentType ? errors.employmentType : null}
+                                />
                                 <FormSelectField
                                     id="create-departmentId"
                                     label="Phòng ban"
@@ -245,6 +239,7 @@ export function EmployeeCreateDialog({
                                 <FormSelectField
                                     id="create-positionId"
                                     label="Chức danh"
+                                    required
                                     value={form.positionId}
                                     onChange={(e) => updateField('positionId', e.target.value)}
                                     onBlur={() => blurField('positionId')}

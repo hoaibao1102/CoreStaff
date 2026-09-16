@@ -36,6 +36,8 @@ import {
     updateEmployee,
     changeEmploymentStatus,
     getEmployeeHistory,
+    getDepartments,
+    getPositions,
     type EmployeeProfile,
     type EmploymentHistoryRecord,
 } from '../../services/hrService';
@@ -118,7 +120,7 @@ interface EditFieldProps {
     type?: string;
     error?: string | null;
     helperText?: string;
-    inputMode?: string;
+    inputMode?: React.InputHTMLAttributes<HTMLInputElement>['inputMode'];
     maxLength?: number;
 }
 
@@ -238,8 +240,21 @@ function EmployeeDetailContent({
         setLoading(true);
         setError(null);
         try {
-            const data = await getEmployeeById(apiBase, employeeId);
-            setEmployee(data);
+            const [data, departments, positions] = await Promise.all([
+                getEmployeeById(apiBase, employeeId),
+                getDepartments(apiBase, true),
+                getPositions(apiBase, true),
+            ]);
+            // Build lookup maps for client-side name resolution
+            const deptMap = new Map(departments.map(d => [d._id, d.name]));
+            const posMap = new Map(positions.map(p => [p._id, p.name]));
+            // Resolve names from IDs
+            const enriched: EmployeeProfile = {
+                ...data,
+                departmentName: data.departmentId ? (deptMap.get(data.departmentId) ?? data.departmentName) : undefined,
+                positionName: data.positionId ? (posMap.get(data.positionId) ?? data.positionName) : undefined,
+            };
+            setEmployee(enriched);
             setFormData({
                 employeeCode: data.employeeCode,
                 employmentType: data.employmentType,

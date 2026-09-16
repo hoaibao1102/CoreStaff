@@ -208,11 +208,18 @@ export function EmployeeDirectoryScreen({
       import('../../services/hrService').then(m => m.getDepartments(apiBase!, true)),
       import('../../services/hrService').then(m => m.getPositions(apiBase!, true)),
     ]);
-    return {
-      rows: employees.filter(row => row.organizationId === user.organizationId),
-      departments,
-      positions,
-    };
+    // Build lookup maps for client-side name resolution
+    const deptMap = new Map(departments.map(d => [d._id, d.name]));
+    const posMap = new Map(positions.map(p => [p._id, p.name]));
+    // Enrich employees with resolved names
+    const enriched = employees
+      .filter(row => row.organizationId === user.organizationId)
+      .map(row => ({
+        ...row,
+        departmentName: row.departmentId ? (deptMap.get(row.departmentId) ?? row.departmentName) : undefined,
+        positionName: row.positionId ? (posMap.get(row.positionId) ?? row.positionName) : undefined,
+      }));
+    return { rows: enriched, departments, positions };
   }, [apiBase, status, departmentId, user.organizationId]);
 
   const resource = useHrResource(allowed && apiBase ? loader : null);
