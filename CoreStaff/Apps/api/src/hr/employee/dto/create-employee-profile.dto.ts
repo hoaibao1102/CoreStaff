@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsMongoId, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsMongoId, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { EmploymentType, Gender } from '../../../database/schemas/enums';
 
 export class CreateEmployeeProfileDto {
@@ -35,12 +35,12 @@ export class CreateEmployeeProfileDto {
 	@ApiProperty({ required: false })
 	@IsOptional()
 	@IsString()
-	@MaxLength(32)
+	@Matches(/^\d{10}$/, { message: 'PHONE_INVALID' })
 	phone?: string;
 
 	@ApiProperty({ required: false })
 	@IsOptional()
-	@IsString()
+	@IsEmail({}, { message: 'EMAIL_INVALID' })
 	@MaxLength(256)
 	email?: string;
 
@@ -50,28 +50,28 @@ export class CreateEmployeeProfileDto {
 	@MaxLength(256)
 	address?: string;
 
-	@ApiProperty({ required: false, description: 'CCCD/CMND.' })
+	@ApiProperty({ required: false, description: 'CCCD/CMND, 9–12 chữ số.', example: '0123456789' })
 	@IsOptional()
 	@IsString()
-	@MaxLength(32)
+	@Matches(/^\d{9,12}$/, { message: 'CITIZEN_ID_INVALID' })
 	citizenId?: string;
 
 	@ApiProperty({ required: false })
 	@IsOptional()
 	@IsString()
-	@MaxLength(32)
+	@Matches(/^\d{10,12}$/, { message: 'TAX_CODE_INVALID' })
 	taxCode?: string;
 
 	@ApiProperty({ required: false, description: 'Mã số BHXH.' })
 	@IsOptional()
 	@IsString()
-	@MaxLength(32)
+	@Matches(/^\d{1,12}$/, { message: 'SOCIAL_INSURANCE_CODE_INVALID' })
 	socialInsuranceCode?: string;
 
 	@ApiProperty({ required: false })
 	@IsOptional()
 	@IsString()
-	@MaxLength(64)
+	@Matches(/^\d{6,17}$/, { message: 'BANK_ACCOUNT_INVALID' })
 	bankAccount?: string;
 
 	@ApiProperty({ required: false })

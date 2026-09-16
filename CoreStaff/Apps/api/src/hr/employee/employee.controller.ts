@@ -8,6 +8,7 @@ import {
 	ApiErrorExamples,
 	ApiSuccess,
 	employeeExample,
+	employeeReadExample,
 	employmentHistoryExample,
 } from '../../common/swagger-responses';
 import { EmployeeService } from './employee.service';
@@ -37,7 +38,7 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get()
 	@ApiOperation({ summary: 'List employee profiles in the current tenant.' })
-	@ApiSuccess('Employee profiles in the current tenant.', [employeeExample])
+	@ApiSuccess('Employee profiles in the current tenant.', [employeeReadExample])
 	@ApiErrorExamples()
 	async findAll(
 		@Tenant() organizationId: string | null,
@@ -49,9 +50,20 @@ export class EmployeeController {
 		return { success: true, data };
 	}
 
+	@Roles('HR')
+	@Get('eligible-users')
+	@ApiOperation({ summary: 'List active tenant accounts that can be linked to a new employee profile.' })
+	@ApiSuccess('Eligible accounts for employee profile creation.', [])
+	@ApiErrorExamples()
+	async eligibleUsers(@Tenant() organizationId: string | null) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.listEligibleUsers(orgId);
+		return { success: true, data };
+	}
+
 	@Get('me')
 	@ApiOperation({ summary: "Current user's own EmployeeProfile." })
-	@ApiSuccess("Current user's employee profile.", employeeExample)
+	@ApiSuccess("Current user's employee profile.", employeeReadExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async me(@Tenant() organizationId: string | null, @CurrentUser() user: SessionUser) {
@@ -64,7 +76,7 @@ export class EmployeeController {
 	@Roles('HR')
 	@Get(':id')
 	@ApiOperation({ summary: 'Get an employee profile by id.' })
-	@ApiSuccess('Employee profile detail.', employeeExample)
+	@ApiSuccess('Employee profile detail.', employeeReadExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {
@@ -94,6 +106,7 @@ export class EmployeeController {
 		summary: 'Transition employmentStatus and append an EmploymentHistory record (TASK-023, BR-HIST-01).',
 	})
 	@ApiSuccess('Employment status changed.', { ...employeeExample, employmentStatus: 'ACTIVE' })
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiResponse({ status: 409, description: 'EMPLOYMENT_STATUS_TRANSITION_INVALID' })
 	@ApiErrorExamples()
 	async changeStatus(
@@ -112,6 +125,7 @@ export class EmployeeController {
 	@Get(':id/history')
 	@ApiOperation({ summary: 'Employment status history for an employee (TASK-023).' })
 	@ApiSuccess('Employment status history for an employee.', [employmentHistoryExample])
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async history(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);

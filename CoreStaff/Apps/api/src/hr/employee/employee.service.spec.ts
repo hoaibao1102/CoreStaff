@@ -121,6 +121,9 @@ function buildHistoryModel(rows: HistoryRow[]) {
 /** `Department`/`Position`/`User` are only used for `.exists()` referential checks here. */
 function buildRefModel(ids: Record<string, string[]>) {
 	return {
+        find({ organizationId, _id }: { organizationId: string; _id: { $in: string[] } }) {
+            return { select: () => ({ lean: async () => (ids[organizationId] ?? []).filter(id => _id.$in.includes(id)).map(id => ({ _id: id, name: `Name ${id}`, fullName: `User ${id}` })) }) };
+        },
 		async exists({ _id, organizationId }: { _id: string; organizationId: string }) {
 			return ids[organizationId]?.includes(_id) ? { _id } : null;
 		},
@@ -156,6 +159,16 @@ function buildService(
 }
 
 describe('EmployeeService.create (TASK-020)', () => {
+	it.each([
+		[{ organizationId: 1, userId: 1 }, 'EMPLOYEE_PROFILE_ALREADY_EXISTS'],
+		[{ organizationId: 1, employeeCode: 1 }, 'EMPLOYEE_CODE_TAKEN'],
+	])('maps concurrent unique-key conflicts to the correct field: %s', async (keyPattern, message) => {
+		const profiles = { exists: jest.fn().mockResolvedValue(null), create: jest.fn().mockRejectedValue({ code: 11000, keyPattern }) };
+		const users = { exists: jest.fn().mockResolvedValue({ _id: 'user1' }) };
+		const svc = new EmployeeService(profiles as never, {} as never, {} as never, {} as never, users as never, fakeConnection() as never);
+		await expect(svc.create('org1', { userId: 'user1', employeeCode: 'NV-001', joinDate: '2026-01-01' }))
+			.rejects.toThrow(message);
+	});
 	it('creates a profile defaulting to PROBATION (SRS §15.2A)', async () => {
 		const profiles: ProfileRow[] = [];
 		const svc = buildService(profiles, []);
@@ -202,6 +215,27 @@ describe('EmployeeService.create (TASK-020)', () => {
 				departmentId: 'missing',
 			} as never),
 		).rejects.toBeInstanceOf(NotFoundException);
+	});
+});
+
+describe('EmployeeService.listEligibleUsers', () => {
+	it('returns only safe account fields for active, unlinked users in the tenant', async () => {
+		const profileLean = jest.fn().mockResolvedValue([{ userId: 'user1' }]);
+		const profileSelect = jest.fn().mockReturnValue({ lean: profileLean });
+		const profileModel = { find: jest.fn().mockReturnValue({ select: profileSelect }) };
+		const userLean = jest.fn().mockResolvedValue([{ _id: 'user2', fullName: 'Nhân viên mới', email: 'new@example.com' }]);
+		const userSort = jest.fn().mockReturnValue({ lean: userLean });
+		const userSelect = jest.fn().mockReturnValue({ sort: userSort });
+		const userModel = { find: jest.fn().mockReturnValue({ select: userSelect }) };
+		const svc = new EmployeeService(profileModel as never, {} as never, {} as never, {} as never, userModel as never, fakeConnection() as never);
+
+		const result = await svc.listEligibleUsers('org1');
+
+		expect(profileModel.find).toHaveBeenCalledWith({ organizationId: 'org1' });
+		expect(userModel.find).toHaveBeenCalledWith({ organizationId: 'org1', _id: { $nin: ['user1'] }, status: 'ACTIVE' });
+		expect(userSelect).toHaveBeenCalledWith('_id fullName email phone employeeCode');
+		expect(result).toEqual([{ _id: 'user2', fullName: 'Nhân viên mới', email: 'new@example.com' }]);
+		expect(result[0]).not.toHaveProperty('passwordHash');
 	});
 });
 
@@ -329,3 +363,22 @@ describe('EmployeeService.listHistory (TASK-023)', () => {
 		expect(result.map((h) => h.newStatus)).toEqual([EmploymentStatus.ON_LEAVE, EmploymentStatus.ACTIVE]);
 	});
 });
+
+ describe('TASK-025/026 read profiles', () => {
+    const row = { _id: 'p1', organizationId: 'org1', userId: 'user1', employeeCode: 'E001', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', joinDate: '2026-09-16', departmentId: 'd1', positionId: 'pos1', directManagerId: 'user2' };
+    it('resolves names on list and me without replacing reference IDs', async () => {
+        const svc = buildService([row], [], { departments: { org1: ['d1'] }, positions: { org1: ['pos1'] } });
+        const expected = { userId: 'user1', departmentId: 'd1', fullName: 'User user1', departmentName: 'Name d1', positionName: 'Name pos1', managerName: 'User user2' };
+        expect(await svc.findByUserId('org1', 'user1')).toMatchObject(expected);
+        expect(await svc.findAll('org1', { status: 'ACTIVE', departmentId: 'd1' })).toEqual([expect.objectContaining(expected)]);
+        expect(await svc.findAll('org1', { status: 'PROBATION' })).toEqual([]);
+        expect(await svc.findAll('org2')).toEqual([]);
+        await expect(svc.findByUserId('org2', 'user1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+    it('does not resolve foreign tenant references or expose user credentials', async () => {
+        const svc = buildService([row], [], { users: { org2: ['user1', 'user2'] }, departments: { org2: ['d1'] }, positions: { org2: ['pos1'] } });
+        const result = await svc.findOne('org1', 'p1');
+        expect(result).toMatchObject({ fullName: null, departmentName: null, positionName: null, managerName: null });
+        expect(result).not.toHaveProperty('passwordHash');
+    });
+ });

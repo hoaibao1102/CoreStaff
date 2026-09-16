@@ -64,14 +64,12 @@ interface HistoryCalendarViewProps {
 }
 
 export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ records, onSelect }) => {
-  // Map date→record for O(1) lookup
   const byDate = React.useMemo(() => {
     const m: Record<string, DayAttendance> = {};
     records.forEach((r) => { m[r.date] = r; });
     return m;
   }, [records]);
 
-  // Determine month from first record
   const [year, month] = React.useMemo(() => {
     if (!records.length) return [2026, 8];
     return records[0].date.split('-').map(Number);
@@ -83,43 +81,20 @@ export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ record
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
 
   return (
-
-    <div
-      id={`history-item-${record.id}`}
-      onClick={() => onSelect(record)}
-      className="bg-surface-container-lowest rounded-xl border border-outline-variant p-3.5 shadow-card-sm hover:shadow-md transition-all cursor-pointer space-y-2 group"
-    >
+    <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-            {record.formattedDate}
-          </span>
-          {record.totalWorkingMinutes && !isHoliday && (
-            <span className="text-[11px] text-on-surface-variant mt-0.5">
-              Tổng: {Math.floor(record.totalWorkingMinutes / 60)}h {record.totalWorkingMinutes % 60}m
-
-            </span>
-          ))}
-        </div>
+        <h3 className="text-sm font-bold capitalize text-slate-800">{monthLabel}</h3>
+        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700">
+          {records.length} bản ghi
+        </span>
       </div>
 
-
-      {!isHoliday ? (
-        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-outline-variant bg-surface-container-low rounded-lg p-2.5 text-xs">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-primary" />
-            <div>
-              <span className="text-[10px] text-on-surface-variant block">Giờ vào</span>
-              <span className="font-mono font-medium text-on-surface">
-                {record.checkIn ? record.checkIn.time : '—'}
-              </span>
-            </div>
-
-          </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-400">
+        {DOW_LABELS.map((label) => (
+          <span key={label}>{label}</span>
         ))}
-        </div>
+      </div>
 
-      {/* ── Day cells ── */}
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: firstDow }).map((_, i) => <div key={`blank-${i}`} />)}
 
@@ -147,7 +122,6 @@ export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ record
                 record ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default',
               ].join(' ')}
             >
-              {/* Day number */}
               <span className={[
                 'text-[12px] font-semibold leading-none',
                 !record ? (isWknd ? 'text-red-300' : 'text-stone-300') :
@@ -157,64 +131,44 @@ export const HistoryCalendarView: React.FC<HistoryCalendarViewProps> = ({ record
               ].join(' ')}>
                 {day}
               </span>
-            </div>
-          </div>
-    </div>
-  ) : (
-    <p className="text-xs text-on-surface-variant italic pt-3 border-t border-outline-variant">
-      Ngày nghỉ chính thức / Không có ca làm việc.
-    </p>
-  )
-}
 
+              {record && !isHoliday && (
+                <div className="flex flex-col items-center gap-[3px] mt-1 w-full">
+                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                  {record.checkIn && (
+                    <span className={`text-[9px] font-mono font-medium leading-none ${st.timeText}`}>
+                      {record.checkIn.time}
+                    </span>
+                  )}
+                  {record.checkOut ? (
+                    <span className={`text-[9px] font-mono leading-none ${st.timeText} opacity-75`}>
+                      {record.checkOut.time}
+                    </span>
+                  ) : record.checkIn ? (
+                    <span className="text-[8px] leading-none text-stone-400">-</span>
+                  ) : null}
+                </div>
+              )}
 
-{/* Working day content */ }
-{
-  record && !isHoliday && (
-    <div className="flex flex-col items-center gap-[3px] mt-1 w-full">
-      <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-      {record.checkIn && (
-        <span className={`text-[9px] font-mono font-medium leading-none ${st.timeText}`}>
-          {record.checkIn.time}
-        </span>
-      )}
-      {record.checkOut ? (
-        <span className={`text-[9px] font-mono leading-none ${st.timeText} opacity-75`}>
-          {record.checkOut.time}
-        </span>
-      ) : record.checkIn ? (
-        <span className="text-[8px] leading-none text-stone-400">–</span>
-      ) : null}
-    </div>
-  )
-}
+              {isHoliday && (
+                <span className="text-[9px] text-stone-500 font-medium mt-0.5 leading-none">Nghỉ</span>
+              )}
 
-{/* Holiday */ }
-{
-  isHoliday && (
-    <span className="text-[9px] text-stone-500 font-medium mt-0.5 leading-none">Nghỉ</span>
-  )
-}
-
-{/* Alert dot */ }
-{
-  (hasAlert || hasWarn) && !isHoliday && (
-    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
-  )
-}
-            </button >
+              {(hasAlert || hasWarn) && !isHoliday && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+              )}
+            </button>
           );
         })}
-      </div >
+      </div>
 
-  {/* Footer note */ }
-  < p className = "text-[9px] text-slate-400 text-center pt-1 border-t border-slate-100" >
-    <span className="inline-flex items-center gap-1">
-      <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
-      Chấm vàng = chờ duyệt · Bấm vào ngày để xem chi tiết
-    </span>
-      </p >
-    </div >
+      <p className="text-[9px] text-slate-400 text-center pt-1 border-t border-slate-100">
+        <span className="inline-flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
+          Chấm vàng = chờ duyệt · Bấm vào ngày để xem chi tiết
+        </span>
+      </p>
+    </div>
   );
 };
 

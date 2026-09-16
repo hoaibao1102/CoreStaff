@@ -152,6 +152,15 @@ export const employeeExample = {
 	updatedAt: '2026-09-15T03:20:00.000Z',
 };
 
+/** Read endpoints retain reference IDs and add nullable display names. */
+export const employeeReadExample = {
+    ...employeeExample,
+    fullName: 'Nguyen Van An',
+    departmentName: 'Engineering',
+    positionName: 'Developer',
+    managerName: null,
+};
+
 export const employmentHistoryExample = {
 	_id: '66f1b2c3d4e5f60718293e01',
 	organizationId: '66f1b2c3d4e5f60718293a40',

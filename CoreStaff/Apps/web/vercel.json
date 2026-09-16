@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/hr/employees/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/app/profile",
+      "destination": "/index.html"
+    }
+  ]
+}

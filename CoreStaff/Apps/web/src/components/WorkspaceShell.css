@@ -1,0 +1,242 @@
+/* The rail owns its width; flex distributes remaining space to the app.
+   Layers: topbar 10, sidebar 20, portaled menus/tooltips/sheets 50.
+   Sheet and its nested menu share layer 50, ordered by their portals. */
+:root {
+  --sidebar-width: 17.5rem;
+  --sidebar-collapsed-width: 4.5rem;
+  --sidebar-header-height: 6rem;
+  --sidebar-item-height: 2.75rem;
+  --sidebar-icon-column: 3.5rem;
+  --sidebar-duration: 200ms;
+}
+
+.workspace-shell {
+  display: flex;
+  min-height: 100dvh;
+  width: 100%;
+  background: var(--background);
+}
+
+.workspace-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.workspace-sidebar-desktop { display: none; }
+
+.workspace-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+.workspace-sidebar-header {
+  position: relative;
+  flex: 0 0 var(--sidebar-header-height);
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-sidebar-brand {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.workspace-sidebar-brand small { font-size: 0.625rem; }
+.workspace-sidebar-brand > div { height: 2.5rem; }
+
+.workspace-sidebar-toggle {
+  position: absolute;
+  top: 1.25rem;
+  right: 0.75rem;
+  transition-property: background-color, color;
+}
+
+.workspace-sidebar[data-collapsed="true"] .workspace-sidebar-toggle {
+  top: 3.5rem;
+  right: auto;
+  left: 1.25rem;
+}
+
+.workspace-sidebar-navigation {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.workspace-sidebar-group + .workspace-sidebar-group { margin-top: 1rem; }
+
+.workspace-sidebar-group-heading {
+  display: flex;
+  height: 2rem;
+  align-items: center;
+  padding-left: 1rem;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.workspace-sidebar[data-collapsed="true"] .workspace-sidebar-group-heading::before {
+  content: '';
+  width: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-sidebar-item,
+.workspace-sidebar-account {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--sidebar-item-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.workspace-sidebar-item + .workspace-sidebar-item { margin-top: 0.25rem; }
+
+.workspace-sidebar-item:hover,
+.workspace-sidebar-account:hover,
+.workspace-sidebar-account[aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.workspace-sidebar-item[aria-current="page"] {
+  background: color-mix(in oklch, var(--primary) 8%, var(--card));
+  color: var(--primary);
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.workspace-sidebar-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--sidebar-icon-column);
+  width: var(--sidebar-icon-column);
+}
+
+.workspace-sidebar-icon svg { flex-shrink: 0; }
+
+.workspace-sidebar-label {
+  min-width: 0;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+
+.workspace-sidebar-item-text {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+  overflow: hidden;
+}
+
+.workspace-sidebar[data-collapsed="true"] .workspace-sidebar-label {
+  visibility: hidden;
+  opacity: 0;
+  width: 0;
+  flex: 0 0 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.workspace-sidebar-footer {
+  flex-shrink: 0;
+  padding: 0.75rem 0.5rem max(0.75rem, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+
+.workspace-sidebar-account { height: 3rem; }
+.workspace-sidebar-account-text { flex: 1; overflow: hidden; }
+
+.workspace-sidebar :is(a, button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.workspace-mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  height: 5rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.workspace-mobile-drawer[data-side="left"] {
+  width: min(var(--sidebar-width), calc(100vw - 2rem));
+  max-width: none;
+  height: 100dvh;
+  gap: 0;
+  border: 0;
+  transition-property: transform, opacity;
+}
+
+.workspace-mobile-drawer .workspace-sidebar-toggle {
+  width: 2.75rem;
+  height: 2.75rem;
+  top: 1rem;
+  right: 0.5rem;
+}
+
+@media (min-width: 64rem) {
+  .workspace-sidebar-desktop {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: block;
+    flex-shrink: 0;
+    width: var(--sidebar-width);
+    height: 100dvh;
+    transition: width var(--sidebar-duration) ease;
+  }
+
+  .workspace-shell[data-collapsed="true"] .workspace-sidebar-desktop {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .workspace-mobile-header { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell *,
+  .workspace-mobile-drawer,
+  .workspace-mobile-drawer *,
+  [data-slot="sheet-overlay"],
+  [data-slot="dropdown-menu-content"] {
+    transition: none;
+    animation: none;
+  }
+}

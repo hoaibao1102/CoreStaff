@@ -50,19 +50,31 @@ export class EmployeeService {
 		const query: Record<string, unknown> = { organizationId };
 		if (filter.status) query.employmentStatus = filter.status;
 		if (filter.departmentId) query.departmentId = filter.departmentId;
-		return this.profileModel.find(query).sort({ employeeCode: 1 }).lean();
+		const rows = await this.profileModel.find(query).sort({ employeeCode: 1 }).lean();
+		return this.resolveNames(organizationId, rows);
+	}
+
+	/** Accounts in the tenant that do not have an employee profile yet. */
+	async listEligibleUsers(organizationId: string) {
+		const linked = await this.profileModel.find({ organizationId }).select('userId').lean();
+		const linkedIds = linked.map(row => row.userId);
+		return this.userModel
+			.find({ organizationId, _id: { $nin: linkedIds }, status: 'ACTIVE' })
+			.select('_id fullName email phone employeeCode')
+			.sort({ fullName: 1 })
+			.lean();
 	}
 
 	async findOne(organizationId: string, id: string) {
 		const doc = await this.profileModel.findOne({ _id: id, organizationId }).lean();
 		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		return doc;
+		return (await this.resolveNames(organizationId, [doc]))[0];
 	}
 
 	async findByUserId(organizationId: string, userId: string) {
 		const doc = await this.profileModel.findOne({ organizationId, userId }).lean();
 		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		return doc;
+		return (await this.resolveNames(organizationId, [doc]))[0];
 	}
 
 	async update(organizationId: string, id: string, dto: UpdateEmployeeProfileDto) {
@@ -135,6 +147,26 @@ export class EmployeeService {
 		return this.historyModel.find({ organizationId, employeeProfileId }).sort({ createdAt: -1 }).lean();
 	}
 
+	/** Add display names without changing reference IDs or exposing auth fields. */
+	private async resolveNames<T extends { userId: unknown; departmentId?: unknown; positionId?: unknown; directManagerId?: unknown }>(organizationId: string, rows: T[]) {
+		if (!rows.length) return [];
+		const ids = (values: unknown[]) => [...new Set(values.filter(Boolean).map(String))];
+		const [users, departments, positions] = await Promise.all([
+			this.userModel.find({ organizationId, _id: { $in: ids(rows.flatMap(r => [r.userId, r.directManagerId])) } }).select('_id fullName').lean(),
+			this.departmentModel.find({ organizationId, _id: { $in: ids(rows.map(r => r.departmentId)) } }).select('_id name').lean(),
+			this.positionModel.find({ organizationId, _id: { $in: ids(rows.map(r => r.positionId)) } }).select('_id name').lean(),
+		]);
+		const userNames = new Map(users.map(r => [String(r._id), r.fullName]));
+		const departmentNames = new Map(departments.map(r => [String(r._id), r.name]));
+		const positionNames = new Map(positions.map(r => [String(r._id), r.name]));
+		return rows.map(row => ({ ...row,
+			fullName: userNames.get(String(row.userId)) ?? null,
+			departmentName: departmentNames.get(String(row.departmentId)) ?? null,
+			positionName: positionNames.get(String(row.positionId)) ?? null,
+			managerName: userNames.get(String(row.directManagerId)) ?? null,
+		}));
+	}
+
 	private async assertUserAvailable(organizationId: string, userId: string): Promise<void> {
 		const userExists = await this.userModel.exists({ _id: userId, organizationId });
 		if (!userExists) throw new NotFoundException('USER_NOT_FOUND');
@@ -161,6 +193,9 @@ export class EmployeeService {
 
 function mapDuplicateKey(err: unknown): unknown {
 	if (err && typeof err === 'object' && (err as { code?: number }).code === DUPLICATE_KEY_ERROR) {
+		if ((err as { keyPattern?: Record<string, unknown> }).keyPattern?.userId) {
+			return new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
+		}
 		return new ConflictException('EMPLOYEE_CODE_TAKEN');
 	}
 	return err;

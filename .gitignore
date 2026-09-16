@@ -4,6 +4,7 @@
 # Local agent/skill tooling — never part of the product repo
 .agents/
 .claude/
+.aider-desk/
 skills-lock.json
 
 node_modules/

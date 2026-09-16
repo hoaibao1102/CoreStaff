@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AllowTempPassword, AuthGuard } from './guards/auth.guard';
 import { CurrentUser, SessionUser } from '../common/tenant-context';
@@ -13,6 +13,16 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 
 const COOKIE_NAME = 'sid';
 const SESSION_TTL_MS = 30 * 60 * 1000;
+
+export function sessionCookieOptions(): CookieOptions {
+	const production = process.env.NODE_ENV === 'production';
+	return {
+		httpOnly: true,
+		secure: production,
+		sameSite: production ? 'none' : 'lax',
+		path: '/',
+	};
+}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -36,11 +46,8 @@ export class AuthController {
 		const result = await this.authService.login(dto);
 
 		res.cookie(COOKIE_NAME, result.sessionId, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			sameSite: 'lax',
+			...sessionCookieOptions(),
 			maxAge: SESSION_TTL_MS,
-			path: '/',
 		});
 
 		return {
@@ -59,7 +66,7 @@ export class AuthController {
 	): Promise<{ success: true }> {
 		const sid = getCookie(req.headers.cookie, COOKIE_NAME);
 		if (sid) await this.authService.logout(sid);
-		res.clearCookie(COOKIE_NAME, { path: '/' });
+		res.clearCookie(COOKIE_NAME, sessionCookieOptions());
 		return { success: true };
 	}
 
