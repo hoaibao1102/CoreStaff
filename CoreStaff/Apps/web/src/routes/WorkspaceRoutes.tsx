@@ -3,6 +3,10 @@ import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDi
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
+import { PositionScreen } from '../screens/Positions/PositionScreen';
+import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
+import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
+import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
@@ -84,7 +88,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   // Every HR directory read requires an HR with a tenant; the route never
   // renders for anyone else. The SYSTEM_ADMIN branch below must be skipped for
   // these paths, so it also sits behind the role check.
-  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees')) {
+  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees' || route === '/hr/assignments')) {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -118,6 +122,19 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
       </WorkspaceShell>
     );
   }
+  if (route === '/hr/positions') {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><PositionScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
+  }
+  if (route === '/hr/workplaces' && user.role === 'HR') {
+    if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
+    if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><WorkplaceScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
+  }
+  if (route === '/hr/shift-templates' && user.role === 'HR') {
+    if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
+    if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><ShiftTemplateScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
+  }
 
   // ── HR routes ────────────────────────────────────────────────────────
   if (user.role === 'HR') {
@@ -130,6 +147,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               apiBase={apiBase}
               employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
             />
+          ) : route === '/hr/assignments' ? (
+            <AssignmentScreen user={user} apiBase={apiBase} />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.

@@ -1,10 +1,12 @@
 import {
     Building2,
+    BriefcaseBusiness,
     CalendarDays,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
     ClipboardCheck,
+    ClipboardList,
     Clock3,
     FileText,
     LayoutDashboard,
@@ -54,12 +56,16 @@ function getNavGroups(user: AuthUser): NavGroup[] {
     }
 
     if (role === 'HR') {
+        common.push({ href: '/hr/positions', label: 'Chức danh', icon: BriefcaseBusiness });
         return [
             {
                 title: 'Quản lý',
                 items: [
                     ...common,
                     { href: '/hr/employees', label: 'Danh sách nhân viên', icon: Users },
+                    { href: '/hr/assignments', label: 'Quản lý phân công', icon: ClipboardList },
+                    { href: '/hr/workplaces', label: 'Nơi làm việc', icon: Building2 },
+                    { href: '/hr/shift-templates', label: 'Ca làm việc', icon: Clock3 },
                 ],
             },
             {
