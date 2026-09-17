@@ -68,7 +68,12 @@ export interface Position {
     name: string;
     active: boolean;
     organizationId: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
+
+export type CreatePositionPayload = Pick<Position, 'code' | 'name'>;
+export type UpdatePositionPayload = Partial<CreatePositionPayload>;
 
 export interface EligibleEmployeeAccount {
     _id: string;
@@ -377,6 +382,12 @@ export async function getPositions(base: string, activeOnly?: boolean): Promise<
         { method: 'GET' },
     );
 }
+
+export async function getPositionById(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}`, { method: 'GET' }); }
+export async function createPosition(base: string, payload: CreatePositionPayload): Promise<Position> { return hrRequest<Position>(base, '/api/hr/positions', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function updatePosition(base: string, id: string, payload: UpdatePositionPayload): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }); }
+export async function activatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/activate`, { method: 'PATCH' }); }
+export async function deactivatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/deactivate`, { method: 'PATCH' }); }
 
 export function paginateEmployees(data: EmployeeProfile[], query: string, requestedPage: number) {
     const term = query.trim().toLocaleLowerCase('vi');

@@ -3,6 +3,7 @@ import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDi
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
+import { PositionScreen } from '../screens/Positions/PositionScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
@@ -117,6 +118,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
         </section>
       </WorkspaceShell>
     );
+  }
+  if (route === '/hr/positions') {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><PositionScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
   }
 
   // ── HR routes ────────────────────────────────────────────────────────

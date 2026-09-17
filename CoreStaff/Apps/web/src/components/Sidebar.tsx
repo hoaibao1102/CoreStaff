@@ -1,5 +1,6 @@
 import {
     Building2,
+    BriefcaseBusiness,
     CalendarDays,
     ChevronDown,
     ChevronLeft,
@@ -54,6 +55,7 @@ function getNavGroups(user: AuthUser): NavGroup[] {
     }
 
     if (role === 'HR') {
+        common.push({ href: '/hr/positions', label: 'Chức danh', icon: BriefcaseBusiness });
         return [
             {
                 title: 'Quản lý',
