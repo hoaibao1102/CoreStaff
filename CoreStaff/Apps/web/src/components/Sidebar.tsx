@@ -6,6 +6,7 @@ import {
     ChevronLeft,
     ChevronRight,
     ClipboardCheck,
+    ClipboardList,
     Clock3,
     FileText,
     LayoutDashboard,
@@ -62,6 +63,9 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                 items: [
                     ...common,
                     { href: '/hr/employees', label: 'Danh sách nhân viên', icon: Users },
+                    { href: '/hr/assignments', label: 'Quản lý phân công', icon: ClipboardList },
+                    { href: '/hr/workplaces', label: 'Nơi làm việc', icon: Building2 },
+                    { href: '/hr/shift-templates', label: 'Ca làm việc', icon: Clock3 },
                 ],
             },
             {

@@ -1,0 +1,14 @@
+import { hrRequest, mapHrError } from './hrService';
+
+export interface ShiftTemplate { _id: string; organizationId?: string; workplaceId: string; startTime: string; endTime: string; breakMinutes: number; gracePeriodMinutes: number; active: boolean; createdAt?: string; updatedAt?: string; }
+export interface CreateShiftTemplatePayload { workplaceId: string; startTime: string; endTime: string; breakMinutes?: number; gracePeriodMinutes?: number; }
+export type UpdateShiftTemplatePayload = Partial<CreateShiftTemplatePayload>;
+export interface ShiftTemplateFilters { workplaceId?: string; active?: boolean; }
+const idPath = (id: string) => `/api/hr/shift-templates/${encodeURIComponent(id)}`;
+export function getShiftTemplates(base: string, filters: ShiftTemplateFilters = {}) { const q = new URLSearchParams(); if (filters.workplaceId?.trim()) q.set('workplaceId', filters.workplaceId.trim()); if (filters.active !== undefined) q.set('active', String(filters.active)); return hrRequest<ShiftTemplate[]>(base, `/api/hr/shift-templates${q.size ? `?${q}` : ''}`); }
+export function getShiftTemplateById(base: string, id: string) { return hrRequest<ShiftTemplate>(base, idPath(id)); }
+export function createShiftTemplate(base: string, payload: CreateShiftTemplatePayload) { return hrRequest<ShiftTemplate>(base, '/api/hr/shift-templates', { method: 'POST', body: JSON.stringify(payload) }); }
+export function updateShiftTemplate(base: string, id: string, payload: UpdateShiftTemplatePayload) { return hrRequest<ShiftTemplate>(base, idPath(id), { method: 'PATCH', body: JSON.stringify(payload) }); }
+export function activateShiftTemplate(base: string, id: string) { return hrRequest<ShiftTemplate>(base, `${idPath(id)}/activate`, { method: 'PATCH' }); }
+export function deactivateShiftTemplate(base: string, id: string) { return hrRequest<ShiftTemplate>(base, `${idPath(id)}/deactivate`, { method: 'PATCH' }); }
+export function shiftTemplateErrorMessage(error: unknown) { const code = (error as { code?: string } | null)?.code; const messages: Record<string,string> = { SHIFT_START_TIME_MUST_BE_BEFORE_END: 'Giờ bắt đầu phải trước giờ kết thúc.', SHIFT_TEMPLATE_ALREADY_EXISTS_FOR_WORKPLACE: 'Nơi làm việc này đã có ca làm việc được cấu hình.', CANNOT_CREATE_SHIFT_FOR_INACTIVE_WORKPLACE: 'Không thể tạo ca làm việc cho nơi làm việc đang ngưng hoạt động.', WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT: 'Không tìm thấy nơi làm việc hoặc nơi làm việc không thuộc tổ chức hiện tại.', SHIFT_TEMPLATE_NOT_FOUND: 'Không tìm thấy cấu hình ca làm việc.', CANNOT_UPDATE_SHIFT_FOR_INACTIVE_WORKPLACE: 'Không thể cập nhật ca làm việc cho nơi làm việc đang ngưng hoạt động.', CANNOT_DEACTIVATE_SHIFT_IN_USE_BY_ACTIVE_ASSIGNMENTS: 'Không thể ngưng hoạt động ca làm việc vì vẫn còn nhân viên đang được phân công tại nơi làm việc này.' }; return (code && messages[code]) || mapHrError(code, 'Không thể thực hiện thao tác. Vui lòng thử lại.'); }
