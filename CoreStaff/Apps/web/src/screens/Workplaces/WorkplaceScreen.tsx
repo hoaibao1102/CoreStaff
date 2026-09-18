@@ -45,6 +45,7 @@ import {
   type CreateWorkplacePayload,
   type Workplace,
 } from "@/services/workplace.service";
+import { getAssignments } from "@/services/assignment.service";
 import { WorkplaceActivateDialog } from "./WorkplaceActivateDialog";
 import { WorkplaceDeactivateDialog } from "./WorkplaceDeactivateDialog";
 import { WorkplaceDetailDialog } from "./WorkplaceDetailDialog";
@@ -105,6 +106,7 @@ export function WorkplaceScreen({
 }) {
   const [formError, setFormError] = useState("");
   const [rows, setRows] = useState<Workplace[]>([]);
+  const [assignedEmployeeCounts, setAssignedEmployeeCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [loading, setLoading] = useState(true);
@@ -148,6 +150,28 @@ export function WorkplaceScreen({
       window.clearTimeout(timer);
     };
   }, [apiBase, organizationId, revision, search, status]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAssignments(apiBase, { active: true })
+      .then((assignments) => {
+        if (cancelled) return;
+        const employeesByWorkplace = new Map<string, Set<string>>();
+        assignments.forEach((assignment) => {
+          if (!assignment.workplaceId) return;
+          const employees = employeesByWorkplace.get(assignment.workplaceId) ?? new Set<string>();
+          employees.add(assignment.userId);
+          employeesByWorkplace.set(assignment.workplaceId, employees);
+        });
+        setAssignedEmployeeCounts(
+          Object.fromEntries([...employeesByWorkplace].map(([workplaceId, employees]) => [workplaceId, employees.size])),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setAssignedEmployeeCounts({});
+      });
+    return () => { cancelled = true; };
+  }, [apiBase, revision]);
 
   const create = async () => {
     const message = validate(form);
@@ -272,6 +296,7 @@ export function WorkplaceScreen({
               <TableRow>
                 <TableHead className="pl-6">Mã</TableHead>
                 <TableHead>Tên nơi làm việc</TableHead>
+                <TableHead>Nhân viên đã phân công</TableHead>
                 <TableHead>Địa chỉ</TableHead>
                 <TableHead>Bán kính cho phép</TableHead>
                 <TableHead>Độ chính xác tối đa</TableHead>
@@ -285,6 +310,10 @@ export function WorkplaceScreen({
                   <TableCell className="pl-6 font-medium">{row.code}</TableCell>
                   <TableCell className="max-w-xs whitespace-normal break-words">
                     {row.name}
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-semibold">{assignedEmployeeCounts[row._id] ?? 0}</span>
+                    <span className="ml-1 text-muted-foreground">nhân viên</span>
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal break-words">
                     {row.address}

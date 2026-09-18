@@ -10,6 +10,8 @@ import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
 import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
 import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
+import { CompensationScreen } from '../screens/Compensation/CompensationScreen';
+import { SalaryProfilesScreen } from '../screens/SalaryProfiles/SalaryProfilesScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
@@ -93,7 +95,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   const hrScoped =
     route === '/hr/employees' || route.startsWith('/hr/employees/') ||
     route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
-    route === '/hr/assignments';
+    route === '/hr/assignments' || route === '/hr/salary-profiles' ||
+    route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
+    route === '/hr/kpi-inputs';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
@@ -169,6 +173,14 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             />
           ) : route === '/hr/assignments' ? (
             <AssignmentScreen user={user} apiBase={apiBase} />
+          ) : route === '/hr/salary-profiles' ? (
+            <SalaryProfilesScreen apiBase={apiBase} />
+          ) : route === '/hr/organization-allowances' ? (
+            <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
+          ) : route === '/hr/attendance-bonus-policies' ? (
+            <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
+          ) : route === '/hr/kpi-inputs' ? (
+            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.

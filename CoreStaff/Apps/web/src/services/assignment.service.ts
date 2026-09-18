@@ -79,5 +79,9 @@ export function deactivateAssignment(base: string, id: string): Promise<Assignme
 
 /** Public mapper for assignment screens; technical backend messages stay hidden. */
 export function assignmentErrorMessage(error: unknown): string {
+  const assignmentError = error as { code?: string; status?: number } | null;
+  if (assignmentError?.status === 409 && !assignmentError.code) {
+    return 'Khoảng thời gian phân công của nhân viên đang bị trùng. Hãy chọn ngày khác hoặc ngưng phân công cũ trước.';
+  }
   return mapHrError((error as { code?: string } | null)?.code, 'Không thể xử lý phân công. Vui lòng thử lại.');
 }
