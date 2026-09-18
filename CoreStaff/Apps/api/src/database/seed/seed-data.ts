@@ -7,7 +7,7 @@
  * password per org, with a dev-only default. See `SEED_PASSWORD` in .env.example.
  */
 
-import { Gender, Role } from '../schemas/enums';
+import { Gender, Role, ContractStatus, ContractType } from '../schemas/enums';
 
 export interface OrgSeed {
 	code: string;
@@ -161,3 +161,48 @@ export interface AdminSeed {
  * real run must supply SEED_PASSWORD (DoD §:2352: no committed credentials).
  */
 export const DEV_SEED_PASSWORD = 'TvsAdmin1!';
+
+/** Day offsets are resolved against *today* at seed time (TASK-030 reads them
+ * relative to the server clock). `expiryOffsetDays` beyond the warning window
+ * (30) → no "Sắp hết hạn" badge on the dashboard. */
+export interface ContractSeed {
+	orgCode: string;
+	employeeCode: string;
+	contractType: ContractType;
+	status: ContractStatus;
+	/** Days from today for effectiveDate. None ⇒ date stays 0. */
+	effectiveOffsetDays?: number;
+	/** Days from today for expiryDate (unset for INDEFINITE_TERM). */
+	expiryOffsetDays?: number;
+	endDate?: string;
+	note?: string;
+}
+
+export const CONTRACTS: ContractSeed[] = [
+	// TVS-0001: ACTIVE FIXED_TERM inside the 30-day warning window.
+	{ orgCode: 'TVS', employeeCode: 'TVS-0001', contractType: ContractType.FIXED_TERM, status: ContractStatus.ACTIVE, effectiveOffsetDays: -60, expiryOffsetDays: 15, note: 'Hợp đồng 2025, gia hạn theo đợt.' },
+	// TVS-0003: ACTIVE INDEFINITE_TERM — never expires.
+	{ orgCode: 'TVS', employeeCode: 'TVS-0003', contractType: ContractType.INDEFINITE_TERM, status: ContractStatus.ACTIVE, effectiveOffsetDays: -10, note: 'Chính thức nhận việc sau thử việc.' },
+	// TVS-0005: EXPIRED FIXED_TERM (end in the past).
+	{ orgCode: 'TVS', employeeCode: 'TVS-0005', contractType: ContractType.FIXED_TERM, status: ContractStatus.EXPIRED, effectiveOffsetDays: -400, expiryOffsetDays: -30 },
+	// ABC-0002: ACTIVE INDEFINITE_TERM, far outside the warning window.
+	{ orgCode: 'ABC', employeeCode: 'ABC-0002', contractType: ContractType.INDEFINITE_TERM, status: ContractStatus.ACTIVE, effectiveOffsetDays: -120 },
+	// ABC-0003: DRAFT PROBATION — HR is drafting, expiry in 60 days.
+	{ orgCode: 'ABC', employeeCode: 'ABC-0003', contractType: ContractType.PROBATION, status: ContractStatus.DRAFT, effectiveOffsetDays: 0, expiryOffsetDays: 60 },
+];
+
+/** Document rows are metadata-only: storageKey points at a seed ObjectId that has
+ * no real S3 object, so downloads 404 — they exist purely to populate the lists. */
+export interface DocumentSeed {
+	orgCode: string;
+	employeeCode: string;
+	contractCode: string;
+	originalName: string;
+	mimeType: string;
+	sizeBytes: number;
+}
+
+export const DOCUMENTS: DocumentSeed[] = [
+	{ orgCode: 'TVS', employeeCode: 'TVS-0001', contractCode: 'TVS-0001', originalName: 'CV_NguyenVanAn.pdf', mimeType: 'application/pdf', sizeBytes: 48_536 },
+	{ orgCode: 'TVS', employeeCode: 'TVS-0005', contractCode: 'TVS-0005', originalName: 'CCCD_HoangVanEm.jpg', mimeType: 'image/jpeg', sizeBytes: 1_204_671 },
+];

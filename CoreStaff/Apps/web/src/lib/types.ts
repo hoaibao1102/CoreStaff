@@ -70,3 +70,61 @@ export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
     CONTRACT: 'Hợp đồng',
     INTERNSHIP: 'Thực tập',
 };
+
+/** Contract type enum from backend (employment-contract.schema.ts, TASK-028). */
+export const CONTRACT_TYPE = {
+    PROBATION: 'PROBATION',
+    FIXED_TERM: 'FIXED_TERM',
+    INDEFINITE_TERM: 'INDEFINITE_TERM',
+} as const;
+
+export type ContractType = (typeof CONTRACT_TYPE)[keyof typeof CONTRACT_TYPE];
+
+export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
+    PROBATION: 'Thử việc',
+    FIXED_TERM: 'Có thời hạn',
+    INDEFINITE_TERM: 'Không thời hạn',
+};
+
+/** Stored contract status (TASK-030). EXPIRING_SOON is derived, never stored. */
+export const CONTRACT_STATUS = {
+    DRAFT: 'DRAFT',
+    ACTIVE: 'ACTIVE',
+    EXPIRED: 'EXPIRED',
+    TERMINATED: 'TERMINATED',
+} as const;
+
+export type ContractStatus = (typeof CONTRACT_STATUS)[keyof typeof CONTRACT_STATUS];
+
+/** Vietnamese labels for contract status. */
+export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
+    DRAFT: 'Nháp',
+    ACTIVE: 'Đang hiệu lực',
+    EXPIRED: 'Hết hiệu lực',
+    TERMINATED: 'Đã chấm dứt',
+};
+
+export const CONTRACT_STATUS_BADGE: Record<ContractStatus, string> = {
+    DRAFT: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+    ACTIVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    EXPIRED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    TERMINATED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+};
+
+/** Valid contract transitions per backend state machine (table lives server-side). */
+export const CONTRACT_STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
+    DRAFT: ['ACTIVE', 'TERMINATED'],
+    ACTIVE: ['TERMINATED', 'EXPIRED'],
+    EXPIRED: ['ACTIVE'],
+    TERMINATED: [],
+};
+
+/** Compliance finding labels (codes mirror the API; see hrService.ContractFindingCode). */
+export const CONTRACT_FINDING_LABELS: Record<string, string> = {
+    NO_CONTRACT: 'Chưa có hợp đồng',
+    EXPIRED_NOT_RENEWED: 'Hết hạn chưa gia hạn',
+    ACTIVE_PAST_EXPIRY: 'Vẫn "hiệu lực" quá ngày hết hạn',
+    PROBATION_OVERDUE: 'Qua hạn thử việc chưa ký HĐ',
+};
+
+export const CONTRACT_FINDING_ORDER = ['NO_CONTRACT', 'EXPIRED_NOT_RENEWED', 'ACTIVE_PAST_EXPIRY', 'PROBATION_OVERDUE'] as const;

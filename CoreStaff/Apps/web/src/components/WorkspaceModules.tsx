@@ -109,6 +109,15 @@ const modules: WorkspaceModule[] = [
     roles: ['HR'],
   },
   {
+    id: 'contracts',
+    title: 'Hợp đồng lao động',
+    description: 'Tạo, theo dõi hiệu lực và quản lý hết hạn hợp đồng.',
+    route: '/hr/contracts',
+    status: 'ready',
+    icon: FileText,
+    roles: ['HR'],
+  },
+  {
     id: 'periods',
     title: 'Chốt kỳ công',
     description: 'Review blockers, department confirmation, close/reopen và export snapshot.',

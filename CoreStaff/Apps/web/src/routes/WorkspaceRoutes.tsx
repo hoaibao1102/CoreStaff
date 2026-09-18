@@ -1,5 +1,6 @@
 import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
+import { ContractsScreen } from '../screens/Contracts/ContractsScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
@@ -86,10 +87,14 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   const route = path.replace(/\/$/, '') || '/';
 
   // ── Forbidden guard ──────────────────────────────────────────────────
-  // Every HR directory read requires an HR with a tenant; the route never
-  // renders for anyone else. The SYSTEM_ADMIN branch below must be skipped for
-  // these paths, so it also sits behind the role check.
-  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees' || route === '/hr/assignments')) {
+  // Every HR directory/contract/assignment read requires an HR with a tenant; the
+  // route never renders for anyone else. The SYSTEM_ADMIN branch below must be
+  // skipped for these paths, so it also sits behind the role check.
+  const hrScoped =
+    route === '/hr/employees' || route.startsWith('/hr/employees/') ||
+    route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
+    route === '/hr/assignments';
+  if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -157,6 +162,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               user={user}
               apiBase={apiBase}
               employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
+            />
+          ) : route === '/hr/contracts' || route.startsWith('/hr/contracts/') ? (
+            <ContractsScreen
+              user={user}
+              apiBase={apiBase}
+              contractId={route.startsWith('/hr/contracts/') ? route.split('/').pop() : undefined}
             />
           ) : route === '/hr/assignments' ? (
             <AssignmentScreen user={user} apiBase={apiBase} />
