@@ -47,6 +47,39 @@ export const EMPLOYMENT_STATUS_TRANSITIONS: Record<EmploymentStatus, EmploymentS
   TERMINATED: [],
 };
 
+/** SRS §30A.2 — contract type enum. */
+export const ContractType = {
+  PROBATION: 'PROBATION',
+  FIXED_TERM: 'FIXED_TERM',
+  INDEFINITE_TERM: 'INDEFINITE_TERM',
+} as const;
+export type ContractType = (typeof ContractType)[keyof typeof ContractType];
+
+/**
+ * Contract lifecycle (TASK-028/030). `EXPIRING_SOON` is deliberately NOT here:
+ * it is derived on-read from `status === ACTIVE` + `expiryDate` inside the
+ * 30-day warning window (see `computeExpiryWarning`), never stored.
+ */
+export const ContractStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  TERMINATED: 'TERMINATED',
+} as const;
+export type ContractStatus = (typeof ContractStatus)[keyof typeof ContractStatus];
+
+/** Allowed contract status transitions (SRS §30A.2, TASK-030). */
+export const CONTRACT_STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
+  DRAFT: [ContractStatus.ACTIVE, ContractStatus.TERMINATED],
+  ACTIVE: [ContractStatus.TERMINATED, ContractStatus.EXPIRED],
+  // Renewal — HR must supply a new effectiveDate + expiryDate on this transition.
+  EXPIRED: [ContractStatus.ACTIVE],
+  TERMINATED: [],
+};
+
+/** Window (days) within which an ACTIVE contract is flagged "expiring soon". */
+export const CONTRACT_EXPIRY_WARNING_DAYS = 30;
+
 export const Gender = {
   MALE: 'MALE',
   FEMALE: 'FEMALE',

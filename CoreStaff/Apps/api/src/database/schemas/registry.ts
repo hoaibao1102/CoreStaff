@@ -7,6 +7,8 @@ import { DepartmentSchema } from './department.schema';
 import { PositionSchema } from './position.schema';
 import { EmployeeProfileSchema } from './employee-profile.schema';
 import { EmploymentHistorySchema } from './employment-history.schema';
+import { EmploymentContractSchema } from './employment-contract.schema';
+import { EmployeeDocumentSchema } from './employee-document.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015.
@@ -22,10 +24,13 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Position', schema: PositionSchema },
   { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
   { name: 'EmploymentHistory', schema: EmploymentHistorySchema },
+  { name: 'EmploymentContract', schema: EmploymentContractSchema },
+  { name: 'EmployeeDocument', schema: EmployeeDocumentSchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
 export { DepartmentSchema, PositionSchema, EmployeeProfileSchema, EmploymentHistorySchema };
+export { EmploymentContractSchema, EmployeeDocumentSchema };
 export { Organization } from './organization.schema';
 export { User } from './user.schema';
 export { UserSession } from './user-session.schema';
@@ -34,6 +39,8 @@ export { Department } from './department.schema';
 export { Position } from './position.schema';
 export { EmployeeProfile } from './employee-profile.schema';
 export { EmploymentHistory } from './employment-history.schema';
+export { EmploymentContract } from './employment-contract.schema';
+export { EmployeeDocument } from './employee-document.schema';
 
 export function registryEntries() {
   return SCHEMA_REGISTRY.map(({ name, schema }) => ({ name, schema } as const));

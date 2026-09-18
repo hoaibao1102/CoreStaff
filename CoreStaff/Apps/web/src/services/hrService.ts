@@ -1,5 +1,7 @@
 import { apiUrl } from '../config/api';
 import type {
+    ContractStatus,
+    ContractType,
     EmploymentStatus,
     EmploymentType,
     Gender,
@@ -102,6 +104,62 @@ export interface EmployeeCreateDto {
     workplaceId?: string;
 }
 
+// ── EmploymentContract (TASK-028) ─────────────────────────────────────
+
+export interface EmploymentContract {
+    _id: string;
+    organizationId: string;
+    employeeProfileId: string;
+    contractType: ContractType;
+    status: ContractStatus;
+    effectiveDate: string;
+    expiryDate?: string;
+    endDate?: string;
+    note?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    // Derived on-read (TASK-030), and resolved names by the backend.
+    isExpiringSoon: boolean;
+    expiryWarningDays: number | null;
+    employeeCode?: string | null;
+    employeeFullName?: string | null;
+}
+
+export interface ContractCreateDto {
+    employeeId: string;
+    contractType: ContractType;
+    effectiveDate: string;
+    expiryDate?: string;
+    note?: string;
+}
+
+export interface ContractUpdateDto {
+    effectiveDate?: string;
+    expiryDate?: string;
+    note?: string;
+}
+
+export interface ContractStatusUpdateDto {
+    newStatus: ContractStatus;
+    effectiveDate?: string;
+    expiryDate?: string;
+    reason?: string;
+}
+
+// ── EmployeeDocument (TASK-029) ───────────────────────────────────────
+
+export interface EmployeeDocument {
+    _id: string;
+    organizationId: string;
+    employeeProfileId: string;
+    contractId?: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedBy: string;
+    createdAt: string;
+}
+
 // ───────── API Error Codes ─────────
 
 /**
@@ -132,6 +190,22 @@ export const HR_ERROR_CODES: Record<string, string> = {
 
     // Status transition errors
     EMPLOYMENT_STATUS_TRANSITION_INVALID: 'Trạng thái không thể chuyển đổi theo quy định nhân sự.',
+
+    // Contract errors (TASK-028/030)
+    EMPLOYMENT_CONTRACT_NOT_FOUND: 'Không tìm thấy hợp đồng lao động.',
+    EMPLOYMENT_CONTRACT_ALREADY_EXISTS: 'Hợp đồng cho nhân viên này đã tồn tại.',
+    CONTRACT_EXPIRY_REQUIRED: 'Hợp đồng có thời hạn phải có ngày hết hạn.',
+    CONTRACT_INDEFINITE_TERM_NO_EXPIRY: 'Hợp đồng không thời hạn không được có ngày hết hạn.',
+    CONTRACT_EXPIRY_BEFORE_EFFECTIVE: 'Ngày hết hạn phải sau ngày hiệu lực.',
+    EMPLOYMENT_CONTRACT_STATUS_TRANSITION_INVALID: 'Trạng thái hợp đồng không thể chuyển đổi như yêu cầu.',
+    CONTRACT_TERMINATION_DATE_REQUIRED: 'Khi chấm dứt hợp đồng cần cung cấp ngày hiệu lực (ngày chấm dứt).',
+    CONTRACT_RENEWAL_DATES_REQUIRED: 'Khi gia hạn hợp đồng cần cung cấp ngày hiệu lực và ngày hết hạn mới.',
+
+    // Document errors (TASK-029)
+    EMPLOYEE_DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu của nhân viên.',
+    EMPLOYEE_DOCUMENT_FILE_REQUIRED: 'Vui lòng chọn tệp để tải lên.',
+    EMPLOYEE_DOCUMENT_FILE_TOO_LARGE: 'Tệp quá lớn. Giới hạn tải lên là 10 MB.',
+    EMPLOYEE_DOCUMENT_TYPE_NOT_ALLOWED: 'Định dạng tệp không được hỗ trợ. Chỉ chấp nhận PDF, ảnh hoặc tài liệu văn phòng.',
 
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
@@ -391,4 +465,138 @@ export async function listEmployees(base: string, status: string, departmentId: 
     if (status) params.set('status', status);
     if (departmentId) params.set('departmentId', departmentId);
     return hrRequest<EmployeeProfile[]>(base, `/api/hr/employees?${params}`, { method: 'GET' });
+}
+
+// ── Employment Contracts (HR-only, TASK-028/030) ──────────────────────
+
+export async function listContracts(
+    base: string,
+    options?: { employeeId?: string; status?: string },
+): Promise<EmploymentContract[]> {
+    const params = new URLSearchParams();
+    if (options?.employeeId) params.set('employeeId', options.employeeId);
+    if (options?.status) params.set('status', options.status);
+    return hrRequest<EmploymentContract[]>(base, `/api/hr/contracts?${params}`, { method: 'GET' });
+}
+
+export async function getContractById(base: string, id: string): Promise<EmploymentContract> {
+    return hrRequest<EmploymentContract>(base, `/api/hr/contracts/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createContract(base: string, dto: ContractCreateDto): Promise<EmploymentContract> {
+    return hrRequest<EmploymentContract>(base, '/api/hr/contracts', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+export async function updateContract(base: string, id: string, dto: ContractUpdateDto): Promise<EmploymentContract> {
+    return hrRequest<EmploymentContract>(base, `/api/hr/contracts/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+    });
+}
+
+export async function updateContractStatus(
+    base: string,
+    id: string,
+    dto: ContractStatusUpdateDto,
+): Promise<EmploymentContract> {
+    return hrRequest<EmploymentContract>(base, `/api/hr/contracts/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+    });
+}
+
+/* ── Employee Documents (TASK-029) ────────────────────────────────────
+ * Uploads and downloads must NOT go through hrRequest: hrRequest forces
+ * `Content-Type: application/json`, which breaks the multipart boundary that
+ * the browser generates for FormData. Raw fetch keeps `credentials` and omits
+ * the header; the server parses the multipart fields via multer. */
+
+export async function listDocuments(
+    base: string,
+    options?: { employeeId?: string; contractId?: string },
+): Promise<EmployeeDocument[]> {
+    const params = new URLSearchParams();
+    if (options?.employeeId) params.set('employeeId', options.employeeId);
+    if (options?.contractId) params.set('contractId', options.contractId);
+    return hrRequest<EmployeeDocument[]>(base, `/api/hr/documents?${params}`, { method: 'GET' });
+}
+
+export async function getMyDocuments(base: string): Promise<EmployeeDocument[]> {
+    return hrRequest<EmployeeDocument[]>(base, '/api/app/documents', { method: 'GET' });
+}
+
+export interface UploadDocumentResult {
+    _id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    employeeProfileId: string;
+    contractId?: string;
+}
+
+/** Multipart upload via raw fetch — never set Content-Type manually. */
+export async function uploadDocument(
+    base: string,
+    dto: { employeeProfileId: string; contractId?: string },
+    file: File,
+): Promise<UploadDocumentResult> {
+    const form = new FormData();
+    form.append('employeeProfileId', dto.employeeProfileId);
+    if (dto.contractId) form.append('contractId', dto.contractId);
+    form.append('file', file);
+
+    const res = await fetch(apiUrl(base, '/api/hr/documents/upload'), {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+    });
+
+    const body = await parseJson<ApiSuccess<UploadDocumentResult> | ApiFailure>(res);
+    if (!res.ok || body?.success === false) {
+        const code = body?.success === false ? body.error?.code : undefined;
+        const message = body?.success === false ? body.error?.message : `HTTP ${res.status}`;
+        const error = new Error(message);
+        (error as any).code = code;
+        (error as any).status = res.status;
+        throw error;
+    }
+    if (!body || body.success !== true) {
+        throw new Error('Phản hồi từ máy chủ không hợp lệ.');
+    }
+    return body.data as UploadDocumentResult;
+}
+
+/** Get a signed-out-of-band download: fetch the blob, open an object URL, click
+ * the anchor with `download` set, then revoke. Safe against path-tampering —
+ * the server derives Content-Disposition from the stored originalName, and the
+ * endpoint is tenant+owner scoped. */
+export async function downloadDocument(base: string, id: string): Promise<void> {
+    const res = await fetch(apiUrl(base, `/api/hr/documents/${encodeURIComponent(id)}/download`), {
+        method: 'GET',
+        credentials: 'include',
+    });
+    if (!res.ok) {
+        const body = await parseJson<ApiFailure>(res);
+        const code = body?.success === false ? body.error?.code : undefined;
+        const error = new Error(body?.success === false ? body.error?.message : `HTTP ${res.status}`);
+        (error as any).code = code;
+        (error as any).status = res.status;
+        throw error;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function deleteDocument(base: string, id: string): Promise<void> {
+    return hrRequest<undefined>(base, `/api/hr/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

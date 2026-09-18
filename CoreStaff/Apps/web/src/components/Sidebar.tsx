@@ -60,6 +60,7 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                 items: [
                     ...common,
                     { href: '/hr/employees', label: 'Danh sách nhân viên', icon: Users },
+                    { href: '/hr/contracts', label: 'Hợp đồng lao động', icon: FileText },
                 ],
             },
             {
