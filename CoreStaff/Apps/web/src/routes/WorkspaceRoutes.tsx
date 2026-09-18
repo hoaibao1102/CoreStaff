@@ -2,6 +2,7 @@ import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
+import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
 import { PositionScreen } from '../screens/Positions/PositionScreen';
 import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
@@ -137,6 +138,16 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   // ── HR routes ────────────────────────────────────────────────────────
+  if (route === '/app/attendance' && user.role === 'HR') {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <AttendanceScreen user={user} />
+        </section>
+      </WorkspaceShell>
+    );
+  }
+
   if (user.role === 'HR') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
@@ -181,6 +192,14 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
         </section>
       </WorkspaceShell>
     );
+  }
+
+  if (user.role === 'EMPLOYEE' && route === '/app/attendance/history') {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><AttendanceHistoryScreen /></section></WorkspaceShell>;
+  }
+
+  if (user.role === 'EMPLOYEE' && route === '/app/leave') {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
   // ── Fallback: show dashboard ─────────────────────────────────────────
