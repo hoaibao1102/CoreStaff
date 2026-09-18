@@ -12,6 +12,11 @@ import { EmployeeDocumentSchema } from './employee-document.schema';
 import { WorkplaceSchema } from './workplace.schema';
 import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
+import {
+  SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
+  OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
+  AttendanceBonusPolicySchema, KpiPayrollInputSchema,
+} from './compensation.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -32,6 +37,13 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Workplace', schema: WorkplaceSchema },
   { name: 'ShiftTemplate', schema: ShiftTemplateSchema },
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
+  { name: 'SalaryProfile', schema: SalaryProfileSchema },
+  { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
+  { name: 'AllowanceCatalog', schema: AllowanceCatalogSchema },
+  { name: 'OrganizationAllowance', schema: OrganizationAllowanceSchema },
+  { name: 'AttendanceBonusTemplate', schema: AttendanceBonusTemplateSchema },
+  { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
+  { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };

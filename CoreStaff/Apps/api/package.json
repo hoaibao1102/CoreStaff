@@ -13,7 +13,10 @@
     "test:watch": "jest --watch",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
     "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
-    "seed": "ts-node-script src/database/seed/seed.ts"
+    "seed": "ts-node-script src/database/seed/seed.ts",
+    "seed:compensation:dry": "ts-node-script scripts/seed-compensation.ts",
+    "seed:compensation": "ts-node-script scripts/seed-compensation.ts --apply",
+    "verify:compensation": "ts-node-script scripts/verify-compensation-seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1135.0",
