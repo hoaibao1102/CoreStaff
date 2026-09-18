@@ -47,11 +47,10 @@ interface NavItem {
 function getNavGroups(user: AuthUser): NavGroup[] {
     const role = user.role;
 
-    const common: NavItem[] = [
-        { href: '/overview', label: 'Tổng quan', icon: LayoutDashboard },
-        { href: '/app/profile', label: 'Hồ sơ của tôi', icon: UserRound },
-    ];
-    if (user.organizationId) {
+    const common: NavItem[] = role === 'EMPLOYEE'
+        ? []
+        : [{ href: '/overview', label: 'Tổng quan', icon: LayoutDashboard }];
+    if (user.organizationId && role !== 'EMPLOYEE') {
         common.push({ href: '/hr/departments', label: 'Phòng ban', icon: Building2 });
     }
 
@@ -74,6 +73,7 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                 // matches the routes (§16.2 / AC-HR-SELF-01).
                 title: 'Nhân sự',
                 items: [
+                    { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
                     { href: '/hr/periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
                     { href: '/hr/payroll-runs', label: 'Payroll & Payslip', icon: WalletCards },
                 ],
@@ -108,7 +108,7 @@ function getNavGroups(user: AuthUser): NavGroup[] {
     return [
         {
             title: 'Menu chính',
-            items: [...common, ...managerItems],
+            items: role === 'EMPLOYEE' ? [...managerItems, ...common] : [...common, ...managerItems],
         },
     ];
 }
