@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
@@ -115,6 +115,7 @@ export function EmployeeCreateDialog({
     const formRef = useRef<HTMLFormElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [tempPassword, setTempPassword] = useState<string | null>(null);
+    const [showTempPassword, setShowTempPassword] = useState(false);
     const [copied, setCopied] = useState(false);
     // 'link' is the default so the existing eligible-accounts flow (and its
     // tests/e2e) is untouched; 'new' provisions an EMPLOYEE account (TASK-120).
@@ -188,6 +189,7 @@ export function EmployeeCreateDialog({
             // holder on the parent. The panel dies with the dialog.
             const password = (created as { tempPassword?: string } | undefined)?.tempPassword;
             setTempPassword(password ?? null);
+            setShowTempPassword(false);
             setCopied(false);
             toast.success('Tạo hồ sơ thành công', 'Hồ sơ nhân sự đã được tạo.');
             onCreated(created);
@@ -226,6 +228,7 @@ export function EmployeeCreateDialog({
                         // The one-time password dies with the dialog — never kept
                         // after close (not in localStorage, not in any holder).
                         setTempPassword(null);
+                        setShowTempPassword(false);
                         setCopied(false);
                     }
                     onOpenChange(next);
@@ -255,7 +258,18 @@ export function EmployeeCreateDialog({
                             <div>
                                 <FormLabel htmlFor="create-temp-password">Mật khẩu tạm thời (một lần)</FormLabel>
                                 <div className="flex gap-2">
-                                    <code id="create-temp-password" className="min-h-11 select-all rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-base font-semibold tracking-wide">{tempPassword}</code>
+                                    <code id="create-temp-password" className="min-h-11 min-w-0 flex-1 select-all overflow-x-auto rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-base font-semibold tracking-wide">{showTempPassword ? tempPassword : '••••••••••••'}</code>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="min-h-11"
+                                        onClick={() => setShowTempPassword((visible) => !visible)}
+                                        aria-label={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                        title={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                    >
+                                        {showTempPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                                        <span className="sr-only">{showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</span>
+                                    </Button>
                                     <Button type="button" variant="outline" className="min-h-11" onClick={() => void copyPassword()}>
                                         {copied ? 'Đã chép' : 'Chép'}
                                     </Button>
