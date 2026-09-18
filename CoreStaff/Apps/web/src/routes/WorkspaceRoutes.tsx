@@ -141,9 +141,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (route === '/app/attendance' && user.role === 'HR') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <AttendanceScreen user={user} />
-        </section>
+        <AttendanceScreen user={user} />
       </WorkspaceShell>
     );
   }
@@ -187,15 +185,19 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (route === '/app/attendance' && (user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER')) {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <AttendanceScreen user={user} />
-        </section>
+        <AttendanceScreen user={user} />
       </WorkspaceShell>
     );
   }
 
   if (user.role === 'EMPLOYEE' && route === '/app/attendance/history') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><AttendanceHistoryScreen /></section></WorkspaceShell>;
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+        <div className="mx-auto w-full max-w-md md:max-w-2xl px-3 py-2 sm:px-6 sm:py-6">
+          <AttendanceHistoryScreen />
+        </div>
+      </WorkspaceShell>
+    );
   }
 
   if (user.role === 'EMPLOYEE' && route === '/app/leave') {

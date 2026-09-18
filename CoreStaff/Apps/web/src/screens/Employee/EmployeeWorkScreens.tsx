@@ -12,14 +12,10 @@ const attendanceRows = [
   ['14/09/2026', '08:00', '17:01', '8 giờ 01 phút', 'Hoàn thành'],
 ];
 
+import { AttendanceHistoryView } from '../Attendance/components/AttendanceHistoryView';
+
 export function AttendanceHistoryScreen() {
-  return <div className="space-y-6">
-    <div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Lịch sử chấm công</h1><p className="mt-2 text-sm text-muted-foreground">Theo dõi giờ vào, giờ ra và tổng thời gian làm việc.</p></div>
-    <div className="grid gap-4 sm:grid-cols-3">
-      {[['Ngày công', '20/22'], ['Tổng giờ', '160 giờ 24 phút'], ['Đi muộn', '2 lần']].map(([label, value]) => <Card key={label}><CardContent className="p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></CardContent></Card>)}
-    </div>
-    <Card><CardHeader className="border-b"><CardTitle>Tháng 09/2026</CardTitle><CardDescription>Danh sách chấm công của bạn</CardDescription></CardHeader><CardContent className="overflow-x-auto p-0"><table className="w-full text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="p-4">Ngày</th><th className="p-4">Vào ca</th><th className="p-4">Ra ca</th><th className="p-4">Tổng giờ</th><th className="p-4">Trạng thái</th></tr></thead><tbody>{attendanceRows.map(row => <tr key={row[0]} className="border-b last:border-0"><td className="p-4 font-medium">{row[0]}</td><td className="p-4">{row[1]}</td><td className="p-4">{row[2]}</td><td className="p-4">{row[3]}</td><td className="p-4"><Badge variant={row[4] === 'Hoàn thành' ? 'default' : 'secondary'}>{row[4]}</Badge></td></tr>)}</tbody></table></CardContent></Card>
-  </div>;
+  return <AttendanceHistoryView />;
 }
 
 export function LeaveOvertimeScreen() {
