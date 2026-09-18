@@ -172,3 +172,41 @@ export const employmentHistoryExample = {
 	changedBy: '66f1b2c3d4e5f60718293a4b',
 	createdAt: '2026-09-15T03:20:00.000Z',
 };
+
+export const contractExample = {
+	_id: '66f1b2c3d4e5f60718293f01',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	employeeProfileId: '66f1b2c3d4e5f60718293d01',
+	contractType: 'FIXED_TERM',
+	status: 'ACTIVE',
+	effectiveDate: '2026-01-01T00:00:00.000Z',
+	expiryDate: '2026-12-31T00:00:00.000Z',
+	endDate: null,
+	statusReason: 'Ky hop dong chinh thuc sau thu viec.',
+	statusChangedAt: '2026-09-15T03:20:00.000Z',
+	note: 'Xác định thời hạn 12 tháng.',
+	createdAt: '2026-09-15T03:20:00.000Z',
+	updatedAt: '2026-09-15T03:20:00.000Z',
+};
+
+/** Read endpoints add resolved owner names + the derived expiry warning. */
+export const contractReadExample = {
+	...contractExample,
+	employeeFullName: 'Nguyen Van An',
+	employeeCode: 'TVS-0248',
+	isExpiringSoon: true,
+	isExpired: false,
+	expiryWarningDays: 15,
+};
+
+export const employeeDocumentExample = {
+	_id: '66f1b2c3d4e5f60718293f02',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	employeeProfileId: '66f1b2c3d4e5f60718293d01',
+	contractId: '66f1b2c3d4e5f60718293f01',
+	originalName: 'HDLD_2026.pdf',
+	mimeType: 'application/pdf',
+	sizeBytes: 245760,
+	uploadedBy: '66f1b2c3d4e5f60718293a4b',
+	createdAt: '2026-09-15T03:20:00.000Z',
+};

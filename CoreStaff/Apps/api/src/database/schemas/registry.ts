@@ -7,6 +7,8 @@ import { DepartmentSchema } from './department.schema';
 import { PositionSchema } from './position.schema';
 import { EmployeeProfileSchema } from './employee-profile.schema';
 import { EmploymentHistorySchema } from './employment-history.schema';
+import { EmploymentContractSchema } from './employment-contract.schema';
+import { EmployeeDocumentSchema } from './employee-document.schema';
 import { WorkplaceSchema } from './workplace.schema';
 import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
@@ -25,6 +27,8 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Position', schema: PositionSchema },
   { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
   { name: 'EmploymentHistory', schema: EmploymentHistorySchema },
+  { name: 'EmploymentContract', schema: EmploymentContractSchema },
+  { name: 'EmployeeDocument', schema: EmployeeDocumentSchema },
   { name: 'Workplace', schema: WorkplaceSchema },
   { name: 'ShiftTemplate', schema: ShiftTemplateSchema },
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
@@ -32,6 +36,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
 export { DepartmentSchema, PositionSchema, EmployeeProfileSchema, EmploymentHistorySchema, WorkplaceSchema };
+export { EmploymentContractSchema, EmployeeDocumentSchema };
 export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
 export { Organization } from './organization.schema';
@@ -42,6 +47,8 @@ export { Department } from './department.schema';
 export { Position } from './position.schema';
 export { EmployeeProfile } from './employee-profile.schema';
 export { EmploymentHistory } from './employment-history.schema';
+export { EmploymentContract } from './employment-contract.schema';
+export { EmployeeDocument } from './employee-document.schema';
 export { Workplace } from './workplace.schema';
 export { ShiftTemplate } from './shift-template.schema';
 
