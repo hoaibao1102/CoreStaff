@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   ArrowLeft,
   BriefcaseBusiness,
   CalendarDays,
   ContactRound,
   CreditCard,
+  Download,
+  FileText,
   Hash,
   IdCard,
   Mail,
@@ -22,6 +24,7 @@ import { Button } from '../../components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
 import { Skeleton } from '../../components/skeleton';
 import { useHrResource } from '../../lib/useHrResource';
+import { toast } from '../../components/toast';
 import {
   EMPLOYMENT_STATUS_BADGE,
   EMPLOYMENT_STATUS_LABELS,
@@ -30,7 +33,14 @@ import {
 } from '../../lib/types';
 import { roleLabel } from '../../lib/labels';
 import type { AuthUser } from '../../services/auth';
-import { getMyEmployeeProfile, hrErrorMessage, type EmployeeProfile } from '../../services/hrService';
+import {
+  getMyEmployeeProfile,
+  getMyDocuments,
+  downloadDocument,
+  hrErrorMessage,
+  type EmployeeProfile,
+  type EmployeeDocument,
+} from '../../services/hrService';
 import { SelfProvisionDialog } from '../EmployeeDirectory/components/SelfProvisionDialog';
 
 /* ───────── Helpers ───────── */
@@ -322,6 +332,89 @@ function InfoSection({
   );
 }
 
+/* ───────── Self Documents (TASK-029) ───────── */
+/** Own-documents list for the caller (`/app/documents`, no @Roles — mirrors the
+ * `GET /hr/employees/me` self-service precedent). Download is tenant+owner-scoped
+ * server-side; a document from someone else's profile 404s. */
+function MyDocumentsSection({ apiBase }: { apiBase: string }) {
+  const [docs, setDocs] = useState<EmployeeDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setFailed(false);
+      setDocs(await getMyDocuments(apiBase));
+    } catch {
+      setDocs([]);
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  if (loading) {
+    return (
+      <Card className="rounded-xl border-border shadow-none">
+        <CardHeader className="border-b border-border/50 pb-4">
+          <CardTitle className="text-base font-semibold text-foreground">Tài liệu của tôi</CardTitle>
+        </CardHeader>
+        <CardContent><Skeleton className="h-16 rounded-lg" /></CardContent>
+      </Card>
+    );
+  }
+  if (failed) {
+    return (
+      <Card className="rounded-xl border-border shadow-none">
+        <CardHeader className="border-b border-border/50 pb-4">
+          <CardTitle className="text-base font-semibold text-foreground">Tài liệu của tôi</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Không tải được danh sách tài liệu.</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>Thử lại</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card className="rounded-xl border-border shadow-none">
+      <CardHeader className="border-b border-border/50 pb-4">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <span className="rounded-lg bg-muted p-2 text-muted-foreground"><FileText className="h-4 w-4" aria-hidden="true" /></span>
+          Tài liệu của tôi
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {docs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Chưa có tài liệu nào.</p>
+        ) : (
+          <ul className="divide-y divide-border/50">
+            {docs.map((doc) => (
+              <li key={doc._id} className="flex items-center gap-3 py-2.5">
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground hover:underline"
+                  title={`Tải ${doc.originalName}`}
+                  onClick={() => void downloadDocument(apiBase, doc._id).catch((err) => toast.error('Không thể tải xuống', hrErrorMessage(err)))}
+                >
+                  {doc.originalName}
+                </button>
+                <span className="shrink-0 text-xs text-muted-foreground">{(doc.sizeBytes / 1024).toFixed(0)} KB</span>
+                <Download className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ───────── Main Screen ───────── */
 
 export function EmployeeProfileScreen({
@@ -435,6 +528,8 @@ export function EmployeeProfileScreen({
         <>
           <ProfileHeader user={user} profile={profile} />
           <SummaryStats profile={profile} user={user} />
+
+          {apiBase && profile && <MyDocumentsSection apiBase={apiBase} />}
 
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-5">

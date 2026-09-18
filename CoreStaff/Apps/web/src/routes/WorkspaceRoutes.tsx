@@ -1,5 +1,6 @@
 import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
+import { ContractsScreen } from '../screens/Contracts/ContractsScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
@@ -9,6 +10,7 @@ import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
 import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
 import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
+import { CompensationScreen } from '../screens/Compensation/CompensationScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
@@ -86,10 +88,16 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   const route = path.replace(/\/$/, '') || '/';
 
   // ── Forbidden guard ──────────────────────────────────────────────────
-  // Every HR directory read requires an HR with a tenant; the route never
-  // renders for anyone else. The SYSTEM_ADMIN branch below must be skipped for
-  // these paths, so it also sits behind the role check.
-  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees' || route === '/hr/assignments')) {
+  // Every HR directory/contract/assignment read requires an HR with a tenant; the
+  // route never renders for anyone else. The SYSTEM_ADMIN branch below must be
+  // skipped for these paths, so it also sits behind the role check.
+  const hrScoped =
+    route === '/hr/employees' || route.startsWith('/hr/employees/') ||
+    route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
+    route === '/hr/assignments' || route === '/hr/salary-profiles' ||
+    route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
+    route === '/hr/kpi-inputs';
+  if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -156,8 +164,22 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               apiBase={apiBase}
               employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
             />
+          ) : route === '/hr/contracts' || route.startsWith('/hr/contracts/') ? (
+            <ContractsScreen
+              user={user}
+              apiBase={apiBase}
+              contractId={route.startsWith('/hr/contracts/') ? route.split('/').pop() : undefined}
+            />
           ) : route === '/hr/assignments' ? (
             <AssignmentScreen user={user} apiBase={apiBase} />
+          ) : route === '/hr/salary-profiles' ? (
+            <CompensationScreen apiBase={apiBase} kind="salary-profiles" />
+          ) : route === '/hr/organization-allowances' ? (
+            <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
+          ) : route === '/hr/attendance-bonus-policies' ? (
+            <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
+          ) : route === '/hr/kpi-inputs' ? (
+            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.

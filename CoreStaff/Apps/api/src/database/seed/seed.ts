@@ -7,10 +7,13 @@ import { DepartmentSchema } from '../schemas/department.schema';
 import { PositionSchema } from '../schemas/position.schema';
 import { EmployeeProfileSchema } from '../schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from '../schemas/employment-history.schema';
+import { EmploymentContractSchema } from '../schemas/employment-contract.schema';
+import { EmployeeDocumentSchema } from '../schemas/employee-document.schema';
+import { AllowanceCatalogSchema, AttendanceBonusTemplateSchema, LaborCompliancePolicySchema } from '../schemas/compensation.schema';
 import { EmploymentStatus, Role, OrganizationStatus, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
-import { ORGS, HRS, DEPARTMENTS, POSITIONS, EMPLOYEES, DEV_SEED_PASSWORD } from './seed-data';
+import { ORGS, HRS, DEPARTMENTS, POSITIONS, EMPLOYEES, CONTRACTS, DOCUMENTS, DEV_SEED_PASSWORD, type ContractSeed, type DocumentSeed } from './seed-data';
 
 /**
  * Idempotent seed: TASK-019 Organizations + HR/System Admin accounts, plus the
@@ -32,6 +35,8 @@ type UserModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 type CatalogModel = mongoose.Model<IdDoc & { organizationId: mongoose.Types.ObjectId; code: string; name: string; active: boolean }>;
 type ProfileModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 type HistoryModel = mongoose.Model<IdDoc & Record<string, unknown>>;
+type ContractModel = mongoose.Model<IdDoc & Record<string, unknown>>;
+type DocumentModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 
 /** Row shape shared by HRS and EMPLOYEES — every seeded account is an employee. */
 interface AccountSeed {
@@ -93,6 +98,11 @@ async function main(): Promise<void> {
     const Position = connection.model('Position', PositionSchema) as unknown as CatalogModel;
     const Profile = connection.model('EmployeeProfile', EmployeeProfileSchema) as unknown as ProfileModel;
     const History = connection.model('EmploymentHistory', EmploymentHistorySchema) as unknown as HistoryModel;
+    const Contract = connection.model('EmploymentContract', EmploymentContractSchema) as unknown as ContractModel;
+    const Doc = connection.model('EmployeeDocument', EmployeeDocumentSchema) as unknown as DocumentModel;
+    const LaborPolicy = connection.model('LaborCompliancePolicy', LaborCompliancePolicySchema);
+    const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
+    const BonusTemplate = connection.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
 
     const orgIds = new Map<string, mongoose.Types.ObjectId>();
     for (const { code, name } of ORGS) {
@@ -106,6 +116,30 @@ async function main(): Promise<void> {
       orgIds.set(code, created._id);
       console.log(`[seed] CREATED org ${code}`);
     }
+
+    // TASK-031..034 compensation foundations. Values are seed configuration,
+    // never hard-coded in calculation services. Re-running is idempotent.
+    for (const organizationId of orgIds.values()) {
+      await LaborPolicy.updateOne(
+        { organizationId, version: 1 },
+        { $setOnInsert: { organizationId, effectiveFrom: new Date('2026-01-01'), probationMinimumRate: 0.85, version: 1, active: true } },
+        { upsert: true },
+      );
+    }
+    for (const item of [
+      { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', defaultTaxable: true, defaultInsuranceBased: false },
+    ]) await AllowanceCatalog.updateOne({ code: item.code }, { $setOnInsert: { ...item, active: true } }, { upsert: true });
+    await BonusTemplate.updateOne(
+      { code: 'ATTENDANCE_100_70_50' },
+      { $setOnInsert: { code: 'ATTENDANCE_100_70_50', name: 'Chuyên cần 100/70/50', templateVersion: 1, active: true, tiers: [
+        { order: 1, percentage: 100, conditions: [{ metric: 'LATE_COUNT', operator: 'EQ', value: 0 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+        { order: 2, percentage: 70, conditions: [{ metric: 'LATE_COUNT', operator: 'LTE', value: 2 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+        { order: 3, percentage: 50, conditions: [{ metric: 'LATE_COUNT', operator: 'LTE', value: 4 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+      ] } },
+      { upsert: true },
+    );
 
     const passwordHash = await seedPasswordHash();
     // HR rows carry no role in seed-data; they are the tenant's HR accounts.
@@ -162,6 +196,57 @@ async function main(): Promise<void> {
         changedBy: hrIds.get(account.orgCode),
       });
       console.log(`[seed] CREATED history ${account.employeeCode}`);
+    }
+
+    // Contracts (TASK-028/030) + document metadata (TASK-029) after every
+    // profile exists, so both can resolve `employeeProfileId` in one pass.
+    // Offsets are day-relative so the dashboard's 30-day warning stays live.
+    const contractIds = new Map<string, mongoose.Types.ObjectId>();
+    for (const row of CONTRACTS) {
+      const profileId = await resolveProfileId(Profile, orgIds, userIds, row);
+      if (!profileId) continue;
+      const key = `${row.orgCode}\\${row.employeeCode}`;
+      const existing = await Contract.findOne({ organizationId: requireOrg(orgIds, row.orgCode), employeeProfileId: profileId }).exec();
+      if (existing) {
+        contractIds.set(key, existing._id);
+        console.log(`[seed] SKIPPED contract ${row.orgCode}/${row.employeeCode}`);
+        continue;
+      }
+      const created = await Contract.create(toContractRow(orgIds, profileId, row));
+      contractIds.set(key, created._id);
+      console.log(`[seed] CREATED contract ${row.orgCode}/${row.employeeCode} (${row.status})`);
+    }
+
+    for (const row of DOCUMENTS) {
+      const profileId = await resolveProfileId(Profile, orgIds, userIds, row);
+      if (!profileId) continue;
+      const contractKey = `${row.orgCode}\\${row.contractCode}`;
+      const contractId = contractIds.get(contractKey);
+      if (!contractId) {
+        console.error(`[seed] SKIPPED document ${row.originalName}: no seeded contract for ${row.contractCode}`);
+        continue;
+      }
+      const organizationId = requireOrg(orgIds, row.orgCode);
+      const existing = await Doc.findOne({ organizationId, employeeProfileId: profileId, originalName: row.originalName }).exec();
+      if (existing) {
+        console.log(`[seed] SKIPPED document ${row.originalName}`);
+        continue;
+      }
+      // Metadata row only — storageKey is a seed ObjectId with no real S3 object
+      // (downloads 404 by design; AC-CONTRACT-01 file privacy).
+      const docId = new mongoose.Types.ObjectId();
+      await Doc.create({
+        _id: docId,
+        organizationId,
+        employeeProfileId: profileId,
+        contractId,
+        originalName: row.originalName,
+        mimeType: row.mimeType,
+        sizeBytes: row.sizeBytes,
+        storageKey: `${row.orgCode}/${docId}`,
+        uploadedBy: hrIds.get(row.orgCode),
+      });
+      console.log(`[seed] CREATED document ${row.originalName}`);
     }
 
     await seedSystemAdmin(User);
@@ -274,6 +359,40 @@ async function upsertCatalog(
   const created = await Model.create({ organizationId, code: row.code, name: row.name, active: true });
   console.log(`[seed] CREATED ${label} ${row.orgCode}/${row.code}`);
   return created._id;
+}
+
+/** Resolves the seeded profile for a contract/document row; null when the seed is inconsistent. */
+async function resolveProfileId(
+  Profile: ProfileModel,
+  orgIds: Map<string, mongoose.Types.ObjectId>,
+  userIds: Map<string, mongoose.Types.ObjectId>,
+  row: { orgCode: string; employeeCode: string },
+): Promise<mongoose.Types.ObjectId | null> {
+  const userId = userIds.get(row.employeeCode);
+  if (!userId) throw new Error(`Seed data references unknown user: ${row.employeeCode}`);
+  const profile = await Profile.findOne({ organizationId: requireOrg(orgIds, row.orgCode), userId }).exec();
+  return profile?._id ?? null;
+}
+
+/** Contract seed row → document shape. Day offsets resolve against seed time so the
+ * server reads the relative gaps (TASK-030 warning window) rather than stale dates. */
+function toContractRow(
+  orgIds: Map<string, mongoose.Types.ObjectId>,
+  employeeProfileId: mongoose.Types.ObjectId,
+  row: ContractSeed,
+): Record<string, unknown> {
+  const today = new Date();
+  const inDays = (n = 0) => new Date(today.getTime() + n * 86_400_000);
+  return {
+    organizationId: requireOrg(orgIds, row.orgCode),
+    employeeProfileId,
+    contractType: row.contractType,
+    status: row.status,
+    effectiveDate: inDays(row.effectiveOffsetDays ?? 0),
+    expiryDate: row.expiryOffsetDays !== undefined ? inDays(row.expiryOffsetDays) : undefined,
+    endDate: row.endDate ? new Date(row.endDate) : undefined,
+    note: row.note,
+  };
 }
 
 /** Platform-local SYSTEM_ADMIN from env (PLATFORM_ADMIN_EMAIL / _PASSWORD); orgId null. */
