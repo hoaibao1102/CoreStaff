@@ -219,9 +219,9 @@ export function AssignmentCreateDialog({
             </div>
           ) : loadingEmployees ? (
             <div className="space-y-1.5">
-              <FormLabel htmlFor="assignment-userId" required>
+              <label htmlFor="assignment-userId" className="text-sm font-medium">
                 Nhân viên <span className="text-destructive">*</span>
-              </FormLabel>
+              </label>
               <div className="flex items-center gap-2 min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
                 <LoaderCircle className="animate-spin size-4 motion-reduce:animate-none" aria-hidden="true" />
                 <span className="text-muted-foreground">Đang tải danh sách nhân viên...</span>
@@ -229,9 +229,9 @@ export function AssignmentCreateDialog({
             </div>
           ) : employeeError ? (
             <div className="space-y-1.5">
-              <FormLabel htmlFor="assignment-userId" required>
+              <label htmlFor="assignment-userId" className="text-sm font-medium">
                 Nhân viên <span className="text-destructive">*</span>
-              </FormLabel>
+              </label>
               <div className="flex items-center gap-2 min-h-11 w-full rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 <span>{employeeError}</span>
               </div>
@@ -239,9 +239,9 @@ export function AssignmentCreateDialog({
             </div>
           ) : !hasEligibleEmployees ? (
             <div className="space-y-1.5">
-              <FormLabel htmlFor="assignment-userId" required>
+              <label htmlFor="assignment-userId" className="text-sm font-medium">
                 Nhân viên <span className="text-destructive">*</span>
-              </FormLabel>
+              </label>
               <div className="flex flex-col items-center justify-center gap-2 min-h-11 w-full rounded-lg border border-input bg-muted px-3 py-4 text-center">
                 <Users className="size-5 text-muted-foreground" aria-hidden="true" />
                 <p className="text-sm text-muted-foreground">Không còn nhân viên chưa được phân công trong phòng ban này.</p>

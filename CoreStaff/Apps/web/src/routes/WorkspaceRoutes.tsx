@@ -11,6 +11,7 @@ import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
 import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { CompensationScreen } from '../screens/Compensation/CompensationScreen';
+import { SalaryProfilesScreen } from '../screens/SalaryProfiles/SalaryProfilesScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
@@ -173,7 +174,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/assignments' ? (
             <AssignmentScreen user={user} apiBase={apiBase} />
           ) : route === '/hr/salary-profiles' ? (
-            <CompensationScreen apiBase={apiBase} kind="salary-profiles" />
+            <SalaryProfilesScreen apiBase={apiBase} />
           ) : route === '/hr/organization-allowances' ? (
             <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
           ) : route === '/hr/attendance-bonus-policies' ? (
