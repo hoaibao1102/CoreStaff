@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { FileText, Plus, AlarmClock, SlidersHorizontal, X } from 'lucide-react';
+import { FileText, Plus, AlarmClock, ShieldAlert, SlidersHorizontal, X } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { navigationEvent } from '../../components/AppLink';
 import { Card, CardContent } from '../../components/card';
@@ -7,8 +7,8 @@ import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { Skeleton } from '../../components/skeleton';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
-import { CONTRACT_STATUS_LABELS } from '../../lib/types';
-import { hrErrorMessage, type EmploymentContract } from '../../services/hrService';
+import { CONTRACT_STATUS_LABELS, CONTRACT_FINDING_LABELS } from '../../lib/types';
+import { hrErrorMessage, type EmploymentContract, type ContractFinding } from '../../services/hrService';
 import { useHrResource } from '../../lib/useHrResource';
 import { ContractTable } from './components/ContractTable';
 import { ContractCreateDialog, ContractDetailDialog, type ContractEmployee } from './components/ContractDialogs';
@@ -81,9 +81,10 @@ export function ContractsScreen({
   const [createOpen, setCreateOpen] = useState(false);
 
   const loader = useCallback(async () => {
-    const [contracts, employees] = await Promise.all([
+    const [contracts, employees, compliance] = await Promise.all([
       import('../../services/hrService').then((m) => m.listContracts(apiBase!, { status })),
       import('../../services/hrService').then((m) => m.listEmployees(apiBase!, '', '')),
+      import('../../services/hrService').then((m) => m.getContractCompliance(apiBase!).catch(() => ({ findings: [], counts: {} }))),
     ]);
     const tenantEmployees = employees.filter((row) => row.organizationId === user.organizationId);
     // Employee → {code, name} for the table and the create dialog picker.
@@ -96,7 +97,7 @@ export function ContractsScreen({
         employeeFullName: c.employeeFullName ?? (owner ? owner.fullName ?? owner.employeeCode : null),
       };
     });
-    return { contracts: enriched, employees: tenantEmployees };
+    return { contracts: enriched, employees: tenantEmployees, compliance };
   }, [apiBase, status, user.organizationId]);
 
   const resource = useHrResource(allowed && apiBase ? loader : null);
@@ -104,6 +105,7 @@ export function ContractsScreen({
   const error = resource.error ? hrErrorMessage(resource.error) : null;
   const contracts: EmploymentContract[] = resource.data?.contracts ?? [];
   const employees: ContractEmployee[] = resource.data?.employees ?? [];
+  const findings: ContractFinding[] = resource.data?.compliance?.findings ?? [];
 
   const term = query.trim().toLocaleLowerCase('vi');
   const filtered = contracts.filter((c) => !term || `${c.employeeCode ?? ''} ${c.employeeFullName ?? ''}`.toLocaleLowerCase('vi').includes(term));
@@ -114,7 +116,6 @@ export function ContractsScreen({
 
   const activeCount = contracts.filter((c) => c.status === 'ACTIVE').length;
   const expiringSoon = contracts.filter((c) => c.isExpiringSoon).length;
-  const draftCount = contracts.filter((c) => c.status === 'DRAFT').length;
 
   if (!allowed) return <EmployeeDataState status="forbidden" />;
   if (!apiBase) return <EmployeeDataState status="unavailable" />;
@@ -162,8 +163,36 @@ export function ContractsScreen({
         <StatCard label="Kết quả" value={total} icon={FileText} ready={!loading} />
         <StatCard label="Đang hiệu lực" value={activeCount} icon={FileText} ready={!loading} />
         <StatCard label="Sắp hết hạn" value={expiringSoon} icon={AlarmClock} ready={!loading} />
-        <StatCard label="Nháp" value={draftCount} icon={FileText} ready={!loading} />
+        <StatCard label="Cần xử lý" value={findings.length} icon={ShieldAlert} ready={!loading} />
       </div>
+
+      {findings.length > 0 && (
+        <Card>
+          <CardContent className="space-y-2 p-4 sm:p-6">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-red-600" aria-hidden="true" />
+              <h2 className="text-base font-semibold text-foreground">Cần HR xử lý</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Hệ thống chỉ cảnh báo, không tự đổi trạng thái nhân viên hay hợp đồng — hợp đồng hết hạn mà người lao động vẫn làm việc là trạng thái hợp pháp cần HR chủ động xử lý.
+            </p>
+            <ul className="divide-y">
+              {findings.map((f) => (
+                <li key={`${f.code}:${f.employeeProfileId}:${f.contractId ?? ''}`} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <span className="font-medium text-foreground">
+                    {f.employeeFullName || f.employeeCode || f.employeeProfileId}
+                    {f.employeeCode && f.employeeFullName ? ` · ${f.employeeCode}` : ''}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {CONTRACT_FINDING_LABELS[f.code] ?? f.code}
+                    {f.daysPastExpiry ? ` (${f.daysPastExpiry} ngày)` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-6">

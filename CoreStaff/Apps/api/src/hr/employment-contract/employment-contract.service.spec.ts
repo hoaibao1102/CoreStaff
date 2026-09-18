@@ -14,6 +14,8 @@ interface ContractRow {
   effectiveDate: Date;
   expiryDate?: Date;
   endDate?: Date;
+  statusReason?: string;
+  statusChangedAt?: Date;
   note?: string;
 }
 
@@ -22,6 +24,7 @@ interface ProfileRow {
   organizationId: string;
   userId: string;
   employeeCode: string;
+  employmentStatus?: string;
 }
 
 interface UserRow {
@@ -58,9 +61,10 @@ function buildContractModel(rows: ContractRow[]) {
       return { toObject: () => ({ ...row }) };
     },
     find(filter: Record<string, unknown>) {
-      return {
-        sort: () => ({ lean: async () => rows.filter((r) => matches(r as never, filter)) }),
-      };
+      // Chainable: the service calls both `.lean()` and `.sort(...).lean()`.
+      const run = async () => rows.filter((r) => filterMatches(r as never, filter));
+      const query = { sort: () => query, lean: run };
+      return query;
     },
     findOne(filter: Record<string, unknown>) {
       return leanQuery('findOne', () => {
@@ -150,30 +154,35 @@ describe('computeExpiryWarning', () => {
   it('flags an ACTIVE contract inside the 30-day window', () => {
     expect(computeExpiryWarning(ContractStatus.ACTIVE, at(15), now)).toEqual({
       isExpiringSoon: true,
+      isExpired: false,
       expiryWarningDays: 15,
     });
   });
   it('does not flag contracts outside the window', () => {
     expect(computeExpiryWarning(ContractStatus.ACTIVE, at(31), now)).toEqual({
       isExpiringSoon: false,
+      isExpired: false,
       expiryWarningDays: 31,
     });
   });
   it('only flags ACTIVE contracts', () => {
     expect(computeExpiryWarning(ContractStatus.DRAFT, at(10), now)).toEqual({
       isExpiringSoon: false,
+      isExpired: false,
       expiryWarningDays: null,
     });
   });
-  it('never flags a date in the past (data drift — HR fixes status)', () => {
+  it('surfaces a past expiry as drift instead of hiding it', () => {
     expect(computeExpiryWarning(ContractStatus.ACTIVE, at(-10), now)).toEqual({
       isExpiringSoon: false,
+      isExpired: true,
       expiryWarningDays: 0,
     });
   });
   it('handles an undefined expiryDate', () => {
     expect(computeExpiryWarning(ContractStatus.ACTIVE, undefined, now)).toEqual({
       isExpiringSoon: false,
+      isExpired: false,
       expiryWarningDays: null,
     });
   });
@@ -295,9 +304,26 @@ describe('EmploymentContractService', () => {
       const out = await service.changeStatus('org-a', 'c1', {
         newStatus: ContractStatus.TERMINATED,
         effectiveDate: '2026-03-01',
+        reason: '  Nhân viên nghỉ việc  ',
       });
       expect(out.endDate).toEqual(new Date('2026-03-01T00:00:00.000Z'));
       expect(out.status).toBe(ContractStatus.TERMINATED);
+      // TASK-030: the HR-typed reason must be persisted, trimmed, not dropped.
+      expect(out.statusReason).toBe('Nhân viên nghỉ việc');
+      expect(out.statusChangedAt).toBeInstanceOf(Date);
+    });
+
+    it('a later transition without a reason clears the stale one', async () => {
+      const service = buildService([
+        contractRow({ status: ContractStatus.EXPIRED, statusReason: 'Hết hạn', endDate: new Date('2026-01-01') }),
+      ]);
+      const out = await service.changeStatus('org-a', 'c1', {
+        newStatus: ContractStatus.ACTIVE,
+        effectiveDate: '2026-02-01',
+        expiryDate: '2026-12-31',
+      });
+      expect(out.status).toBe(ContractStatus.ACTIVE);
+      expect(out.statusReason).toBeUndefined();
     });
 
     it('renewal EXPIRED→ACTIVE requires new dates', async () => {
@@ -305,13 +331,141 @@ describe('EmploymentContractService', () => {
       await expect(service.changeStatus('org-a', 'c1', { newStatus: ContractStatus.ACTIVE })).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('renewal appends a new row and freezes the expired term (no overwrite)', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', status: ContractStatus.EXPIRED, effectiveDate: new Date('2025-01-01T00:00:00.000Z'), expiryDate: new Date('2025-12-31T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows);
       const out = await service.changeStatus('org-a', 'c1', {
         newStatus: ContractStatus.ACTIVE,
-        effectiveDate: '2027-01-01',
-        expiryDate: '2027-12-31',
+        effectiveDate: '2026-01-01',
+        expiryDate: '2026-12-31',
       });
+      // A distinct new row, ACTIVE, with the renewal dates...
+      expect(out._id).not.toBe('c1');
       expect(out.status).toBe(ContractStatus.ACTIVE);
-      expect(out.effectiveDate).toEqual(new Date('2027-01-01T00:00:00.000Z'));
+      expect(out.effectiveDate).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+      // ...and the original term left EXPIRED with its dates intact (§46 severance).
+      const old = rows.find((r) => r._id === 'c1');
+      expect(old?.status).toBe(ContractStatus.EXPIRED);
+      expect(old?.expiryDate).toEqual(new Date('2025-12-31T00:00:00.000Z'));
+      expect(rows).toHaveLength(2);
+    });
+
+    it('refuses a renewal that overlaps an existing ACTIVE window', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', status: ContractStatus.EXPIRED }),
+        contractRow({ _id: 'c2', status: ContractStatus.ACTIVE, effectiveDate: new Date('2026-06-01T00:00:00.000Z'), expiryDate: new Date('2027-06-01T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows);
+      await expect(
+        service.changeStatus('org-a', 'c1', { newStatus: ContractStatus.ACTIVE, effectiveDate: '2026-07-01', expiryDate: '2027-07-01' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('allows back-to-back terms that only touch at the boundary', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', status: ContractStatus.EXPIRED }),
+        contractRow({ _id: 'c2', status: ContractStatus.ACTIVE, effectiveDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate: new Date('2026-12-31T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows);
+      // New window starts exactly when c2 ends → not an overlap.
+      const out = await service.changeStatus('org-a', 'c1', { newStatus: ContractStatus.ACTIVE, effectiveDate: '2026-12-31', expiryDate: '2027-12-31' });
+      expect(out.status).toBe(ContractStatus.ACTIVE);
+    });
+  });
+
+  describe('findContractAt', () => {
+    const p = [{ _id: 'p1', organizationId: 'org-a', userId: 'u1', employeeCode: 'TVS-0001' }];
+    const u = [{ _id: 'u1', organizationId: 'org-a', fullName: 'NVA' }];
+
+    it('returns the EXPIRED term that governed a past date, not the newest row', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', status: ContractStatus.EXPIRED, effectiveDate: new Date('2025-01-01T00:00:00.000Z'), expiryDate: new Date('2025-12-31T00:00:00.000Z') }),
+        contractRow({ _id: 'c2', status: ContractStatus.ACTIVE, effectiveDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate: new Date('2026-12-31T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows, p, u);
+      const out = await service.findContractAt('org-a', 'p1', new Date('2025-06-15T00:00:00.000Z'));
+      expect(out?._id).toBe('c1');
+    });
+
+    it('matches half-open windows (expiry day is exclusive)', async () => {
+      const rows = [contractRow({ _id: 'c1', effectiveDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate: new Date('2026-12-31T00:00:00.000Z') })];
+      const service = buildService(rows, p, u);
+      expect((await service.findContractAt('org-a', 'p1', new Date('2026-12-30T00:00:00.000Z')))?._id).toBe('c1');
+      expect(await service.findContractAt('org-a', 'p1', new Date('2026-12-31T00:00:00.000Z'))).toBeNull();
+    });
+
+    it('returns null outside every window and ignores DRAFT/TERMINATED', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', status: ContractStatus.DRAFT }),
+        contractRow({ _id: 'c2', status: ContractStatus.TERMINATED, effectiveDate: new Date('2024-01-01T00:00:00.000Z'), expiryDate: new Date('2024-12-31T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows, p, u);
+      expect(await service.findContractAt('org-a', 'p1', new Date('2024-06-01T00:00:00.000Z'))).toBeNull();
+    });
+  });
+
+  describe('findCompliance', () => {
+    const now = new Date('2026-09-18T00:00:00.000Z');
+    const profile = (id: string, status = 'ACTIVE'): ProfileRow => ({
+      _id: id,
+      organizationId: 'org-a',
+      userId: `u-${id}`,
+      employeeCode: id.toUpperCase(),
+      employmentStatus: status,
+    });
+
+    it('flags a working employee with no ACTIVE contract', async () => {
+      const service = buildService([contractRow({ _id: 'c1', status: ContractStatus.EXPIRED })], [profile('p1')]);
+      const out = await service.findCompliance('org-a', now);
+      expect(out.findings).toEqual([
+        expect.objectContaining({ code: 'EXPIRED_NOT_RENEWED', employeeProfileId: 'p1', contractId: 'c1' }),
+      ]);
+    });
+
+    it('flags a working employee with no contract at all', async () => {
+      const service = buildService([], [profile('p1')]);
+      const out = await service.findCompliance('org-a', now);
+      expect(out.findings[0].code).toBe('NO_CONTRACT');
+    });
+
+    it('does not flag covered employees or terminal ones', async () => {
+      const service = buildService(
+        [contractRow({ _id: 'c1' }), contractRow({ _id: 'c2', employeeProfileId: 'p2' })],
+        [profile('p1'), profile('p2', 'ACTIVE'), profile('p3', 'RESIGNED')],
+      );
+      const out = await service.findCompliance('org-a', now);
+      expect(out.findings).toHaveLength(0);
+    });
+
+    it('reports ACTIVE-past-expiry with days past, plus probation overdue', async () => {
+      const rows = [
+        contractRow({ _id: 'c1', expiryDate: new Date('2026-09-08T00:00:00.000Z') }),
+        contractRow({ _id: 'c2', employeeProfileId: 'p2', contractType: ContractType.PROBATION, expiryDate: new Date('2026-08-19T00:00:00.000Z') }),
+      ];
+      const service = buildService(rows, [profile('p1'), profile('p2', 'PROBATION')]);
+      const out = await service.findCompliance('org-a', now);
+      expect(out.counts.ACTIVE_PAST_EXPIRY).toBe(2);
+      expect(out.findings.find((f) => f.employeeProfileId === 'p1')).toEqual(
+        expect.objectContaining({ code: 'ACTIVE_PAST_EXPIRY', daysPastExpiry: 10, contractId: 'c1' }),
+      );
+      // Probation contract + PROBATION employee → both findings for p2.
+      expect(out.findings.filter((f) => f.employeeProfileId === 'p2').map((f) => f.code).sort()).toEqual([
+        'ACTIVE_PAST_EXPIRY',
+        'PROBATION_OVERDUE',
+      ]);
+    });
+
+    it('ignores DRAFT and TERMINATED contracts when judging coverage', async () => {
+      const service = buildService(
+        [contractRow({ _id: 'c1', status: ContractStatus.DRAFT }), contractRow({ _id: 'c2', status: ContractStatus.TERMINATED })],
+        [profile('p1')],
+      );
+      const out = await service.findCompliance('org-a', now);
+      expect(out.findings[0].code).toBe('NO_CONTRACT');
     });
   });
 });

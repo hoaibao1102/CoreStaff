@@ -50,6 +50,42 @@ export class EmploymentContractController {
 	}
 
 	@Roles('HR')
+	@Get('compliance')
+	@ApiOperation({
+		summary: 'Contract-compliance findings for working employees.',
+		description:
+			'Read-only: NO_CONTRACT / EXPIRED_NOT_RENEWED / ACTIVE_PAST_EXPIRY / PROBATION_OVERDUE. Never mutates employee or contract status — an expired contract plus a still-working employee is a legal state under BLLĐ 2019 §20.2 that HR must resolve deliberately.',
+	})
+	@ApiSuccess('Compliance findings.', [])
+	@ApiErrorExamples()
+	async compliance(@Tenant() organizationId: string | null) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.contracts.findCompliance(orgId);
+		return { success: true, data };
+	}
+
+	@Roles('HR')
+	@Get('at')
+	@ApiOperation({
+		summary: 'Contract in effect for an employee on a given date (date-window match).',
+		description:
+			'Reference for payroll/severance: returns the ACTIVE or EXPIRED contract whose effectiveDate <= asOf < expiryDate, not the newest row. 204 when none covers that day.',
+	})
+	@ApiResponse({ status: 200, description: 'The governing contract.', schema: { example: contractReadExample } })
+	@ApiResponse({ status: 204, description: 'No contract governs that date.' })
+	@ApiErrorExamples()
+	async contractAt(
+		@Tenant() organizationId: string | null,
+		@Query('employeeId') employeeId: string,
+		@Query('asOf') asOf: string,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.contracts.findContractAt(orgId, employeeId, new Date(asOf));
+		if (!data) return null;
+		return { success: true, data };
+	}
+
+	@Roles('HR')
 	@Get(':id')
 	@ApiOperation({ summary: 'Get an employment contract by id.' })
 	@ApiSuccess('Employment contract detail.', contractReadExample)

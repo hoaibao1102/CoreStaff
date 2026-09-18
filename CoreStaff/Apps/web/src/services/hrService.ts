@@ -115,11 +115,14 @@ export interface EmploymentContract {
     effectiveDate: string;
     expiryDate?: string;
     endDate?: string;
+    statusReason?: string;
+    statusChangedAt?: string;
     note?: string;
     createdAt?: string;
     updatedAt?: string;
     // Derived on-read (TASK-030), and resolved names by the backend.
     isExpiringSoon: boolean;
+    isExpired: boolean;
     expiryWarningDays: number | null;
     employeeCode?: string | null;
     employeeFullName?: string | null;
@@ -200,6 +203,7 @@ export const HR_ERROR_CODES: Record<string, string> = {
     EMPLOYMENT_CONTRACT_STATUS_TRANSITION_INVALID: 'Trạng thái hợp đồng không thể chuyển đổi như yêu cầu.',
     CONTRACT_TERMINATION_DATE_REQUIRED: 'Khi chấm dứt hợp đồng cần cung cấp ngày hiệu lực (ngày chấm dứt).',
     CONTRACT_RENEWAL_DATES_REQUIRED: 'Khi gia hạn hợp đồng cần cung cấp ngày hiệu lực và ngày hết hạn mới.',
+    EMPLOYMENT_CONTRACT_OVERLAPS_ACTIVE: 'Nhân viên này đã có hợp đồng đang hiệu lực trùng khoảng thời gian đó.',
 
     // Document errors (TASK-029)
     EMPLOYEE_DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu của nhân viên.',
@@ -481,6 +485,30 @@ export async function listContracts(
 
 export async function getContractById(base: string, id: string): Promise<EmploymentContract> {
     return hrRequest<EmploymentContract>(base, `/api/hr/contracts/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+/** Read-only compliance findings (mirrors api `ContractFindingCode`). */
+export type ContractFindingCode = 'NO_CONTRACT' | 'EXPIRED_NOT_RENEWED' | 'ACTIVE_PAST_EXPIRY' | 'PROBATION_OVERDUE';
+
+export interface ContractFinding {
+    code: ContractFindingCode;
+    employeeProfileId: string;
+    employeeCode?: string | null;
+    employeeFullName?: string | null;
+    employmentStatus?: string;
+    contractId?: string;
+    contractType?: string;
+    lastExpiryDate?: string;
+    daysPastExpiry?: number;
+}
+
+export interface ContractCompliance {
+    findings: ContractFinding[];
+    counts: Partial<Record<ContractFindingCode, number>>;
+}
+
+export async function getContractCompliance(base: string): Promise<ContractCompliance> {
+    return hrRequest<ContractCompliance>(base, '/api/hr/contracts/compliance', { method: 'GET' });
 }
 
 export async function createContract(base: string, dto: ContractCreateDto): Promise<EmploymentContract> {

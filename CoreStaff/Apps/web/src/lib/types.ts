@@ -118,3 +118,13 @@ export const CONTRACT_STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[
     EXPIRED: ['ACTIVE'],
     TERMINATED: [],
 };
+
+/** Compliance finding labels (codes mirror the API; see hrService.ContractFindingCode). */
+export const CONTRACT_FINDING_LABELS: Record<string, string> = {
+    NO_CONTRACT: 'Chưa có hợp đồng',
+    EXPIRED_NOT_RENEWED: 'Hết hạn chưa gia hạn',
+    ACTIVE_PAST_EXPIRY: 'Vẫn "hiệu lực" quá ngày hết hạn',
+    PROBATION_OVERDUE: 'Qua hạn thử việc chưa ký HĐ',
+};
+
+export const CONTRACT_FINDING_ORDER = ['NO_CONTRACT', 'EXPIRED_NOT_RENEWED', 'ACTIVE_PAST_EXPIRY', 'PROBATION_OVERDUE'] as const;

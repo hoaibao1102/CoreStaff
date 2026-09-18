@@ -47,6 +47,13 @@ export const EMPLOYMENT_STATUS_TRANSITIONS: Record<EmploymentStatus, EmploymentS
   TERMINATED: [],
 };
 
+/** The same §176 fact as a value: employees these systems still owe a contract to. */
+export const WORKING_EMPLOYMENT_STATUSES: EmploymentStatus[] = [
+  EmploymentStatus.PROBATION,
+  EmploymentStatus.ACTIVE,
+  EmploymentStatus.ON_LEAVE,
+];
+
 /** SRS §30A.2 — contract type enum. */
 export const ContractType = {
   PROBATION: 'PROBATION',

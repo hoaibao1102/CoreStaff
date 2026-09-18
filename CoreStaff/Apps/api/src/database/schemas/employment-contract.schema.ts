@@ -39,6 +39,14 @@ export class EmploymentContract {
   @Prop({ required: false, type: Date })
   endDate?: Date;
 
+  /** HR-supplied reason for the latest status change (TASK-030). Overwritten each transition. */
+  @Prop({ required: false, maxlength: 500 })
+  statusReason?: string;
+
+  /** Server time of the latest status change. */
+  @Prop({ required: false, type: Date })
+  statusChangedAt?: Date;
+
   @Prop({ required: false, maxlength: 1000 })
   note?: string;
 

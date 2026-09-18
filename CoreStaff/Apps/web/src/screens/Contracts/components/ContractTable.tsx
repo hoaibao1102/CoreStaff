@@ -85,9 +85,14 @@ export function ContractTable({ rows, total, current, pages, onNavigate, onViewD
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${(CONTRACT_STATUS_BADGE as Record<string, string>)[row.status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {(CONTRACT_STATUS_LABELS as Record<string, string>)[row.status]}
                       </span>
-                      {row.isExpiringSoon && (
+                      {!row.isExpired && row.isExpiringSoon && (
                         <span className="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-400">
                           Sắp hết hạn ({row.expiryWarningDays} ngày)
+                        </span>
+                      )}
+                      {row.isExpired && (
+                        <span className="mt-1 block text-xs font-medium text-red-700 dark:text-red-400">
+                          Quá ngày hết hạn — chưa cập nhật trạng thái
                         </span>
                       )}
                     </td>

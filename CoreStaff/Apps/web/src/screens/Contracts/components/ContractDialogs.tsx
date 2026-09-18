@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRef } from 'react';
-import { ArrowLeftRight, FileText, LoaderCircle, Paperclip, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, FileText, LoaderCircle, Paperclip, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Input } from '../../../components/input';
@@ -9,8 +9,8 @@ import { FormLabel } from '../../../components/form/FormLabel';
 import { FormError } from '../../../components/form/FormError';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
 import { toast } from '../../../components/toast';
-import type { ContractCreateDto, EmployeeDocument, EmploymentContract } from '../../../services/hrService';
-import { createContract, uploadDocument, listDocuments, downloadDocument, deleteDocument, hrErrorMessage, updateContractStatus } from '../../../services/hrService';
+import type { ContractCreateDto, ContractUpdateDto, EmployeeDocument, EmploymentContract } from '../../../services/hrService';
+import { createContract, updateContract, uploadDocument, listDocuments, downloadDocument, deleteDocument, hrErrorMessage, updateContractStatus } from '../../../services/hrService';
 import {
   CONTRACT_STATUS_BADGE,
   CONTRACT_STATUS_LABELS,
@@ -227,6 +227,138 @@ export function ContractCreateDialog(props: {
   );
 }
 
+/* ───────── Edit Contract Dialog ───────── */
+
+/**
+ * Edits the mutable fields only (PATCH /hr/contracts/:id): effectiveDate,
+ * expiryDate, note. `contractType`, `employeeId` and `status` are immutable here
+ * by design — status moves go through "Chuyển trạng thái", which for renewal now
+ * appends a new row rather than editing dates.
+ */
+export function ContractEditDialog(props: {
+  apiBase: string;
+  contract: SimpleContract;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const isIndefinite = props.contract.contractType === 'INDEFINITE_TERM';
+  const initial = () => ({
+    effectiveDate: (props.contract.effectiveDate ?? '').slice(0, 10),
+    expiryDate: (props.contract.expiryDate ?? '').slice(0, 10),
+    note: props.contract.note ?? '',
+  });
+  const [form, setForm] = useState(initial);
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+
+  // Re-seed whenever the dialog reopens (e.g. after a status change reloaded it).
+  useEffect(() => { if (props.open) { setForm(initial()); setErrors({}); } }, [props.open, props.contract._id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    const next: Record<string, string | null> = {};
+    if (!form.effectiveDate) next.effectiveDate = 'Vui lòng chọn ngày hiệu lực.';
+    if (!isIndefinite && !form.expiryDate) next.expiryDate = 'Hợp đồng có thời hạn phải có ngày hết hạn.';
+    if (form.effectiveDate && form.expiryDate && form.expiryDate <= form.effectiveDate) {
+      next.expiryDate = 'Ngày hết hạn phải sau ngày hiệu lực.';
+    }
+    setErrors(next);
+    if (Object.keys(next).length) {
+      toast.warning('Vui lòng kiểm tra thông tin', 'Một số trường chưa đầy đủ hoặc chưa đúng.');
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const dto: ContractUpdateDto = {
+        effectiveDate: form.effectiveDate,
+        ...(isIndefinite ? {} : { expiryDate: form.expiryDate }),
+        note: form.note.trim(),
+      };
+      await updateContract(props.apiBase, props.contract._id, dto);
+      toast.success('Cập nhật hợp đồng thành công', 'Thông tin hợp đồng đã được lưu.');
+      props.onOpenChange(false);
+      props.onSaved?.();
+    } catch (err) {
+      toast.error('Không thể cập nhật hợp đồng', hrErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={props.open} onOpenChange={(next) => { if (!submitting) props.onOpenChange(next); }}>
+      <DialogContent className="max-w-2xl gap-0">
+        <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
+          <DialogTitle className="text-xl font-semibold">Chỉnh sửa hợp đồng</DialogTitle>
+          <DialogDescription className="mt-1.5">
+            Loại hợp đồng: {(CONTRACT_TYPE_LABELS as Record<string, string>)[props.contract.contractType]} — không đổi được ở đây.
+          </DialogDescription>
+        </DialogHeader>
+        <form ref={formRef} className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate aria-busy={submitting}>
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-6 sm:px-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <FormLabel htmlFor="contract-edit-effective" required>Ngày hiệu lực</FormLabel>
+                <Input
+                  id="contract-edit-effective"
+                  type="date"
+                  className="h-11"
+                  value={form.effectiveDate}
+                  onChange={(e) => setForm((p) => ({ ...p, effectiveDate: e.target.value }))}
+                  disabled={submitting}
+                  aria-invalid={!!errors.effectiveDate}
+                />
+                <FormError message={errors.effectiveDate} />
+              </div>
+              {!isIndefinite && (
+                <div className="space-y-1.5">
+                  <FormLabel htmlFor="contract-edit-expiry" required>Ngày hết hạn</FormLabel>
+                  <Input
+                    id="contract-edit-expiry"
+                    type="date"
+                    className="h-11"
+                    value={form.expiryDate}
+                    onChange={(e) => setForm((p) => ({ ...p, expiryDate: e.target.value }))}
+                    disabled={submitting}
+                    aria-invalid={!!errors.expiryDate}
+                  />
+                  <FormError message={errors.expiryDate} />
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="contract-edit-note">Ghi chú</FormLabel>
+              <Textarea
+                id="contract-edit-note"
+                className="min-h-24"
+                value={form.note}
+                maxLength={1000}
+                placeholder="Nhập ghi chú về hợp đồng (tùy chọn)..."
+                onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
+                disabled={submitting}
+              />
+              <p className="text-right text-xs text-muted-foreground">{form.note.length}/1000</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-popover px-5 py-4">
+            <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={() => props.onOpenChange(false)}>
+              Hủy
+            </Button>
+            <Button type="submit" className="min-h-11" disabled={submitting}>
+              {submitting && <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+              {submitting ? 'Đang lưu…' : 'Lưu'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ───────── Contract Documents Section ───────── */
 
 interface ContractDocumentsSectionProps {
@@ -339,6 +471,7 @@ export function ContractDetailDialog(props: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusMode, setStatusMode] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusForm, setStatusForm] = useState<{ newStatus: ContractStatus | ''; effectiveDate: string; expiryDate: string; reason: string }>({
     newStatus: '', effectiveDate: '', expiryDate: '', reason: '',
@@ -427,12 +560,18 @@ export function ContractDetailDialog(props: {
                     Sắp hết hạn ({contract.expiryWarningDays} ngày)
                   </span>
                 )}
-                {transitions.length > 0 && (
-                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => { setStatusMode(true); setStatusForm({ newStatus: '', effectiveDate: '', expiryDate: '', reason: '' }); setStatusErrors({}); }}>
-                    <ArrowLeftRight className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    Chuyển trạng thái
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                    <Pencil className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Chỉnh sửa
                   </Button>
-                )}
+                  {transitions.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => { setStatusMode(true); setStatusForm({ newStatus: '', effectiveDate: '', expiryDate: '', reason: '' }); setStatusErrors({}); }}>
+                      <ArrowLeftRight className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      Chuyển trạng thái
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -440,6 +579,7 @@ export function ContractDetailDialog(props: {
                 <FieldRow label="Ngày hiệu lực" value={new Date(contract.effectiveDate).toLocaleDateString('vi-VN')} />
                 <FieldRow label="Ngày hết hạn" value={contract.expiryDate ? new Date(contract.expiryDate).toLocaleDateString('vi-VN') : 'Không thời hạn'} />
                 <FieldRow label="Ngày chấm dứt" value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : null} />
+                <FieldRow label="Lý do đổi trạng thái" value={contract.statusReason} />
                 <FieldRow label="Ghi chú" value={contract.note} />
               </dl>
 
@@ -538,6 +678,16 @@ export function ContractDetailDialog(props: {
           </div>
         </DialogContent>
       </Dialog>
+
+      {contract && editMode && (
+        <ContractEditDialog
+          apiBase={props.apiBase}
+          contract={contract}
+          open={editMode}
+          onOpenChange={setEditMode}
+          onSaved={() => { void load(); props.onChanged?.(); }}
+        />
+      )}
     </Dialog>
   );
 }

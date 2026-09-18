@@ -53,6 +53,7 @@ beforeEach(() => {
     }
     if (path.pathname.endsWith('/api/app/documents')) return jsonResponse([{ _id: 'd2', organizationId: 'org1', employeeProfileId: 'p1', originalName: 'CCCD.jpg', mimeType: 'image/jpeg', sizeBytes: 2048, uploadedBy: 'u1', createdAt: now }]);
     if (path.pathname.endsWith('/api/hr/employees/me')) return jsonResponse(employees[0]);
+    if (path.pathname.endsWith('/api/hr/contracts/compliance')) return jsonResponse({ findings: [], counts: {} });
     if (path.pathname.match(/\/api\/hr\/contracts\/[^/]+$/)) {
       const id = path.pathname.split('/').pop();
       return jsonResponse({ ...contract, _id: id });
@@ -75,7 +76,7 @@ test('lists contracts with the expiring-soon badge (TASK-030 derived on-read)', 
   expect(container.textContent).toContain('Test Employee');
   expect(container.textContent).toContain('Sắp hết hạn (13 ngày)');
   expect(container.textContent).toContain('Đang hiệu lực');
-  expect(fetchMock).toHaveBeenCalledTimes(2); // contracts + employees
+  expect(fetchMock).toHaveBeenCalledTimes(3); // contracts + employees + compliance
 });
 
 test('create posts the HR payload and never sets status', async () => {
@@ -130,6 +131,31 @@ test('INDEFINITE_TERM hides the expiry field and omits it from the payload', asy
   const body = JSON.parse(String(request![1].body));
   expect(body).toEqual({ employeeId: 'p1', contractType: 'INDEFINITE_TERM', effectiveDate: '2026-09-01' });
   expect(body).not.toHaveProperty('expiryDate');
+});
+
+test('edit dialog PATCHes only mutable fields and never sends status or type', async () => {
+  await render(<ContractsScreen user={user} apiBase="https://api.test" contractId="c1" />);
+  await act(async () => { await Promise.resolve(); });
+  await clickText('Chỉnh sửa');
+  const setInput = async (id: string, value: string) => {
+    await act(async () => {
+      const input = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement;
+      const proto = input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  await setInput('contract-edit-effective', '2026-02-01');
+  await setInput('contract-edit-expiry', '2027-02-01');
+  await setInput('contract-edit-note', 'Dieu chinh ngay');
+  await act(async () => (document.body.querySelector('form button[type="submit"]') as HTMLButtonElement).click());
+  const request = fetchMock.mock.calls.find(([url, init]) => init?.method === 'PATCH' && /\/api\/hr\/contracts\/[^/]+$/.test(new URL(String(url)).pathname));
+  expect(request).toBeDefined();
+  const body = JSON.parse(String(request![1].body));
+  expect(body).toEqual({ effectiveDate: '2026-02-01', expiryDate: '2027-02-01', note: 'Dieu chinh ngay' });
+  expect(body).not.toHaveProperty('status');
+  expect(body).not.toHaveProperty('contractType');
+  expect(body).not.toHaveProperty('employeeId');
 });
 
 test('detail shows documents and deletion calls DELETE on the document row', async () => {

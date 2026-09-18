@@ -182,6 +182,8 @@ export const contractExample = {
 	effectiveDate: '2026-01-01T00:00:00.000Z',
 	expiryDate: '2026-12-31T00:00:00.000Z',
 	endDate: null,
+	statusReason: 'Ky hop dong chinh thuc sau thu viec.',
+	statusChangedAt: '2026-09-15T03:20:00.000Z',
 	note: 'Xác định thời hạn 12 tháng.',
 	createdAt: '2026-09-15T03:20:00.000Z',
 	updatedAt: '2026-09-15T03:20:00.000Z',
@@ -193,6 +195,7 @@ export const contractReadExample = {
 	employeeFullName: 'Nguyen Van An',
 	employeeCode: 'TVS-0248',
 	isExpiringSoon: true,
+	isExpired: false,
 	expiryWarningDays: 15,
 };
 
