@@ -9,6 +9,7 @@ import { EmployeeProfileSchema } from '../schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from '../schemas/employment-history.schema';
 import { EmploymentContractSchema } from '../schemas/employment-contract.schema';
 import { EmployeeDocumentSchema } from '../schemas/employee-document.schema';
+import { AllowanceCatalogSchema, AttendanceBonusTemplateSchema, LaborCompliancePolicySchema } from '../schemas/compensation.schema';
 import { EmploymentStatus, Role, OrganizationStatus, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
@@ -99,6 +100,9 @@ async function main(): Promise<void> {
     const History = connection.model('EmploymentHistory', EmploymentHistorySchema) as unknown as HistoryModel;
     const Contract = connection.model('EmploymentContract', EmploymentContractSchema) as unknown as ContractModel;
     const Doc = connection.model('EmployeeDocument', EmployeeDocumentSchema) as unknown as DocumentModel;
+    const LaborPolicy = connection.model('LaborCompliancePolicy', LaborCompliancePolicySchema);
+    const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
+    const BonusTemplate = connection.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
 
     const orgIds = new Map<string, mongoose.Types.ObjectId>();
     for (const { code, name } of ORGS) {
@@ -112,6 +116,30 @@ async function main(): Promise<void> {
       orgIds.set(code, created._id);
       console.log(`[seed] CREATED org ${code}`);
     }
+
+    // TASK-031..034 compensation foundations. Values are seed configuration,
+    // never hard-coded in calculation services. Re-running is idempotent.
+    for (const organizationId of orgIds.values()) {
+      await LaborPolicy.updateOne(
+        { organizationId, version: 1 },
+        { $setOnInsert: { organizationId, effectiveFrom: new Date('2026-01-01'), probationMinimumRate: 0.85, version: 1, active: true } },
+        { upsert: true },
+      );
+    }
+    for (const item of [
+      { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', defaultTaxable: true, defaultInsuranceBased: false },
+    ]) await AllowanceCatalog.updateOne({ code: item.code }, { $setOnInsert: { ...item, active: true } }, { upsert: true });
+    await BonusTemplate.updateOne(
+      { code: 'ATTENDANCE_100_70_50' },
+      { $setOnInsert: { code: 'ATTENDANCE_100_70_50', name: 'Chuyên cần 100/70/50', templateVersion: 1, active: true, tiers: [
+        { order: 1, percentage: 100, conditions: [{ metric: 'LATE_COUNT', operator: 'EQ', value: 0 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+        { order: 2, percentage: 70, conditions: [{ metric: 'LATE_COUNT', operator: 'LTE', value: 2 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+        { order: 3, percentage: 50, conditions: [{ metric: 'LATE_COUNT', operator: 'LTE', value: 4 }, { metric: 'ABSENT_DAYS', operator: 'EQ', value: 0 }] },
+      ] } },
+      { upsert: true },
+    );
 
     const passwordHash = await seedPasswordHash();
     // HR rows carry no role in seed-data; they are the tenant's HR accounts.
