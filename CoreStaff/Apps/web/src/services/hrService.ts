@@ -70,7 +70,12 @@ export interface Position {
     name: string;
     active: boolean;
     organizationId: string;
+    createdAt?: string;
+    updatedAt?: string;
 }
+
+export type CreatePositionPayload = Pick<Position, 'code' | 'name'>;
+export type UpdatePositionPayload = Partial<CreatePositionPayload>;
 
 export interface EligibleEmployeeAccount {
     _id: string;
@@ -78,6 +83,15 @@ export interface EligibleEmployeeAccount {
     email: string;
     phone?: string;
     employeeCode?: string;
+}
+
+export interface Workplace {
+    _id: string;
+    code: string;
+    name: string;
+    address?: string;
+    active: boolean;
+    organizationId: string;
 }
 
 export interface EmployeeCreateDto {
@@ -170,6 +184,15 @@ export interface EmployeeDocument {
  * Tuyệt đối không hiển thị thông báo kỹ thuật cho người dùng cuối.
  */
 export const HR_ERROR_CODES: Record<string, string> = {
+    // Assignment errors
+    AT_LEAST_ONE_FILTER_REQUIRED: 'Vui lòng chọn trạng thái hoặc nơi làm việc để lọc dữ liệu.',
+    USER_NOT_FOUND_IN_TENANT: 'Không tìm thấy nhân viên trong tổ chức hiện tại.',
+    DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT: 'Phòng ban không tồn tại hoặc không thuộc tổ chức hiện tại.',
+    WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT: 'Nơi làm việc không tồn tại hoặc không thuộc tổ chức hiện tại.',
+    ASSIGNMENT_NOT_FOUND: 'Không tìm thấy phân công.',
+    OVERLAPPING_ASSIGNMENT_EXISTS: 'Khoảng thời gian phân công bị trùng với phân công hiện có.',
+    EMPLOYEE_ASSIGNMENT_ALREADY_EXISTS: 'Nhân viên đã có phân công tương ứng.',
+
     // User / Auth errors
     USER_NOT_FOUND: 'Không tìm thấy tài khoản đăng nhập này trong tổ chức.',
     AUTHENTICATION_REQUIRED: 'Vui lòng đăng nhập để tiếp tục.',
@@ -428,6 +451,10 @@ export async function getDepartmentById(base: string, id: string): Promise<Depar
     return hrRequest<Department>(base, `/api/hr/departments/${encodeURIComponent(id)}`, { method: 'GET' });
 }
 
+export async function getWorkplaces(base: string): Promise<Workplace[]> {
+    return hrRequest<Workplace[]>(base, '/api/hr/workplaces', { method: 'GET' });
+}
+
 export async function createDepartment(base: string, dto: Pick<Department, 'code' | 'name'>): Promise<Department> {
     return hrRequest<Department>(base, '/api/hr/departments', { method: 'POST', body: JSON.stringify(dto) });
 }
@@ -455,6 +482,12 @@ export async function getPositions(base: string, activeOnly?: boolean): Promise<
         { method: 'GET' },
     );
 }
+
+export async function getPositionById(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}`, { method: 'GET' }); }
+export async function createPosition(base: string, payload: CreatePositionPayload): Promise<Position> { return hrRequest<Position>(base, '/api/hr/positions', { method: 'POST', body: JSON.stringify(payload) }); }
+export async function updatePosition(base: string, id: string, payload: UpdatePositionPayload): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }); }
+export async function activatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/activate`, { method: 'PATCH' }); }
+export async function deactivatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/deactivate`, { method: 'PATCH' }); }
 
 export function paginateEmployees(data: EmployeeProfile[], query: string, requestedPage: number) {
     const term = query.trim().toLocaleLowerCase('vi');

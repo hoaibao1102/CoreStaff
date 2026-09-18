@@ -498,12 +498,6 @@ export function EmployeeProfileScreen({
             Xem thông tin tài khoản, hồ sơ cá nhân và phân công công việc của bạn.
           </p>
         </div>
-        <AppLink href="/overview">
-          <Button type="button" variant="outline" className="w-full bg-background sm:w-auto">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Tổng quan
-          </Button>
-        </AppLink>
       </div>
 
       {/* Data state banners */}

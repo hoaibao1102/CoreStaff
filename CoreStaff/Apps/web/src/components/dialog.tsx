@@ -23,7 +23,7 @@ function DialogContent({
     <DialogPrimitive.Backdrop forceRender data-slot="dialog-backdrop" style={{ zIndex: layer }} className={cn('fixed inset-0 bg-black/45 backdrop-blur-[3px]', backdropClassName)} />
     <DialogPrimitive.Popup
       data-slot="dialog-content"
-      className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-xl border border-border bg-popover text-sm text-popover-foreground shadow-xl outline-none', className)}
+      className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-popover text-sm text-popover-foreground shadow-xl outline-none', className)}
       {...props}
       style={{ ...style, zIndex: layer + MODAL_LAYER.popupOffset }}
     >

@@ -1,4 +1,4 @@
-import { LayoutDashboard, LogOut, Users, UserRound } from 'lucide-react';
+import { LayoutDashboard, LogOut, Users } from 'lucide-react';
 import { AuthUser } from '@/services/auth';
 import { CoreStaffLogo } from './CoreStaffLogo';
 import { AppLink } from './AppLink';
@@ -14,7 +14,6 @@ export function AppHeader({ roleLabel, user, onLogout }: AppHeaderProps) {
   const links = [
     { href: '/overview', label: 'Tổng quan', icon: LayoutDashboard, visible: true },
     { href: '/hr/employees', label: 'Nhân viên', icon: Users, visible: user.role === 'HR' && !!user.organizationId },
-    { href: '/app/profile', label: 'Hồ sơ của tôi', icon: UserRound, visible: true },
   ];
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-md">
