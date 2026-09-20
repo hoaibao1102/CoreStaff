@@ -96,9 +96,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/employees' || route.startsWith('/hr/employees/') ||
     route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
-    route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
-    route === '/hr/kpi-inputs';
+    route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
+    return <EmployeeDataState status="forbidden" />;
+  }
+
+  if (route === '/hr/kpi-inputs' && user.role !== 'HR' && user.role !== 'DEPARTMENT_MANAGER') {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -180,7 +183,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/attendance-bonus-policies' ? (
             <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
           ) : route === '/hr/kpi-inputs' ? (
-            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" />
+            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" userRole={user.role} />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.
@@ -209,6 +212,16 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
         <AttendanceScreen user={user} />
+      </WorkspaceShell>
+    );
+  }
+
+  if (route === '/hr/kpi-inputs' && user.role === 'DEPARTMENT_MANAGER') {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+          <CompensationScreen apiBase={apiBase} kind="kpi-inputs" userRole={user.role} />
+        </section>
       </WorkspaceShell>
     );
   }

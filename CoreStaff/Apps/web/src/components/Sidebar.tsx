@@ -12,6 +12,7 @@ import {
     LayoutDashboard,
     LogOut,
     ShieldCheck,
+    Target,
     UserRound,
     Users,
     WalletCards,
@@ -102,7 +103,10 @@ function getNavGroups(user: AuthUser): NavGroup[] {
     // DEPARTMENT_MANAGER or EMPLOYEE
     const managerItems: NavItem[] = [];
     if (role === 'DEPARTMENT_MANAGER') {
-        managerItems.push({ href: '/manager/approvals', label: 'Queue phê duyệt', icon: ClipboardCheck });
+        managerItems.push(
+            { href: '/manager/approvals', label: 'Queue phê duyệt', icon: ClipboardCheck },
+            { href: '/hr/kpi-inputs', label: 'Đánh giá KPI phòng', icon: Target },
+        );
     }
     managerItems.push(
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },

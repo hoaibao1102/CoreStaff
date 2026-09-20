@@ -4,7 +4,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { RolesGuard } from '../../common/rbac.decorator';
 import {
   AllowanceCatalogSchema, AttendanceBonusPolicySchema, AttendanceBonusTemplateSchema,
-  KpiPayrollInputSchema, LaborCompliancePolicySchema, OrganizationAllowanceSchema, SalaryProfileSchema,
+  KpiPayrollInputSchema, KpiPolicySchema, LaborCompliancePolicySchema, OrganizationAllowanceSchema, SalaryProfileSchema,
 } from '../../database/schemas/compensation.schema';
 import { EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
 import { UserSchema } from '../../database/schemas/user.schema';
@@ -21,6 +21,7 @@ import { CompensationService } from './compensation.service';
     { name: 'AttendanceBonusTemplate', schema: AttendanceBonusTemplateSchema },
     { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
     { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
+    { name: 'KpiPolicy', schema: KpiPolicySchema },
     { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
     { name: 'User', schema: UserSchema },
     { name: 'UserSession', schema: UserSessionSchema },

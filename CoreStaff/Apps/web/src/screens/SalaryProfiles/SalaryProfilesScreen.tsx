@@ -166,14 +166,17 @@ function SalaryDetailDialog({
     return (
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
             <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <WalletCards className="h-5 w-5 text-primary" />
-                        Chi tiết hồ sơ lương
-                    </DialogTitle>
+                <DialogHeader className="p-6 pb-2">
+                    <div className="flex items-center justify-between gap-2 pr-6">
+                        <DialogTitle className="flex items-center gap-2">
+                            <WalletCards className="h-5 w-5 text-primary" />
+                            Chi tiết hồ sơ lương
+                        </DialogTitle>
+                        <Badge variant="outline" className="font-mono text-xs">Phiên bản v{profile.version}</Badge>
+                    </div>
                 </DialogHeader>
 
-                <div className="space-y-6">
+                <div className="space-y-6 px-6 pb-6">
                     {/* Employee info */}
                     <div className="flex items-start gap-4">
                         <Avatar size="lg" className="h-14 w-14 shrink-0">
@@ -245,11 +248,18 @@ function SalaryDetailDialog({
                     </div>
 
                     {/* Version history note */}
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
-                        <div className="flex items-start gap-2">
-                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                            <p>Lịch sử thay đổi lương được lưu theo phiên bản. Mỗi lần cập nhật, hệ thống sẽ tự động tăng số phiên bản.</p>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3.5 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                        <div className="flex items-start gap-2.5">
+                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <p className="text-xs leading-relaxed">Lịch sử thay đổi lương được lưu theo phiên bản. Mỗi lần cập nhật, hệ thống sẽ tự động tăng số phiên bản và bảo toàn dữ liệu đối soát.</p>
                         </div>
+                    </div>
+
+                    {/* Footer buttons */}
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                        <Button variant="outline" onClick={onClose}>
+                            Đóng
+                        </Button>
                     </div>
                 </div>
             </DialogContent>

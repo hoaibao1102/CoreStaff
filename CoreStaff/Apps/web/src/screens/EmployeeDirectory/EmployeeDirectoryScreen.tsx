@@ -353,9 +353,11 @@ export function EmployeeDirectoryScreen({
             accountsFailed={resource.data?.accountsFailed}
             onRetryAccounts={loadEmployees}
             onOpenChange={setCreateOpen}
-            onCreated={() => {
-              setCreateOpen(false);
+            onCreated={(created) => {
               loadEmployees();
+              if (!created?.tempPassword) {
+                setCreateOpen(false);
+              }
             }}
           />
           {employeeId && (

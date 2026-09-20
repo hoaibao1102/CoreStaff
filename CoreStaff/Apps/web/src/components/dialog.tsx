@@ -23,12 +23,12 @@ function DialogContent({
     <DialogPrimitive.Backdrop forceRender data-slot="dialog-backdrop" style={{ zIndex: layer }} className={cn('fixed inset-0 bg-black/45 backdrop-blur-[3px]', backdropClassName)} />
     <DialogPrimitive.Popup
       data-slot="dialog-content"
-      className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-popover text-sm text-popover-foreground shadow-xl outline-none', className)}
+      className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-popover text-sm text-popover-foreground shadow-2xl outline-none', className)}
       {...props}
       style={{ ...style, zIndex: layer + MODAL_LAYER.popupOffset }}
     >
       <DialogDepth.Provider value={depth + 1}>{children}</DialogDepth.Provider>
-      {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" className="absolute right-3 top-3 min-h-11 min-w-11" />} aria-label="Đóng hộp thoại"><X aria-hidden="true" /></DialogPrimitive.Close>}
+      {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" size="icon" className="absolute right-3.5 top-3.5 h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted z-20 cursor-pointer" />} aria-label="Đóng hộp thoại"><X aria-hidden="true" className="size-4" /></DialogPrimitive.Close>}
     </DialogPrimitive.Popup>
   </DialogPrimitive.Portal>;
 }
