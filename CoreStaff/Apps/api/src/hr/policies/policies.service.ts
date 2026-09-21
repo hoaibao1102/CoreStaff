@@ -38,7 +38,7 @@ export class PoliciesService {
   constructor(
     @InjectModel('LaborCompliancePolicy') private readonly laborPolicies: Model<LaborCompliancePolicy>,
     @InjectModel('OvertimePayPolicy') private readonly overtimePolicies: Model<OvertimePayPolicy>,
-  ) {}
+  ) { }
 
   // ── effective window helpers ──────────────────────────────────────────────
 
@@ -138,13 +138,13 @@ export class PoliciesService {
       {
         version: policy.version,
         legalReference: policy.legalReference,
-        normalDailyMinutes: policy.normalDailyMinutes,
-        normalWeeklyMinutes: policy.normalWeeklyMinutes,
-        maxCombinedDailyMinutes: policy.maxCombinedDailyMinutes,
-        maxMonthlyOvertimeMinutes: policy.maxMonthlyOvertimeMinutes,
-        maxAnnualOvertimeMinutes: policy.maxAnnualOvertimeMinutes,
-        exceptionalAnnualOvertimeMinutes: policy.exceptionalAnnualOvertimeMinutes,
-        warningThresholdPercent: policy.warningThresholdPercent,
+        normalDailyMinutes: policy.normalDailyMinutes!,
+        normalWeeklyMinutes: policy.normalWeeklyMinutes!,
+        maxCombinedDailyMinutes: policy.maxCombinedDailyMinutes!,
+        maxMonthlyOvertimeMinutes: policy.maxMonthlyOvertimeMinutes!,
+        maxAnnualOvertimeMinutes: policy.maxAnnualOvertimeMinutes!,
+        exceptionalAnnualOvertimeMinutes: policy.exceptionalAnnualOvertimeMinutes!,
+        warningThresholdPercent: policy.warningThresholdPercent!,
       },
       usage,
     );
