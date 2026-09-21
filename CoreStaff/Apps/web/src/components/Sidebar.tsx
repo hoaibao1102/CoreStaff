@@ -11,6 +11,7 @@ import {
     FileText,
     LayoutDashboard,
     LogOut,
+    ShieldAlert,
     ShieldCheck,
     UserRound,
     Users,
@@ -70,6 +71,8 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                     { href: '/hr/organization-allowances', label: 'Phụ cấp', icon: WalletCards },
                     { href: '/hr/attendance-bonus-policies', label: 'Thưởng chuyên cần', icon: ClipboardCheck },
                     { href: '/hr/kpi-inputs', label: 'KPI kỳ lương', icon: ClipboardList },
+                    { href: '/hr/policies/labor-compliance', label: 'Tuân thủ lao động', icon: ShieldAlert },
+                    { href: '/hr/policies/overtime-pay', label: 'Lương tăng ca', icon: WalletCards },
                 ],
             },
             {

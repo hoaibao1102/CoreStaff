@@ -43,5 +43,6 @@ export class EmployeeAssignment {
 
 export const EmployeeAssignmentSchema = SchemaFactory.createForClass(EmployeeAssignment);
 
-// Tenant-scoped uniqueness: one active assignment per user per department at a time.
-EmployeeAssignmentSchema.index({ organizationId: 1, userId: 1, departmentId: 1 }, { unique: true });
+// Historical assignments are allowed. Overlap protection is enforced by the
+// service because the date range is part of the business rule.
+EmployeeAssignmentSchema.index({ organizationId: 1, userId: 1, departmentId: 1, active: 1 });

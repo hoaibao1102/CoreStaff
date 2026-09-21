@@ -6,10 +6,10 @@ import { hrRequest } from '../../services/hrService';
 
 type Kind = 'salary-profiles' | 'organization-allowances' | 'attendance-bonus-policies' | 'kpi-inputs';
 const meta: Record<Kind, { title: string; description: string; columns: string[] }> = {
-  'salary-profiles': { title: 'Hồ sơ lương', description: 'Lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian.', columns: ['employeeProfileId','baseSalary','insuranceSalary','effectiveFrom','version'] },
-  'organization-allowances': { title: 'Phụ cấp', description: 'Danh mục chuẩn và phụ cấp tùy chỉnh của tổ chức.', columns: ['code','name','amount','taxable','effectiveFrom'] },
-  'attendance-bonus-policies': { title: 'Thưởng chuyên cần', description: 'Policy theo phiên bản, tiers và điều kiện.', columns: ['name','bonusAmount','effectiveFrom','version','active'] },
-  'kpi-inputs': { title: 'KPI kỳ lương', description: 'Dữ liệu KPI thủ công theo nhân viên và kỳ.', columns: ['employeeProfileId','period','score','amount','status'] },
+  'salary-profiles': { title: 'Hồ sơ lương', description: 'Lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian.', columns: ['employeeProfileId', 'baseSalary', 'insuranceSalary', 'effectiveFrom', 'version'] },
+  'organization-allowances': { title: 'Phụ cấp', description: 'Danh mục chuẩn và phụ cấp tùy chỉnh của tổ chức.', columns: ['code', 'name', 'amount', 'taxable', 'effectiveFrom'] },
+  'attendance-bonus-policies': { title: 'Thưởng chuyên cần', description: 'Policy theo phiên bản, tiers và điều kiện.', columns: ['name', 'bonusAmount', 'effectiveFrom', 'version', 'active'] },
+  'kpi-inputs': { title: 'KPI kỳ lương', description: 'Dữ liệu KPI thủ công theo nhân viên và kỳ.', columns: ['employeeProfileId', 'period', 'score', 'amount', 'status'] },
 };
 
 export function CompensationScreen({ apiBase, kind }: { apiBase: string | null; kind: Kind }) {

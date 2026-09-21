@@ -11,6 +11,10 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { BatchValidator } from '../../common/batch-validator';
 
 const DUPLICATE_KEY_ERROR = 11000;
+const LEGACY_UNIQUE_INDEXES = [
+    'organizationId_1_userId_1_departmentId_1',
+    'organizationId_1_employeeId_1_departmentId_1',
+];
 
 @Injectable()
 export class AssignmentService {
@@ -22,7 +26,23 @@ export class AssignmentService {
         @InjectModel('ShiftTemplate') private readonly shiftTemplateModel: Model<ShiftTemplateDocument>,
     ) { }
 
+    private async removeLegacyUniqueIndex(): Promise<void> {
+      for (const indexName of LEGACY_UNIQUE_INDEXES) {
+        try {
+            await this.assignmentModel.collection.dropIndex(indexName);
+        } catch (error) {
+            // MongoDB throws when the old index is already gone; that is the
+            // desired state. Do not hide any other database error.
+            const code = (error as { code?: number }).code;
+            if (code !== 27 && code !== 26) throw error;
+        }
+      }
+    }
+
     async create(organizationId: string, user: any, dto: CreateAssignmentDto) {
+        // Older databases may still have the pre-time-range unique index,
+        // which incorrectly returns 409 for a valid historical assignment.
+        await this.removeLegacyUniqueIndex();
         const batch = new BatchValidator();
 
         // Validate effectiveFrom / effectiveTo
@@ -46,22 +66,68 @@ export class AssignmentService {
 
         const userIds = dto.userIds;
 
-        // Validate each user exists and check for overlaps
+        // Validate each user exists
         for (const userId of userIds) {
             const userDoc = await this.profileModel.findOne({ userId, organizationId }).lean();
             batch.checkExists(userDoc, 'userId', `USER_${userId}_NOT_FOUND_IN_TENANT`);
+        }
+        batch.throwIfAny();
+
+        // An employee may already have an active assignment created without a
+        // workplace. In that case, adding a workplace is an enrichment of the
+        // existing assignment, not a conflicting second assignment.
+        const enriched: any[] = [];
+        const toCreate: string[] = [];
+        for (const userId of userIds) {
+            if (dto.workplaceId) {
+                const assignmentWithoutWorkplace = await this.assignmentModel.findOne({
+                    organizationId,
+                    userId,
+                    departmentId: dto.departmentId,
+                    active: true,
+                    $or: [{ workplaceId: { $exists: false } }, { workplaceId: null }],
+                }).lean();
+                if (assignmentWithoutWorkplace) {
+                    const updated = await this.assignmentModel.findByIdAndUpdate(
+                        assignmentWithoutWorkplace._id,
+                        { workplaceId: dto.workplaceId },
+                        { new: true },
+                    ).lean();
+                    if (updated) {
+                        enriched.push(updated);
+                        continue;
+                    }
+                }
+            }
 
             const overlap = await this.checkOverlap(organizationId, userId, dto.departmentId, undefined, dto.effectiveFrom, dto.effectiveTo);
             if (overlap) {
                 batch.add(`user ${userId}`, 'OVERLAPPING_ASSIGNMENT_EXISTS');
+            } else {
+                toCreate.push(userId);
             }
         }
 
         batch.throwIfAny();
 
+        if (!toCreate.length) {
+            return enriched.map((item) => ({
+                _id: item._id,
+                organizationId: item.organizationId,
+                userId: item.userId,
+                departmentId: item.departmentId,
+                workplaceId: item.workplaceId,
+                effectiveFrom: item.effectiveFrom,
+                effectiveTo: item.effectiveTo,
+                active: item.active,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+            }));
+        }
+
         try {
             const docs = await this.assignmentModel.insertMany(
-                userIds.map((userId) => ({
+                toCreate.map((userId) => ({
                     organizationId,
                     userId,
                     departmentId: dto.departmentId,
@@ -73,7 +139,7 @@ export class AssignmentService {
             );
             const data = docs.map((doc) => doc.toObject({ versionKey: false }));
 
-            return data.map((item) => ({
+            return [...enriched, ...data].map((item) => ({
                 _id: item._id,
                 organizationId: item.organizationId,
                 userId: item.userId,
@@ -235,8 +301,19 @@ export class AssignmentService {
         };
         if (excludeId) query._id = { $ne: excludeId };
 
-        const existing = await this.assignmentModel.findOne(query).lean();
-        return !!existing;
+        const existing = await this.assignmentModel.find(query).sort({ createdAt: -1 }).lean();
+        const nextFrom = effectiveFrom ? new Date(effectiveFrom).getTime() : Number.NEGATIVE_INFINITY;
+        const nextTo = effectiveTo ? new Date(effectiveTo).getTime() : Number.POSITIVE_INFINITY;
+
+        return existing.some((assignment) => {
+            const currentFrom = assignment.effectiveFrom
+                ? new Date(assignment.effectiveFrom).getTime()
+                : Number.NEGATIVE_INFINITY;
+            const currentTo = assignment.effectiveTo
+                ? new Date(assignment.effectiveTo).getTime()
+                : Number.POSITIVE_INFINITY;
+            return currentFrom <= nextTo && nextFrom <= currentTo;
+        });
     }
 }
 

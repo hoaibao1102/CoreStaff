@@ -1,5 +1,4 @@
 import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Card, CardContent } from '../../../components/card';
 import { Button } from '../../../components/button';
 import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_BADGE } from '../../../lib/types';
 
@@ -14,38 +13,7 @@ interface EmployeeTableProps {
 
 export function EmployeeTable({ rows, total, current, pages, onNavigate, onViewDetail }: EmployeeTableProps) {
     return (
-        <Card>
-            <CardContent className="p-0">
-                {/* Header bar */}
-                <div className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
-                    <p className="text-sm text-muted-foreground">{total} nhân viên</p>
-                    {/* Pagination */}
-                    {pages > 1 && (
-                        <div className="flex items-center gap-1.5">
-                            <Button
-                                variant="outline"
-                                size="icon-sm"
-                                disabled={current <= 1}
-                                aria-label="Trang trước"
-                                onClick={() => onNavigate(current - 1)}
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <span className="min-w-[3rem] text-center text-sm text-muted-foreground">
-                                {current} / {pages}
-                            </span>
-                            <Button
-                                variant="outline"
-                                size="icon-sm"
-                                disabled={current >= pages}
-                                aria-label="Trang sau"
-                                onClick={() => onNavigate(current + 1)}
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    )}
-                </div>
+        <div className="min-w-0 rounded-xl border border-border bg-card">
 
                 {/* Table */}
                 <div className="overflow-x-auto">
@@ -122,7 +90,20 @@ export function EmployeeTable({ rows, total, current, pages, onNavigate, onViewD
                         </tbody>
                     </table>
                 </div>
-            </CardContent>
-        </Card>
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border p-4 sm:px-6">
+                    <p className="text-sm text-muted-foreground" role="status">
+                        {total === 0 ? 0 : (current - 1) * 10 + 1}–{Math.min(current * 10, total)} / {total} nhân viên
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang trước" disabled={current <= 1} onClick={() => onNavigate(current - 1)}>
+                            <ChevronLeft aria-hidden="true" />
+                        </Button>
+                        <span className="text-sm">{current} / {pages}</span>
+                        <Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang sau" disabled={current >= pages} onClick={() => onNavigate(current + 1)}>
+                            <ChevronRight aria-hidden="true" />
+                        </Button>
+                    </div>
+                </div>
+        </div>
     );
 }

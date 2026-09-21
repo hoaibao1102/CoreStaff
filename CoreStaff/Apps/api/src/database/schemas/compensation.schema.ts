@@ -7,17 +7,65 @@ export type KpiStatus = (typeof KpiStatus)[keyof typeof KpiStatus];
 export const KpiSource = { MANUAL: 'MANUAL', IMPORT: 'IMPORT' } as const;
 export type KpiSource = (typeof KpiSource)[keyof typeof KpiSource];
 
+/**
+ * TASK-036 / SRS §30B.1 — tenant labor-compliance policy, effective-dated and
+ * versioned. All limit/rate values are seed configuration (SRS §30B.1:2516) and
+ * are never hard-coded in calculation services. Vietnam seed: 8h/day, 48h/week;
+ * combined normal + OT capped per policy with monthly/annual OT checked against
+ * their own limits (AC-LABOR-01).
+ */
 @Schema({ collection: 'labor_compliance_policies', timestamps: true })
 export class LaborCompliancePolicy {
   @Prop({ type: 'ObjectId', ref: 'Organization', required: true }) organizationId: string;
   @Prop({ required: true, type: Date }) effectiveFrom: Date;
   @Prop({ type: Date }) effectiveTo?: Date;
+  @Prop({ required: true, min: 0 }) normalDailyMinutes: number;
+  @Prop({ required: true, min: 0 }) normalWeeklyMinutes: number;
+  @Prop({ required: true, min: 0 }) maxCombinedDailyMinutes: number;
+  @Prop({ required: true, min: 0 }) maxMonthlyOvertimeMinutes: number;
+  @Prop({ required: true, min: 0 }) maxAnnualOvertimeMinutes: number;
+  @Prop({ required: true, min: 0 }) exceptionalAnnualOvertimeMinutes: number;
+  /** Below this % of a limit the engine treats usage as normal; at/above it warns. */
+  @Prop({ required: true, min: 0, max: 100 }) warningThresholdPercent: number;
   @Prop({ required: true, min: 0.01, max: 1 }) probationMinimumRate: number;
+  @Prop({ required: true, trim: true }) legalReference: string;
   @Prop({ required: true, min: 1, default: 1 }) version: number;
   @Prop({ required: true, default: true }) active: boolean;
 }
 export const LaborCompliancePolicySchema = SchemaFactory.createForClass(LaborCompliancePolicy);
 LaborCompliancePolicySchema.index({ organizationId: 1, effectiveFrom: -1 });
+
+/** OT categories backend derives from the Calendar (§30D.2:2610). No OT_SUNDAY. */
+export const OvertimeType = {
+  WORKING_DAY: 'OT_WORKING_DAY',
+  WEEKLY_OFF: 'OT_WEEKLY_OFF',
+  PUBLIC_HOLIDAY: 'OT_PUBLIC_HOLIDAY',
+} as const;
+export type OvertimeType = (typeof OvertimeType)[keyof typeof OvertimeType];
+
+/**
+ * TASK-037 / SRS §30D.2 — overtime pay rates, effective-dated and versioned.
+ * Rates are multipliers (e.g. 1.5 = +150% for OTPay per overtime minute).
+ * Referential seed values: 150%/200%/300% — kept solely in seed configuration,
+ * never hard-coded in a service. Public-holiday rule (avoid double counting a
+ * weekly-off that is also a public holiday) is enforced by the rate resolver
+ * (AC-OT-PAY-01).
+ */
+@Schema({ collection: 'overtime_pay_policies', timestamps: true })
+export class OvertimePayPolicy {
+  @Prop({ type: 'ObjectId', ref: 'Organization', required: true }) organizationId: string;
+  @Prop({ required: true, type: Date }) effectiveFrom: Date;
+  @Prop({ type: Date }) effectiveTo?: Date;
+  @Prop({ required: true, min: 0 }) workingDayRate: number;
+  @Prop({ required: true, min: 0 }) weeklyOffRate: number;
+  @Prop({ required: true, min: 0 }) publicHolidayRate: number;
+  @Prop({ required: true, trim: true }) legalReference: string;
+  @Prop({ required: true, min: 1, default: 1 }) version: number;
+  @Prop({ required: true, default: true }) active: boolean;
+}
+export type OvertimePayPolicyDocument = HydratedDocument<OvertimePayPolicy>;
+export const OvertimePayPolicySchema = SchemaFactory.createForClass(OvertimePayPolicy);
+OvertimePayPolicySchema.index({ organizationId: 1, effectiveFrom: -1 });
 
 @Schema({ collection: 'salary_profiles', timestamps: true })
 export class SalaryProfile {
