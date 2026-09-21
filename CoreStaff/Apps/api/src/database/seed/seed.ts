@@ -9,7 +9,12 @@ import { EmployeeProfileSchema } from '../schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from '../schemas/employment-history.schema';
 import { EmploymentContractSchema } from '../schemas/employment-contract.schema';
 import { EmployeeDocumentSchema } from '../schemas/employee-document.schema';
-import { AllowanceCatalogSchema, AttendanceBonusTemplateSchema, LaborCompliancePolicySchema } from '../schemas/compensation.schema';
+import {
+  AllowanceCatalogSchema,
+  AttendanceBonusTemplateSchema,
+  LaborCompliancePolicySchema,
+  OvertimePayPolicySchema,
+} from '../schemas/compensation.schema';
 import { EmploymentStatus, Role, OrganizationStatus, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
@@ -101,6 +106,7 @@ async function main(): Promise<void> {
     const Contract = connection.model('EmploymentContract', EmploymentContractSchema) as unknown as ContractModel;
     const Doc = connection.model('EmployeeDocument', EmployeeDocumentSchema) as unknown as DocumentModel;
     const LaborPolicy = connection.model('LaborCompliancePolicy', LaborCompliancePolicySchema);
+    const OvertimePolicy = connection.model('OvertimePayPolicy', OvertimePayPolicySchema);
     const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
     const BonusTemplate = connection.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
 
@@ -117,12 +123,46 @@ async function main(): Promise<void> {
       console.log(`[seed] CREATED org ${code}`);
     }
 
-    // TASK-031..034 compensation foundations. Values are seed configuration,
-    // never hard-coded in calculation services. Re-running is idempotent.
+    // TASK-031..037 compensation + policy foundations. Values are seed
+    // configuration (SRS §30B.1, §30D.2), never hard-coded in calculation
+    // services. Re-running is idempotent. Demo config only — HR/legal must
+    // confirm before a real deploy (SRS §30K).
     for (const organizationId of orgIds.values()) {
       await LaborPolicy.updateOne(
         { organizationId, version: 1 },
-        { $setOnInsert: { organizationId, effectiveFrom: new Date('2026-01-01'), probationMinimumRate: 0.85, version: 1, active: true } },
+        {
+          $setOnInsert: {
+            organizationId,
+            effectiveFrom: new Date('2026-01-01'),
+            normalDailyMinutes: 480,
+            normalWeeklyMinutes: 2880,
+            maxCombinedDailyMinutes: 720,
+            maxMonthlyOvertimeMinutes: 2400,
+            maxAnnualOvertimeMinutes: 20000,
+            exceptionalAnnualOvertimeMinutes: 24000,
+            warningThresholdPercent: 80,
+            probationMinimumRate: 0.85,
+            legalReference: 'BLLĐ 45/2019/QH14',
+            version: 1,
+            active: true,
+          },
+        },
+        { upsert: true },
+      );
+      await OvertimePolicy.updateOne(
+        { organizationId, version: 1 },
+        {
+          $setOnInsert: {
+            organizationId,
+            effectiveFrom: new Date('2026-01-01'),
+            workingDayRate: 1.5,
+            weeklyOffRate: 2.0,
+            publicHolidayRate: 3.0,
+            legalReference: 'BLLĐ 45/2019/QH14',
+            version: 1,
+            active: true,
+          },
+        },
         { upsert: true },
       );
     }
