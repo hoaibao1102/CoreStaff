@@ -47,20 +47,52 @@ export const EMPLOYMENT_STATUS_TRANSITIONS: Record<EmploymentStatus, EmploymentS
   TERMINATED: [],
 };
 
-export const Gender = {
-  MALE: 'MALE',
-  FEMALE: 'FEMALE',
-  OTHER: 'OTHER',
-} as const;
-export type Gender = (typeof Gender)[keyof typeof Gender];
+/** The same §176 fact as a value: employees these systems still owe a contract to. */
+export const WORKING_EMPLOYMENT_STATUSES: EmploymentStatus[] = [
+  EmploymentStatus.PROBATION,
+  EmploymentStatus.ACTIVE,
+  EmploymentStatus.ON_LEAVE,
+];
 
-/** SRS §30A.2: "Loại hợp đồng: PROBATION | FIXED_TERM | INDEFINITE_TERM." */
+/** SRS §30A.2 — contract type enum. */
 export const ContractType = {
   PROBATION: 'PROBATION',
   FIXED_TERM: 'FIXED_TERM',
   INDEFINITE_TERM: 'INDEFINITE_TERM',
 } as const;
 export type ContractType = (typeof ContractType)[keyof typeof ContractType];
+
+/**
+ * Contract lifecycle (TASK-028/030). `EXPIRING_SOON` is deliberately NOT here:
+ * it is derived on-read from `status === ACTIVE` + `expiryDate` inside the
+ * 30-day warning window (see `computeExpiryWarning`), never stored.
+ */
+export const ContractStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  TERMINATED: 'TERMINATED',
+} as const;
+export type ContractStatus = (typeof ContractStatus)[keyof typeof ContractStatus];
+
+/** Allowed contract status transitions (SRS §30A.2, TASK-030). */
+export const CONTRACT_STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
+  DRAFT: [ContractStatus.ACTIVE, ContractStatus.TERMINATED],
+  ACTIVE: [ContractStatus.TERMINATED, ContractStatus.EXPIRED],
+  // Renewal — HR must supply a new effectiveDate + expiryDate on this transition.
+  EXPIRED: [ContractStatus.ACTIVE],
+  TERMINATED: [],
+};
+
+/** Window (days) within which an ACTIVE contract is flagged "expiring soon". */
+export const CONTRACT_EXPIRY_WARNING_DAYS = 30;
+
+export const Gender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  OTHER: 'OTHER',
+} as const;
+export type Gender = (typeof Gender)[keyof typeof Gender];
 
 /**
  * SRS §30D.3 names three insurance contributions (BHXH/BHYT/BHTN) but never a

@@ -90,4 +90,31 @@ Không còn NC mở liên quan Leave override.
 
 ---
 
-*Full QC after NC-1 = A fix — `QC_REVIEW_CORESTAFF_DOCS.md`*
+## 8. Re-QC delta D36 — Department Manager Workspace
+
+> **Ngày:** 22/09/2026  
+> **Phạm vi:** SRS, Proposal, Context, Use Case, Design Master, Decision Log, backlog append-only, SVG liên quan và wiki public.  
+> **Governance:** Không sửa Milestone hoặc TASK-001…TASK-119; chỉ append TASK-120…TASK-126.
+
+| Gate | Kết quả |
+|---|---|
+| Manager là Employee + quyền quản lý | ✅ Đồng bộ |
+| Navigation desktop: Cá nhân / Quản lý → Phòng ban | ✅ Đồng bộ |
+| Phòng ban: Phê duyệt + Đánh giá nhân sự | ✅ Đồng bộ |
+| Đánh giá nhân sự giới hạn KPI kỳ lương | ✅ Đồng bộ |
+| ManagerAssignment hỗ trợ nhiều phòng | ✅ Đồng bộ |
+| Employee/approval/OT/KPI bị scope server-side | ✅ Đồng bộ |
+| Network/GPS hợp lệ không cần duyệt từng ngày | ✅ Đồng bộ |
+| Responsive web desktop + mobile-web nghiệm thu trước Expo | ✅ Đồng bộ |
+| Expo dùng chung API, chỉ triển khai sau Mốc Web | ✅ Đồng bộ |
+| Frozen task fingerprint TASK-001…118 | ✅ Không đổi |
+| Backlog TASK-001…126 | ✅ ID liên tục, 19 cột |
+| Markdown fences | ✅ Cân bằng |
+| SVG XML | ✅ Hợp lệ |
+| Wiki ID/fragment | ✅ Không trùng, không link chết |
+
+**Verdict D36:** **PASS — tài liệu sẵn sàng để người dùng duyệt trước khi triển khai source code.**
+
+---
+
+*Full QC after NC-1 = A fix + D36 delta review — `QC_REVIEW_CORESTAFF_DOCS.md`*

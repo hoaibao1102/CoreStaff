@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays, Clock3, FileCheck2, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, Clock3, FileCheck2, FileText, ShieldCheck, UserRound, Users } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { AppLink } from '../../components/AppLink';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
@@ -58,6 +58,7 @@ export function HrOverviewScreen({ user }: { user: AuthUser }) {
   const date = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'full' }).format(new Date());
   const shortcuts = [
     { href: '/hr/employees', title: 'Danh bạ nhân viên', description: 'Tìm kiếm nhân viên, tra cứu phòng ban và thông tin công việc trong tổ chức.', icon: Users, visible: canViewEmployees(user), primary: true },
+    { href: '/hr/contracts', title: 'Hợp đồng lao động', description: 'Tạo hợp đồng, theo dõi hiệu lực và cảnh báo sắp hết hạn.', icon: FileText, visible: canViewEmployees(user), primary: false },
     { href: '/app/profile', title: 'Hồ sơ của tôi', description: 'Xem thông tin tài khoản, hồ sơ cá nhân và phân công công việc của bạn.', icon: UserRound, visible: canViewProfile(user), primary: false },
   ];
 

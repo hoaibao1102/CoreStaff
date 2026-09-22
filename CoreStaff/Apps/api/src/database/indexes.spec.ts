@@ -9,6 +9,8 @@ import { EmployeeProfileSchema } from './schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from './schemas/employment-history.schema';
 import { InsuranceProfileSchema } from './schemas/insurance-profile.schema';
 import { InsurancePolicySchema } from './schemas/insurance-policy.schema';
+import { EmploymentContractSchema } from './schemas/employment-contract.schema';
+import { EmployeeDocumentSchema } from './schemas/employee-document.schema';
 import { normalizeEmail, normalizeCode, normalizeEmployeeCode } from './schemas/enums';
 
 describe('mongodb index contracts (TASK-015)', () => {
@@ -59,6 +61,16 @@ describe('mongodb index contracts (TASK-015)', () => {
 
   it('InsurancePolicy: tenant-scoped effective-dating lookup (TASK-039)', () => {
     expect(hasCompoundIndex(InsurancePolicySchema, ['organizationId', 'effectiveFrom'])).toBe(true);
+  });
+
+  it('EmploymentContract: tenant/employee lookup + status filter (TASK-028)', () => {
+    expect(hasCompoundIndex(EmploymentContractSchema, ['organizationId', 'employeeProfileId'])).toBe(true);
+    expect(hasCompoundIndex(EmploymentContractSchema, ['organizationId', 'status'])).toBe(true);
+  });
+
+  it('EmployeeDocument: tenant/employee + contract-scoped lookup (TASK-029)', () => {
+    expect(hasCompoundIndex(EmployeeDocumentSchema, ['organizationId', 'employeeProfileId'])).toBe(true);
+    expect(hasCompoundIndex(EmployeeDocumentSchema, ['organizationId', 'contractId'])).toBe(true);
   });
 });
 

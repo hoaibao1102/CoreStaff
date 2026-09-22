@@ -12,7 +12,7 @@
 |---|---|
 | Tên hệ thống | **CoreStaff — Human Resource, Attendance & Payroll Management System** |
 | Tên tiếng Việt | **CoreStaff — Hệ thống Quản trị Nhân sự, Chấm công và Tiền lương** |
-| Loại sản phẩm | Nền tảng web multi-tenant responsive; mobile-first cho Employee, desktop-first cho Department Manager, HR và System Admin |
+| Loại sản phẩm | Nền tảng web multi-tenant responsive cho toàn bộ role; Department Manager dùng desktop sidebar và mobile-web bottom navigation. React Native/Expo là phase sau, chỉ port khi responsive web đã được nghiệm thu |
 | Đối tượng | Văn phòng và doanh nghiệp nhỏ có khoảng 10–50 nhân viên trong mỗi Organization; đây là phân khúc mục tiêu, không phải giới hạn kỹ thuật |
 | Xác thực | Email hoặc mã nhân viên và mật khẩu |
 | Vai trò MVP | `EMPLOYEE`, `DEPARTMENT_MANAGER`, `HR`, `SYSTEM_ADMIN` |
@@ -150,10 +150,11 @@ MVP được xem là thành công khi có thể demo end-to-end:
 #### Department Manager
 
 - Dùng một tài khoản duy nhất cho cả quyền nhân viên và quyền quản lý.
-- Check-in/out, xem lịch sử, tổng hợp cá nhân, giải trình và adjustment qua khu vực “Công của tôi” nếu có `EmployeeAssignment` hợp lệ.
-- Xử lý approval/adjustment của các Department được giao, nhưng không được tự xử lý request có `employeeId` bằng chính `userId` của mình.
-- Request cá nhân của Department Manager được chuyển cho HR khác hoặc người quản lý thay thế được cấu hình.
-- Xem evidence/audit đúng tenant và department scope.
+- Nhóm Cá nhân gồm Chấm công hôm nay, Lịch sử công, Nghỉ phép & OT; quyền attendance cá nhân vẫn cần `EmployeeAssignment` hợp lệ.
+- Nhóm Quản lý có workspace Phòng ban với tab Phê duyệt và Đánh giá nhân sự (KPI kỳ lương).
+- Xử lý approval/adjustment/OT và KPI của các Department được giao qua `ManagerAssignment`, nhưng không được tự xử lý request có `employeeId` bằng chính `userId` của mình.
+- Request cá nhân của Department Manager được chuyển theo ApprovalDelegation hoặc HR queue.
+- Xem evidence/audit đúng tenant và managed department scope; không xem dữ liệu lương/định danh nhạy cảm của phòng.
 - Xác nhận bảng công phòng ban khi không còn blocker.
 
 #### HR với tư cách nhân viên
@@ -838,6 +839,45 @@ Hiển thị:
 - Nên có hộp xác nhận để tránh thao tác nhầm.
 - Không cho reject nhanh mà thiếu lý do.
 
+### FR-MGR-08 — Workspace Phòng ban và chức năng cá nhân 【MVP】
+
+`DEPARTMENT_MANAGER` là một nhân viên có thêm quyền quản lý, không phải một ứng dụng hoặc danh tính tách biệt.
+
+- Nhóm **Cá nhân** gồm đúng ba chức năng chính: **Chấm công hôm nay**, **Lịch sử công**, **Nghỉ phép & OT**.
+- Nhóm **Quản lý** có một mục cấp một là **Phòng ban**.
+- Workspace **Phòng ban** gồm hai tab con:
+  - **Phê duyệt**: xử lý Selfie/ngoại lệ/adjustment/giải trình và OT của nhân viên thuộc Department được giao.
+  - **Đánh giá nhân sự**: trong MVP chỉ là **đánh giá KPI kỳ lương**, không phải performance review/OKR/360° đầy đủ.
+- Manager chỉ tạo/sửa KPI ở trạng thái `DRAFT`; HR là actor duy nhất `CONFIRMED` để khóa đầu vào Payroll.
+- Manager không xem salary profile, hợp đồng, tài liệu private, tax/insurance identifier hoặc lương của nhân viên trong phòng.
+- Nếu không có `ManagerAssignment` hiệu lực, workspace hiển thị trạng thái “Chưa được phân công quản lý phòng ban nào” và không fallback sang toàn tenant hoặc Department trên hồ sơ cá nhân.
+
+### FR-MGR-09 — ManagerAssignment và phạm vi nhiều phòng 【MVP】
+
+- Một Department Manager có thể quản lý một hoặc nhiều Department qua `ManagerAssignment` có hiệu lực.
+- `managedDepartmentIds` được backend resolve từ session + `ManagerAssignment`; không nhận `managerId`, `organizationId` hoặc danh sách Department tin cậy từ client.
+- `EmployeeAssignment` trả lời nhân viên làm ở đâu/ca nào; `ManagerAssignment` trả lời manager được quản lý Department nào. Không dùng thay thế lẫn nhau.
+- `EmployeeProfile.departmentId` và `directManagerId` không phải nguồn authorization cho workspace Phòng ban.
+- Mọi list/detail/mutation Employee, Approval, OT và KPI của manager phải ràng buộc `organizationId` và `managedDepartmentIds` trong chính query/service.
+
+### FR-MGR-10 — Responsive web-first, Expo sau nghiệm thu 【MVP/SHOULD】
+
+**Mốc Web 【MVP】:** hoàn thiện và nghiệm thu ReactJS responsive trước trên desktop và mobile viewport.
+
+- Desktop (`>= md`): sidebar chia hai nhóm **Cá nhân** và **Quản lý**; `Phòng ban` mở workspace có tabs ngang; queue/KPI dùng table và dialog/side sheet chi tiết.
+- Mobile web (`< md`): bottom navigation của manager gồm **Chấm công**, **Lịch sử**, **Đơn từ**, **Phòng ban**; trong Phòng ban dùng segmented control **Phê duyệt | Đánh giá nhân sự**.
+- Mobile web hiển thị queue/KPI bằng card list, filter bằng sheet/full-screen modal, detail full-screen và sticky action bar; không ép table ngang.
+- Viewport 360px không horizontal overflow; touch target tối thiểu 44×44px; bottom nav/sticky action không che nội dung.
+
+**Mốc Expo 【SHOULD】:** chỉ bắt đầu sau khi desktop web và mobile web đã pass acceptance test và được nghiệm thu. Expo dùng lại API contract, enum và error code; không copy DOM component và không tạo endpoint mobile riêng.
+
+### FR-MGR-11 — Phạm vi “duyệt công” 【MVP】
+
+- Normal attendance bằng Network/GPS hợp lệ theo policy không cần manager duyệt từng ngày.
+- Queue công chỉ chứa Selfie cần approval, attendance exception, AdjustmentRequest hoặc Clarification cần quyết định.
+- GPS anomaly tự tạo request vẫn là `【SHOULD】` theo D17.
+- Cách này tránh queue tăng theo số nhân viên × số ngày nhưng vẫn giữ kiểm soát cho mọi ngoại lệ.
+
 ---
 
 ## 11A. Yêu cầu chức năng — HR và chốt kỳ công
@@ -1193,13 +1233,14 @@ Hiển thị:
 
 | Route | Màn hình | MVP |
 |---|---|:---:|
-| `/manager/approvals` | Queue phê duyệt đúng scope | ✅ |
-| `/manager/approvals/:id` | Chi tiết/xử lý | ✅ |
-| `/manager/adjustments` | Adjustment phòng ban | ✅ |
-| `/manager/leave`, `/manager/leave/:id` | Duyệt LeaveRequest đúng department scope | ✅ |
-| `/manager/schedules` | Xem lịch nhân viên phòng ban | ✅ |
-| `/manager/overtime` | Duyệt OT và xem kết quả phòng ban | ✅ |
-| `/manager/timesheet` | Rà soát và xác nhận phòng ban | ✅ |
+| `/app/attendance` | Cá nhân — Chấm công hôm nay | ✅ |
+| `/app/attendance/history` | Cá nhân — Lịch sử công | ✅ |
+| `/app/leave`, `/app/overtime` | Cá nhân — Nghỉ phép & OT | ✅ |
+| `/manager/department?tab=approvals` | Phòng ban — Phê duyệt công ngoại lệ/adjustment/OT đúng scope | ✅ |
+| `/manager/department?tab=evaluations` | Phòng ban — Đánh giá nhân sự (KPI kỳ lương) | ✅ |
+| `/manager/department/approvals/:id` | Chi tiết/xử lý request; desktop sheet/dialog, mobile-web full-screen | ✅ |
+
+Các route cũ `/manager/approvals`, `/manager/adjustments`, `/manager/overtime` và route KPI dành cho manager được redirect về tab tương ứng trong `/manager/department`; chúng không còn là mục điều hướng độc lập. Leave approval và timesheet confirmation vẫn là nghiệp vụ manager nhưng sẽ được tích hợp vào workspace Phòng ban ở phase tương ứng, không mở rộng cấu trúc navigation đã chốt.
 
 ### 14.4. HR tenant
 
@@ -1230,10 +1271,14 @@ Hiển thị:
 ### 14.6. Điều hướng
 
 - Employee → `/app/attendance`.
-- Department Manager → `/manager/approvals`; menu bắt buộc có “Công của tôi” trỏ tới `/app/attendance` cùng lịch sử/adjustment cá nhân.
+- Department Manager mặc định vào chức năng cá nhân `/app/attendance`; desktop sidebar chia:
+  - **Cá nhân:** Chấm công hôm nay, Lịch sử công, Nghỉ phép & OT.
+  - **Quản lý:** một mục **Phòng ban** trỏ `/manager/department`, bên trong có hai tab Phê duyệt và Đánh giá nhân sự.
+- Mobile web của Department Manager dùng bốn bottom destinations: Chấm công, Lịch sử, Đơn từ, Phòng ban; không nhét submenu lồng vào bottom navigation.
 - HR → `/hr/dashboard`; menu có “Công của tôi” và employee routes khi có EmployeeAssignment hợp lệ; nếu không có assignment thì ẩn action chấm công.
 - System Admin → `/platform/organizations`; không có route nghiệp vụ chấm công.
 - Route trái role hoặc tenant scope trả 403/404 phù hợp; guest về `/login`.
+- Expo chỉ port sau khi responsive web desktop/mobile đã được nghiệm thu; không chạy song song và không chặn nghiệm thu Mốc Web.
 
 ---
 
@@ -1307,10 +1352,17 @@ Department
 - UNIQUE INDEX(organizationId, code)
 
 ManagerAssignment
-- id, organizationId, departmentId, managerId
+- id, organizationId
+- managerUserId: ObjectId ref User(DEPARTMENT_MANAGER)
+- departmentId: ObjectId ref Department
 - effectiveFrom, effectiveTo nullable, active
+- createdBy: ObjectId ref User(HR)
 - createdAt, updatedAt
+- INDEX(organizationId, managerUserId, active)
+- INDEX(organizationId, departmentId, active)
 ```
+
+HR quản lý vòng đời ManagerAssignment bằng soft CRUD. Service chặn khoảng hiệu lực chồng lấn cho cùng `managerUserId + departmentId`. Backend resolve `managedDepartmentIds` tại thời điểm request; Department của hồ sơ manager không tự sinh quyền quản lý.
 
 ### 15.4. Workplace và AllowedNetwork
 
@@ -1631,7 +1683,34 @@ Login response không được chứa `passwordHash`, failed count hoặc token 
 | Calendar | CRUD `/api/hr/calendar-exceptions` — HR. `EmployeeDayOverride`: **không** CRUD trực tiếp; chỉ đọc `GET /api/hr/employee-day-overrides` (optional) và sinh từ leave apply |
 | Audit | `GET /api/hr/audit-logs` tenant scope; `GET /api/platform/audit-logs` platform scope |
 
-### 16.6A. Leave, bonus và allowance APIs
+### 16.6A. Manager workspace và scope APIs
+
+| Method | Endpoint | Quyền | Mục đích |
+|---|---|---|---|
+| GET | `/api/manager/context` | Department Manager | Trả managed Departments/capabilities từ session + ManagerAssignment |
+| GET | `/api/manager/employees` | Department Manager | Danh sách field không nhạy cảm trong managedDepartmentIds |
+| GET | `/api/manager/approvals` | Department Manager | Queue hợp nhất ATTENDANCE/OVERTIME có filter và pagination server-side |
+| GET | `/api/manager/attendance-requests/:id` | Department Manager | Chi tiết attendance exception đúng scope |
+| POST | `/api/manager/attendance-requests/:id/approve` | Department Manager | Approve với `expectedVersion` |
+| POST | `/api/manager/attendance-requests/:id/reject` | Department Manager | Reject có reason 10–1000 ký tự |
+| POST | `/api/manager/attendance-requests/:id/request-clarification` | Department Manager | Yêu cầu giải trình có nội dung |
+| GET | `/api/manager/overtime-requests/:id` | Department Manager | Chi tiết OT đúng scope |
+| POST | `/api/manager/overtime-requests/:id/approve` | Department Manager | Duyệt approved window; backend tự phân loại OT |
+| POST | `/api/manager/overtime-requests/:id/reject` | Department Manager | Từ chối có reason |
+| GET/POST/PATCH | `/api/hr/manager-assignments` | HR | Soft CRUD phân công manager quản lý Department |
+
+Quy tắc API:
+
+- Actor/tenant lấy từ session; client không gửi identity hoặc organization tin cậy.
+- `departmentId` filter nếu có phải thuộc `managedDepartmentIds`; bỏ filter vẫn chỉ trả union các Department được giao.
+- Manager ngoài scope nhận `RESOURCE_NOT_FOUND`/`DEPARTMENT_SCOPE_VIOLATION` theo contract; không query toàn tenant rồi filter ở frontend.
+- Mutation dùng `expectedVersion`; state đã đổi trả `409 REQUEST_STATE_CHANGED` và không áp dụng quyết định lần hai.
+- `actorId == employeeId` trả `SELF_APPROVAL_FORBIDDEN`.
+- API employee/KPI dành cho manager chỉ trả field không nhạy cảm; không trả lương, hợp đồng, tài liệu private, CCCD, tax hoặc insurance identifier.
+
+KPI manager tái sử dụng `/api/hr/kpi-inputs` và `/api/hr/kpi-policies/applicable`, nhưng backend bắt buộc scope bằng ManagerAssignment. Manager chỉ create/update `DRAFT`; endpoint confirm chỉ cho HR.
+
+### 16.6B. Leave, bonus và allowance APIs
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
@@ -1645,7 +1724,7 @@ Login response không được chứa `passwordHash`, failed count hoặc token 
 | GET/POST/PATCH | `/api/hr/organization-allowances` | HR | Enable/custom/create allowance |
 | GET/POST/PATCH | `/api/hr/approval-delegations` | HR | Cấu hình delegate có hiệu lực |
 
-### 16.6B. Full-time schedule và overtime APIs
+### 16.6C. Full-time schedule và overtime APIs
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
@@ -1657,14 +1736,14 @@ Login response không được chứa `passwordHash`, failed count hoặc token 
 
 `overtimeType`, `actualMinutes` và `eligibleMinutes` không được nhận từ client như dữ liệu tin cậy.
 
-### 16.6C. Resolve REJECTED APIs
+### 16.6D. Resolve REJECTED APIs
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
 | POST | `/api/manager/approvals/:id/reopen-for-clarification` | Department Manager | Mở lại REJECTED thành CLARIFICATION_REQUESTED |
 | POST | `/api/hr/attendance-days/:id/resolve-rejected` | HR | Resolve dayResult có lý do và audit |
 
-### 16.6D. Adjustment APIs
+### 16.6E. Adjustment APIs
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
@@ -1789,6 +1868,8 @@ capturedAtClient: 2026-09-08T08:15:03+07:00
 | `TENANT_SCOPE_VIOLATION` | 404 | Resource không tồn tại trong tenant hiện tại |
 | `DEPARTMENT_SCOPE_VIOLATION` | 403 | Manager không được giao Department này |
 | `SELF_APPROVAL_FORBIDDEN` | 403 | Không được tự duyệt hoặc tự áp dụng request của chính mình |
+| `MANAGER_ASSIGNMENT_REQUIRED` | 403 | Manager chưa có ManagerAssignment hiệu lực; UI hiển thị no-assignment state |
+| `REQUEST_STATE_CHANGED` | 409 | Request đã được actor/tab khác xử lý; refetch và hiển thị trạng thái mới |
 
 ### 17.3. Attendance
 
@@ -2001,6 +2082,9 @@ Backend thực hiện trong transaction:
 | History | loading, data, empty, error |
 | Approval list | loading, data, empty, filtered-empty, error |
 | Approval detail | loading, data, forbidden/not found, stale/conflict |
+| Manager workspace | loading context, one/multiple departments, no assignment, forbidden, error |
+| Manager KPI evaluation | loading, data, empty, draft editing, confirmed/locked, out-of-scope conflict |
+| Responsive manager navigation | desktop sidebar, mobile-web bottom nav, active tab, safe-area/content-not-obscured |
 | Timesheet review | loading, ready, blockers, partially-confirmed, ready-to-close, stale/conflict |
 | Period closing | confirming, closing, closed, already-closed, rollback/error |
 | Export | preparing, ready, downloading, stale snapshot, error |
@@ -2049,7 +2133,14 @@ Mọi trạng thái lỗi phải có hành động phù hợp: thử lại, cấ
 - AC-MGR-04: Employee thấy quyết định sau refetch/login lại.
 - AC-MGR-05: Hai Department Manager/tab cùng xử lý chỉ quyết định đầu hợp lệ; lần sau nhận conflict.
 - AC-MGR-06: Evidence URL không thể truy cập khi logout hoặc không có quyền.
-- AC-MGR-07: Department Manager có assignment check-in/out và xem “Công của tôi” bằng cùng một tài khoản.
+- AC-MGR-07: Department Manager có assignment check-in/out và xem các chức năng cá nhân bằng cùng một tài khoản.
+- AC-MGR-09: Desktop sidebar có nhóm Cá nhân/Quản lý; Quản lý chỉ có mục Phòng ban với hai tab Phê duyệt và Đánh giá nhân sự.
+- AC-MGR-10: Mobile web 360px có bốn bottom destinations, card list/full-screen detail, không horizontal overflow và action không che nội dung.
+- AC-MGR-11: Manager không có ManagerAssignment nhận no-assignment state và không thấy dữ liệu tenant; manager nhiều phòng chỉ thấy union phòng được giao.
+- AC-MGR-12: Manager không thể ép `departmentId` ngoài scope trên employee/approval/OT/KPI API; direct ID ngoài scope không trả dữ liệu và không mutate.
+- AC-MGR-13: Manager tạo/sửa KPI `DRAFT` đúng scope; manager gọi confirm bị từ chối; HR confirm thành công.
+- AC-MGR-14: Normal Network/GPS attendance hợp lệ không vào approval queue; Selfie/exception/adjustment/clarification vào queue theo policy.
+- AC-MGR-15: Expo không bắt đầu trước khi desktop web và mobile web pass acceptance test và được nghiệm thu.
 - AC-HR-SELF-01: HR có assignment được chấm công; HR không có assignment không thấy action check-in/out.
 - AC-SELF-APPROVAL-01: Department Manager/HR xử lý request của chính mình nhận `403 SELF_APPROVAL_FORBIDDEN`; request được giao cho actor khác đủ quyền.
 - AC-SYS-ATTENDANCE-01: System Admin không truy cập được chức năng check-in/out.
@@ -2205,7 +2296,7 @@ Backend
 | Backend | NestJS + TypeScript + Mongoose | REST API, Swagger/OpenAPI, DTO validation, RBAC/tenant guards |
 | Database | MongoDB replica set | Transaction, compound unique indexes và snapshot collections |
 | Web | ReactJS + TypeScript + Vite | System Admin, HR/Payroll, Department Manager và Employee web responsive |
-| Mobile | React Native + Expo + TypeScript 【SHOULD】 | Employee hero flow: login, attendance, request, history, Payslip |
+| Mobile | React Native + Expo + TypeScript 【SHOULD】 | Phase sau nghiệm thu responsive web; port Employee flows và Department Manager workspace bằng cùng API contract |
 | Testing | Jest/Supertest, Vitest, Playwright | Unit, integration/API và E2E |
 | Infrastructure | MongoDB Atlas (replica set managed) + HTTPS hosting | Local/CI/deployment có transaction thật (không dùng Docker) |
 | File storage | Private local hoặc S3-compatible | Selfie, hợp đồng và tài liệu private |
@@ -2224,10 +2315,11 @@ Backend
 
 #### Phân chia frontend
 
-- ReactJS là frontend MVP bắt buộc cho toàn bộ role và là bề mặt quản trị chính.
-- React Native là SHOULD, chỉ triển khai Employee app; không xây HR/System Admin/Payroll management trên mobile trong MVP.
+- ReactJS là frontend MVP bắt buộc cho toàn bộ role và là bề mặt triển khai/nghiệm thu trước.
+- Mốc Web phải hoàn chỉnh trên cả desktop và mobile viewport; mobile web không được xem là bản thu nhỏ nguyên xi của table desktop.
+- React Native/Expo là SHOULD và chỉ bắt đầu sau khi Mốc Web được nghiệm thu. Phase Expo port Employee flows và Department Manager workspace; không xây HR/System Admin/Payroll management trên native mobile trong MVP.
 - Web/mobile dùng chung API contract, enum, error code và pure validation types; không chia sẻ DOM/native UI component.
-- Mobile lưu token/session bằng SecureStore; không lưu refresh token trong AsyncStorage.
+- Mobile lưu token/session bằng SecureStore; không lưu refresh token hoặc evidence nhạy cảm trong AsyncStorage.
 
 ### 23.3. Khoảng cách từ prototype đến sản phẩm CoreStaff
 
@@ -2380,7 +2472,8 @@ System Admin tạo Organization A/B + HR đầu tiên
 - [ ] Có loading/empty/error/permission states chính.
 - [ ] Unit và integration test cho business rules trọng yếu.
 - [ ] ReactJS production build thành công và toàn bộ role dùng được trên web.
-- [ ] React Native Employee hero flow build được nếu thực hiện SHOULD; không chặn nghiệm thu web MVP.
+- [ ] Department Manager web được nghiệm thu ở desktop và mobile viewport: đúng navigation, card/table adaptation, không overflow và scope API an toàn.
+- [ ] React Native/Expo Employee + Department Manager flow build được nếu thực hiện SHOULD; chỉ bắt đầu sau nghiệm thu web và không chặn nghiệm thu web MVP.
 - [ ] API DTO không rò `_id`, `__v`; mọi tiền VND dùng integer và reconcile đúng.
 - [ ] README có hướng dẫn setup, env, migration, seed, run và tài khoản demo.
 - [ ] Có video hoặc kịch bản demo end-to-end nếu môn học yêu cầu.
@@ -2391,11 +2484,13 @@ System Admin tạo Organization A/B + HR đầu tiên
 
 | Mã | Câu hỏi | Mặc định đề xuất |
 |---|---|---|
-| OQ-01 | Stack? | **RESOLVED 12/09/2026:** NestJS + MongoDB (replica set) + ReactJS; React Native Employee app = SHOULD |
+| OQ-01 | Stack? | **RESOLVED D36:** NestJS + MongoDB replica set + ReactJS responsive web; Expo Employee + Department Manager app = SHOULD sau nghiệm thu Web |
 | OQ-02 | Xác định tenant lúc login? | **RESOLVED 12/09/2026:** organizationCode + identifier + password; platform login riêng |
 | OQ-02A | Approval delegation? | **RESOLVED 12/09/2026:** active ApprovalDelegation trước, fallback HR queue chung |
 | OQ-03 | Kiến trúc tenant? | Shared schema có organizationId; test isolation bắt buộc |
-| OQ-04 | Manager quản lý nhiều phòng? | Có qua ManagerAssignment có hiệu lực |
+| OQ-04 | Manager quản lý nhiều phòng? | **RESOLVED D36:** Có qua ManagerAssignment có hiệu lực; không suy quyền từ profile department/directManagerId |
+| OQ-04C | Manager workspace/navigation? | **RESOLVED D36:** Cá nhân có 3 mục; Quản lý có Phòng ban → Phê duyệt + Đánh giá nhân sự |
+| OQ-04D | Web/Expo delivery? | **RESOLVED D36:** Responsive web desktop+mobile nghiệm thu trước; Expo port sau bằng cùng API |
 | OQ-04A | Phân khúc mục tiêu? | 10–50 nhân viên/Organization; không hard-code giới hạn |
 | OQ-04B | Ca hành chính? | HR cấu hình; 08:00–17:00 chỉ là seed/demo |
 | OQ-04E | OT type? | Backend tự phân loại; Employee không chọn |
@@ -2479,18 +2574,13 @@ CoreStaff phục vụ văn phòng/doanh nghiệp nhỏ khoảng 10–50 nhân vi
 - Quản lý ngày hiệu lực/hết hạn, tài liệu hợp đồng private và lịch sử thay đổi.
 - Không hard-delete nhân viên/hợp đồng đã phát sinh bảng công hoặc payroll.
 
-**EmploymentContract (TASK-028, formalized 2026-09-22 — field names below are the
-first code-level rendering of the bullets above, not a new business rule):**
-
-```text
-EmploymentContract
-- id, organizationId, employeeId
-- contractType: PROBATION | FIXED_TERM | INDEFINITE_TERM
-- startDate, endDate (null chỉ khi INDEFINITE_TERM)
-- documentRef (tài liệu hợp đồng private, TASK-029)
-- createdBy, createdAt, updatedAt
-```
-Một document mỗi giai đoạn hợp đồng; gia hạn tạo document mới thay vì sửa document cũ (đây chính là cách "lịch sử thay đổi" được giữ mà không cần collection lịch sử riêng — cùng pattern effective-dating với SalaryProfile/InsurancePolicy ở §30D). Không có API update/delete: sửa sai = tạo lại giai đoạn mới; "không hard-delete" nghĩa là không có endpoint xóa nào cả trong MVP này.
+**EmploymentContract (TASK-028) — triển khai thật nằm ở `hr/employment-contract`**
+(`database/schemas/employment-contract.schema.ts`): `contractType`, `status`
+(DRAFT→ACTIVE→…), `effectiveDate`/`expiryDate`/`endDate`, `statusReason`,
+cảnh báo hết hạn tính động lúc đọc (`isExpiringSoon`). Một bản nháp field-list
+tối giản từng được thêm tạm ở đây ngày 2026-09-22 trước khi merge với bản đầy đủ
+hơn này — đã gỡ để tránh hai nguồn sự thật; xem code hoặc
+`Docs/TASK_038_039_IMPLEMENTATION.md` cho lịch sử quyết định.
 
 ### 30A.3. Thử việc
 
@@ -2811,7 +2901,7 @@ Organization & Tenant Isolation
 + Attendance, Leave, Approval & OT
 + Labor Compliance & Timesheet Closing
 + Payroll Snapshot, Insurance, PIT & Payslip
-+ NestJS, MongoDB Replica Set, ReactJS & React Native Employee Extension
++ NestJS, MongoDB Replica Set, ReactJS Responsive Web & Expo Extension after Web Acceptance
 + Audit & Policy Versioning
 ```
 

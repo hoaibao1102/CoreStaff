@@ -1,5 +1,6 @@
 import { EmployeeDataState } from '../components/EmployeeDataState';
 import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDirectoryScreen';
+import { ContractsScreen } from '../screens/Contracts/ContractsScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
@@ -9,7 +10,12 @@ import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
 import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
 import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
+import { CompensationScreen } from '../screens/Compensation/CompensationScreen';
+import { SalaryProfilesScreen } from '../screens/SalaryProfiles/SalaryProfilesScreen';
+import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
+import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
+import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
 import type { ApiSource, HealthResponse } from '../config/api';
@@ -86,10 +92,20 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   const route = path.replace(/\/$/, '') || '/';
 
   // ── Forbidden guard ──────────────────────────────────────────────────
-  // Every HR directory read requires an HR with a tenant; the route never
-  // renders for anyone else. The SYSTEM_ADMIN branch below must be skipped for
-  // these paths, so it also sits behind the role check.
-  if ((user.role !== 'HR' || !user.organizationId) && (route.startsWith('/hr/employees/') || route === '/hr/employees' || route === '/hr/assignments')) {
+  // Every HR directory/contract/assignment read requires an HR with a tenant; the
+  // route never renders for anyone else. The SYSTEM_ADMIN branch below must be
+  // skipped for these paths, so it also sits behind the role check.
+  const hrScoped =
+    route === '/hr/employees' || route.startsWith('/hr/employees/') ||
+    route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
+    route === '/hr/assignments' || route === '/hr/salary-profiles' ||
+    route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
+    route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay';
+  if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
+    return <EmployeeDataState status="forbidden" />;
+  }
+
+  if (route === '/hr/kpi-inputs' && user.role !== 'HR' && user.role !== 'DEPARTMENT_MANAGER') {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -141,9 +157,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (route === '/app/attendance' && user.role === 'HR') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <AttendanceScreen user={user} />
-        </section>
+        <AttendanceScreen user={user} />
       </WorkspaceShell>
     );
   }
@@ -158,8 +172,26 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               apiBase={apiBase}
               employeeId={route.startsWith('/hr/employees/') ? route.split('/').pop() : undefined}
             />
+          ) : route === '/hr/contracts' || route.startsWith('/hr/contracts/') ? (
+            <ContractsScreen
+              user={user}
+              apiBase={apiBase}
+              contractId={route.startsWith('/hr/contracts/') ? route.split('/').pop() : undefined}
+            />
           ) : route === '/hr/assignments' ? (
             <AssignmentScreen user={user} apiBase={apiBase} />
+          ) : route === '/hr/salary-profiles' ? (
+            <SalaryProfilesScreen apiBase={apiBase} />
+          ) : route === '/hr/organization-allowances' ? (
+            <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
+          ) : route === '/hr/attendance-bonus-policies' ? (
+            <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
+          ) : route === '/hr/kpi-inputs' ? (
+            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" userRole={user.role} />
+          ) : route === '/hr/policies/labor-compliance' ? (
+            <LaborCompliancePolicyScreen apiBase={apiBase} />
+          ) : route === '/hr/policies/overtime-pay' ? (
+            <OvertimePayPolicyScreen apiBase={apiBase} />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.
@@ -187,18 +219,33 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (route === '/app/attendance' && (user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER')) {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <AttendanceScreen user={user} />
+        <AttendanceScreen user={user} />
+      </WorkspaceShell>
+    );
+  }
+
+  if (user.role === 'DEPARTMENT_MANAGER' && (route === '/manager/department' || route === '/manager/approvals' || route === '/hr/kpi-inputs')) {
+    const initialTab = route === '/hr/kpi-inputs' ? 'evaluations' : 'approvals';
+    return (
+      <WorkspaceShell user={user} currentPath="/manager/department" onLogout={onLogout}>
+        <section className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+          <ManagerDepartmentScreen apiBase={apiBase} initialTab={initialTab} />
         </section>
       </WorkspaceShell>
     );
   }
 
-  if (user.role === 'EMPLOYEE' && route === '/app/attendance/history') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><AttendanceHistoryScreen /></section></WorkspaceShell>;
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/attendance/history') {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+        <div className="mx-auto w-full max-w-md md:max-w-2xl px-3 py-2 sm:px-6 sm:py-6">
+          <AttendanceHistoryScreen />
+        </div>
+      </WorkspaceShell>
+    );
   }
 
-  if (user.role === 'EMPLOYEE' && route === '/app/leave') {
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave') {
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 

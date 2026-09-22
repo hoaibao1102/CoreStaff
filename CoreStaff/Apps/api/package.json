@@ -13,9 +13,13 @@
     "test:watch": "jest --watch",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
     "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
-    "seed": "ts-node-script src/database/seed/seed.ts"
+    "seed": "ts-node-script src/database/seed/seed.ts",
+    "seed:compensation:dry": "ts-node-script scripts/seed-compensation.ts",
+    "seed:compensation": "ts-node-script scripts/seed-compensation.ts --apply",
+    "verify:compensation": "ts-node-script scripts/verify-compensation-seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1135.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
@@ -26,9 +30,12 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
+    "mongodb-memory-server": "^11.3.0",
+    "mongodb-memory-server-core": "^11.3.0",
     "mongoose": "^8.9.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -36,6 +43,7 @@
     "@nestjs/testing": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",

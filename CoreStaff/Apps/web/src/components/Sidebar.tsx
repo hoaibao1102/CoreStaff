@@ -11,7 +11,9 @@ import {
     FileText,
     LayoutDashboard,
     LogOut,
+    ShieldAlert,
     ShieldCheck,
+    Target,
     UserRound,
     Users,
     WalletCards,
@@ -62,9 +64,16 @@ function getNavGroups(user: AuthUser): NavGroup[] {
                 items: [
                     ...common,
                     { href: '/hr/employees', label: 'Danh sách nhân viên', icon: Users },
+                    { href: '/hr/contracts', label: 'Hợp đồng lao động', icon: FileText },
                     { href: '/hr/assignments', label: 'Quản lý phân công', icon: ClipboardList },
                     { href: '/hr/workplaces', label: 'Nơi làm việc', icon: Building2 },
                     { href: '/hr/shift-templates', label: 'Ca làm việc', icon: Clock3 },
+                    { href: '/hr/salary-profiles', label: 'Hồ sơ lương', icon: WalletCards },
+                    { href: '/hr/organization-allowances', label: 'Phụ cấp', icon: WalletCards },
+                    { href: '/hr/attendance-bonus-policies', label: 'Thưởng chuyên cần', icon: ClipboardCheck },
+                    { href: '/hr/kpi-inputs', label: 'KPI kỳ lương', icon: ClipboardList },
+                    { href: '/hr/policies/labor-compliance', label: 'Tuân thủ lao động', icon: ShieldAlert },
+                    { href: '/hr/policies/overtime-pay', label: 'Lương tăng ca', icon: WalletCards },
                 ],
             },
             {
@@ -94,23 +103,21 @@ function getNavGroups(user: AuthUser): NavGroup[] {
         ];
     }
 
-    // DEPARTMENT_MANAGER or EMPLOYEE
-    const managerItems: NavItem[] = [];
-    if (role === 'DEPARTMENT_MANAGER') {
-        managerItems.push({ href: '/manager/approvals', label: 'Queue phê duyệt', icon: ClipboardCheck });
-    }
-    managerItems.push(
+    const personalItems: NavItem[] = [
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
         { href: '/app/leave', label: 'Nghỉ phép & OT', icon: FileText },
-    );
-
-    return [
-        {
-            title: 'Menu chính',
-            items: role === 'EMPLOYEE' ? [...managerItems, ...common] : [...common, ...managerItems],
-        },
     ];
+
+    if (role === 'DEPARTMENT_MANAGER') {
+        return [
+            { title: 'Cá nhân', items: personalItems },
+            { title: 'Quản lý', items: [{ href: '/manager/department', label: 'Phòng ban', icon: Building2 }] },
+        ];
+    }
+
+    return [{ title: 'Cá nhân', items: personalItems }];
+    
 }
 
 /* ───────── Sidebar Component ───────── */

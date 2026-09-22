@@ -7,11 +7,20 @@ import { DepartmentSchema } from './department.schema';
 import { PositionSchema } from './position.schema';
 import { EmployeeProfileSchema } from './employee-profile.schema';
 import { EmploymentHistorySchema } from './employment-history.schema';
+import { EmploymentContractSchema } from './employment-contract.schema';
+import { EmployeeDocumentSchema } from './employee-document.schema';
 import { WorkplaceSchema } from './workplace.schema';
 import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
 import { InsuranceProfileSchema } from './insurance-profile.schema';
 import { InsurancePolicySchema } from './insurance-policy.schema';
+import { ManagerAssignmentSchema } from './manager-assignment.schema';
+import { ManagerRequestSchema } from './manager-request.schema';
+import {
+  SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
+  OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
+  AttendanceBonusPolicySchema, KpiPayrollInputSchema, KpiPolicySchema, OvertimePayPolicySchema,
+} from './compensation.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -27,15 +36,29 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Position', schema: PositionSchema },
   { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
   { name: 'EmploymentHistory', schema: EmploymentHistorySchema },
+  { name: 'EmploymentContract', schema: EmploymentContractSchema },
+  { name: 'EmployeeDocument', schema: EmployeeDocumentSchema },
   { name: 'Workplace', schema: WorkplaceSchema },
   { name: 'ShiftTemplate', schema: ShiftTemplateSchema },
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
   { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
   { name: 'InsurancePolicy', schema: InsurancePolicySchema },
+  { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
+  { name: 'ManagerRequest', schema: ManagerRequestSchema },
+  { name: 'SalaryProfile', schema: SalaryProfileSchema },
+  { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
+  { name: 'AllowanceCatalog', schema: AllowanceCatalogSchema },
+  { name: 'OrganizationAllowance', schema: OrganizationAllowanceSchema },
+  { name: 'AttendanceBonusTemplate', schema: AttendanceBonusTemplateSchema },
+  { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
+  { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
+  { name: 'KpiPolicy', schema: KpiPolicySchema },
+  { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
 export { DepartmentSchema, PositionSchema, EmployeeProfileSchema, EmploymentHistorySchema, WorkplaceSchema };
+export { EmploymentContractSchema, EmployeeDocumentSchema };
 export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
 export { InsuranceProfileSchema };
@@ -50,6 +73,8 @@ export { Department } from './department.schema';
 export { Position } from './position.schema';
 export { EmployeeProfile } from './employee-profile.schema';
 export { EmploymentHistory } from './employment-history.schema';
+export { EmploymentContract } from './employment-contract.schema';
+export { EmployeeDocument } from './employee-document.schema';
 export { Workplace } from './workplace.schema';
 export { ShiftTemplate } from './shift-template.schema';
 

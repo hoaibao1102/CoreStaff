@@ -14,6 +14,7 @@ import { AssignmentDetailDialog } from './AssignmentDetailDialog';
 import { AssignmentEditDialog } from './AssignmentEditDialog';
 import { AssignmentActivateDialog } from './AssignmentActivateDialog';
 import { AssignmentDeactivateDialog } from './AssignmentDeactivateDialog';
+import { ManagerAssignmentsPanel } from './ManagerAssignmentsPanel';
 
 type StatusFilter = 'active' | 'inactive';
 const PAGE_SIZE = 10;
@@ -80,13 +81,21 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
   const employeeNames = useMemo(() => new Map(employees.map(item => [item.userId, item.fullName || item.employeeCode])), [employees]);
   const departmentNames = useMemo(() => new Map(departments.map(item => [item._id, item.name])), [departments]);
   const workplaceNames = useMemo(() => new Map(workplaces.map(item => [item._id, item.name])), [workplaces]);
+
+  // Lấy danh sách userIds đã có phân công nơi làm việc (active + có workplaceId)
+  const assignedUserIds = useMemo(
+    () => rows.filter(row => row.active && row.workplaceId).map(row => row.userId),
+    [rows],
+  );
+
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visibleRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const resetFilters = () => { setStatus('active'); setWorkplaceId(''); setPage(1); };
 
-  return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+  return <div className="space-y-8">
+    <ManagerAssignmentsPanel apiBase={apiBase} />
+    <div className="flex flex-col justify-between gap-4 border-t border-border pt-8 sm:flex-row sm:items-start">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Quản lý phân công</h1>
         <p className="mt-2 text-sm text-muted-foreground">Quản lý phòng ban, nơi làm việc và thời gian phân công của nhân viên</p>
@@ -114,31 +123,31 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
 
       {error ? <div className="p-4 sm:p-6"><Alert variant="destructive"><AlertDescription className="flex flex-wrap items-center justify-between gap-4"><span>Không thể tải danh sách phân công. Vui lòng thử lại.</span><Button variant="outline" className="min-h-11" onClick={() => setRevision(value => value + 1)}>Thử lại</Button></AlertDescription></Alert></div>
         : loading ? <div className="space-y-4 p-4 sm:p-6" role="status" aria-label="Đang tải danh sách phân công"><span className="sr-only">Đang tải danh sách phân công…</span>{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-12 w-full" />)}</div>
-        : rows.length === 0 ? <div className="flex flex-col items-center gap-3 px-6 py-12 text-center" role="status"><ClipboardList className="size-10 text-muted-foreground" aria-hidden="true" /><h2 className="text-lg font-semibold">Chưa có phân công phù hợp.</h2></div>
-        : <>
-          <Table aria-label="Danh sách phân công" className="min-w-[980px]"><TableHeader><TableRow>
-            <TableHead className="pl-6">Nhân viên</TableHead><TableHead>Phòng ban</TableHead><TableHead>Nơi làm việc</TableHead><TableHead>Ngày bắt đầu</TableHead><TableHead>Ngày kết thúc</TableHead><TableHead>Trạng thái</TableHead><TableHead className="w-20 pr-6 text-right">Thao tác</TableHead>
-          </TableRow></TableHeader><TableBody>{visibleRows.map(row => <TableRow key={row._id}>
-            <TableCell className="pl-6 font-medium">{employeeNames.get(row.userId) || 'Chưa có thông tin'}</TableCell>
-            <TableCell>{departmentNames.get(row.departmentId) || 'Chưa có thông tin'}</TableCell>
-            <TableCell>{row.workplaceId ? workplaceNames.get(row.workplaceId) || 'Chưa có thông tin' : 'Không áp dụng'}</TableCell>
-            <TableCell className="text-muted-foreground">{formatDate(row.effectiveFrom)}</TableCell><TableCell className="text-muted-foreground">{formatDate(row.effectiveTo)}</TableCell>
-            <TableCell><AssignmentStatus active={row.active} /></TableCell>
-            <TableCell className="w-20 pr-6 text-right"><DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="min-h-11 min-w-11" />} aria-label={`Mở thao tác phân công của ${employeeNames.get(row.userId) || 'nhân viên'}`}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem className="min-h-10 px-3" onClick={() => setDetailId(row._id)}><Eye aria-hidden="true" />Xem chi tiết</DropdownMenuItem>
-                <DropdownMenuItem className="min-h-10 px-3" onClick={() => setEditId(row._id)}><Pencil aria-hidden="true" />Chỉnh sửa</DropdownMenuItem>
-                {!row.active && <DropdownMenuItem className="min-h-10 px-3 text-primary" onClick={() => setActivateId(row._id)}><Power aria-hidden="true" />Kích hoạt lại</DropdownMenuItem>}
-                {row.active && <DropdownMenuItem variant="destructive" className="min-h-10 px-3" onClick={() => setDeactivateId(row._id)}><PowerOff aria-hidden="true" />Ngưng hoạt động</DropdownMenuItem>}
-              </DropdownMenuContent>
-            </DropdownMenu></TableCell>
-          </TableRow>)}</TableBody></Table>
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border p-4 sm:px-6">
-            <p className="text-sm text-muted-foreground" role="status">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, rows.length)} / {rows.length} phân công</p>
-            <div className="flex items-center gap-2"><Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft aria-hidden="true" /></Button><span className="text-sm">{currentPage} / {pages}</span><Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang sau" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight aria-hidden="true" /></Button></div>
-          </div>
-        </>}
+          : rows.length === 0 ? <div className="flex flex-col items-center gap-3 px-6 py-12 text-center" role="status"><ClipboardList className="size-10 text-muted-foreground" aria-hidden="true" /><h2 className="text-lg font-semibold">Chưa có phân công phù hợp.</h2></div>
+            : <>
+              <Table aria-label="Danh sách phân công" className="min-w-[980px]"><TableHeader><TableRow>
+                <TableHead className="pl-6">Nhân viên</TableHead><TableHead>Phòng ban</TableHead><TableHead>Nơi làm việc</TableHead><TableHead>Ngày bắt đầu</TableHead><TableHead>Ngày kết thúc</TableHead><TableHead>Trạng thái</TableHead><TableHead className="w-20 pr-6 text-right">Thao tác</TableHead>
+              </TableRow></TableHeader><TableBody>{visibleRows.map(row => <TableRow key={row._id}>
+                <TableCell className="pl-6 font-medium">{employeeNames.get(row.userId) || 'Chưa có thông tin'}</TableCell>
+                <TableCell>{departmentNames.get(row.departmentId) || 'Chưa có thông tin'}</TableCell>
+                <TableCell>{row.workplaceId ? workplaceNames.get(row.workplaceId) || 'Chưa có thông tin' : 'Không áp dụng'}</TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(row.effectiveFrom)}</TableCell><TableCell className="text-muted-foreground">{formatDate(row.effectiveTo)}</TableCell>
+                <TableCell><AssignmentStatus active={row.active} /></TableCell>
+                <TableCell className="w-20 pr-6 text-right"><DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="min-h-11 min-w-11" />} aria-label={`Mở thao tác phân công của ${employeeNames.get(row.userId) || 'nhân viên'}`}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem className="min-h-10 px-3" onClick={() => setDetailId(row._id)}><Eye aria-hidden="true" />Xem chi tiết</DropdownMenuItem>
+                    <DropdownMenuItem className="min-h-10 px-3" onClick={() => setEditId(row._id)}><Pencil aria-hidden="true" />Chỉnh sửa</DropdownMenuItem>
+                    {!row.active && <DropdownMenuItem className="min-h-10 px-3 text-primary" onClick={() => setActivateId(row._id)}><Power aria-hidden="true" />Kích hoạt lại</DropdownMenuItem>}
+                    {row.active && <DropdownMenuItem variant="destructive" className="min-h-10 px-3" onClick={() => setDeactivateId(row._id)}><PowerOff aria-hidden="true" />Ngưng hoạt động</DropdownMenuItem>}
+                  </DropdownMenuContent>
+                </DropdownMenu></TableCell>
+              </TableRow>)}</TableBody></Table>
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border p-4 sm:px-6">
+                <p className="text-sm text-muted-foreground" role="status">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, rows.length)} / {rows.length} phân công</p>
+                <div className="flex items-center gap-2"><Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft aria-hidden="true" /></Button><span className="text-sm">{currentPage} / {pages}</span><Button variant="outline" className="min-h-11 min-w-11" aria-label="Trang sau" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight aria-hidden="true" /></Button></div>
+              </div>
+            </>}
     </div>
     <AssignmentCreateDialog
       apiBase={apiBase}
@@ -146,6 +155,7 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
       employees={employees}
       departments={departments}
       workplaces={workplaces}
+      assignedUserIds={assignedUserIds}
       onClose={() => setCreateOpen(false)}
       onCreated={() => { setPage(1); setRevision(value => value + 1); }}
     />

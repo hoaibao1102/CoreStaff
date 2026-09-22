@@ -1,581 +1,553 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-    Building2,
-    Clock,
-    Camera,
-    Wifi,
-    Radar,
-    AlertTriangle,
-    ChevronLeft,
-    CheckCircle2,
-    XCircle,
-    CalendarDays,
-    User,
+  Wifi,
+  MapPin,
+  Camera,
+  ChevronLeft,
+  CalendarDays,
+  Clock,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
-import { Card, CardContent } from '../../components/card';
-import { Button } from '../../components/button';
-import { Badge } from '../../components/badge';
 import { AppLink } from '../../components/AppLink';
 import { Avatar, AvatarFallback } from '../../components/avatar';
-
-/* ───────── Types ───────── */
-export type AttendanceStatus =
-    | 'NOT_CHECKED_IN'
-    | 'CHECKED_IN'
-    | 'COMPLETED'
-    | 'LATE'
-    | 'EARLY_LEAVE'
-    | 'LOCKED'
-    | 'HOLIDAY';
-
-export type MethodType = 'NETWORK' | 'GPS' | 'SELFIE';
-
-export interface AttendanceEvent {
-    time: string;
-    method: MethodType;
-    workplace: string;
-    address: string;
-    accuracy?: number;
-}
-
-export interface DayAttendance {
-    id: string;
-    date: string;
-    shiftName: string;
-    shiftHours: string;
-    workplace: string;
-    workplaceAddress: string;
-    status: AttendanceStatus;
-    checkIn?: AttendanceEvent;
-    checkOut?: AttendanceEvent;
-    totalWorkingMinutes?: number;
-}
-
-export interface AttendanceState {
-    todayRecord: DayAttendance;
-    isSubmitting: boolean;
-    lastError: { code: string; message: string } | null;
-    method: MethodType;
-    workMode: 'IN_OFFICE' | 'OUT_OFFICE';
-}
-
-/* ───────── Mock Data ───────── */
-const MOCK_TODAY: DayAttendance = {
-    id: 'att-today',
-    date: new Date().toISOString().split('T')[0],
-    shiftName: 'Ca hành chính',
-    shiftHours: '08:00 – 17:00',
-    workplace: 'Văn phòng TVS Quận 8',
-    workplaceAddress: '123 đường mẫu, Quận 8, TP.HCM',
-    status: 'NOT_CHECKED_IN',
-};
-
-/* ───────── Helpers ───────── */
-function getStatusConfig(status: AttendanceStatus) {
-    const map: Record<AttendanceStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-        NOT_CHECKED_IN: { label: 'Chưa chấm công', color: 'bg-slate-100 text-slate-600', icon: XCircle },
-        CHECKED_IN: { label: 'Đã vào ca', color: 'bg-blue-100 text-blue-700', icon: CheckCircle2 },
-        COMPLETED: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-        LATE: { label: 'Vào muộn', color: 'bg-amber-100 text-amber-700', icon: AlertTriangle },
-        EARLY_LEAVE: { label: 'Về sớm', color: 'bg-orange-100 text-orange-700', icon: AlertTriangle },
-        LOCKED: { label: 'Đã khóa', color: 'bg-red-100 text-red-700', icon: XCircle },
-        HOLIDAY: { label: 'Nghỉ lễ', color: 'bg-purple-100 text-purple-700', icon: CheckCircle2 },
-    };
-    return map[status];
-}
-
-function getMethodIcon(method: MethodType) {
-    const map: Record<MethodType, typeof Wifi> = {
-        NETWORK: Wifi,
-        GPS: Radar,
-        SELFIE: Camera,
-    };
-    return map[method];
-}
-
-function getMethodLabel(method: MethodType): string {
-    const map: Record<MethodType, string> = {
-        NETWORK: 'Xác thực mạng WiFi',
-        GPS: 'Xác thực GPS',
-        SELFIE: 'Xác thực Selfie',
-    };
-    return map[method];
-}
-
-function formatMinutes(minutes: number): string {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h} giờ ${m} phút`;
-}
+import type {
+  AttendanceMethod,
+  AttendanceStatus,
+  DayAttendance,
+  AttendanceEvent,
+} from './types';
+import { useLocation, fetchAddressFromCoords, formatCoords } from './verification/useLocation';
+import { useGpsVerification } from './verification/useGpsVerification';
+import { CameraCapture, SelfiePreview } from './components/CameraComponents';
+import { NetworkAttendanceFlow } from './components/NetworkAttendanceFlow';
+import { GpsAttendanceFlow } from './components/GpsAttendanceFlow';
+import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
+import { PolicyModal } from './components/PolicyModal';
+import { CheckInSuccessModal } from './components/CheckInSuccessModal';
+import { ResultBanner, type ResultBannerProps } from './components/ResultBanner';
+import { AttendanceHistoryView } from './components/AttendanceHistoryView';
 
 function getInitials(name: string): string {
-    return name
-        .split(' ')
-        .slice(-2)
-        .map((n) => n.charAt(0).toUpperCase())
-        .join('');
+  return name
+    .split(' ')
+    .slice(-2)
+    .map((n) => n.charAt(0).toUpperCase())
+    .join('');
 }
 
-/* ───────── Server Clock ───────── */
 function ServerClock() {
-    const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState(new Date());
 
-    useEffect(() => {
-        const interval = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(interval);
-    }, []);
+  useEffect(() => {
+    const interval = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-    return (
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            {time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </span>
-    );
+  return (
+    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+      {time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+    </span>
+  );
 }
 
-/* ───────── Header ───────── */
 interface EmployeeAppBarProps {
-    userName: string;
-    employeeCode: string;
-    department: string;
+  userName: string;
+  employeeCode: string;
+  department: string;
 }
 
 function EmployeeAppBar({ userName, employeeCode, department }: EmployeeAppBarProps) {
-    return (
-        <header className="border-b bg-card">
-            <div className="px-4 py-3 sm:px-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Avatar>
-                            <AvatarFallback className="bg-primary text-primary-foreground">
-                                {getInitials(userName)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <h1 className="text-sm font-bold text-foreground tracking-tight">Chấm công</h1>
-                            <p className="text-xs text-muted-foreground">TimeLock • Attendance v1.0</p>
-                        </div>
-                    </div>
-                    <ServerClock />
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>Xin chào, <strong className="text-foreground">{userName}</strong></span>
-                    <span>•</span>
-                    <span>{employeeCode}</span>
-                    <span>•</span>
-                    <span>{department}</span>
-                </div>
+  return (
+    <header className="border-b bg-card">
+      <div className="px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar>
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                {getInitials(userName)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-sm font-bold text-foreground tracking-tight">Chấm công nhân viên</h1>
+              <p className="text-xs text-muted-foreground">CoreStaff • Attendance Suite v2.0</p>
             </div>
-        </header>
-    );
+          </div>
+          <ServerClock />
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Xin chào, <strong className="text-foreground">{userName}</strong></span>
+          <span>•</span>
+          <span>{employeeCode}</span>
+          <span>•</span>
+          <span>{department}</span>
+        </div>
+      </div>
+    </header>
+  );
 }
 
-/* ───────── Shift Card ───────── */
-interface ShiftCardProps {
-    shiftName: string;
-    shiftHours: string;
-    workplace: string;
-    workplaceAddress: string;
-}
+export function AttendanceScreen({ user }: { user: AuthUser }) {
+  const [mainTab, setMainTab] = useState<'TODAY' | 'HISTORY'>('TODAY');
+  const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('NETWORK');
+  const [attendanceRecord, setAttendanceRecord] = useState<DayAttendance>({
+    id: 'att-today',
+    workDate: new Date().toISOString().split('T')[0],
+    shiftName: 'Ca Hành Chính',
+    shiftHours: '08:00 – 17:30',
+    workplace: 'Văn phòng CoreStaff Quận 8',
+    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
+    status: 'NOT_CHECKED_IN',
+    availableAction: 'CHECK_IN',
+    attendanceMethod: 'NETWORK',
+    verificationContext: {
+      method: 'NETWORK',
+      status: 'CONNECTED_TO_ALLOWED_NETWORK',
+      canAttend: true,
+      networkId: 'net-office-1',
+      networkName: 'CoreStaff-Office-5G',
+      workplaceId: 'wp-q8',
+      workplaceName: 'Văn phòng CoreStaff Quận 8',
+    },
+    checkIn: null,
+    checkOut: null,
+  });
 
-function ShiftCard({ shiftName, shiftHours, workplace, workplaceAddress }: ShiftCardProps) {
-    return (
-        <Card>
-            <CardContent className="p-4 sm:p-5">
-                <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
-                        <Clock className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                        <div>
-                            <p className="text-xs font-medium text-muted-foreground">Ca làm việc</p>
-                            <p className="text-sm font-semibold text-foreground">{shiftName}</p>
-                            <p className="text-sm text-muted-foreground">{shiftHours}</p>
-                        </div>
-                        <div className="flex items-start gap-1.5">
-                            <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <div>
-                                <p className="text-xs font-medium text-muted-foreground">Nơi làm việc</p>
-                                <p className="text-sm text-foreground">{workplace}</p>
-                                <p className="text-xs text-muted-foreground">{workplaceAddress}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [result, setResult] = useState<ResultBannerProps | null>(null);
 
-/* ───────── Status Card ───────── */
-interface StatusCardProps {
-    status: AttendanceStatus;
-    checkInTime?: string;
-    checkOutTime?: string;
-    totalMinutes?: number;
-}
+  // Modals & Camera
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [selfieAddress, setSelfieAddress] = useState<string | null>(null);
+  const [currentAddress, setCurrentAddress] = useState<string>('');
 
-function StatusCard({ status, checkInTime, checkOutTime, totalMinutes }: StatusCardProps) {
-    const config = getStatusConfig(status);
-    const Icon = config.icon;
+  // GPS verification
+  const location = useLocation();
+  const workplaceGps = {
+    id: 'wp-q8',
+    name: 'Văn phòng CoreStaff Quận 8',
+    address: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
+    latitude: 10.7431,
+    longitude: 106.6782,
+    allowedRadiusMeters: 250,
+    maximumAccuracyMeters: 50,
+  };
 
-    return (
-        <Card>
-            <CardContent className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Trạng thái hôm nay</p>
-                        <div className="flex items-center gap-2">
-                            <Icon className={`h-5 w-5 ${config.color.replace('bg-', 'text-').replace('/10', '')}`} />
-                            <p className="text-base font-semibold text-foreground">{config.label}</p>
-                        </div>
-                        {(checkInTime || checkOutTime) && (
-                            <dl className="grid grid-cols-2 gap-4 pt-2">
-                                {checkInTime && (
-                                    <>
-                                        <dt className="text-xs text-muted-foreground">Vào ca</dt>
-                                        <dd className="font-mono text-sm font-medium text-foreground">{checkInTime}</dd>
-                                    </>
-                                )}
-                                {checkOutTime && (
-                                    <>
-                                        <dt className="text-xs text-muted-foreground">Ra ca</dt>
-                                        <dd className="font-mono text-sm font-medium text-foreground">{checkOutTime}</dd>
-                                    </>
-                                )}
-                            </dl>
-                        )}
-                        {totalMinutes !== undefined && (
-                            <p className="pt-1 text-sm text-muted-foreground">
-                                Tổng cộng: <strong className="text-foreground">{formatMinutes(totalMinutes)}</strong>
-                            </p>
-                        )}
-                    </div>
-                    <Badge variant={status === 'COMPLETED' ? 'default' : status === 'NOT_CHECKED_IN' ? 'outline' : 'secondary'}>
-                        {config.label}
-                    </Badge>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
+  const gpsVerification = useGpsVerification(workplaceGps, location.coords);
 
-/* ───────── Method Card ───────── */
-interface MethodCardProps {
-    method: MethodType;
-    workMode: 'IN_OFFICE' | 'OUT_OFFICE';
-}
+  // Address lookup when GPS coords update
+  useEffect(() => {
+    if (location.coords) {
+      let active = true;
+      fetchAddressFromCoords(location.coords.latitude, location.coords.longitude).then((addr) => {
+        if (active) {
+          setCurrentAddress(addr);
+          setSelfieAddress(addr);
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+  }, [location.coords?.latitude, location.coords?.longitude]);
 
-function MethodCard({ method, workMode }: MethodCardProps) {
-    const Icon = getMethodIcon(method);
-    const isOffice = workMode === 'IN_OFFICE';
+  // Auto-dismiss result banner
+  useEffect(() => {
+    if (!result) return;
+    const timer = window.setTimeout(() => setResult(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [result]);
 
-    return (
-        <Card>
-            <CardContent className="p-4 sm:p-5">
-                <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-primary-fixed-dim p-2.5 text-on-primary-fixed bg-primary/20 text-primary">
-                        <Icon className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1">
-                        <p className="text-sm font-semibold text-foreground">
-                            {isOffice ? 'Tại văn phòng' : 'Làm ngoài văn phòng'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{getMethodLabel(method)}</p>
-                    </div>
-                    {method === 'GPS' && (
-                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                            GPS hợp lệ · ±16m
-                        </Badge>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
+  // Update verification context when switching methods
+  const handleSelectMethod = (m: AttendanceMethod) => {
+    setSelectedMethod(m);
+    setAttendanceRecord((prev) => ({
+      ...prev,
+      attendanceMethod: m,
+      verificationContext:
+        m === 'NETWORK'
+          ? {
+              method: 'NETWORK',
+              status: 'CONNECTED_TO_ALLOWED_NETWORK',
+              canAttend: true,
+              networkId: 'net-office-1',
+              networkName: 'CoreStaff-Office-5G',
+              workplaceId: 'wp-q8',
+              workplaceName: 'Văn phòng CoreStaff Quận 8',
+            }
+          : m === 'GPS'
+            ? {
+                method: 'GPS',
+                workplace: workplaceGps,
+              }
+            : {
+                method: 'SELFIE',
+              },
+    }));
+  };
 
-/* ───────── Timeline ───────── */
-interface TimelineProps {
-    checkIn?: AttendanceEvent;
-    checkOut?: AttendanceEvent;
-}
+  // Check-in / Check-out dispatch
+  const handleAction = async () => {
+    if (attendanceRecord.availableAction === 'NONE' || isSubmitting) return;
 
-function AttendanceTimeline({ checkIn, checkOut }: TimelineProps) {
-    const events = [
-        { label: 'Vào ca', event: checkIn, side: 'left' as const },
-        { label: 'Ra ca', event: checkOut, side: 'right' as const },
-    ];
+    const action = attendanceRecord.availableAction;
+    const mode: 'CHECK_IN' | 'CHECK_OUT' = action === 'CHECK_IN' ? 'CHECK_IN' : 'CHECK_OUT';
 
-    return (
-        <Card>
-            <CardContent className="p-4 sm:p-5">
-                <p className="mb-4 text-sm font-semibold text-foreground">Lịch sử hôm nay</p>
-                <div className="relative space-y-0">
-                    {/* Vertical line */}
-                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border hidden sm:block" />
+    // SELFIE: Open camera first
+    if (selectedMethod === 'SELFIE') {
+      setCameraMode(mode);
+      setIsCameraOpen(true);
+      return;
+    }
 
-                    {events.map(({ label, event, side }) => (
-                        <div key={label} className={`relative flex items-center gap-4 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
-                            {/* Dot */}
-                            <div className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${event ? 'bg-primary border-primary text-primary-foreground' : 'bg-muted border-muted text-muted-foreground'} hidden sm:flex`}>
-                                {event ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                            </div>
+    // NETWORK or GPS: Execute action directly
+    setIsSubmitting(true);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                            {/* Content */}
-                            <div className="flex-1">
-                                <p className="text-sm font-medium text-foreground">{label}</p>
-                                {event ? (
-                                    <div className="mt-1 space-y-0.5">
-                                        <p className="font-mono text-sm text-muted-foreground">{event.time}</p>
-                                        <p className="text-xs text-muted-foreground">{getMethodLabel(event.method)}</p>
-                                        {event.accuracy && <p className="text-xs text-muted-foreground">±{event.accuracy}m</p>}
-                                    </div>
-                                ) : (
-                                    <p className="mt-1 text-xs italic text-muted-foreground/60">Chưa có</p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
+    executeAttendanceSubmission(mode);
+  };
 
-/* ───────── Action Button ───────── */
-interface ActionButtonProps {
-    actionType: 'CHECK_IN' | 'CHECK_OUT';
-    isEnabled: boolean;
-    isLoading: boolean;
-    method: MethodType;
-    onClick: () => void;
-}
+  const executeAttendanceSubmission = (mode: 'CHECK_IN' | 'CHECK_OUT', photoUrl?: string) => {
+    const nowIso = new Date().toISOString();
+    const eventTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-function ActionButton({ actionType, isEnabled, isLoading, method, onClick }: ActionButtonProps) {
-    const isCheckIn = actionType === 'CHECK_IN';
-    const Icon = getMethodIcon(method);
+    if (mode === 'CHECK_IN') {
+      const newCheckIn: AttendanceEvent =
+        selectedMethod === 'SELFIE'
+          ? {
+              eventId: `evt-${Date.now()}`,
+              recordedAt: nowIso,
+              method: 'SELFIE',
+              workplaceName: 'Ca Hiện Trường / Khách Hàng',
+              status: 'PENDING_APPROVAL',
+              approvalStatus: 'PENDING_APPROVAL',
+              evidence: photoUrl ? { previewUrl: photoUrl } : undefined,
+              location: {
+                latitude: location.coords?.latitude ?? 10.7431,
+                longitude: location.coords?.longitude ?? 106.6782,
+                accuracyMeters: location.coords?.accuracyMeters ?? 15,
+                address: selfieAddress || currentAddress || '123 Đường mẫu, Quận 8, TP.HCM',
+              },
+            }
+          : selectedMethod === 'GPS'
+            ? {
+                eventId: `evt-${Date.now()}`,
+                recordedAt: nowIso,
+                method: 'GPS',
+                workplaceName: attendanceRecord.workplace,
+                status: 'AUTO_APPROVED',
+                accuracyMeters: Math.round(location.coords?.accuracyMeters ?? 18),
+                distanceMeters: gpsVerification.distanceMeters ?? 25,
+                address: attendanceRecord.workplaceAddress,
+              }
+            : {
+                eventId: `evt-${Date.now()}`,
+                recordedAt: nowIso,
+                method: 'NETWORK',
+                workplaceName: attendanceRecord.workplace,
+                status: 'AUTO_APPROVED',
+                networkName: 'CoreStaff-Office-5G',
+                address: attendanceRecord.workplaceAddress,
+              };
 
-    return (
-        <div className="space-y-2">
-            {!isEnabled && !isLoading && (
-                <div className="flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50/50 px-3 py-2 text-xs text-amber-800">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Hôm nay bạn đã hoàn thành chấm công.</span>
-                </div>
+      setAttendanceRecord((prev) => ({
+        ...prev,
+        status: 'CHECKED_IN',
+        availableAction: 'CHECK_OUT',
+        checkIn: newCheckIn,
+      }));
+
+      setIsSubmitting(false);
+      setResult({
+        status: 'success',
+        message: `Vào ca thành công lúc ${eventTime}. Chúc bạn một ngày làm việc hiệu quả!`,
+      });
+      setIsSuccessModalOpen(true);
+    } else {
+      const newCheckOut: AttendanceEvent =
+        selectedMethod === 'SELFIE'
+          ? {
+              eventId: `evt-${Date.now()}`,
+              recordedAt: nowIso,
+              method: 'SELFIE',
+              workplaceName: 'Ca Hiện Trường / Khách Hàng',
+              status: 'PENDING_APPROVAL',
+              approvalStatus: 'PENDING_APPROVAL',
+              evidence: photoUrl ? { previewUrl: photoUrl } : undefined,
+              location: {
+                latitude: location.coords?.latitude ?? 10.7431,
+                longitude: location.coords?.longitude ?? 106.6782,
+                accuracyMeters: location.coords?.accuracyMeters ?? 15,
+                address: selfieAddress || currentAddress || '123 Đường mẫu, Quận 8, TP.HCM',
+              },
+            }
+          : selectedMethod === 'GPS'
+            ? {
+                eventId: `evt-${Date.now()}`,
+                recordedAt: nowIso,
+                method: 'GPS',
+                workplaceName: attendanceRecord.workplace,
+                status: 'AUTO_APPROVED',
+                accuracyMeters: Math.round(location.coords?.accuracyMeters ?? 16),
+                distanceMeters: gpsVerification.distanceMeters ?? 20,
+                address: attendanceRecord.workplaceAddress,
+              }
+            : {
+                eventId: `evt-${Date.now()}`,
+                recordedAt: nowIso,
+                method: 'NETWORK',
+                workplaceName: attendanceRecord.workplace,
+                status: 'AUTO_APPROVED',
+                networkName: 'CoreStaff-Office-5G',
+                address: attendanceRecord.workplaceAddress,
+              };
+
+      setAttendanceRecord((prev) => ({
+        ...prev,
+        status: 'COMPLETED',
+        availableAction: 'NONE',
+        checkOut: newCheckOut,
+        totalWorkingMinutes: 480,
+      }));
+
+      setIsSubmitting(false);
+      setResult({
+        status: 'success',
+        message: `Tan ca thành công lúc ${eventTime}. Đã hoàn thành ngày công!`,
+        workingMinutes: 480,
+      });
+      setIsSuccessModalOpen(true);
+    }
+  };
+
+  const handlePhotoCaptured = async (photoUrl?: string) => {
+    setIsCameraOpen(false);
+    if (photoUrl) {
+      setPreviewPhotoUrl(photoUrl);
+      if (location.coords) {
+        const addr = await fetchAddressFromCoords(location.coords.latitude, location.coords.longitude);
+        setSelfieAddress(addr);
+      }
+    }
+  };
+
+  const handleRetakePhoto = () => {
+    setPreviewPhotoUrl(null);
+    setIsCameraOpen(true);
+  };
+
+  const handleConfirmSelfie = async () => {
+    if (!previewPhotoUrl) return;
+    setIsSubmitting(true);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    executeAttendanceSubmission(cameraMode, previewPhotoUrl);
+    setPreviewPhotoUrl(null);
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      {/* App Bar */}
+      <EmployeeAppBar
+        userName={user.fullName}
+        employeeCode={user.employeeCode || 'CS-0248'}
+        department={user.role === 'HR' ? 'Nhân sự' : user.role === 'DEPARTMENT_MANAGER' ? 'Quản lý' : 'Nhân viên'}
+      />
+
+      {/* Navigation breadcrumb & Main View Switcher (Hôm nay / Lịch sử) */}
+      <div className="border-b border-border bg-card/60 px-4 py-2.5 sm:px-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 max-w-7xl mx-auto">
+          <div className="flex items-center gap-3">
+            <AppLink href="/overview" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <ChevronLeft className="h-4 w-4" />
+              Tổng quan
+            </AppLink>
+
+            {/* Primary Main Tab Switcher */}
+            <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setMainTab('TODAY')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  mainTab === 'TODAY'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Clock className="size-3.5" />
+                <span>Chấm công hôm nay</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainTab('HISTORY')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  mainTab === 'HISTORY'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <CalendarDays className="size-3.5" />
+                <span>Lịch sử công</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3 Check-in Method Switcher (only visible in TODAY tab) */}
+          {mainTab === 'TODAY' && (
+            <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => handleSelectMethod('NETWORK')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  selectedMethod === 'NETWORK'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Wifi className="size-3.5" />
+                <span>Wi-Fi</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectMethod('GPS')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  selectedMethod === 'GPS'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <MapPin className="size-3.5" />
+                <span>GPS</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectMethod('SELFIE')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                  selectedMethod === 'SELFIE'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Camera className="size-3.5" />
+                <span>Selfie</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Container */}
+      <main className="flex-1 px-4 py-4 sm:px-6 max-w-7xl mx-auto w-full space-y-4 pb-24 md:pb-8">
+        {mainTab === 'HISTORY' ? (
+          <AttendanceHistoryView />
+        ) : (
+          <>
+            {/* Result banner message */}
+            {result && (
+              <ResultBanner
+                status={result.status}
+                message={result.message}
+                workingMinutes={result.workingMinutes}
+              />
             )}
 
-            <Button
-                className={`w-full h-12 text-base font-bold transition-all ${isEnabled && !isLoading
-                    ? 'bg-primary hover:bg-primary/80 text-primary-foreground shadow-md'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed'
-                    }`}
-                disabled={!isEnabled || isLoading}
-                onClick={onClick}
-            >
-                {isLoading ? (
-                    <>
-                        <Clock className="h-5 w-5 animate-spin" />
-                        <span>{isCheckIn ? 'Đang ghi nhận VÀO CA...' : 'Đang ghi nhận RA CA...'}</span>
-                    </>
-                ) : (
-                    <>
-                        <Icon className="h-5 w-5" />
-                        <span>{isCheckIn ? 'VÀO CA' : 'RA CA'}</span>
-                    </>
-                )}
-            </Button>
-        </div>
-    );
-}
+            {/* Selected Method Flow */}
+            {selectedMethod === 'NETWORK' && (
+              <NetworkAttendanceFlow
+                today={attendanceRecord}
+                employeeName={user.fullName}
+                employeeCode={user.employeeCode || 'CS-0248'}
+                department={user.role === 'HR' ? 'Phòng Nhân sự' : 'Phòng Kinh doanh'}
+                submitting={isSubmitting}
+                onSubmit={handleAction}
+                onOpenPolicy={() => setIsPolicyOpen(true)}
+                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
+              />
+            )}
 
-/* ───────── Bottom Navigation ───────── */
-type Tab = 'TODAY' | 'HISTORY' | 'PROFILE';
+            {selectedMethod === 'GPS' && (
+              <GpsAttendanceFlow
+                today={attendanceRecord}
+                coords={location.coords}
+                gpsVerification={gpsVerification}
+                submitting={isSubmitting}
+                onSubmit={handleAction}
+                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
+              />
+            )}
 
-interface BottomNavProps {
-    activeTab: Tab;
-    onTabChange: (tab: Tab) => void;
-}
+            {selectedMethod === 'SELFIE' && (
+              <SelfieAttendanceFlow
+                today={attendanceRecord}
+                submitting={isSubmitting}
+                onStartCapture={handleAction}
+                previewPhotoUrl={previewPhotoUrl}
+                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
+              />
+            )}
+          </>
+        )}
+      </main>
 
-function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-    const tabs: { id: Tab; label: string; icon: typeof Clock }[] = [
-        { id: 'TODAY', label: 'Hôm nay', icon: Clock },
-        { id: 'HISTORY', label: 'Lịch sử', icon: CalendarDays },
-        { id: 'PROFILE', label: 'Hồ sơ', icon: User },
-    ];
+      {/* Selfie Preview Screen (shown after capturing photo) */}
+      {previewPhotoUrl && selectedMethod === 'SELFIE' && (
+        <SelfiePreview
+          mode={cameraMode}
+          photoUrl={previewPhotoUrl}
+          employeeCode={user.employeeCode || 'CS-0248'}
+          employeeName={user.fullName}
+          address={selfieAddress ?? undefined}
+          accuracy={location.coords?.accuracyMeters}
+          isSubmitting={isSubmitting}
+          onRetake={handleRetakePhoto}
+          onConfirmUse={handleConfirmSelfie}
+        />
+      )}
 
-    return (
-        <nav className="sticky bottom-0 border-t bg-card" role="tablist" aria-label="Điều hướng chấm công">
-            <div className="flex">
-                {tabs.map(({ id, label, icon: Icon }) => (
-                    <button
-                        key={id}
-                        role="tab"
-                        aria-selected={activeTab === id}
-                        className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${activeTab === id
-                            ? 'border-b-2 border-primary text-primary'
-                            : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                        onClick={() => onTabChange(id)}
-                    >
-                        <Icon className="h-5 w-5" />
-                        <span>{label}</span>
-                    </button>
-                ))}
-            </div>
-        </nav>
-    );
-}
+      {/* Fullscreen Camera Overlay */}
+      {isCameraOpen && (
+        <CameraCapture
+          mode={cameraMode}
+          mockLocation={{
+            address: currentAddress || formatCoords(location.coords),
+            accuracyMeters: Math.round(location.coords?.accuracyMeters ?? 0),
+            latitude: location.coords?.latitude,
+            longitude: location.coords?.longitude,
+          }}
+          onClose={() => setIsCameraOpen(false)}
+          onCapture={handlePhotoCaptured}
+        />
+      )}
 
-/* ───────── Main Screen ───────── */
-export function AttendanceScreen({ user }: { user: AuthUser }) {
-    const [state, setState] = useState<AttendanceState>({
-        todayRecord: MOCK_TODAY,
-        isSubmitting: false,
-        lastError: null,
-        method: 'NETWORK',
-        workMode: 'IN_OFFICE',
-    });
-    const [tab, setTab] = useState<Tab>('TODAY');
+      {/* Policy Modal */}
+      <PolicyModal isOpen={isPolicyOpen} onClose={() => setIsPolicyOpen(false)} />
 
-    const isCheckIn = state.todayRecord.status === 'NOT_CHECKED_IN';
-    const completed = state.todayRecord.status === 'COMPLETED';
-
-    const handleAction = async () => {
-        if (state.isSubmitting || completed) return;
-        setState((prev) => ({ ...prev, isSubmitting: true, lastError: null }));
-
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        if (isCheckIn) {
-            setState((prev) => ({
-                ...prev,
-                todayRecord: {
-                    ...prev.todayRecord,
-                    status: 'CHECKED_IN',
-                    checkIn: {
-                        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-                        method: prev.method,
-                        workplace: prev.todayRecord.workplace,
-                        address: prev.todayRecord.workplaceAddress,
-                        accuracy: 16,
-                    },
-                },
-                isSubmitting: false,
-            }));
-        } else {
-            setState((prev) => ({
-                ...prev,
-                todayRecord: {
-                    ...prev.todayRecord,
-                    status: 'COMPLETED',
-                    checkOut: {
-                        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-                        method: prev.method,
-                        workplace: prev.todayRecord.workplace,
-                        address: prev.todayRecord.workplaceAddress,
-                        accuracy: 12,
-                    },
-                    totalWorkingMinutes: 480,
-                },
-                isSubmitting: false,
-            }));
+      {/* Success Modal / Bottom Sheet */}
+      <CheckInSuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        checkInEvent={attendanceRecord.checkIn}
+        checkOutEvent={attendanceRecord.checkOut}
+        mode={attendanceRecord.status === 'COMPLETED' ? 'CHECK_OUT' : 'CHECK_IN'}
+        method={attendanceRecord.attendanceMethod}
+        accuracyMeters={Math.round(location.coords?.accuracyMeters ?? (attendanceRecord.attendanceMethod === 'GPS' ? 18 : 5))}
+        workplaceName={
+          attendanceRecord.attendanceMethod === 'SELFIE'
+            ? 'Ca Hiện Trường / Khách Hàng'
+            : attendanceRecord.workplace
         }
-    };
-
-    return (
-        <div className="flex min-h-screen flex-col bg-background">
-            {/* App Bar */}
-            <EmployeeAppBar
-                userName={user.fullName}
-                employeeCode={user.employeeCode || '—'}
-                department={user.role === 'HR' ? 'Nhân sự' : user.role === 'DEPARTMENT_MANAGER' ? 'Quản lý' : 'Nhân viên'}
-            />
-
-            {/* Back link */}
-            <div className="px-4 py-2 sm:px-6">
-                <AppLink href="/" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                    <ChevronLeft className="h-4 w-4" />
-                    Tổng quan
-                </AppLink>
-            </div>
-
-            {/* Content */}
-            <main className="flex-1 space-y-4 px-4 pb-20 pt-2 sm:px-6 sm:pb-24">
-                {tab === 'TODAY' && (
-                    <>
-                        <ShiftCard
-                            shiftName={state.todayRecord.shiftName}
-                            shiftHours={state.todayRecord.shiftHours}
-                            workplace={state.todayRecord.workplace}
-                            workplaceAddress={state.todayRecord.workplaceAddress}
-                        />
-
-                        <StatusCard
-                            status={state.todayRecord.status}
-                            checkInTime={state.todayRecord.checkIn?.time}
-                            checkOutTime={state.todayRecord.checkOut?.time}
-                            totalMinutes={state.todayRecord.totalWorkingMinutes}
-                        />
-
-                        <MethodCard method={state.method} workMode={state.workMode} />
-
-                        <AttendanceTimeline
-                            checkIn={state.todayRecord.checkIn}
-                            checkOut={state.todayRecord.checkOut}
-                        />
-
-                        {/* Error display */}
-                        {state.lastError && (
-                            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                <div>
-                                    <strong>{state.lastError.code}</strong>
-                                    <p className="mt-0.5">{state.lastError.message}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Action button */}
-                        {!completed && (
-                            <ActionButton
-                                actionType={isCheckIn ? 'CHECK_IN' : 'CHECK_OUT'}
-                                isEnabled={!completed}
-                                isLoading={state.isSubmitting}
-                                method={state.method}
-                                onClick={handleAction}
-                            />
-                        )}
-
-                        {completed && (
-                            <div className="rounded-lg bg-emerald-50 px-4 py-4 text-center text-sm font-semibold text-emerald-700 border border-emerald-200">
-                                ✅ Đã hoàn thành ngày công hôm nay
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {tab === 'HISTORY' && (
-                    <Card>
-                        <CardContent className="py-12 text-center">
-                            <CalendarDays className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                            <p className="mt-3 text-sm text-muted-foreground">Lịch sử chấm công sẽ hiển thị ở đây.</p>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {tab === 'PROFILE' && (
-                    <Card>
-                        <CardContent className="py-12 text-center">
-                            <User className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                            <p className="mt-3 text-sm text-muted-foreground">Thông tin hồ sơ cá nhân.</p>
-                        </CardContent>
-                    </Card>
-                )}
-            </main>
-
-            {/* Bottom Nav */}
-            <BottomNav activeTab={tab} onTabChange={setTab} />
-        </div>
-    );
+        workplaceAddress={selfieAddress || currentAddress || attendanceRecord.workplaceAddress}
+        photoUrl={
+          (attendanceRecord.checkOut && 'evidence' in attendanceRecord.checkOut && attendanceRecord.checkOut.evidence?.previewUrl) ||
+          (attendanceRecord.checkIn && 'evidence' in attendanceRecord.checkIn && attendanceRecord.checkIn.evidence?.previewUrl) ||
+          previewPhotoUrl
+        }
+      />
+    </div>
+  );
 }

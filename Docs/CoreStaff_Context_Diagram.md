@@ -22,8 +22,8 @@ flowchart LR
   HR -->|Employee, position, contract, salary profile, policies, payroll decisions| TL
   TL -->|HR dashboard, compliance alerts, timesheet, payroll, reports| HR
 
-  MGR -->|Attendance/leave/OT/adjustment decisions, department confirmation| TL
-  TL -->|Department workforce data and approval queue| MGR
+  MGR -->|Personal attendance/requests; scoped approval and KPI draft decisions| TL
+  TL -->|Managed departments, approval queue, scoped employees and KPI policies| MGR
 
   EMP -->|Profile updates, attendance, LeaveRequest, OT, clarification| TL
   TL -->|Schedule, attendance history, request status, payslip| EMP
@@ -33,7 +33,7 @@ flowchart LR
 
   subgraph TECH["Technology Platform"]
     WEB[ReactJS Web — MVP]
-    MOBILE[React Native Employee App — SHOULD]
+    MOBILE[React Native Employee + Manager App — SHOULD after Web acceptance]
     API[NestJS REST API]
     DB[(MongoDB Replica Set)]
   end
@@ -57,10 +57,13 @@ flowchart LR
 - Tính, review, approve, lock Payroll và phát hành Payslip.
 
 ### Department Manager
-- Chấm công cá nhân nếu có assignment.
-- Duyệt attendance exception, leave, OT và adjustment đúng department scope.
-- Xác nhận bảng công phòng ban.
-- Không xem lương cả phòng mặc định và không tự duyệt request của mình.
+- Là nhân viên có thêm quyền quản lý; nhóm Cá nhân gồm Chấm công hôm nay, Lịch sử công, Nghỉ phép & OT.
+- Workspace Phòng ban có hai tab: Phê duyệt và Đánh giá nhân sự (KPI kỳ lương).
+- Duyệt attendance exception/adjustment/clarification và OT đúng `managedDepartmentIds`; không duyệt từng Network/GPS record hợp lệ.
+- ManagerAssignment có hiệu lực là nguồn authorization cho một hoặc nhiều Department; profile department/directManagerId không tự sinh quyền.
+- Manager chỉ tạo/sửa KPI DRAFT; HR confirm để đưa vào Payroll.
+- Xác nhận bảng công phòng ban; không xem lương/dữ liệu nhạy cảm cả phòng và không tự duyệt request của mình.
+- ReactJS responsive desktop/mobile được nghiệm thu trước; Expo chỉ port sau bằng cùng API contract.
 
 ### Employee
 - Xem/cập nhật phần hồ sơ được phép.

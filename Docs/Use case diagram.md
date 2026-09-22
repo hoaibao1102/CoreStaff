@@ -26,6 +26,7 @@ flowchart LR
     CONTRACT([Manage Contracts & Employee Documents])
     POLICY([Manage Labor, OT, Insurance & Tax Policies])
     COMP([Manage Salary Profiles, Allowances, KPI])
+    MGR_WORKSPACE([Department Workspace: Approvals & KPI Evaluation])
     SCHEDULE([Manage Full-time Office Schedule])
     ATT([Check-in / Check-out Network, GPS, Selfie])
     LEAVE([Request / Approve / Apply Leave])
@@ -56,6 +57,7 @@ flowchart LR
 
   MGR --- AUTH
   MGR --- ATT
+  MGR --- MGR_WORKSPACE
   MGR --- LEAVE
   MGR --- OT
   MGR --- APPROVAL
@@ -89,10 +91,13 @@ flowchart LR
 - Tính, review, approve, lock, mark-paid Payroll; xuất báo cáo và phát hành Payslip.
 
 ## Department Manager
-- Thực hiện chức năng Employee cho dữ liệu cá nhân.
-- Xem nhân viên/phê duyệt attendance, LeaveRequest, OT và adjustment đúng department scope; không tự duyệt.
-- Xác nhận bảng công phòng ban.
-- Không tự duyệt request và không xem lương cả phòng mặc định.
+- Thực hiện ba chức năng cá nhân: Chấm công hôm nay, Lịch sử công, Nghỉ phép & OT bằng cùng một tài khoản.
+- Workspace **Phòng ban** có hai tab **Phê duyệt** và **Đánh giá nhân sự**.
+- Phê duyệt chỉ xử lý Selfie/ngoại lệ/adjustment/clarification và OT đúng scope; Network/GPS hợp lệ không phải duyệt từng ngày.
+- Đánh giá nhân sự trong MVP là KPI kỳ lương: manager lưu DRAFT, HR CONFIRMED.
+- Xem nhân viên và xử lý nghiệp vụ trong một/nhiều Department được giao qua ManagerAssignment; không tự duyệt.
+- Xác nhận bảng công phòng ban; không xem lương hoặc dữ liệu nhạy cảm cả phòng.
+- Responsive web desktop/mobile hoàn thành trước; Expo port sau khi Mốc Web được nghiệm thu.
 
 ## Employee
 - Xem/cập nhật hồ sơ được phép.
