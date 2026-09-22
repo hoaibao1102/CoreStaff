@@ -2,6 +2,12 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { normalizeCode } from './enums';
 
+export const WorkplaceType = {
+  IN_OFFICE: 'IN_OFFICE',
+  OUT_OFFICE: 'OUT_OFFICE',
+} as const;
+export type WorkplaceType = (typeof WorkplaceType)[keyof typeof WorkplaceType];
+
 export type WorkplaceDocument = HydratedDocument<Workplace>;
 
 /** FR-HRCFG-03: HR-managed, soft-CRUD, tenant-scoped workplace catalog. */
@@ -16,23 +22,26 @@ export class Workplace {
   @Prop({ required: true })
   name!: string;
 
+  @Prop({ required: true, enum: Object.values(WorkplaceType), default: WorkplaceType.IN_OFFICE })
+  type!: WorkplaceType;
+
   @Prop({ required: false })
   address?: string;
 
   /** Latitude [-90, 90]. */
-  @Prop({ required: true })
+  @Prop({ required: false, default: 0 })
   latitude!: number;
 
   /** Longitude [-180, 180]. */
-  @Prop({ required: true })
+  @Prop({ required: false, default: 0 })
   longitude!: number;
 
-  /** Geofence radius in meters (minimum: 100). */
-  @Prop({ required: true })
+  /** Geofence radius in meters (minimum: 100 for IN_OFFICE). */
+  @Prop({ required: false, default: 0 })
   allowedRadiusMeters!: number;
 
-  /** Maximum GPS accuracy in meters (minimum: 80). */
-  @Prop({ required: true })
+  /** Maximum GPS accuracy in meters (minimum: 80 for IN_OFFICE). */
+  @Prop({ required: false, default: 0 })
   maximumAccuracyMeters!: number;
 
   /** Soft-CRUD flag — referenced workplaces are deactivated, never hard-deleted. */

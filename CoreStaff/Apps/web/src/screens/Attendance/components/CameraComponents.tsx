@@ -404,7 +404,7 @@ export function SelfiePreview({
             <div className="flex items-start gap-2">
               <MapPin className="size-[18px] shrink-0 mt-0.5" />
               <span className="text-xs leading-snug line-clamp-2">
-                Địa chỉ: {address || (typeof accuracy === 'number' ? `Văn phòng CoreStaff Quận 8 (±${Math.round(accuracy)}m)` : '123 Đường mẫu, Phường 4, Quận 8, TP.HCM')}
+                Địa chỉ: {address || (typeof accuracy === 'number' ? `Vị trí thực địa (±${Math.round(accuracy)}m)` : 'Đang lấy tọa độ GPS...')}
               </span>
             </div>
           </div>

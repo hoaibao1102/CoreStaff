@@ -35,7 +35,7 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
           </span>
           <div className="flex items-start gap-1 text-muted-foreground text-[11px]">
             <MapPin className="size-3.5 shrink-0 mt-0.5" />
-            <span className="leading-snug">{loc?.address || '123 Đường mẫu, Quận 8, TP.HCM'}</span>
+            <span className="leading-snug">{loc?.address || 'Vị trí GPS thực tế'}</span>
           </div>
           {loc?.accuracyMeters != null && (
             <div className="flex items-center gap-1 text-muted-foreground text-[11px]">

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Building2, Compass } from "lucide-react";
+import { cn } from "cn";
 import { Button } from "@/components/button";
 import {
   Dialog,
@@ -16,51 +18,52 @@ import {
   updateWorkplace,
   workplaceErrorMessage,
   type Workplace,
+  type WorkplaceType,
 } from "@/services/workplace.service";
+import {
+  AddressAutocomplete,
+  type SelectedLocation,
+} from "@/components/form/AddressAutocomplete";
 
-const FIELD_LABELS = {
-  code: "Mã nơi làm việc",
-  name: "Tên nơi làm việc",
-  address: "Địa chỉ",
-  latitude: "Vĩ độ",
-  longitude: "Kinh độ",
-  allowedRadiusMeters: "Bán kính cho phép (m)",
-  maximumAccuracyMeters: "Độ chính xác tối đa (m)",
-};
 type Values = {
   code: string;
   name: string;
+  type: WorkplaceType;
   address: string;
   latitude: string;
   longitude: string;
   allowedRadiusMeters: string;
   maximumAccuracyMeters: string;
 };
+
 const from = (w: Workplace): Values => ({
   code: w.code,
   name: w.name,
-  address: w.address,
-  latitude: String(w.latitude),
-  longitude: String(w.longitude),
-  allowedRadiusMeters: String(w.allowedRadiusMeters),
-  maximumAccuracyMeters: String(w.maximumAccuracyMeters),
+  type: w.type || "IN_OFFICE",
+  address: w.address || "",
+  latitude: String(w.latitude ?? 0),
+  longitude: String(w.longitude ?? 0),
+  allowedRadiusMeters: String(w.allowedRadiusMeters || 200),
+  maximumAccuracyMeters: String(w.maximumAccuracyMeters || 100),
 });
-const validate = (v: Values) =>
-  !v.code.trim()
-    ? "Vui lòng nhập mã nơi làm việc."
-    : !v.name.trim()
-      ? "Vui lòng nhập tên nơi làm việc."
-      : !v.address.trim()
-        ? "Vui lòng nhập địa chỉ."
-        : Number(v.latitude) < -90 || Number(v.latitude) > 90
-          ? "Vĩ độ phải nằm trong khoảng từ -90 đến 90."
-          : Number(v.longitude) < -180 || Number(v.longitude) > 180
-            ? "Kinh độ phải nằm trong khoảng từ -180 đến 180."
-            : Number(v.allowedRadiusMeters) < 100
-              ? "Bán kính cho phép tối thiểu là 100 m."
-              : Number(v.maximumAccuracyMeters) < 80
-                ? "Độ chính xác tối đa phải từ 80 m trở lên."
-                : "";
+
+const validate = (v: Values) => {
+  if (!v.code.trim()) return "Vui lòng nhập mã nơi làm việc.";
+  if (!v.name.trim()) return "Vui lòng nhập tên nơi làm việc.";
+  if (v.type !== "OUT_OFFICE") {
+    if (!v.address.trim()) return "Vui lòng nhập địa chỉ.";
+    if (Number(v.latitude) < -90 || Number(v.latitude) > 90)
+      return "Vĩ độ phải nằm trong khoảng từ -90 đến 90.";
+    if (Number(v.longitude) < -180 || Number(v.longitude) > 180)
+      return "Kinh độ phải nằm trong khoảng từ -180 đến 180.";
+    if (Number(v.allowedRadiusMeters) < 100)
+      return "Bán kính cho phép tối thiểu là 100 m.";
+    if (Number(v.maximumAccuracyMeters) < 80)
+      return "Độ chính xác tối đa phải từ 80 m trở lên.";
+  }
+  return "";
+};
+
 export function WorkplaceEditDialog({
   apiBase,
   workplaceId,
@@ -79,6 +82,7 @@ export function WorkplaceEditDialog({
     [original, setOriginal] = useState<Values | null>(null),
     [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false);
+
   useEffect(() => {
     if (!open || !workplaceId) return;
     setLoading(true);
@@ -93,6 +97,23 @@ export function WorkplaceEditDialog({
       )
       .finally(() => setLoading(false));
   }, [apiBase, workplaceId, open]);
+
+  const handleLocationSelected = (loc: SelectedLocation) => {
+    setValues((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        address: loc.address,
+        latitude: String(loc.latitude),
+        longitude: String(loc.longitude),
+      };
+    });
+    toast.success(
+      "Đã lấy tọa độ GPS từ bản đồ",
+      `Vĩ độ: ${loc.latitude} • Kinh độ: ${loc.longitude}`
+    );
+  };
+
   const save = async () => {
     if (!values || !original) return;
     const message = validate(values);
@@ -101,30 +122,30 @@ export function WorkplaceEditDialog({
       toast.warning("Vui lòng kiểm tra thông tin", message);
       return;
     }
-    const keys = [
-      "code",
-      "name",
-      "address",
-      "latitude",
-      "longitude",
-      "allowedRadiusMeters",
-      "maximumAccuracyMeters",
-    ] as const;
-    const payload = Object.fromEntries(
-      keys
-        .filter((k) => values[k] !== original[k])
-        .map((k) => [
-          k,
-          [
-            "latitude",
-            "longitude",
-            "allowedRadiusMeters",
-            "maximumAccuracyMeters",
-          ].includes(k)
-            ? Number(values[k])
-            : values[k].trim(),
-        ]),
-    );
+
+    const payload: Partial<Workplace> = {
+      type: values.type,
+    };
+    if (values.code.trim() !== original.code) payload.code = values.code.trim();
+    if (values.name.trim() !== original.name) payload.name = values.name.trim();
+    if (values.address.trim() !== original.address) payload.address = values.address.trim();
+
+    if (values.type === "OUT_OFFICE") {
+      payload.latitude = 0;
+      payload.longitude = 0;
+      payload.allowedRadiusMeters = 0;
+      payload.maximumAccuracyMeters = 0;
+    } else {
+      if (values.latitude !== original.latitude || original.type === "OUT_OFFICE")
+        payload.latitude = Number(values.latitude);
+      if (values.longitude !== original.longitude || original.type === "OUT_OFFICE")
+        payload.longitude = Number(values.longitude);
+      if (values.allowedRadiusMeters !== original.allowedRadiusMeters || original.type === "OUT_OFFICE")
+        payload.allowedRadiusMeters = Number(values.allowedRadiusMeters);
+      if (values.maximumAccuracyMeters !== original.maximumAccuracyMeters || original.type === "OUT_OFFICE")
+        payload.maximumAccuracyMeters = Number(values.maximumAccuracyMeters);
+    }
+
     setFormError("");
     setSaving(true);
     try {
@@ -138,9 +159,10 @@ export function WorkplaceEditDialog({
       setSaving(false);
     }
   };
+
   return (
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="border-b border-border pr-16">
           <DialogTitle>Chỉnh sửa nơi làm việc</DialogTitle>
           <DialogDescription>
@@ -153,46 +175,156 @@ export function WorkplaceEditDialog({
           </p>
         ) : (
           <>
-            <div className="px-6">
+            <div className="px-6 pt-2">
               <FormError message={formError} />
             </div>
-            <div className="grid gap-5 px-6 pb-2 sm:grid-cols-2">
-              {(
-                [
-                  "code",
-                  "name",
-                  "address",
-                  "latitude",
-                  "longitude",
-                  "allowedRadiusMeters",
-                  "maximumAccuracyMeters",
-                ] as const
-              ).map((k) => (
-                <FormLabel key={k} className="space-y-2 text-sm font-medium">
+            <div className="space-y-5 px-6 pb-2">
+              {/* Loại nơi làm việc */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  Loại nơi làm việc <span className="text-destructive">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1 border border-border">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all",
+                      values.type !== "OUT_OFFICE"
+                        ? "bg-background text-foreground shadow-sm font-semibold border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => setValues({ ...values, type: "IN_OFFICE" })}
+                  >
+                    <Building2 className="size-4 text-blue-600" />
+                    <span>Tại văn phòng (IN_OFFICE)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all",
+                      values.type === "OUT_OFFICE"
+                        ? "bg-background text-foreground shadow-sm font-semibold border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => setValues({ ...values, type: "OUT_OFFICE" })}
+                  >
+                    <Compass className="size-4 text-purple-600" />
+                    <span>Lưu động / Ngoại văn phòng (OUT_OFFICE)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Thông tin cơ bản */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormLabel className="space-y-1.5 text-sm font-medium">
                   <span className="text-foreground">
-                    {FIELD_LABELS[k]}{" "}
-                    <span className="text-destructive">*</span>
+                    Mã nơi làm việc <span className="text-destructive">*</span>
                   </span>
                   <Input
                     className="min-h-11"
-                    type={
-                      [
-                        "latitude",
-                        "longitude",
-                        "allowedRadiusMeters",
-                        "maximumAccuracyMeters",
-                      ].includes(k)
-                        ? "number"
-                        : "text"
-                    }
-                    value={values[k]}
-                    onChange={(e) =>
-                      setValues({ ...values, [k]: e.target.value })
-                    }
+                    value={values.code}
+                    onChange={(e) => setValues({ ...values, code: e.target.value })}
                     disabled={saving}
                   />
                 </FormLabel>
-              ))}
+                <FormLabel className="space-y-1.5 text-sm font-medium">
+                  <span className="text-foreground">
+                    Tên nơi làm việc <span className="text-destructive">*</span>
+                  </span>
+                  <Input
+                    className="min-h-11"
+                    value={values.name}
+                    onChange={(e) => setValues({ ...values, name: e.target.value })}
+                    disabled={saving}
+                  />
+                </FormLabel>
+              </div>
+
+              <div className="space-y-1.5 text-sm font-medium">
+                <span className="text-foreground">
+                  {values.type === "OUT_OFFICE" ? "Địa bàn / Khu vực làm việc" : "Địa chỉ trụ sở"}
+                  {values.type !== "OUT_OFFICE" && <span className="text-destructive"> *</span>}
+                </span>
+                <AddressAutocomplete
+                  className="min-h-11"
+                  value={values.address}
+                  onChange={(addr) => setValues({ ...values, address: addr })}
+                  onSelectLocation={handleLocationSelected}
+                  placeholder={
+                    values.type === "OUT_OFFICE"
+                      ? "Ví dụ: Toàn quốc, TP.HCM, Quận 8..."
+                      : "Nhập địa chỉ để tìm kiếm và tự động lấy tọa độ GPS..."
+                  }
+                  disabled={saving}
+                />
+              </div>
+
+              {/* Geofence GPS — Chỉ hiện khi IN_OFFICE */}
+              {values.type !== "OUT_OFFICE" && (
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="size-4 text-primary" />
+                      <span className="text-sm font-semibold text-foreground">Tọa độ GPS & Bán kính Geofence</span>
+                    </div>
+                    <span className="text-xs text-primary">
+                      ✓ Tự động điền khi chọn địa chỉ ở trên
+                    </span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormLabel className="space-y-1.5 text-sm font-medium">
+                      <span className="text-foreground">
+                        Vĩ độ (Latitude) <span className="text-destructive">*</span>
+                      </span>
+                      <Input
+                        className="min-h-11"
+                        type="number"
+                        step="any"
+                        value={values.latitude}
+                        onChange={(e) => setValues({ ...values, latitude: e.target.value })}
+                        disabled={saving}
+                      />
+                    </FormLabel>
+                    <FormLabel className="space-y-1.5 text-sm font-medium">
+                      <span className="text-foreground">
+                        Kinh độ (Longitude) <span className="text-destructive">*</span>
+                      </span>
+                      <Input
+                        className="min-h-11"
+                        type="number"
+                        step="any"
+                        value={values.longitude}
+                        onChange={(e) => setValues({ ...values, longitude: e.target.value })}
+                        disabled={saving}
+                      />
+                    </FormLabel>
+                    <FormLabel className="space-y-1.5 text-sm font-medium">
+                      <span className="text-foreground">
+                        Bán kính cho phép (m) <span className="text-destructive">*</span>
+                      </span>
+                      <Input
+                        className="min-h-11"
+                        type="number"
+                        value={values.allowedRadiusMeters}
+                        onChange={(e) => setValues({ ...values, allowedRadiusMeters: e.target.value })}
+                        disabled={saving}
+                      />
+                    </FormLabel>
+                    <FormLabel className="space-y-1.5 text-sm font-medium">
+                      <span className="text-foreground">
+                        Độ chính xác tối đa (m) <span className="text-destructive">*</span>
+                      </span>
+                      <Input
+                        className="min-h-11"
+                        type="number"
+                        value={values.maximumAccuracyMeters}
+                        onChange={(e) => setValues({ ...values, maximumAccuracyMeters: e.target.value })}
+                        disabled={saving}
+                      />
+                    </FormLabel>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mx-6 mb-6 flex flex-wrap justify-end gap-3 border-t border-border pt-5">
               <Button

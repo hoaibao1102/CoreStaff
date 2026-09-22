@@ -67,7 +67,7 @@ export { EmployeeProfile } from './employee-profile.schema';
 export { EmploymentHistory } from './employment-history.schema';
 export { EmploymentContract } from './employment-contract.schema';
 export { EmployeeDocument } from './employee-document.schema';
-export { Workplace } from './workplace.schema';
+export { Workplace, WorkplaceType } from './workplace.schema';
 export { ShiftTemplate } from './shift-template.schema';
 
 export function registryEntries() {

@@ -1,9 +1,35 @@
 import { hrRequest, mapHrError } from './hrService';
 
-export interface Workplace { _id: string; organizationId?: string; code: string; name: string; address: string; latitude: number; longitude: number; allowedRadiusMeters: number; maximumAccuracyMeters: number; active: boolean; createdAt?: string; updatedAt?: string; }
-export interface CreateWorkplacePayload { code: string; name: string; address: string; latitude: number; longitude: number; allowedRadiusMeters: number; maximumAccuracyMeters: number; }
+export type WorkplaceType = 'IN_OFFICE' | 'OUT_OFFICE';
+
+export interface Workplace {
+  _id: string;
+  organizationId?: string;
+  code: string;
+  name: string;
+  type?: WorkplaceType;
+  address: string;
+  latitude: number;
+  longitude: number;
+  allowedRadiusMeters: number;
+  maximumAccuracyMeters: number;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateWorkplacePayload {
+  code: string;
+  name: string;
+  type?: WorkplaceType;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  allowedRadiusMeters?: number;
+  maximumAccuracyMeters?: number;
+}
 export type UpdateWorkplacePayload = Partial<CreateWorkplacePayload>;
-export interface WorkplaceFilters { active?: boolean; search?: string; }
+export interface WorkplaceFilters { active?: boolean; search?: string; type?: WorkplaceType; }
 
 function path(id: string) { return `/api/hr/workplaces/${encodeURIComponent(id)}`; }
 export function getWorkplaces(base: string, filters: WorkplaceFilters = {}) {

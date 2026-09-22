@@ -79,15 +79,13 @@ export function CheckInSuccessModal({
       ? 'Văn phòng CoreStaff Quận 8'
       : method === 'SELFIE'
         ? 'Ca Hiện Trường / Khách Hàng'
-        : 'Văn phòng CoreStaff Quận 8');
+        : 'Nơi làm việc được chỉ định');
 
   const displayAddress =
     workplaceAddress ||
-    (method === 'GPS'
-      ? '123 Đường mẫu, Phường 4, Quận 8, TP.HCM'
-      : method === 'SELFIE'
-        ? 'Địa điểm công tác (vị trí GPS thực tế)'
-        : '123 Đường mẫu, Phường 4, Quận 8, TP.HCM');
+    (method === 'SELFIE'
+      ? 'Địa điểm công tác (vị trí GPS thực tế)'
+      : 'Địa chỉ nơi làm việc');
 
   const isPending = method === 'SELFIE' || activeEvent?.status === 'PENDING_APPROVAL';
 

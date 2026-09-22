@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Wifi,
   MapPin,
   Camera,
-  ChevronLeft,
-  CalendarDays,
   Clock,
+  Building2,
+  Compass,
+  AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
-import { AppLink } from '../../components/AppLink';
 import { Avatar, AvatarFallback } from '../../components/avatar';
+import { getMyEmployeeProfile } from '../../services/hrService';
+import { getWorkplaceById, type Workplace } from '../../services/workplace.service';
 import type {
   AttendanceMethod,
   AttendanceStatus,
@@ -25,7 +28,6 @@ import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
 import { PolicyModal } from './components/PolicyModal';
 import { CheckInSuccessModal } from './components/CheckInSuccessModal';
 import { ResultBanner, type ResultBannerProps } from './components/ResultBanner';
-import { AttendanceHistoryView } from './components/AttendanceHistoryView';
 
 function getInitials(name: string): string {
   return name
@@ -86,16 +88,17 @@ function EmployeeAppBar({ userName, employeeCode, department }: EmployeeAppBarPr
   );
 }
 
-export function AttendanceScreen({ user }: { user: AuthUser }) {
-  const [mainTab, setMainTab] = useState<'TODAY' | 'HISTORY'>('TODAY');
+export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: string | null }) {
+  const [userWorkplace, setUserWorkplace] = useState<Workplace | null>(null);
+  const [isLoadingWorkplace, setIsLoadingWorkplace] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('NETWORK');
   const [attendanceRecord, setAttendanceRecord] = useState<DayAttendance>({
     id: 'att-today',
     workDate: new Date().toISOString().split('T')[0],
     shiftName: 'Ca Hành Chính',
     shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
+    workplace: 'Đang tải nơi làm việc...',
+    workplaceAddress: 'Đang kiểm tra dữ liệu vị trí...',
     status: 'NOT_CHECKED_IN',
     availableAction: 'CHECK_IN',
     attendanceMethod: 'NETWORK',
@@ -105,8 +108,8 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
       canAttend: true,
       networkId: 'net-office-1',
       networkName: 'CoreStaff-Office-5G',
-      workplaceId: 'wp-q8',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
+      workplaceId: 'wp-default',
+      workplaceName: 'Đang tải nơi làm việc...',
     },
     checkIn: null,
     checkOut: null,
@@ -124,17 +127,106 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
   const [selfieAddress, setSelfieAddress] = useState<string | null>(null);
   const [currentAddress, setCurrentAddress] = useState<string>('');
 
-  // GPS verification
+  // Fetch employee's assigned workplace & Auto-route method
+  useEffect(() => {
+    if (!apiBase) return;
+    let active = true;
+    setIsLoadingWorkplace(true);
+
+    getMyEmployeeProfile(apiBase)
+      .then(async (profile) => {
+        if (!active) return;
+        if (profile.workplaceId) {
+          try {
+            const wp = await getWorkplaceById(apiBase, profile.workplaceId);
+            if (active && wp) {
+              setUserWorkplace(wp);
+              const isOutOffice = wp.type === 'OUT_OFFICE';
+
+              if (isOutOffice) {
+                // OUT_OFFICE: Tự động chuyển hướng sang chế độ SELFIE
+                setSelectedMethod('SELFIE');
+                setAttendanceRecord((prev) => ({
+                  ...prev,
+                  workplace: wp.name,
+                  workplaceAddress: wp.address || 'Hiện trường / Lưu động',
+                  attendanceMethod: 'SELFIE',
+                  verificationContext: {
+                    method: 'SELFIE',
+                    canAttend: true,
+                    workplaceId: wp._id,
+                    workplaceName: wp.name,
+                  },
+                }));
+              } else {
+                // IN_OFFICE: Mặc định mạng nội bộ hoặc GPS
+                setSelectedMethod('NETWORK');
+                setAttendanceRecord((prev) => ({
+                  ...prev,
+                  workplace: wp.name,
+                  workplaceAddress: wp.address || 'Văn phòng làm việc',
+                  attendanceMethod: 'NETWORK',
+                  verificationContext: {
+                    method: 'NETWORK',
+                    status: 'CONNECTED_TO_ALLOWED_NETWORK',
+                    canAttend: true,
+                    networkId: 'net-office-1',
+                    networkName: 'CoreStaff-Office-5G',
+                    workplaceId: wp._id,
+                    workplaceName: wp.name,
+                  },
+                }));
+              }
+              return;
+            }
+          } catch {
+            // Fallback to default
+          }
+        }
+
+        // Nếu nhân viên chưa có workplaceId cụ thể
+        if (active) {
+          setAttendanceRecord((prev) => ({
+            ...prev,
+            workplace: profile.workplaceName || 'Văn phòng CoreStaff',
+            workplaceAddress: 'Trụ sở chính',
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setIsLoadingWorkplace(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [apiBase]);
+
+  // GPS verification config based on employee's actual workplace
   const location = useLocation();
-  const workplaceGps = {
-    id: 'wp-q8',
-    name: 'Văn phòng CoreStaff Quận 8',
-    address: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    latitude: 10.7431,
-    longitude: 106.6782,
-    allowedRadiusMeters: 250,
-    maximumAccuracyMeters: 50,
-  };
+  const workplaceGps = useMemo(() => {
+    if (userWorkplace && userWorkplace.type !== 'OUT_OFFICE' && userWorkplace.latitude && userWorkplace.longitude) {
+      return {
+        id: userWorkplace._id,
+        name: userWorkplace.name,
+        address: userWorkplace.address,
+        latitude: userWorkplace.latitude,
+        longitude: userWorkplace.longitude,
+        allowedRadiusMeters: userWorkplace.allowedRadiusMeters || 250,
+        maximumAccuracyMeters: userWorkplace.maximumAccuracyMeters || 50,
+      };
+    }
+    return {
+      id: userWorkplace?._id || 'wp-default',
+      name: userWorkplace?.name || 'Văn phòng làm việc',
+      address: userWorkplace?.address || 'Chưa thiết lập địa chỉ',
+      latitude: userWorkplace?.latitude || 10.762622,
+      longitude: userWorkplace?.longitude || 106.660247,
+      allowedRadiusMeters: userWorkplace?.allowedRadiusMeters || 200,
+      maximumAccuracyMeters: userWorkplace?.maximumAccuracyMeters || 80,
+    };
+  }, [userWorkplace]);
 
   const gpsVerification = useGpsVerification(workplaceGps, location.coords);
 
@@ -175,8 +267,8 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
               canAttend: true,
               networkId: 'net-office-1',
               networkName: 'CoreStaff-Office-5G',
-              workplaceId: 'wp-q8',
-              workplaceName: 'Văn phòng CoreStaff Quận 8',
+              workplaceId: userWorkplace?._id || 'wp-default',
+              workplaceName: userWorkplace?.name || 'Văn phòng CoreStaff',
             }
           : m === 'GPS'
             ? {
@@ -226,10 +318,10 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
               approvalStatus: 'PENDING_APPROVAL',
               evidence: photoUrl ? { previewUrl: photoUrl } : undefined,
               location: {
-                latitude: location.coords?.latitude ?? 10.7431,
-                longitude: location.coords?.longitude ?? 106.6782,
+                latitude: location.coords?.latitude ?? (workplaceGps.latitude || 10.762622),
+                longitude: location.coords?.longitude ?? (workplaceGps.longitude || 106.660247),
                 accuracyMeters: location.coords?.accuracyMeters ?? 15,
-                address: selfieAddress || currentAddress || '123 Đường mẫu, Quận 8, TP.HCM',
+                address: selfieAddress || currentAddress || attendanceRecord.workplaceAddress || 'Vị trí thực địa',
               },
             }
           : selectedMethod === 'GPS'
@@ -240,7 +332,7 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
                 workplaceName: attendanceRecord.workplace,
                 status: 'AUTO_APPROVED',
                 accuracyMeters: Math.round(location.coords?.accuracyMeters ?? 18),
-                distanceMeters: gpsVerification.distanceMeters ?? 25,
+                distanceMeters: gpsVerification.distanceMeters ?? 0,
                 address: attendanceRecord.workplaceAddress,
               }
             : {
@@ -249,7 +341,7 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
                 method: 'NETWORK',
                 workplaceName: attendanceRecord.workplace,
                 status: 'AUTO_APPROVED',
-                networkName: 'CoreStaff-Office-5G',
+                networkName: 'Mạng văn phòng',
                 address: attendanceRecord.workplaceAddress,
               };
 
@@ -273,15 +365,15 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
               eventId: `evt-${Date.now()}`,
               recordedAt: nowIso,
               method: 'SELFIE',
-              workplaceName: 'Ca Hiện Trường / Khách Hàng',
+              workplaceName: attendanceRecord.workplace || 'Ca Hiện Trường / Khách Hàng',
               status: 'PENDING_APPROVAL',
               approvalStatus: 'PENDING_APPROVAL',
               evidence: photoUrl ? { previewUrl: photoUrl } : undefined,
               location: {
-                latitude: location.coords?.latitude ?? 10.7431,
-                longitude: location.coords?.longitude ?? 106.6782,
+                latitude: location.coords?.latitude ?? (workplaceGps.latitude || 10.762622),
+                longitude: location.coords?.longitude ?? (workplaceGps.longitude || 106.660247),
                 accuracyMeters: location.coords?.accuracyMeters ?? 15,
-                address: selfieAddress || currentAddress || '123 Đường mẫu, Quận 8, TP.HCM',
+                address: selfieAddress || currentAddress || attendanceRecord.workplaceAddress || 'Vị trí thực địa',
               },
             }
           : selectedMethod === 'GPS'
@@ -356,97 +448,153 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
         department={user.role === 'HR' ? 'Nhân sự' : user.role === 'DEPARTMENT_MANAGER' ? 'Quản lý' : 'Nhân viên'}
       />
 
-      {/* Navigation breadcrumb & Main View Switcher (Hôm nay / Lịch sử) */}
-      <div className="border-b border-border bg-card/60 px-4 py-2.5 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 max-w-7xl mx-auto">
-          <div className="flex items-center gap-3">
-            <AppLink href="/overview" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronLeft className="h-4 w-4" />
-              Tổng quan
-            </AppLink>
-
-            {/* Primary Main Tab Switcher */}
-            <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setMainTab('TODAY')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  mainTab === 'TODAY'
-                    ? 'bg-card text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Clock className="size-3.5" />
-                <span>Chấm công hôm nay</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMainTab('HISTORY')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  mainTab === 'HISTORY'
-                    ? 'bg-card text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <CalendarDays className="size-3.5" />
-                <span>Lịch sử công</span>
-              </button>
-            </div>
+      {/* Subheader: Phương thức chấm công */}
+      <div className="border-b border-border bg-card/60 px-4 py-2 sm:px-6">
+        <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Phương thức chấm công:</span>
           </div>
 
-          {/* 3 Check-in Method Switcher (only visible in TODAY tab) */}
-          {mainTab === 'TODAY' && (
-            <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('NETWORK')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'NETWORK'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Wifi className="size-3.5" />
-                <span>Wi-Fi</span>
-              </button>
+          {/* 3 Check-in Method Switcher */}
+          <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => handleSelectMethod('NETWORK')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                selectedMethod === 'NETWORK'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Wifi className="size-3.5" />
+              <span>Wi-Fi</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('GPS')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'GPS'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <MapPin className="size-3.5" />
-                <span>GPS</span>
-              </button>
+            <button
+              type="button"
+              onClick={() => handleSelectMethod('GPS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                selectedMethod === 'GPS'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <MapPin className="size-3.5" />
+              <span>GPS</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('SELFIE')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'SELFIE'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Camera className="size-3.5" />
-                <span>Selfie</span>
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => handleSelectMethod('SELFIE')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                selectedMethod === 'SELFIE'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Camera className="size-3.5" />
+              <span>Selfie</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Container */}
       <main className="flex-1 px-4 py-4 sm:px-6 max-w-7xl mx-auto w-full space-y-4 pb-24 md:pb-8">
-        {mainTab === 'HISTORY' ? (
-          <AttendanceHistoryView />
-        ) : (
-          <>
+            {/* Workplace Info & Mode Card */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className={`p-2.5 rounded-xl shrink-0 ${
+                    userWorkplace?.type === 'OUT_OFFICE'
+                      ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400'
+                      : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+                  }`}>
+                    {userWorkplace?.type === 'OUT_OFFICE' ? (
+                      <Compass className="size-5" />
+                    ) : (
+                      <Building2 className="size-5" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-foreground">
+                        {attendanceRecord.workplace}
+                      </h2>
+                      {userWorkplace?.type === 'OUT_OFFICE' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 px-2.5 py-0.5 text-xs font-semibold">
+                          <Compass className="size-3" />
+                          Lưu động / Ngoại văn phòng (OUT_OFFICE)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-semibold">
+                          <Building2 className="size-3" />
+                          Tại văn phòng (IN_OFFICE)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {attendanceRecord.workplaceAddress}
+                    </p>
+                  </div>
+                </div>
+
+                {userWorkplace?.type === 'OUT_OFFICE' ? (
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-300 px-3 py-1.5 text-xs font-medium self-start sm:self-center border border-purple-500/20">
+                    <Sparkles className="size-3.5 shrink-0" />
+                    <span>Tự động định tuyến sang Selfie</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground self-start sm:self-center">
+                    <span>Phương thức ưu tiên: Wi-Fi / GPS</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Informational Callout / Fallback Alert */}
+              {userWorkplace?.type === 'OUT_OFFICE' ? (
+                <div className="mt-3.5 flex items-start gap-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 p-3 text-xs text-purple-800 dark:text-purple-200 border border-purple-200/60 dark:border-purple-800/40">
+                  <Compass className="size-4 shrink-0 text-purple-600 dark:text-purple-400 mt-0.5" />
+                  <p>
+                    Bạn được phân công nơi làm việc lưu động. Vui lòng bấm vào <strong>Chụp ảnh chấm công</strong> bên dưới, ảnh chụp cùng tọa độ thực địa sẽ được ghi nhận trực tiếp.
+                  </p>
+                </div>
+              ) : selectedMethod !== 'SELFIE' ? (
+                <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/30">
+                  <div className="flex items-start sm:items-center gap-2">
+                    <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span>
+                      Gặp sự cố không kết nối được Wi-Fi văn phòng hoặc GPS ngoài phạm vi?
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectMethod('SELFIE')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline hover:text-primary/90 transition-colors whitespace-nowrap self-end sm:self-auto"
+                  >
+                    <Camera className="size-3.5" />
+                    Chấm công dự phòng bằng Selfie (Fallback) &rarr;
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3.5 flex items-center justify-between gap-2.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs text-blue-800 dark:text-blue-200 border border-blue-200/60 dark:border-blue-800/30">
+                  <div className="flex items-center gap-2">
+                    <Camera className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                    <span>
+                      Đang ở chế độ chấm công dự phòng bằng Selfie (Fallback).
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectMethod('NETWORK')}
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline transition-colors whitespace-nowrap"
+                  >
+                    Quay lại Wi-Fi &rarr;
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Result banner message */}
             {result && (
               <ResultBanner
@@ -475,6 +623,7 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
                 today={attendanceRecord}
                 coords={location.coords}
                 gpsVerification={gpsVerification}
+                workplaceGps={workplaceGps}
                 submitting={isSubmitting}
                 onSubmit={handleAction}
                 onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
@@ -490,8 +639,6 @@ export function AttendanceScreen({ user }: { user: AuthUser }) {
                 onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
               />
             )}
-          </>
-        )}
       </main>
 
       {/* Selfie Preview Screen (shown after capturing photo) */}

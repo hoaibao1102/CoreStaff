@@ -70,11 +70,19 @@ export function WorkplaceDetailDialog({
               [
                 ["Mã nơi làm việc", row.code],
                 ["Tên nơi làm việc", row.name],
-                ["Địa chỉ", row.address],
-                ["Vĩ độ", row.latitude],
-                ["Kinh độ", row.longitude],
-                ["Bán kính cho phép", `${row.allowedRadiusMeters} m`],
-                ["Độ chính xác tối đa", `${row.maximumAccuracyMeters} m`],
+                ["Loại nơi làm việc", row.type === "OUT_OFFICE" ? "Lưu động / Ngoại văn phòng (OUT_OFFICE)" : "Tại văn phòng (IN_OFFICE)"],
+                ["Địa chỉ / Khu vực", row.address || "Không cố định"],
+                ...(row.type === "OUT_OFFICE"
+                  ? [
+                      ["Phương thức chấm công", "Chụp ảnh Selfie kèm định vị thực địa"],
+                      ["Bán kính & Tọa độ", "Không giới hạn (Lưu động)"],
+                    ]
+                  : [
+                      ["Vĩ độ", row.latitude],
+                      ["Kinh độ", row.longitude],
+                      ["Bán kính cho phép", `${row.allowedRadiusMeters} m`],
+                      ["Độ chính xác tối đa", `${row.maximumAccuracyMeters} m`],
+                    ]),
                 [
                   "Trạng thái",
                   row.active ? "Đang hoạt động" : "Ngưng hoạt động",

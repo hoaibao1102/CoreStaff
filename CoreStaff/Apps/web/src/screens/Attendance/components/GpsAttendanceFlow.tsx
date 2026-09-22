@@ -1,6 +1,16 @@
 import * as React from 'react';
-import { Clock, MapPin, Crosshair, Fingerprint, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import type { DayAttendance } from '../types';
+import {
+  Clock,
+  MapPin,
+  Crosshair,
+  Fingerprint,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  ExternalLink,
+  Navigation,
+} from 'lucide-react';
+import type { DayAttendance, WorkplaceInfo } from '../types';
 import type { LocationCoords } from '../verification/useLocation';
 import type { useGpsVerification } from '../verification/useGpsVerification';
 import { StickyActionBar } from './StickyActionBar';
@@ -9,6 +19,7 @@ export interface GpsAttendanceFlowProps {
   today: DayAttendance;
   coords: LocationCoords | null;
   gpsVerification: ReturnType<typeof useGpsVerification>;
+  workplaceGps?: WorkplaceInfo | null;
   submitting: boolean;
   onSubmit: () => void;
   onOpenSuccessModal?: () => void;
@@ -18,6 +29,7 @@ export function GpsAttendanceFlow({
   today,
   coords,
   gpsVerification,
+  workplaceGps,
   submitting,
   onSubmit,
   onOpenSuccessModal,
@@ -68,6 +80,28 @@ export function GpsAttendanceFlow({
       : 'Ghi nhận Vào ca (Check-in)';
 
   const isDisabled = !isInside || submitting || today.availableAction === 'NONE' || isCompleted;
+
+  const workplaceLat = workplaceGps?.latitude;
+  const workplaceLon = workplaceGps?.longitude;
+  const allowedRadius = workplaceGps?.allowedRadiusMeters || 200;
+  const distance = gpsVerification.distanceMeters;
+  const distanceText =
+    distance != null
+      ? distance < 1000
+        ? `${Math.round(distance)} m`
+        : `${(distance / 1000).toFixed(2)} km`
+      : 'Đang đo...';
+
+  const hasCoordinates =
+    typeof workplaceLat === 'number' &&
+    typeof workplaceLon === 'number' &&
+    (workplaceLat !== 0 || workplaceLon !== 0);
+
+  const mapQuery = hasCoordinates
+    ? `${workplaceLat},${workplaceLon}`
+    : encodeURIComponent(today.workplaceAddress || today.workplace);
+  const embedUrl = `https://maps.google.com/maps?q=${mapQuery}&hl=vi&z=17&output=embed`;
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
 
   return (
     <div className="space-y-4 md:space-y-5 animate-in fade-in duration-200">
@@ -136,7 +170,7 @@ export function GpsAttendanceFlow({
           {/* Card 2: Location Details & Accuracy Card */}
           <div className="rounded-2xl border border-border bg-card p-4 md:p-5 shadow-xs space-y-3">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-emerald-50 p-1.5 text-emerald-600">
+              <div className="mt-0.5 rounded-full bg-emerald-50 p-1.5 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
                 <MapPin className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -187,83 +221,74 @@ export function GpsAttendanceFlow({
           </StickyActionBar>
         </div>
 
-        {/* Right Column: GPS Map Area */}
+        {/* Right Column: Real GPS Map Area */}
         <div className="md:col-span-7 flex flex-col gap-4">
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs">
             {/* Map View Area */}
-            <div className="relative h-56 md:h-96 w-full overflow-hidden bg-slate-100 select-none">
-              <svg
-                className="absolute inset-0 size-full"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 400 240"
-                preserveAspectRatio="xMidYMid slice"
-              >
-                <defs>
-                  <pattern id="gps-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#cbd5e1" strokeWidth="0.8" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="#f1f5f9" />
-                <rect width="100%" height="100%" fill="url(#gps-grid)" />
-
-                {/* River / Water waterway */}
-                <path
-                  d="M 320 0 C 310 60, 315 140, 340 240 L 370 240 C 345 140, 340 60, 350 0 Z"
-                  fill="#dbeafe"
-                  stroke="#bfdbfe"
-                  strokeWidth="1"
+            <div className="relative h-64 md:h-[420px] w-full overflow-hidden bg-muted/40">
+              {hasCoordinates || today.workplaceAddress ? (
+                <iframe
+                  title={`Bản đồ vị trí ${today.workplace}`}
+                  className="size-full border-0 select-none"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={embedUrl}
                 />
-                <text x="330" y="90" fill="#93c5fd" fontSize="7" transform="rotate(75 330 90)">
-                  Kênh Tàu Hũ
-                </text>
+              ) : (
+                <div className="size-full flex flex-col items-center justify-center p-6 text-center text-muted-foreground">
+                  <MapPin className="size-8 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm font-semibold">Chưa có thông tin tọa độ nơi làm việc</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vui lòng liên hệ HR để thiết lập tọa độ cho nơi làm việc này
+                  </p>
+                </div>
+              )}
 
-                {/* Streets */}
-                <path d="M 0 45 Q 200 65 400 50" fill="none" stroke="#ffffff" strokeWidth="10" />
-                <path d="M 0 45 Q 200 65 400 50" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
-
-                <path d="M 0 170 Q 200 160 400 180" fill="none" stroke="#ffffff" strokeWidth="12" />
-                <path d="M 0 170 Q 200 160 400 180" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
-                <text x="120" y="176" fill="#94a3b8" fontSize="7">
-                  Tạ Quang Bửu
-                </text>
-
-                <path d="M 80 0 L 110 240" fill="none" stroke="#ffffff" strokeWidth="8" />
-                <path d="M 80 0 L 110 240" fill="none" stroke="#cbd5e1" strokeWidth="1" />
-                <text x="75" y="100" fill="#94a3b8" fontSize="6" transform="rotate(80 75 100)">
-                  Phạm Thế Hiển
-                </text>
-
-                <path d="M 230 0 L 200 240" fill="none" stroke="#ffffff" strokeWidth="9" />
-                <path d="M 230 0 L 200 240" fill="none" stroke="#cbd5e1" strokeWidth="1.2" />
-
-                {/* Building blocks */}
-                <rect x="130" y="80" width="55" height="50" rx="4" fill="#e2e8f0" opacity="0.6" />
-                <rect x="220" y="75" width="60" height="55" rx="4" fill="#e2e8f0" opacity="0.6" />
-                <rect x="145" y="15" width="70" height="20" rx="3" fill="#e2e8f0" opacity="0.5" />
-
-                {/* Geofence Radar Circle */}
-                <circle cx="200" cy="115" r="60" fill="#86efac" fillOpacity="0.32" />
-                <circle cx="200" cy="115" r="60" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeDasharray="3 3" />
-                <circle cx="200" cy="115" r="26" fill="#4ade80" fillOpacity="0.25" />
-
-                {/* Animated Beacon Pin */}
-                <circle cx="200" cy="115" r="6" fill="#16a34a" />
-                <circle cx="200" cy="115" r="2.5" fill="#ffffff" />
-              </svg>
-
-              {/* Badge: Đang ở trong / ngoài vùng chấm công */}
-              <div className="absolute top-3 left-3 z-10">
+              {/* Top Floating Badge: Trạng thái trong/ngoài vùng chấm công */}
+              <div className="absolute top-3 left-3 z-10 pointer-events-none">
                 {isInside ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-md">
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-600/95 backdrop-blur-md px-3.5 py-1.5 text-xs font-bold text-white shadow-lg border border-emerald-500/40">
                     <CheckCircle className="size-3.5" />
-                    <span>Đang ở trong vùng chấm công</span>
+                    <span>Đang ở trong vùng chấm công (Cách {distanceText})</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md">
+                  <div className="flex items-center gap-1.5 rounded-full bg-amber-500/95 backdrop-blur-md px-3.5 py-1.5 text-xs font-bold text-white shadow-lg border border-amber-400/40">
                     <AlertCircle className="size-3.5" />
-                    <span>Ngoài vùng chấm công</span>
+                    <span>Ngoài vùng chấm công (Cách {distanceText} • Bán kính {allowedRadius}m)</span>
                   </div>
                 )}
+              </div>
+
+              {/* Bottom Floating Bar: Thông tin nơi làm việc thực tế & Nút mở Google Maps chỉ đường */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2.5 rounded-xl bg-card/95 backdrop-blur-md border border-border p-3 shadow-lg text-xs">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                    <MapPin className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground truncate">{today.workplace}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {hasCoordinates ? (
+                        <span className="font-mono text-foreground/80">
+                          {workplaceLat?.toFixed(6)}, {workplaceLon?.toFixed(6)} • Bán kính: {allowedRadius}m
+                        </span>
+                      ) : (
+                        today.workplaceAddress
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline hover:text-primary/90 text-xs px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors shrink-0"
+                >
+                  <Navigation className="size-3.5" />
+                  <span>Chỉ đường</span>
+                  <ExternalLink className="size-3" />
+                </a>
               </div>
             </div>
           </div>
