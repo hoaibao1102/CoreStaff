@@ -1,6 +1,20 @@
 # TASK-038 / TASK-039 — Nhật ký triển khai
 
-Ngày: 2026-09-22. Xem `Docs/DOCS_DECISION_LOG.md` D32 cho quyết định phạm vi.
+Ngày: 2026-09-22. Xem `Docs/DOCS_DECISION_LOG.md` D37 cho quyết định phạm vi
+(đổi từ D32 → D37 sau khi merge `origin/deploy`, tránh trùng ID với quyết định
+D32 sẵn có của team).
+
+> **Cập nhật quan trọng (2026-09-22, sau khi merge `origin/deploy`):**
+> `hr/contract/` và `hr/salary-profile/` mô tả trong phần "Phạm vi" bên dưới
+> **đã bị xoá** khỏi repo. Lý do: `git pull origin deploy` phát hiện team đã
+> làm sẵn bản đầy đủ hơn — `hr/employment-contract/` (có status workflow,
+> cảnh báo hết hạn, web UI) và `hr/compensation/` (SalaryProfile gắn Allowance/
+> AttendanceBonusPolicy/KPI, web UI). Giữ cả 2 bản sẽ trùng tên collection
+> Mongo `salary_profiles` và trùng file `employment-contract.schema.ts`. Đã
+> bỏ bản tự viết, giữ nguyên `hr/insurance-profile/` + `hr/insurance-policy/`
+> (TASK-038/039 thật sự — không ai làm trùng phần này). Phần "Phạm vi" và
+> bảng AC bên dưới **giữ nguyên làm lịch sử quyết định tại thời điểm viết**,
+> không sửa lại — đọc kèm ghi chú này để hiểu đúng trạng thái code hiện tại.
 
 ## Phạm vi
 
@@ -46,12 +60,7 @@ Không sửa `TASK_BACKLOG_9_WEEKS.md`/`MILESTONE_9_WEEKS.md` (D30 freeze).
 
 | Tiêu chí | Triển khai | Test | Trạng thái |
 |---|---|---|---|
-| AC-CONTRACT-01 tenant scope | `ContractService` mọi query có `organizationId` | `contract.service.spec.ts` "does not leak a contract across tenants" | Đạt |
-| §30A.2 loại hợp đồng đúng 3 giá trị, endDate bắt buộc trừ INDEFINITE_TERM | `ContractType` enum, `CreateContractDto` `ValidateIf` | DTO validation (không có test riêng — logic đơn giản, phủ qua service test) | Đạt |
-| §30A.2 không hard-delete, lịch sử qua nhiều document | `ContractService` không có update/delete endpoint; mỗi giai đoạn là 1 document | `contract.service.spec.ts` "allows a renewal contract..." | Đạt |
-| Không chồng giai đoạn hợp đồng | `rangesOverlap` trong `create()` | `contract.service.spec.ts` "rejects an overlapping contract period" | Đạt |
-| §30D.1 SalaryProfile field đúng, insuranceSalary tách biệt baseSalary | `SalaryProfileService`/schema | `salary-profile.service.spec.ts` | Đạt |
-| SalaryProfile versioned, không sửa tại chỗ | `create()` luôn insert mới, tăng version | `salary-profile.service.spec.ts` "increments version..." | Đạt |
+| AC-CONTRACT-01 tenant scope, §30A.2 contract fields, §30D.1 SalaryProfile | (dòng dưới đây mô tả code TỰ VIẾT ban đầu, **đã xoá** — nay do `hr/employment-contract` + `hr/compensation` của team đảm nhiệm, xem ghi chú đầu file) | — | Superseded |
 | AC-INS-02 chỉ tính khoản participates=true | `InsuranceProfileService` + `calculateInsuranceContributions` | `insurance-profile.service.spec.ts`, `insurance-calculation.spec.ts` "only participating..." | Đạt |
 | §30A.3 participation không tự suy từ Contract/employmentStatus | Không có logic derive tự động trong `InsuranceProfileService`; `participates*` luôn do HR truyền vào DTO | `insurance-profile.service.spec.ts` "allows a false participation flag..." | Đạt |
 | AC-INS-01 dùng insuranceSalary, không phải grossSalary×10.5% | `calculateInsuranceContributions` nhận `insuranceSalary` làm tham số riêng | `insurance-calculation.spec.ts` "never uses grossSalary × 10.5%..." | Đạt |
@@ -106,3 +115,40 @@ Theo yêu cầu rà soát lại toàn bộ để chắc không có lỗi logic:
 - `npm run lint --workspace @corestaff/api` (tsc --noEmit): PASS.
 - `npx jest hr/contract hr/salary-profile hr/insurance-profile hr/insurance-policy database/indexes.spec.ts common/effective-dating.spec.ts --runInBand`: PASS, 7 suites / 49 tests.
 - Full `npm run test --workspace @corestaff/api`: 4 suites thất bại (`auth/auth.service.spec.ts`, `hr/workplace/workplace.service.spec.ts`) — xác nhận **có sẵn từ trước, không liên quan** đến thay đổi này: không file nào trong hai suite đó (hay code chúng test) bị chạm tới, và chạy lại riêng hai suite này (không kèm code mới) vẫn thất bại y hệt (timeout bcrypt + lỗi mock `setActive` không liên quan Contract/Salary/Insurance). Cần một phiên riêng để điều tra, ngoài phạm vi TASK-038/039.
+
+## Merge với `origin/deploy` (2026-09-22)
+
+`git pull origin deploy` ban đầu bị chặn: file `employment-contract.schema.ts`
+trùng path với bản team đã push. Điều tra bằng `git ls-tree`/`git show` phát
+hiện team đã làm xong (trên `deploy`) gần như toàn bộ Sprint 3 còn lại mà
+trước đó tưởng chưa ai làm: `hr/employment-contract`, `hr/employee-document`,
+`hr/compensation` (SalaryProfile + Allowance + AttendanceBonusPolicy + KPI +
+LaborCompliancePolicy + OvertimePayPolicy gộp chung), `hr/policies`,
+`hr/manager`, cộng Attendance module và web UI tương ứng — **ngoại trừ
+InsuranceProfile/InsurancePolicy, hoàn toàn không có ở đâu trong `deploy`**.
+
+Xử lý: xoá `hr/contract/` + `hr/salary-profile/` (bản tự viết, nay dư thừa),
+giữ nguyên `hr/insurance-profile/` + `hr/insurance-policy/` (không phụ thuộc
+code đã xoá — cả hai chỉ import `EmployeeProfile`, không import Contract hay
+SalaryProfile của tôi), rồi pull lại. Merge tạo 5 conflict thật (không phải do
+xoá file mà do cả hai bên cùng sửa các file dùng chung: `enums.ts`,
+`registry.ts`, `hr.module.ts`, `indexes.spec.ts`, `swagger-responses.ts`,
+`DOCS_DECISION_LOG.md`) — đã giải quyết bằng cách giữ cả hai phía (không bên
+nào bị mất), trừ 1 bug do merge tạo ra: `enums.ts` merge tự động (không báo
+conflict) nhưng để lại **2 khai báo `ContractType` trùng tên** — đã xoá bản
+của tôi, giữ bản team (đầy đủ hơn, có kèm `ContractStatus`).
+
+Sau merge, `Docs/SRS_CORESTAFF.md §30A.2` cũng được sửa lại: block field-spec
+`EmploymentContract` tôi viết trước đó không còn khớp code thật (thiếu
+`status`/`expiryDate`/cảnh báo hết hạn của team) — đã thay bằng ghi chú trỏ
+đến implementation thật, tránh SRS mô tả sai code đang chạy.
+
+**Kiểm chứng sau merge:**
+- `npm install` (root, do `package.json`/`package-lock.json` đổi theo merge).
+- `npm run build --workspace @corestaff/api`: PASS.
+- `npm run lint --workspace @corestaff/api`: PASS.
+- `npm run test --workspace @corestaff/api`: 33/34 suite PASS, 338/347 test PASS.
+  Suite fail duy nhất là `hr/workplace/workplace.service.spec.ts` — cùng lỗi
+  có sẵn từ trước đã ghi nhận ở trên, không phải do merge.
+- `npm run build --workspace @corestaff/web`: PASS (chỉ có warning chunk-size,
+  không phải lỗi, không liên quan InsuranceProfile/InsurancePolicy).
