@@ -130,16 +130,9 @@ test('HR login opens directory and own profile without reloading authentication'
   expect(window.location.pathname).toBe('/hr/employees');
   expect(container.querySelector('table[aria-label]')).not.toBeNull();
 
-  await click('#desktop-sidebar nav a[href="/app/profile"]');
-  expect(container.textContent).toContain('current@example.test');
+  expect(container.querySelector('#desktop-sidebar .workspace-sidebar-account')).not.toBeNull();
+  expect(container.textContent).toContain('Current User');
   expect(authRequests()).toBe(requests);
-
-  await act(async () => {
-    const popped = new Promise<void>(resolve => window.addEventListener('popstate', () => resolve(), { once: true }));
-    window.history.back();
-    await popped;
-  });
-  expect(window.location.pathname).toBe('/hr/employees');
 
   await click('#desktop-sidebar nav a[href="/overview"]');
   expect(container.querySelector('#workspace')).not.toBeNull();
@@ -152,8 +145,13 @@ test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER'] as const)('%s login has profile but
 
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   expect(container.querySelector('a[href="/hr/employees"]')).toBeNull();
+  if (role === 'DEPARTMENT_MANAGER') {
+    expect(container.querySelector('#desktop-sidebar nav a[href="/manager/department"]')?.textContent).toContain('Phòng ban');
+    expect(container.querySelector('#desktop-sidebar nav a[href="/manager/approvals"]')).toBeNull();
+    expect(container.querySelector('#desktop-sidebar nav a[href="/hr/kpi-inputs"]')).toBeNull();
+  }
 
-  await click('#desktop-sidebar nav a[href="/app/profile"]');
+  expect(container.querySelector('#desktop-sidebar .workspace-sidebar-account')).not.toBeNull();
   expect(container.textContent).toContain('current@example.test');
 });
 

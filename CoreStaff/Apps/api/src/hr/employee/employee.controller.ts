@@ -42,7 +42,7 @@ export class EmployeeController {
 		return { success: true, data };
 	}
 
-	@Roles('HR')
+	@Roles('HR', 'DEPARTMENT_MANAGER')
 	@Get()
 	@ApiOperation({ summary: 'List employee profiles in the current tenant.' })
 	@ApiSuccess('Employee profiles in the current tenant.', [employeeReadExample])

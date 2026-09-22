@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, Eye, EyeOff, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus, Copy, Check, Mail } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
@@ -115,8 +115,16 @@ export function EmployeeCreateDialog({
     const formRef = useRef<HTMLFormElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [tempPassword, setTempPassword] = useState<string | null>(null);
-    const [showTempPassword, setShowTempPassword] = useState(false);
-    const [copied, setCopied] = useState(false);
+    const [createdCredentials, setCreatedCredentials] = useState<{
+        email: string;
+        fullName: string;
+        employeeCode: string;
+        tempPassword: string;
+    } | null>(null);
+    const [showTempPassword, setShowTempPassword] = useState(true);
+    const [copiedAll, setCopiedAll] = useState(false);
+    const [copiedEmail, setCopiedEmail] = useState(false);
+    const [copiedPw, setCopiedPw] = useState(false);
     // 'link' is the default so the existing eligible-accounts flow (and its
     // tests/e2e) is untouched; 'new' provisions an EMPLOYEE account (TASK-120).
     const [mode, setMode] = useState<CreateAccountMode>(meMode ? 'new' : 'link');
@@ -183,16 +191,31 @@ export function EmployeeCreateDialog({
         setIsSubmitting(true);
         try {
             const created = await handleCreated();
-            resetForm();
-            // One-time password (provisioning mode) is rendered in the panel once
-            // and never stored — not in a toast, not in localStorage, not in a data
-            // holder on the parent. The panel dies with the dialog.
             const password = (created as { tempPassword?: string } | undefined)?.tempPassword;
-            setTempPassword(password ?? null);
-            setShowTempPassword(false);
-            setCopied(false);
-            toast.success('Tạo hồ sơ thành công', 'Hồ sơ nhân sự đã được tạo.');
-            onCreated(created);
+            if (password) {
+                const creds = {
+                    email: form.email || (created as any).email || '',
+                    fullName: form.fullName || (created as any).fullName || '',
+                    employeeCode: form.employeeCode || (created as any).employeeCode || '',
+                    tempPassword: password,
+                };
+                setCreatedCredentials(creds);
+                setTempPassword(password);
+                setShowTempPassword(true);
+                setCopiedAll(false);
+                setCopiedEmail(false);
+                setCopiedPw(false);
+                resetForm();
+                toast.success('Tạo tài khoản thành công', 'Thông tin đăng nhập đã sẵn sàng để gửi cho nhân viên.');
+                onCreated(created);
+            } else {
+                resetForm();
+                setTempPassword(null);
+                setCreatedCredentials(null);
+                toast.success('Tạo hồ sơ thành công', 'Hồ sơ nhân sự đã được tạo.');
+                onCreated(created);
+                onOpenChange(false);
+            }
         } catch (err) {
             const apiError = mapApiError(err);
             const fieldErrors = mapEmployeeValidationErrors(err);
@@ -204,19 +227,52 @@ export function EmployeeCreateDialog({
             submitting.current = false;
             setIsSubmitting(false);
         }
-    }, [validateAll, handleCreated, resetForm, setErrors, submitting, onCreated]);
+    }, [validateAll, handleCreated, resetForm, setErrors, submitting, onCreated, onOpenChange, form]);
+
+    const copyAll = useCallback(async () => {
+        if (!createdCredentials) return;
+        const lines = [
+            'Thông tin tài khoản hệ thống CoreStaff:',
+            `- Họ và tên: ${createdCredentials.fullName || 'Nhân viên'}`,
+            `- Mã nhân viên: ${createdCredentials.employeeCode}`,
+            `- Email đăng nhập: ${createdCredentials.email}`,
+            `- Mật khẩu khởi tạo: ${createdCredentials.tempPassword}`,
+            '',
+            '* Lưu ý: Bạn sẽ được yêu cầu đổi mật khẩu mới trong lần đăng nhập đầu tiên.',
+        ];
+        try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            setCopiedAll(true);
+            toast.success('Đã sao chép toàn bộ thông tin đăng nhập');
+            setTimeout(() => setCopiedAll(false), 2000);
+        } catch {
+            // Clipboard fallback
+        }
+    }, [createdCredentials]);
+
+    const copyEmail = useCallback(async () => {
+        if (!createdCredentials?.email) return;
+        try {
+            await navigator.clipboard.writeText(createdCredentials.email);
+            setCopiedEmail(true);
+            toast.success('Đã sao chép Email');
+            setTimeout(() => setCopiedEmail(false), 1500);
+        } catch {
+            // Clipboard fallback
+        }
+    }, [createdCredentials]);
 
     const copyPassword = useCallback(async () => {
         if (!tempPassword) return;
         try {
             await navigator.clipboard.writeText(tempPassword);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
+            setCopiedPw(true);
+            toast.success('Đã sao chép Mật khẩu');
+            setTimeout(() => setCopiedPw(false), 1500);
         } catch {
-            // Clipboard may be unavailable in restricted contexts; the code is select-all by hand.
+            // Clipboard fallback
         }
     }, [tempPassword]);
-
 
     return (
         <Dialog
@@ -225,11 +281,12 @@ export function EmployeeCreateDialog({
                 if (!submitting.current) {
                     if (!next) {
                         resetForm();
-                        // The one-time password dies with the dialog — never kept
-                        // after close (not in localStorage, not in any holder).
                         setTempPassword(null);
-                        setShowTempPassword(false);
-                        setCopied(false);
+                        setCreatedCredentials(null);
+                        setShowTempPassword(true);
+                        setCopiedAll(false);
+                        setCopiedEmail(false);
+                        setCopiedPw(false);
                     }
                     onOpenChange(next);
                 }
@@ -247,37 +304,107 @@ export function EmployeeCreateDialog({
 
                 {tempPassword !== null ? (
                     <div className="flex min-h-0 flex-1 flex-col">
-                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-6 sm:px-6">
-                            <Alert>
-                                <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4" />
-                                <AlertTitle>{meMode ? 'Đã tạo hồ sơ của bạn' : 'Đã tạo hồ sơ và tài khoản mới'}</AlertTitle>
-                                <AlertDescription className="mt-0.5">
-                                    Mật khẩu tạm thời bên dưới chỉ hiển thị đúng một lần. Hãy chép ngay và chuyển cho nhân viên ngoài hệ thống; mật khẩu sẽ phải đổi khi đăng nhập lần đầu.
+                        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 sm:px-6">
+                            <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200">
+                                <CheckCircle2 aria-hidden="true" className="mt-0.5 size-5 text-emerald-600 dark:text-emerald-400" />
+                                <AlertTitle className="text-base font-semibold">Tài khoản nhân viên đã được tạo thành công</AlertTitle>
+                                <AlertDescription className="mt-1 text-sm text-emerald-900/90 dark:text-emerald-300">
+                                    Dưới đây là thông tin đăng nhập cho nhân viên mới. Mật khẩu khởi tạo bên dưới chỉ xuất hiện <strong>đúng 1 lần duy nhất</strong> này, hãy sao chép và gửi ngay cho nhân viên.
                                 </AlertDescription>
                             </Alert>
-                            <div>
-                                <FormLabel htmlFor="create-temp-password">Mật khẩu tạm thời (một lần)</FormLabel>
-                                <div className="flex gap-2">
-                                    <code id="create-temp-password" className="min-h-11 min-w-0 flex-1 select-all overflow-x-auto rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-base font-semibold tracking-wide">{showTempPassword ? tempPassword : '••••••••••••'}</code>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="min-h-11"
-                                        onClick={() => setShowTempPassword((visible) => !visible)}
-                                        aria-label={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                                        title={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                                    >
-                                        {showTempPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-                                        <span className="sr-only">{showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</span>
-                                    </Button>
-                                    <Button type="button" variant="outline" className="min-h-11" onClick={() => void copyPassword()}>
-                                        {copied ? 'Đã chép' : 'Chép'}
-                                    </Button>
+
+                            <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-sm">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground">Họ và tên nhân viên</p>
+                                        <p className="text-base font-semibold text-foreground mt-0.5">
+                                            {createdCredentials?.fullName || '—'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground">Mã nhân viên</p>
+                                        <p className="text-base font-mono font-semibold text-foreground mt-0.5">
+                                            {createdCredentials?.employeeCode || '—'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 pt-3 border-t border-border/70">
+                                    <div className="flex items-center justify-between">
+                                        <FormLabel htmlFor="create-login-email">Tài khoản đăng nhập (Email / Gmail)</FormLabel>
+                                        <button
+                                            type="button"
+                                            onClick={() => void copyEmail()}
+                                            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium cursor-pointer"
+                                        >
+                                            {copiedEmail ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                                            {copiedEmail ? 'Đã chép Email' : 'Sao chép Email'}
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-3.5 py-2.5">
+                                        <Mail className="size-4 text-muted-foreground shrink-0" />
+                                        <span id="create-login-email" className="font-mono text-sm font-medium text-foreground select-all break-all flex-1">
+                                            {createdCredentials?.email || '—'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 pt-3 border-t border-border/70">
+                                    <div className="flex items-center justify-between">
+                                        <FormLabel htmlFor="create-temp-password">Mật khẩu khởi tạo (Mật khẩu một lần)</FormLabel>
+                                        <button
+                                            type="button"
+                                            onClick={() => void copyPassword()}
+                                            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium cursor-pointer"
+                                        >
+                                            {copiedPw ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                                            {copiedPw ? 'Đã chép mật khẩu' : 'Sao chép mật khẩu'}
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <code
+                                            id="create-temp-password"
+                                            className="min-h-11 min-w-0 flex-1 select-all overflow-x-auto rounded-lg border border-border bg-muted/50 px-3.5 py-2.5 text-base font-semibold tracking-wide font-mono text-foreground"
+                                        >
+                                            {showTempPassword ? tempPassword : '••••••••••••'}
+                                        </code>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="min-h-11 shrink-0"
+                                            onClick={() => setShowTempPassword((visible) => !visible)}
+                                            aria-label={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                            title={showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                        >
+                                            {showTempPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+                                            <span className="sr-only">{showTempPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</span>
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+                                    ⚠️ <strong>Lưu ý:</strong> Mật khẩu này chỉ cấp một lần. Khi đăng nhập lần đầu, nhân viên sẽ được yêu cầu đổi mật khẩu mới để bảo mật tài khoản.
                                 </div>
                             </div>
                         </div>
-                        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-popover px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-                            <Button type="button" className="min-h-11" onClick={() => onOpenChange(false)}>Đóng</Button>
+
+                        <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border bg-popover px-5 py-4 sm:px-6">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="min-h-11"
+                                onClick={() => onOpenChange(false)}
+                            >
+                                Đóng
+                            </Button>
+                            <Button
+                                type="button"
+                                className="min-h-11 gap-2"
+                                onClick={() => void copyAll()}
+                            >
+                                {copiedAll ? <Check className="size-4" /> : <Copy className="size-4" />}
+                                <span>{copiedAll ? 'Đã sao chép tất cả thông tin' : 'Sao chép toàn bộ thông tin đăng nhập'}</span>
+                            </Button>
                         </div>
                     </div>
                 ) : (

@@ -105,10 +105,10 @@
   <text x="420" y="591" font-size="13" font-weight="800" fill="#1e40af" text-anchor="middle">Xác nhận bảng công phòng</text>
   <text x="420" y="607" font-size="10" fill="#1e3a8a" text-anchor="middle">(Confirm Department Timesheet)</text>
 
-  <!-- 7. View Own Payslip -->
+  <!-- 7. Evaluate Department KPI (Manager draft; HR confirms) -->
   <ellipse cx="420" cy="675" rx="100" ry="26" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.8" filter="url(#shadow)" />
-  <text x="420" y="672" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Xem phiếu lương cá nhân</text>
-  <text x="420" y="687" font-size="10" fill="#475569" text-anchor="middle">(View Own Released Payslip)</text>
+  <text x="420" y="672" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Đánh giá KPI nhân sự phòng</text>
+  <text x="420" y="687" font-size="10" fill="#475569" text-anchor="middle">(Draft KPI; HR Confirms)</text>
 
   <!-- Note Box for Manager Rules -->
   <g filter="url(#shadow)">

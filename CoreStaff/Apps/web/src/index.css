@@ -23,6 +23,10 @@
     min-height: 100%;
   }
 
+  [data-portal] {
+    z-index: 9999 !important;
+  }
+
   body {
     margin: 0;
     @apply bg-background text-foreground;
@@ -47,6 +51,26 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* Sleek modern scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
   }
 }
 

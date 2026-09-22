@@ -157,6 +157,35 @@ Topbar
 
 Frontend filter dựa trên `user.role`. Backend vẫn enforce authorization.
 
+### Department Manager Navigation — D36
+
+Desktop sidebar dùng cấu trúc cố định:
+
+```text
+Cá nhân
+├── Chấm công hôm nay
+├── Lịch sử công
+└── Nghỉ phép & OT
+
+Quản lý
+└── Phòng ban
+```
+
+- `Phòng ban` là một destination cấp một, không tách `Queue phê duyệt` và `Đánh giá KPI phòng` thành hai sidebar items.
+- Trong workspace Phòng ban dùng `Tabs`: **Phê duyệt** và **Đánh giá nhân sự**.
+- “Đánh giá nhân sự” hiển thị subtitle **Đánh giá KPI kỳ lương**, tránh hiểu nhầm thành performance review đầy đủ.
+- Profile/logout nằm trong account menu, không thêm vào ba mục Cá nhân đã chốt.
+
+Mobile web (`< md`) dùng bottom navigation:
+
+```text
+Chấm công | Lịch sử | Đơn từ | Phòng ban
+```
+
+- `Phòng ban` mở màn hình full-width; hai tab con dùng segmented control sticky.
+- Không đặt nested menu trong bottom navigation.
+- React Native/Expo chỉ port pattern này sau khi responsive web đã được nghiệm thu.
+
 ### Breadcrumb
 
 Dùng breadcrumb khi user navigate sâu >= 2 levels:
@@ -1800,6 +1829,48 @@ function ProfileCard({ user }: ProfileProps) {}
 │                    │
 └────────────────────┘
 ```
+
+### 7. Department Manager — Phòng ban
+
+#### Desktop
+
+```text
+┌─ Phòng ban ──────────────────────────────────────────┐
+│ Department selector (nếu quản lý > 1 phòng)          │
+│ [Nhân viên] [Công chờ duyệt] [OT chờ duyệt] [KPI]  │
+│ [ Phê duyệt ] [ Đánh giá nhân sự ]                  │
+│ ──────────────────────────────────────────────────── │
+│ Toolbar + table + pagination                         │
+└──────────────────────────────────────────────────────┘
+```
+
+- Approval table mở dialog/side sheet chi tiết.
+- KPI tái sử dụng pattern table hiện có nhưng chỉ load managed scope.
+- Không hiển thị trường salary/contract/private identifiers.
+
+#### Mobile web
+
+```text
+┌──────────────────────┐
+│ Phòng ban      [ENG▼]│
+│ [Phê duyệt|Đánh giá] │ ← sticky segmented control
+│ 🔍 Tìm kiếm   [Lọc]  │
+│ ┌─ Request card ────┐│
+│ │ NV · loại · ngày  ││
+│ │ trạng thái        ││
+│ │ Xem chi tiết →    ││
+│ └───────────────────┘│
+│                      │
+│ Chấm │ LS │ Đơn │ PB │ ← bottom navigation
+└──────────────────────┘
+```
+
+- Queue/KPI dùng card list, không horizontal table.
+- Filter dùng Sheet/full-screen modal; department selector ở header.
+- Detail là full-screen sheet/page; approval actions nằm trong sticky bottom action bar.
+- Nội dung phải có bottom padding bằng tổng chiều cao bottom nav/action bar + safe spacing.
+- Test tối thiểu 360px và các breakpoint 375/768/1024/1440px.
+- Expo không bắt đầu cho đến khi blueprint desktop/mobile web này được nghiệm thu.
 
 ---
 

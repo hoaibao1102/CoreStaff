@@ -15,6 +15,7 @@ import { SalaryProfilesScreen } from '../screens/SalaryProfiles/SalaryProfilesSc
 import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
+import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
 import type { ApiSource, HealthResponse } from '../config/api';
@@ -99,9 +100,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
-    route === '/hr/kpi-inputs' ||
     route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
+    return <EmployeeDataState status="forbidden" />;
+  }
+
+  if (route === '/hr/kpi-inputs' && user.role !== 'HR' && user.role !== 'DEPARTMENT_MANAGER') {
     return <EmployeeDataState status="forbidden" />;
   }
 
@@ -183,7 +187,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/attendance-bonus-policies' ? (
             <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
           ) : route === '/hr/kpi-inputs' ? (
-            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" />
+            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" userRole={user.role} />
           ) : route === '/hr/policies/labor-compliance' ? (
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
@@ -220,7 +224,18 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  if (user.role === 'EMPLOYEE' && route === '/app/attendance/history') {
+  if (user.role === 'DEPARTMENT_MANAGER' && (route === '/manager/department' || route === '/manager/approvals' || route === '/hr/kpi-inputs')) {
+    const initialTab = route === '/hr/kpi-inputs' ? 'evaluations' : 'approvals';
+    return (
+      <WorkspaceShell user={user} currentPath="/manager/department" onLogout={onLogout}>
+        <section className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+          <ManagerDepartmentScreen apiBase={apiBase} initialTab={initialTab} />
+        </section>
+      </WorkspaceShell>
+    );
+  }
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/attendance/history') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
         <div className="mx-auto w-full max-w-md md:max-w-2xl px-3 py-2 sm:px-6 sm:py-6">
@@ -230,7 +245,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  if (user.role === 'EMPLOYEE' && route === '/app/leave') {
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave') {
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 

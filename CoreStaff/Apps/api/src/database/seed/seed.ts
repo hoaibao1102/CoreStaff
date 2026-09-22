@@ -167,9 +167,9 @@ async function main(): Promise<void> {
       );
     }
     for (const item of [
-      { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', defaultTaxable: false, defaultInsuranceBased: false },
-      { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', defaultTaxable: false, defaultInsuranceBased: false },
-      { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', defaultTaxable: true, defaultInsuranceBased: false },
+      { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', description: 'Hỗ trợ chi phí ăn trưa các ngày làm việc thực tế trong tháng', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', description: 'Hỗ trợ chi phí xăng xe đi lại theo vị trí và tính chất công việc', defaultTaxable: false, defaultInsuranceBased: false },
+      { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', description: 'Hỗ trợ cước viễn thông liên lạc phục vụ công việc', defaultTaxable: true, defaultInsuranceBased: false },
     ]) await AllowanceCatalog.updateOne({ code: item.code }, { $setOnInsert: { ...item, active: true } }, { upsert: true });
     await BonusTemplate.updateOne(
       { code: 'ATTENDANCE_100_70_50' },

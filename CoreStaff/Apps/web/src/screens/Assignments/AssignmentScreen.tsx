@@ -14,6 +14,7 @@ import { AssignmentDetailDialog } from './AssignmentDetailDialog';
 import { AssignmentEditDialog } from './AssignmentEditDialog';
 import { AssignmentActivateDialog } from './AssignmentActivateDialog';
 import { AssignmentDeactivateDialog } from './AssignmentDeactivateDialog';
+import { ManagerAssignmentsPanel } from './ManagerAssignmentsPanel';
 
 type StatusFilter = 'active' | 'inactive';
 const PAGE_SIZE = 10;
@@ -92,8 +93,9 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
   const visibleRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const resetFilters = () => { setStatus('active'); setWorkplaceId(''); setPage(1); };
 
-  return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+  return <div className="space-y-8">
+    <ManagerAssignmentsPanel apiBase={apiBase} />
+    <div className="flex flex-col justify-between gap-4 border-t border-border pt-8 sm:flex-row sm:items-start">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Quản lý phân công</h1>
         <p className="mt-2 text-sm text-muted-foreground">Quản lý phòng ban, nơi làm việc và thời gian phân công của nhân viên</p>

@@ -90,8 +90,8 @@
   <text x="810" y="276" font-size="9" fill="#475569" text-anchor="middle">(POLICY: Labor/OT/Insurance/Tax)</text>
 
   <ellipse cx="1025" cy="265" rx="95" ry="24" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
-  <text x="1025" y="263" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Lương, Phụ cấp &amp; Chuyên cần</text>
-  <text x="1025" y="276" font-size="9" fill="#475569" text-anchor="middle">(COMP: Salary, Hybrid Allowance)</text>
+  <text x="1025" y="263" font-size="11" font-weight="700" fill="#0f172a" text-anchor="middle">Lương, Phụ cấp &amp; KPI</text>
+  <text x="1025" y="276" font-size="9" fill="#475569" text-anchor="middle">(COMP: Salary, Allowance, KPI Draft/Confirm)</text>
 
   <ellipse cx="920" cy="355" rx="100" ry="25" fill="url(#ucGrad)" stroke="#1e293b" stroke-width="1.6" filter="url(#shadow)" />
   <text x="920" y="352" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="middle">Cấu hình ca Full-time &amp; Lịch</text>

@@ -58,6 +58,14 @@ async function openApp(page: Page, role = 'HR', path = '/overview') {
       employeeCode: 'NV-001', fullName: user.fullName, employmentType: 'FULL_TIME',
       employmentStatus: 'ACTIVE', joinDate: '2026-01-01',
     };
+    if (url.pathname.endsWith('/manager/context')) data = {
+      managerUserId: user.id,
+      managedDepartments: [{ id: 'dept-1', code: 'ENG', name: 'Kỹ thuật' }],
+      defaultDepartmentId: 'dept-1',
+      capabilities: ['manager:employees:read', 'manager:approvals:write', 'manager:kpi:draft'],
+    };
+    if (url.pathname.endsWith('/manager/employees')) data = [{ id: 'employee', userId: 'employee-user', employeeCode: 'NV-001', fullName: 'Nhân viên A', departmentId: 'dept-1', employmentStatus: 'ACTIVE' }];
+    if (url.pathname.endsWith('/manager/approvals')) data = [];
     await route.fulfill({ json: url.pathname.endsWith('/healthz')
       ? { status: 'ok', mongo: 'configured', service: 'corestaff-api', timezone: 'Asia/Ho_Chi_Minh' }
       : { success: true, data } });
@@ -232,7 +240,9 @@ for (const role of ['HR', 'EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN']) {
     const nav = page.locator('#desktop-sidebar nav');
     await expect(nav.locator('[aria-current="page"]')).toHaveCount(role === 'SYSTEM_ADMIN' ? 0 : 1);
     await expect(nav.locator('a[href="/hr/employees"]')).toHaveCount(role === 'HR' ? 1 : 0);
-    await expect(nav.locator('a[href="/manager/approvals"]')).toHaveCount(role === 'DEPARTMENT_MANAGER' ? 1 : 0);
+    await expect(nav.locator('a[href="/manager/department"]')).toHaveCount(role === 'DEPARTMENT_MANAGER' ? 1 : 0);
+    await expect(nav.locator('a[href="/manager/approvals"]')).toHaveCount(0);
+    await expect(nav.locator('a[href="/hr/kpi-inputs"]')).toHaveCount(role === 'HR' ? 1 : 0);
     await expect(nav.locator('a[href="/platform/organizations"]')).toHaveCount(role === 'SYSTEM_ADMIN' ? 1 : 0);
     if (role !== 'SYSTEM_ADMIN') await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', role === 'HR' ? '/hr/employees' : '/app/attendance/history');
     if (role === 'HR') {
@@ -246,6 +256,24 @@ for (const role of ['HR', 'EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN']) {
     await noOverflow(page);
   });
 }
+
+test('department manager responsive workspace uses desktop tabs and four mobile destinations', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(page, 'DEPARTMENT_MANAGER', '/manager/department');
+  await expect(page.getByRole('heading', { name: 'Phòng ban', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Phê duyệt' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Đánh giá nhân sự' })).toBeVisible();
+  await expect(page.locator('#desktop-sidebar').getByRole('link', { name: 'Phòng ban' })).toBeVisible();
+  await noOverflow(page);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  const mobileNav = page.getByRole('navigation', { name: 'Thanh điều hướng nhân viên' });
+  for (const label of ['Chấm công', 'Lịch sử', 'Đơn từ', 'Phòng ban']) {
+    await expect(mobileNav.getByRole('link', { name: label })).toBeVisible();
+  }
+  await expect(page.locator('#desktop-sidebar')).toBeHidden();
+  await noOverflow(page);
+});
 
 test('short viewport scrolls navigation only and respects reduced motion', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 440 });

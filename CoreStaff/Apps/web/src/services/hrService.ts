@@ -234,6 +234,28 @@ export const HR_ERROR_CODES: Record<string, string> = {
     EMPLOYEE_DOCUMENT_FILE_TOO_LARGE: 'Tệp quá lớn. Giới hạn tải lên là 10 MB.',
     EMPLOYEE_DOCUMENT_TYPE_NOT_ALLOWED: 'Định dạng tệp không được hỗ trợ. Chỉ chấp nhận PDF, ảnh hoặc tài liệu văn phòng.',
 
+    // Compensation errors (TASK-031..035)
+    SALARY_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ lương.',
+    INVALID_PROBATION_SALARY: 'Lương thử việc không hợp lệ.',
+    PROBATION_SALARY_BELOW_MINIMUM: 'Lương thử việc thấp hơn mức tối thiểu theo quy định chính sách lao động.',
+    EFFECTIVE_DATE_RANGE_INVALID: 'Khoảng thời gian hiệu lực không hợp lệ.',
+    EFFECTIVE_DATE_OVERLAP: 'Khoảng thời gian hiệu lực bị trùng với hồ sơ hiện có.',
+    ALLOWANCE_CROSS_TENANT_FORBIDDEN: 'Phụ cấp được chọn không thuộc tổ chức hiện tại hoặc đã hết hiệu lực.',
+    ATTENDANCE_BONUS_POLICY_INVALID: 'Chính sách thưởng chuyên cần không hợp lệ.',
+    LABOR_POLICY_NOT_FOUND: 'Không tìm thấy chính sách tuân thủ lao động có hiệu lực.',
+    ALLOWANCE_CATALOG_NOT_FOUND: 'Không tìm thấy phụ cấp trong danh mục chuẩn.',
+    ALLOWANCE_CODE_NAME_REQUIRED: 'Vui lòng nhập mã và tên phụ cấp.',
+    ALLOWANCE_CODE_TAKEN: 'Mã phụ cấp này đã được sử dụng trong tổ chức.',
+    ORGANIZATION_ALLOWANCE_NOT_FOUND: 'Không tìm thấy phụ cấp của tổ chức.',
+    ATTENDANCE_BONUS_TEMPLATE_NOT_FOUND: 'Không tìm thấy mẫu thưởng chuyên cần.',
+    ATTENDANCE_BONUS_POLICY_NOT_FOUND: 'Không tìm thấy chính sách thưởng chuyên cần.',
+    ATTENDANCE_BONUS_AMOUNT_INVALID: 'Số tiền thưởng chuyên cần không hợp lệ.',
+    ATTENDANCE_BONUS_PERCENTAGE_INVALID: 'Tỷ lệ phần trăm thưởng chuyên cần phải từ 0 đến 100%.',
+    KPI_INPUT_NOT_FOUND: 'Không tìm thấy dữ liệu KPI.',
+    KPI_INPUT_ALREADY_EXISTS: 'Nhân viên này đã có dữ liệu KPI trong kỳ lương được chọn.',
+    KPI_INPUT_CONFIRMED_IMMUTABLE: 'Dữ liệu KPI đã được xác nhận và không thể chỉnh sửa.',
+    KPI_INPUT_NOT_DRAFT: 'Chỉ có thể xác nhận bản ghi KPI ở trạng thái Nháp.',
+
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
 

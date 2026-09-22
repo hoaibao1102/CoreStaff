@@ -129,19 +129,17 @@ CoreStaff giải quyết toàn bộ vòng đời từ lúc nhân viên chấm c�
 ### 5.2. Department Manager (`DEPARTMENT_MANAGER`) — Quản lý phòng ban
 
 - Là nhân viên có thêm quyền quản lý và sử dụng cùng một tài khoản cho cả hai phạm vi.
-- Check-in/check-out, xem lịch sử và điều chỉnh công cá nhân qua mục **Công của tôi** khi có assignment hợp lệ.
-- Không được tự duyệt yêu cầu chấm công hoặc AdjustmentRequest của chính mình; request phải chuyển cho HR/người quản lý khác đủ quyền.
-- Xem yêu cầu thuộc các nhân viên được phân công quản lý.
-- Tìm kiếm và lọc yêu cầu theo nhân viên, trạng thái, ngày và phương thức.
-- Xem ảnh Selfie, tọa độ GPS, độ chính xác và thời gian server.
-- Xem cảnh báo như chấm công ngoài geofence hoặc hai địa điểm cách xa nhau.
-- Phê duyệt bản ghi hợp lệ.
-- Từ chối và bắt buộc nhập lý do.
-- Yêu cầu nhân viên giải trình.
-- Xem phản hồi của nhân viên và đưa ra quyết định cuối cùng.
-- Approve/reject LeaveRequest đúng department scope; không tự duyệt.
-- Theo dõi audit timeline của yêu cầu.
-- Xác nhận dữ liệu phòng ban đã sẵn sàng để chốt công.
+- Nhóm **Cá nhân** gồm: **Chấm công hôm nay**, **Lịch sử công**, **Nghỉ phép & OT**.
+- Nhóm **Quản lý** có một mục **Phòng ban**, gồm hai tab **Phê duyệt** và **Đánh giá nhân sự**.
+- Tab **Phê duyệt** xử lý Selfie/ngoại lệ/adjustment/giải trình và OT; Network/GPS hợp lệ không phải duyệt từng ngày.
+- Tab **Đánh giá nhân sự** trong MVP là KPI kỳ lương: manager tạo/sửa `DRAFT`, HR `CONFIRMED`; không phải performance review đầy đủ.
+- Chỉ xem nhân viên/yêu cầu/KPI thuộc một hoặc nhiều Department được giao qua `ManagerAssignment` có hiệu lực.
+- Không được tự duyệt yêu cầu của chính mình; request phải chuyển theo ApprovalDelegation hoặc HR queue.
+- Xem Selfie, GPS, accuracy, server time, cảnh báo và audit timeline trong request đúng scope.
+- Approve, Reject có lý do hoặc Request Clarification; duyệt khung giờ OT nhưng backend tự phân loại OT.
+- Approve/reject LeaveRequest đúng department scope và xác nhận dữ liệu phòng ban đã sẵn sàng để chốt công.
+- Không xem lương, hợp đồng, tài liệu private hoặc định danh thuế/bảo hiểm của nhân viên trong phòng.
+- Responsive web được hoàn thiện/nghiệm thu ở desktop và mobile viewport trước; Expo chỉ port sau bằng cùng API contract.
 
 ### 5.3. HR (`HR`) — Nhân sự / Payroll Officer
 
@@ -241,14 +239,13 @@ CoreStaff giải quyết toàn bộ vòng đời từ lúc nhân viên chấm c�
 
 ### 6.5. Approval and Clarification Workflow
 
-- Selfie tạo yêu cầu phê duyệt tự động.
-- GPS bất thường có thể tạo yêu cầu xem xét.
-- Department Manager xem danh sách yêu cầu trong phạm vi quản lý.
-- Approve, Reject hoặc Request Clarification.
-- Reject bắt buộc có lý do.
-- Request Clarification bắt buộc có nội dung.
+- Selfie tạo yêu cầu phê duyệt tự động; GPS bất thường tự tạo request là SHOULD.
+- Network/GPS hợp lệ theo policy không cần manager duyệt từng ngày.
+- Department Manager vào **Phòng ban → Phê duyệt** để xem Selfie/ngoại lệ/adjustment/giải trình và OT thuộc `managedDepartmentIds`.
+- Approve, Reject hoặc Request Clarification; Reject/Clarification bắt buộc có nội dung.
 - Nhân viên gửi phản hồi; yêu cầu trở lại trạng thái Pending.
-- Quyết định được lưu trong transaction và có audit trail.
+- Quyết định dùng expected version, lưu transaction/audit và trả conflict nếu request đã được xử lý.
+- Manager không tự duyệt và không thể dùng `departmentId` từ client để vượt `ManagerAssignment`.
 
 ### 6.6. Attendance History and Calculation
 
@@ -492,7 +489,7 @@ Employee gửi OT không chọn loại
 | Layer | Suggested Technology |
 |---|---|
 | Web MVP | ReactJS + TypeScript + Vite + responsive CSS/Tailwind CSS |
-| Mobile 【SHOULD】 | React Native + Expo + TypeScript; chỉ Employee hero flow |
+| Mobile 【SHOULD】 | React Native + Expo + TypeScript; port Employee + Department Manager flow sau khi responsive web desktop/mobile đã nghiệm thu |
 | Backend | NestJS + TypeScript + Mongoose + Swagger/OpenAPI |
 | Database | MongoDB replica set; transaction và compound indexes tenant-scoped |
 | Authentication | HttpOnly cookie cho web; SecureStore cho mobile; refresh/session rotation |
@@ -529,7 +526,7 @@ Employee gửi OT không chọn loại
 - Theo dõi vị trí liên tục trong nền.
 - Chấm công offline và đồng bộ sau.
 - Máy chấm công vân tay.
-- Ứng dụng native iOS/Android.
+- React Native/Expo trước khi responsive web desktop/mobile được nghiệm thu; native mobile là phase SHOULD sau Mốc Web, không phải acceptance gate của Web MVP.
 - Billing/subscription SaaS.
 
 ---

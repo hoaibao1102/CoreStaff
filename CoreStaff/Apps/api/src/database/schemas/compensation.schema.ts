@@ -35,6 +35,11 @@ export class LaborCompliancePolicy {
 export const LaborCompliancePolicySchema = SchemaFactory.createForClass(LaborCompliancePolicy);
 LaborCompliancePolicySchema.index({ organizationId: 1, effectiveFrom: -1 });
 
+export interface EmployeeAssignedAllowance {
+  allowanceId: string;
+  amount: number;
+}
+
 /** OT categories backend derives from the Calendar (§30D.2:2610). No OT_SUNDAY. */
 export const OvertimeType = {
   WORKING_DAY: 'OT_WORKING_DAY',
@@ -79,6 +84,14 @@ export class SalaryProfile {
   @Prop({ min: 1 }) probationAgreedSalary?: number;
   @Prop({ min: 0, max: 1 }) probationRate?: number;
   @Prop({ type: ['ObjectId'], ref: 'OrganizationAllowance', default: [] }) organizationAllowanceIds: string[];
+  @Prop({
+    type: [{
+      allowanceId: { type: 'ObjectId', ref: 'OrganizationAllowance' },
+      amount: { type: Number, default: 0 },
+    }],
+    default: [],
+  })
+  allowances?: EmployeeAssignedAllowance[];
   @Prop({ type: 'ObjectId', ref: 'AttendanceBonusPolicy' }) attendanceBonusPolicyId?: string;
   @Prop({ required: true, enum: ['VND'], default: 'VND' }) currency: 'VND';
   @Prop({ required: true, enum: ['ROUND_HALF_UP_TO_VND'], default: 'ROUND_HALF_UP_TO_VND' }) roundingRule: string;
@@ -93,6 +106,7 @@ SalaryProfileSchema.index({ organizationId: 1, employeeProfileId: 1, effectiveFr
 export class AllowanceCatalog {
   @Prop({ required: true, trim: true, uppercase: true }) code: string;
   @Prop({ required: true }) defaultName: string;
+  @Prop({ required: false }) description?: string;
   @Prop({ required: true, default: true }) defaultTaxable: boolean;
   @Prop({ required: true, default: false }) defaultInsuranceBased: boolean;
   @Prop({ required: true, default: true }) active: boolean;
@@ -106,7 +120,8 @@ export class OrganizationAllowance {
   @Prop({ type: 'ObjectId', ref: 'AllowanceCatalog' }) catalogId?: string;
   @Prop({ required: true, trim: true, uppercase: true }) code: string;
   @Prop({ required: true }) name: string;
-  @Prop({ required: true, min: 0 }) amount: number;
+  @Prop({ required: false }) description?: string;
+  @Prop({ required: false, min: 0, default: 0 }) amount?: number;
   @Prop({ required: true }) taxable: boolean;
   @Prop({ required: true }) insuranceBased: boolean;
   @Prop({ required: true, default: false }) prorated: boolean;
@@ -143,16 +158,48 @@ export class AttendanceBonusPolicy {
   @Prop({ type: Date }) effectiveTo?: Date;
   @Prop({ required: true, min: 1, default: 1 }) version: number;
   @Prop({ required: true, default: true }) active: boolean;
+  @Prop({ type: String, enum: ['ALL', 'DEPARTMENT'], default: 'ALL' }) scope?: string;
+  @Prop({ type: [{ type: 'ObjectId', ref: 'Department' }], default: [] }) departmentIds?: string[];
 }
 export const AttendanceBonusPolicySchema = SchemaFactory.createForClass(AttendanceBonusPolicy);
 AttendanceBonusPolicySchema.index({ organizationId: 1, effectiveFrom: -1 });
+
+export interface KpiTier {
+  name: string; // e.g. "Đạt", "Chưa đạt", "Loại A", "Loại B"
+  percentage: number; // 0-100+
+  minScore?: number;
+  maxScore?: number;
+  order: number;
+}
+
+@Schema({ collection: 'kpi_policies', timestamps: true })
+export class KpiPolicy {
+  @Prop({ type: 'ObjectId', ref: 'Organization', required: true }) organizationId: string;
+  @Prop({ required: true }) name: string;
+  @Prop({ required: true, enum: ['PASS_FAIL', 'GRADE', 'SCORE_RANGE'], default: 'GRADE' }) policyType: string;
+  @Prop({ required: true, min: 0 }) baseAmount: number;
+  @Prop({ type: Array, required: true }) tiers: KpiTier[];
+  @Prop({ required: true, type: Date }) effectiveFrom: Date;
+  @Prop({ type: Date }) effectiveTo?: Date;
+  @Prop({ required: true, min: 1, default: 1 }) version: number;
+  @Prop({ required: true, default: true }) active: boolean;
+  @Prop({ type: String, enum: ['ALL', 'DEPARTMENT'], default: 'ALL' }) scope?: string;
+  @Prop({ type: [{ type: 'ObjectId', ref: 'Department' }], default: [] }) departmentIds?: string[];
+}
+export const KpiPolicySchema = SchemaFactory.createForClass(KpiPolicy);
+KpiPolicySchema.index({ organizationId: 1, effectiveFrom: -1 });
 
 @Schema({ collection: 'kpi_payroll_inputs', timestamps: true })
 export class KpiPayrollInput {
   @Prop({ type: 'ObjectId', ref: 'Organization', required: true }) organizationId: string;
   @Prop({ type: 'ObjectId', ref: 'EmployeeProfile', required: true }) employeeProfileId: string;
+  @Prop({ type: 'ObjectId', ref: 'Department' }) departmentId?: string;
+  @Prop({ type: 'ObjectId', ref: 'KpiPolicy' }) policyId?: string;
   @Prop({ required: true, match: /^\d{4}-(0[1-9]|1[0-2])$/ }) period: string;
   @Prop({ min: 0 }) score?: number;
+  @Prop() tierName?: string;
+  @Prop({ min: 0 }) tierPercentage?: number;
+  @Prop({ min: 0 }) baseAmount?: number;
   @Prop({ required: true, min: 0 }) amount: number;
   @Prop({ required: true, enum: Object.values(KpiSource), default: KpiSource.MANUAL }) source: KpiSource;
   @Prop({ maxlength: 1000 }) note?: string;
@@ -160,6 +207,9 @@ export class KpiPayrollInput {
   @Prop({ required: true, min: 1, default: 1 }) version: number;
   @Prop({ type: Date }) confirmedAt?: Date;
   @Prop({ type: 'ObjectId', ref: 'User' }) confirmedBy?: string;
+  @Prop({ type: 'ObjectId', ref: 'User' }) evaluatedBy?: string;
+  @Prop({ type: Date }) evaluatedAt?: Date;
 }
 export const KpiPayrollInputSchema = SchemaFactory.createForClass(KpiPayrollInput);
 KpiPayrollInputSchema.index({ organizationId: 1, employeeProfileId: 1, period: 1 }, { unique: true });
+
