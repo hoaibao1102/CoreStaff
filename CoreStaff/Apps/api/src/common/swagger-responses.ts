@@ -173,33 +173,6 @@ export const employmentHistoryExample = {
 	createdAt: '2026-09-15T03:20:00.000Z',
 };
 
-/** TASK-028 — SRS §30A.2. */
-export const contractExample = {
-	_id: '66f1b2c3d4e5f60718293f01',
-	organizationId: '66f1b2c3d4e5f60718293a40',
-	employeeId: '66f1b2c3d4e5f60718293d01',
-	contractType: 'FIXED_TERM',
-	startDate: '2026-09-25T00:00:00.000Z',
-	endDate: '2027-09-24T00:00:00.000Z',
-	createdAt: '2026-09-22T03:20:00.000Z',
-	updatedAt: '2026-09-22T03:20:00.000Z',
-};
-
-/** TASK-032 — SRS §30D.1. */
-export const salaryProfileExample = {
-	_id: '66f1b2c3d4e5f60718293f02',
-	organizationId: '66f1b2c3d4e5f60718293a40',
-	employeeId: '66f1b2c3d4e5f60718293d01',
-	effectiveFrom: '2026-09-25T00:00:00.000Z',
-	baseSalary: 15000000,
-	insuranceSalary: 15000000,
-	currency: 'VND',
-	roundingRule: 'ROUND_HALF_UP_TO_VND',
-	version: 1,
-	createdAt: '2026-09-22T03:20:00.000Z',
-	updatedAt: '2026-09-22T03:20:00.000Z',
-};
-
 /** TASK-038 — field shape is an engineering proposal, see insurance-profile.schema.ts. */
 export const insuranceProfileExample = {
 	_id: '66f1b2c3d4e5f60718293f03',

@@ -5,14 +5,13 @@ import { EmployeeModule } from './employee/employee.module';
 import { WorkplaceModule } from './workplace/workplace.module';
 import { ShiftTemplateModule } from './shift-template/shift-template.module';
 import { AssignmentModule } from './assignment/assignment.module';
-import { ContractModule } from './contract/contract.module';
-import { SalaryProfileModule } from './salary-profile/salary-profile.module';
 import { InsuranceProfileModule } from './insurance-profile/insurance-profile.module';
 import { InsurancePolicyModule } from './insurance-policy/insurance-policy.module';
 /**
  * HR Core (TASK-020..023, Sprint 2): Department/Position/Workplace catalogs + EmployeeProfile.
- * Contract/Salary/Insurance (TASK-028/032/038/039, Sprint 3): see Docs/DOCS_DECISION_LOG.md
- * for the 2026-09-22 scope decision on what this sprint slice does and does not cover.
+ * Insurance (TASK-038/039, Sprint 3): see Docs/DOCS_DECISION_LOG.md D32 for scope notes.
+ * Contract (TASK-028) and SalaryProfile (TASK-032) are owned by `hr/employment-contract`
+ * and `hr/compensation` (merged from origin/deploy, 2026-09-22) — not duplicated here.
  */
 @Module({
 	imports: [
@@ -22,8 +21,6 @@ import { InsurancePolicyModule } from './insurance-policy/insurance-policy.modul
 		WorkplaceModule,
 		ShiftTemplateModule,
 		AssignmentModule,
-		ContractModule,
-		SalaryProfileModule,
 		InsuranceProfileModule,
 		InsurancePolicyModule,
 	],
