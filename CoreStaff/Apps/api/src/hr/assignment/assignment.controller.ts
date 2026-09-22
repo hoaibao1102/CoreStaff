@@ -15,8 +15,9 @@ export class AssignmentController {
 
 	@Roles('HR')
 	@Post()
-	@ApiOperation({ summary: 'Assign a user to a department (FR-HRCFG-04). Supports both employee and manager roles.' })
-	@ApiResponse({ status: 409, description: 'OVERLAPPING_ASSIGNMENT_EXISTS or EMPLOYEE_ASSIGNMENT_ALREADY_EXISTS' })
+	@ApiOperation({ summary: 'Assign one or more users to a department/workplace (FR-HRCFG-04). Supports both employee and manager roles.' })
+	@ApiResponse({ status: 201, description: 'Assignment(s) created successfully.' })
+	@ApiResponse({ status: 409, description: 'OVERLAPPING_ASSIGNMENT_EXISTS' })
 	@ApiResponse({ status: 404, description: 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT or USER_NOT_FOUND_IN_TENANT' })
 	async create(
 		@Tenant() organizationId: string | null,
@@ -24,7 +25,7 @@ export class AssignmentController {
 	) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.assignments.create(orgId, null, dto);
-		return { success: true, data };
+		return { success: true, data, count: data.length };
 	}
 
 	@Get()

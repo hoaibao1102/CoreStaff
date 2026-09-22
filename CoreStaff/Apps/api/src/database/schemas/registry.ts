@@ -15,7 +15,7 @@ import { EmployeeAssignmentSchema } from './assignment.schema';
 import {
   SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
   OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
-  AttendanceBonusPolicySchema, KpiPayrollInputSchema, KpiPolicySchema,
+  AttendanceBonusPolicySchema, KpiPayrollInputSchema, KpiPolicySchema, OvertimePayPolicySchema,
 } from './compensation.schema';
 
 /**
@@ -45,6 +45,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
   { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
   { name: 'KpiPolicy', schema: KpiPolicySchema },
+  { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };

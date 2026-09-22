@@ -13,6 +13,7 @@ import {
   KpiStatus,
   LaborCompliancePolicySchema,
   OrganizationAllowanceSchema,
+  OvertimePayPolicySchema,
   SalaryProfileSchema,
 } from '../src/database/schemas/compensation.schema';
 import { EmploymentStatus, Role } from '../src/database/schemas/enums';
@@ -21,6 +22,36 @@ const APPLY = process.argv.includes('--apply');
 const EFFECTIVE_FROM = new Date('2026-09-01T00:00:00.000Z');
 const POLICY_FROM = new Date('2026-01-01T00:00:00.000Z');
 const KPI_PERIOD = '2026-09';
+
+/**
+ * TASK-036/037 seed configuration (SRS §30B.1, §30D.2) — Vietnam reference:
+ * 8h/day, 48h/week, 12h combined daily cap, OT monthly/annual/exceptional caps,
+ * 80% warning threshold, OT multipliers 1.5/2.0/3.0. Demo config only — HR/legal
+ * must confirm when deploying for real (SRS §30K). Never spread into services.
+ */
+const LABOR_POLICY_SEED_V1 = {
+  effectiveFrom: POLICY_FROM,
+  normalDailyMinutes: 480,
+  normalWeeklyMinutes: 2880,
+  maxCombinedDailyMinutes: 720,
+  maxMonthlyOvertimeMinutes: 2400,
+  maxAnnualOvertimeMinutes: 20000,
+  exceptionalAnnualOvertimeMinutes: 24000,
+  warningThresholdPercent: 80,
+  probationMinimumRate: 0.85,
+  legalReference: 'BLLĐ 45/2019/QH14',
+  version: 1,
+  active: true,
+};
+const OVERTIME_POLICY_SEED_V1 = {
+  effectiveFrom: POLICY_FROM,
+  workingDayRate: 1.5,
+  weeklyOffRate: 2.0,
+  publicHolidayRate: 3.0,
+  legalReference: 'BLLĐ 45/2019/QH14',
+  version: 1,
+  active: true,
+};
 
 const salaryByPosition: Record<string, number> = {
   DLEAD: 28_000_000,
@@ -76,6 +107,7 @@ async function main() {
   const BonusPolicy = db.model('AttendanceBonusPolicy', AttendanceBonusPolicySchema);
   const Salary = db.model('SalaryProfile', SalaryProfileSchema);
   const Kpi = db.model('KpiPayrollInput', KpiPayrollInputSchema);
+  const OvertimePolicy = db.model('OvertimePayPolicy', OvertimePayPolicySchema);
 
   const catalogRows = [
     { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', defaultTaxable: false, defaultInsuranceBased: false },
@@ -104,8 +136,14 @@ async function main() {
     await insertIfMissing(
       LaborPolicy,
       { organizationId, version: 1 },
-      { organizationId, effectiveFrom: POLICY_FROM, probationMinimumRate: 0.85, version: 1, active: true },
+      { organizationId, ...LABOR_POLICY_SEED_V1 },
       'LaborCompliancePolicy',
+    );
+    await insertIfMissing(
+      OvertimePolicy,
+      { organizationId, version: 1 },
+      { organizationId, ...OVERTIME_POLICY_SEED_V1 },
+      'OvertimePayPolicy',
     );
 
     const catalog = APPLY
