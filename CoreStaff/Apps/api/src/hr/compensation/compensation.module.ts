@@ -11,9 +11,10 @@ import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { CompensationController } from './compensation.controller';
 import { CompensationService } from './compensation.service';
+import { ManagerModule } from '../manager/manager.module';
 
 @Module({
-  imports: [AuthModule, MongooseModule.forFeature([
+  imports: [AuthModule, ManagerModule, MongooseModule.forFeature([
     { name: 'SalaryProfile', schema: SalaryProfileSchema },
     { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
     { name: 'AllowanceCatalog', schema: AllowanceCatalogSchema },

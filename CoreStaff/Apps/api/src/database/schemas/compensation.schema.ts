@@ -106,6 +106,7 @@ SalaryProfileSchema.index({ organizationId: 1, employeeProfileId: 1, effectiveFr
 export class AllowanceCatalog {
   @Prop({ required: true, trim: true, uppercase: true }) code: string;
   @Prop({ required: true }) defaultName: string;
+  @Prop({ required: false }) description?: string;
   @Prop({ required: true, default: true }) defaultTaxable: boolean;
   @Prop({ required: true, default: false }) defaultInsuranceBased: boolean;
   @Prop({ required: true, default: true }) active: boolean;
@@ -119,6 +120,7 @@ export class OrganizationAllowance {
   @Prop({ type: 'ObjectId', ref: 'AllowanceCatalog' }) catalogId?: string;
   @Prop({ required: true, trim: true, uppercase: true }) code: string;
   @Prop({ required: true }) name: string;
+  @Prop({ required: false }) description?: string;
   @Prop({ required: false, min: 0, default: 0 }) amount?: number;
   @Prop({ required: true }) taxable: boolean;
   @Prop({ required: true }) insuranceBased: boolean;

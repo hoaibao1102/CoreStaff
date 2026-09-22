@@ -8,7 +8,24 @@ import {
     Save,
     X,
     History,
+    Coins,
+    Plus,
 } from 'lucide-react';
+import {
+    listSalaryProfiles,
+    getOrganizationAllowances,
+    type SalaryProfile,
+    type OrganizationAllowance,
+} from '../../services/compensation.service';
+import {
+    SalaryProfileCreateDialog,
+    SalaryProfileEditDialog,
+} from '../Compensation/SalaryProfileDialogs';
+
+function formatVnd(val?: number | null): string {
+    if (val === undefined || val === null || Number.isNaN(val)) return '—';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+}
 import { cn } from 'cn';
 import type { AuthUser } from '../../services/auth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
@@ -188,7 +205,7 @@ export function EmployeeDetailDialog(props: {
     );
 }
 
-type TabType = 'personal' | 'employment' | 'status';
+type TabType = 'personal' | 'employment' | 'compensation' | 'status';
 
 /* ───────── Main Content ───────── */
 function EmployeeDetailContent({
@@ -353,10 +370,36 @@ function EmployeeDetailContent({
         }
     }, [apiBase, employeeId]);
 
+    // Compensation state
+    const [salaryProfile, setSalaryProfile] = useState<SalaryProfile | null>(null);
+    const [allOrgAllowances, setAllOrgAllowances] = useState<OrganizationAllowance[]>([]);
+    const [compLoading, setCompLoading] = useState(false);
+    const [createSalaryOpen, setCreateSalaryOpen] = useState(false);
+    const [editSalaryOpen, setEditSalaryOpen] = useState(false);
+
+    const loadCompensation = useCallback(async () => {
+        if (!apiBase || !employeeId) return;
+        setCompLoading(true);
+        try {
+            const [profiles, orgAllowances] = await Promise.all([
+                listSalaryProfiles(apiBase, employeeId).catch(() => []),
+                getOrganizationAllowances(apiBase).catch(() => []),
+            ]);
+            const active = profiles.find(p => p.active) || profiles[0] || null;
+            setSalaryProfile(active);
+            setAllOrgAllowances(orgAllowances);
+        } catch {
+            // Keep existing state
+        } finally {
+            setCompLoading(false);
+        }
+    }, [apiBase, employeeId]);
+
     useEffect(() => {
         loadEmployee();
         loadHistory();
-    }, [loadEmployee, loadHistory]);
+        loadCompensation();
+    }, [loadEmployee, loadHistory, loadCompensation]);
 
     /* ── Tab 1: Personal Info Validation & Save ── */
     const handlePersonalBlur = useCallback((field: string) => {
@@ -624,6 +667,24 @@ function EmployeeDetailContent({
                             >
                                 <Briefcase className="h-4 w-4" />
                                 <span>Thông tin công việc</span>
+                            </button>
+                            <button
+                                type="button"
+                                className={cn(
+                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    activeTab === 'compensation'
+                                        ? "border-primary text-primary font-semibold"
+                                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                                )}
+                                onClick={() => setActiveTab('compensation')}
+                            >
+                                <Coins className="h-4 w-4" />
+                                <span>Đãi ngộ & Phụ cấp</span>
+                                {salaryProfile?.allowances && salaryProfile.allowances.length > 0 && (
+                                    <span className="ml-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-semibold">
+                                        {salaryProfile.allowances.length}
+                                    </span>
+                                )}
                             </button>
                             <button
                                 type="button"
@@ -934,6 +995,162 @@ function EmployeeDetailContent({
                             )}
                         </div>
 
+                        {/* ───────── TAB 4: ĐÃI NGỘ & PHỤ CẤP ───────── */}
+                        <div className={activeTab === 'compensation' ? 'block space-y-4' : 'hidden'}>
+                            {compLoading ? (
+                                <EmployeeDataState status="loading" />
+                            ) : !salaryProfile ? (
+                                <Card className="rounded-xl border-dashed border-border p-8 text-center">
+                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-3">
+                                        <Coins className="h-6 w-6" />
+                                    </div>
+                                    <h3 className="text-base font-semibold text-foreground">Chưa có hồ sơ lương & phụ cấp</h3>
+                                    <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                                        Nhân viên này chưa được thiết lập mức lương cơ bản và các khoản phụ cấp hàng tháng.
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        className="mt-4 gap-2"
+                                        onClick={() => setCreateSalaryOpen(true)}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Thiết lập hồ sơ lương & phụ cấp
+                                    </Button>
+                                </Card>
+                            ) : (
+                                <>
+                                    {/* Summary & Actions Card */}
+                                    <Card className="rounded-xl border-border shadow-none">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                                        <Coins className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <CardTitle className="text-base">Mức lương & Đóng bảo hiểm</CardTitle>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Hiệu lực từ: {new Date(salaryProfile.effectiveFrom).toLocaleDateString('vi-VN')}
+                                                            {salaryProfile.effectiveTo ? ` đến ${new Date(salaryProfile.effectiveTo).toLocaleDateString('vi-VN')}` : ' (Hiện tại)'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-2 shrink-0 self-start sm:self-auto"
+                                                    onClick={() => setEditSalaryOpen(true)}
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                    Chỉnh sửa phụ cấp & lương
+                                                </Button>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                                <FieldRow label="Lương cơ bản" value={formatVnd(salaryProfile.baseSalary)} />
+                                                <FieldRow label="Lương đóng BHXH" value={formatVnd(salaryProfile.insuranceSalary)} />
+                                                {salaryProfile.probationJobSalary ? (
+                                                    <FieldRow label="Lương theo công việc thử việc" value={formatVnd(salaryProfile.probationJobSalary)} />
+                                                ) : null}
+                                                {salaryProfile.probationAgreedSalary ? (
+                                                    <FieldRow label="Lương thỏa thuận thử việc" value={formatVnd(salaryProfile.probationAgreedSalary)} />
+                                                ) : null}
+                                                <FieldRow
+                                                    label="Tổng phụ cấp hàng tháng"
+                                                    value={formatVnd(
+                                                        (salaryProfile.allowances || []).reduce((acc, a) => acc + (a.amount || 0), 0)
+                                                    )}
+                                                />
+                                            </dl>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Assigned Allowances Card */}
+                                    <Card className="rounded-xl border-border shadow-none">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="text-base">Danh sách phụ cấp của nhân viên</CardTitle>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-xs text-primary hover:text-primary gap-1"
+                                                    onClick={() => setEditSalaryOpen(true)}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                    Gán / Đổi mức phụ cấp
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Các mục phụ cấp công ty được gán riêng kèm số tiền cho nhân viên này. Bạn có thể thay đổi số tiền hoặc bật/tắt mục phụ cấp bất kỳ lúc nào.
+                                            </p>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {(!salaryProfile.allowances || salaryProfile.allowances.length === 0) ? (
+                                                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                                                    Nhân viên hiện chưa được gán mục phụ cấp nào. Bấm <b>"Gán / Đổi mức phụ cấp"</b> để thêm.
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+                                                    {salaryProfile.allowances.map(a => {
+                                                        const orgAllowance = allOrgAllowances.find(oa => oa._id === a.allowanceId);
+                                                        return (
+                                                            <div key={a.allowanceId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-2 hover:bg-muted/30 transition-colors">
+                                                                <div className="space-y-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-semibold text-sm text-foreground">
+                                                                            {orgAllowance?.name || 'Phụ cấp'}
+                                                                        </span>
+                                                                        {orgAllowance?.code && (
+                                                                            <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                                                                                {orgAllowance.code}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {orgAllowance?.description && (
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {orgAllowance.description}
+                                                                        </p>
+                                                                    )}
+                                                                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                                        <span className={cn(
+                                                                            "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                                                                            orgAllowance?.taxable ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                                                        )}>
+                                                                            {orgAllowance?.taxable ? 'Chịu thuế TNCN' : 'Miễn thuế TNCN'}
+                                                                        </span>
+                                                                        <span className={cn(
+                                                                            "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                                                                            orgAllowance?.insuranceBased ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                                                                        )}>
+                                                                            {orgAllowance?.insuranceBased ? 'Tính đóng BHXH' : 'Không đóng BHXH'}
+                                                                        </span>
+                                                                        {orgAllowance?.prorated && (
+                                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                                                                Tính theo ngày công
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <span className="text-base font-bold text-primary">
+                                                                        {formatVnd(a.amount)}
+                                                                    </span>
+                                                                    <span className="block text-[11px] text-muted-foreground">/ tháng</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </>
+                            )}
+                        </div>
+
                         {/* ───────── TAB 3: TRẠNG THÁI & LỊCH SỬ ───────── */}
                         <div className={activeTab === 'status' ? 'block space-y-4' : 'hidden'}>
                             {/* Current Status Overview Card */}
@@ -1138,6 +1355,30 @@ function EmployeeDetailContent({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Salary Profile Dialogs */}
+            <SalaryProfileCreateDialog
+                apiBase={apiBase}
+                open={createSalaryOpen}
+                defaultEmployeeId={employeeId}
+                onClose={() => setCreateSalaryOpen(false)}
+                onCreated={() => {
+                    setCreateSalaryOpen(false);
+                    loadCompensation();
+                }}
+            />
+            {salaryProfile && (
+                <SalaryProfileEditDialog
+                    apiBase={apiBase}
+                    profile={salaryProfile}
+                    open={editSalaryOpen}
+                    onClose={() => setEditSalaryOpen(false)}
+                    onUpdated={() => {
+                        setEditSalaryOpen(false);
+                        loadCompensation();
+                    }}
+                />
+            )}
         </>
     );
 }

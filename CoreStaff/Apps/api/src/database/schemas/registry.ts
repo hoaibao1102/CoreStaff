@@ -12,6 +12,8 @@ import { EmployeeDocumentSchema } from './employee-document.schema';
 import { WorkplaceSchema } from './workplace.schema';
 import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
+import { ManagerAssignmentSchema } from './manager-assignment.schema';
+import { ManagerRequestSchema } from './manager-request.schema';
 import {
   SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
   OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
@@ -37,6 +39,8 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Workplace', schema: WorkplaceSchema },
   { name: 'ShiftTemplate', schema: ShiftTemplateSchema },
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
+  { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
+  { name: 'ManagerRequest', schema: ManagerRequestSchema },
   { name: 'SalaryProfile', schema: SalaryProfileSchema },
   { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
   { name: 'AllowanceCatalog', schema: AllowanceCatalogSchema },

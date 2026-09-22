@@ -148,16 +148,16 @@
   <!-- Manager -> Platform -->
   <path d="M 230 600 L 335 600 L 420 480" fill="none" stroke="#1e293b" stroke-width="1.8" marker-end="url(#arrow)" />
   <rect x="238" y="565" width="180" height="46" rx="5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
-  <text x="244" y="579" font-size="9.5" font-weight="700" fill="#0f172a">5. Duyệt ngoại lệ (Selfie/GPS)</text>
-  <text x="244" y="592" font-size="9" fill="#475569">   Duyệt đơn phép, OT, điều chỉnh</text>
-  <text x="244" y="604" font-size="9" fill="#475569">   Xác nhận bảng công phòng ban</text>
+  <text x="244" y="579" font-size="9.5" font-weight="700" fill="#0f172a">5. Cá nhân + Workspace Phòng ban</text>
+  <text x="244" y="592" font-size="9" fill="#475569">   Duyệt ngoại lệ/OT đúng scope</text>
+  <text x="244" y="604" font-size="9" fill="#475569">   KPI DRAFT + xác nhận bảng công</text>
 
   <!-- Platform -> Manager -->
   <path d="M 420 510 L 320 640 L 230 640" fill="none" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="4,3" marker-end="url(#arrowBlue)" />
   <rect x="238" y="632" width="180" height="46" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1" />
-  <text x="244" y="646" font-size="9.5" font-weight="700" fill="#1e40af">6. Hàng đợi phê duyệt phòng</text>
-  <text x="244" y="659" font-size="9" fill="#2563eb">   Dữ liệu chấm công nhân viên</text>
-  <text x="244" y="671" font-size="9" fill="#2563eb">   "Công của tôi" &amp; Payslip cá nhân</text>
+  <text x="244" y="646" font-size="9.5" font-weight="700" fill="#1e40af">6. Managed departments + queue</text>
+  <text x="244" y="659" font-size="9" fill="#2563eb">   Nhân viên/KPI theo ManagerAssignment</text>
+  <text x="244" y="671" font-size="9" fill="#2563eb">   Chấm công/Lịch sử/Đơn từ cá nhân</text>
 
 
   <!-- ================= 4. EMPLOYEE (Bottom Right) ================= -->

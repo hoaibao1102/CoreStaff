@@ -31,6 +31,7 @@ import {
   type KpiPolicy,
 } from '@/services/compensation.service';
 import { getEmployees, hrErrorMessage } from '@/services/hrService';
+import { getManagerEmployees } from '@/services/manager.service';
 import { KpiInputConfirmDialog, KpiInputCreateDialog, KpiInputEditDialog } from './KpiInputDialogs';
 import { KpiPolicyCreateDialog } from './KpiPolicyDialogs';
 
@@ -52,10 +53,12 @@ export function KpiInputsScreen({
   apiBase,
   canManage = true,
   userRole,
+  departmentId,
 }: {
   apiBase: string | null;
   canManage?: boolean;
   userRole?: string;
+  departmentId?: string;
 }) {
   const isManager = userRole === 'DEPARTMENT_MANAGER';
   const isHr = userRole === 'HR' || (!userRole && canManage);
@@ -80,8 +83,10 @@ export function KpiInputsScreen({
     setLoading(true);
     setError(null);
     Promise.all([
-      getKpiInputs(apiBase, period),
-      getEmployees(apiBase, {}).catch(() => ({ employees: [] })),
+      getKpiInputs(apiBase, period, departmentId),
+      (isManager
+        ? getManagerEmployees(apiBase, departmentId).then(employees => ({ employees: employees.map(item => ({ ...item, _id: item.id })) }))
+        : getEmployees(apiBase, departmentId ? { departmentId } : {})).catch(() => ({ employees: [] })),
       getKpiPolicies(apiBase).catch(() => []),
     ])
       .then(([data, empRes, pols]) => {
@@ -102,7 +107,7 @@ export function KpiInputsScreen({
       .catch(err => { if (!cancelled) setError(hrErrorMessage(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [apiBase, period, revision]);
+  }, [apiBase, period, departmentId, revision]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLocaleLowerCase('vi');
@@ -374,6 +379,8 @@ export function KpiInputsScreen({
       <KpiInputCreateDialog
         apiBase={apiBase}
         open={createOpen}
+        departmentId={departmentId}
+        managerMode={isManager}
         onClose={() => setCreateOpen(false)}
         onCreated={() => setRevision(r => r + 1)}
       />

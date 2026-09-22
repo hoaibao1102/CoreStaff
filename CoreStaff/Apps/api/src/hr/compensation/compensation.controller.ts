@@ -61,11 +61,12 @@ export class CompensationController {
   async kpis(
     @Tenant() org: string | null,
     @Query('period') period?: string,
+    @Query('departmentId') departmentId?: string,
     @CurrentUser() user?: SessionUser,
   ) {
     return {
       success: true,
-      data: await this.service.listKpis(this.org(org), period, user ? { role: user.role, id: String(user._id ?? user.id) } : undefined),
+      data: await this.service.listKpis(this.org(org), period, user ? { role: user.role, id: String(user._id ?? user.id) } : undefined, departmentId),
     };
   }
 

@@ -5,6 +5,8 @@
 .agents/
 .claude/
 .aider-desk/
+.hermes/
+
 skills-lock.json
 
 node_modules/

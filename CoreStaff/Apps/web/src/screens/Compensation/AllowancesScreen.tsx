@@ -108,7 +108,7 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
               <TableRow>
                 <TableHead className="pl-6">Mã phụ cấp</TableHead>
                 <TableHead>Tên phụ cấp</TableHead>
-                <TableHead>Mức phụ cấp</TableHead>
+                <TableHead>Mô tả chính sách</TableHead>
                 <TableHead>Quy tắc tính</TableHead>
                 <TableHead>Hiệu lực từ → đến</TableHead>
                 <TableHead>Phiên bản</TableHead>
@@ -118,10 +118,10 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
             <TableBody>
               {filteredRows.map(row => (
                 <TableRow key={row._id}>
-                  <TableCell className="pl-6 font-semibold">{row.code}</TableCell>
+                  <TableCell className="pl-6 font-semibold font-mono text-xs">{row.code}</TableCell>
                   <TableCell className="font-medium text-foreground">{row.name}</TableCell>
-                  <TableCell className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {formatVnd(row.amount)}
+                  <TableCell className="text-xs text-muted-foreground max-w-xs truncate" title={row.description || 'Chưa có mô tả'}>
+                    {row.description || <span className="italic text-muted-foreground/60">Không có mô tả</span>}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1 text-[11px]">

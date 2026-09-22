@@ -9,10 +9,12 @@ export function CompensationScreen({
   apiBase,
   kind,
   userRole,
+  departmentId,
 }: {
   apiBase: string | null;
   kind: Kind;
   userRole?: string;
+  departmentId?: string;
 }) {
   if (kind === 'salary-profiles') {
     return <SalaryProfilesScreen apiBase={apiBase} />;
@@ -27,7 +29,7 @@ export function CompensationScreen({
   }
 
   if (kind === 'kpi-inputs') {
-    return <KpiInputsScreen apiBase={apiBase} userRole={userRole} />;
+    return <KpiInputsScreen apiBase={apiBase} userRole={userRole} departmentId={departmentId} />;
   }
 
   return null;

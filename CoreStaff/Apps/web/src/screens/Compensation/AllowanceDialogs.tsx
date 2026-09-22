@@ -34,7 +34,7 @@ export function AllowanceCreateDialog({
   const [catalogId, setCatalogId] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
   const [taxable, setTaxable] = useState(false);
   const [insuranceBased, setInsuranceBased] = useState(false);
   const [prorated, setProrated] = useState(true);
@@ -60,6 +60,7 @@ export function AllowanceCreateDialog({
     if (selected) {
       setCode(selected.code);
       setName(selected.defaultName);
+      setDescription(selected.description || '');
       setTaxable(selected.defaultTaxable);
       setInsuranceBased(selected.defaultInsuranceBased);
     }
@@ -67,8 +68,6 @@ export function AllowanceCreateDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = amount.trim() ? Number(amount) : undefined;
-    if (amt !== undefined && (Number.isNaN(amt) || amt < 0)) return setError('Số tiền phụ cấp không hợp lệ.');
     if (mode === 'custom' && (!code.trim() || !name.trim())) {
       return setError('Vui lòng nhập mã và tên phụ cấp tùy chỉnh.');
     }
@@ -82,7 +81,8 @@ export function AllowanceCreateDialog({
         catalogId: mode === 'catalog' ? catalogId || undefined : undefined,
         code: code.trim().toUpperCase(),
         name: name.trim(),
-        amount: amt ?? 0,
+        description: description.trim() || undefined,
+        amount: 0,
         taxable,
         insuranceBased,
         prorated,
@@ -104,7 +104,7 @@ export function AllowanceCreateDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <DialogTitle>Tạo phụ cấp tổ chức mới</DialogTitle>
-          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào chính sách đãi ngộ của tổ chức (TASK-033).</DialogDescription>
+          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào danh mục chính sách của tổ chức (TASK-033).</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -163,11 +163,17 @@ export function AllowanceCreateDialog({
             )}
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Mức phụ cấp mặc định (VND, tùy chọn)</label>
-                <span className="text-[11px] text-muted-foreground">HR có thể gán số tiền riêng cho từng nhân viên</span>
-              </div>
-              <Input type="number" min="0" step="50000" placeholder="Để trống nếu linh hoạt theo từng nhân sự" value={amount} onChange={e => setAmount(e.target.value)} disabled={submitting} />
+              <label className="text-sm font-medium">Mô tả mục phụ cấp (tùy chọn)</label>
+              <Input
+                placeholder="VD: Hỗ trợ chi phí đi lại xăng xe theo vị trí công tác..."
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                disabled={submitting}
+              />
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                <span className="inline-block size-1.5 rounded-full bg-primary" />
+                Mức tiền phụ cấp sẽ được HR gán cụ thể cho từng nhân viên theo chức danh hoặc thỏa thuận trong Hồ sơ lương.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -238,7 +244,7 @@ export function AllowanceEditDialog({
 }) {
   const [code, setCode] = useState(allowance.code);
   const [name, setName] = useState(allowance.name);
-  const [amount, setAmount] = useState(String(allowance.amount));
+  const [description, setDescription] = useState(allowance.description || '');
   const [taxable, setTaxable] = useState(allowance.taxable);
   const [insuranceBased, setInsuranceBased] = useState(allowance.insuranceBased);
   const [prorated, setProrated] = useState(allowance.prorated);
@@ -250,8 +256,6 @@ export function AllowanceEditDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = amount.trim() ? Number(amount) : undefined;
-    if (amt !== undefined && (Number.isNaN(amt) || amt < 0)) return setError('Số tiền phụ cấp không hợp lệ.');
 
     setSubmitting(true);
     setError(null);
@@ -260,7 +264,7 @@ export function AllowanceEditDialog({
       const payload: UpdateAllowancePayload = {
         code: code.trim().toUpperCase(),
         name: name.trim(),
-        amount: amt ?? 0,
+        description: description.trim() || undefined,
         taxable,
         insuranceBased,
         prorated,
@@ -286,7 +290,7 @@ export function AllowanceEditDialog({
             <Badge variant="outline" className="font-mono text-xs">{allowance.code}</Badge>
             <Badge variant="secondary" className="text-[11px]">v{allowance.version}</Badge>
           </div>
-          <DialogDescription className="mt-1">Cập nhật số tiền định mức và các quy tắc khấu trừ/tính thuế của phụ cấp.</DialogDescription>
+          <DialogDescription className="mt-1">Cập nhật thông tin và các quy tắc khấu trừ/tính thuế của phụ cấp.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -309,15 +313,17 @@ export function AllowanceEditDialog({
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Mức phụ cấp mặc định (VND, tùy chọn)</label>
-                {Number(amount) > 0 && (
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount))}
-                  </span>
-                )}
-              </div>
-              <Input type="number" min="0" step="50000" placeholder="Để trống nếu linh hoạt theo từng nhân sự" value={amount} onChange={e => setAmount(e.target.value)} disabled={submitting} />
+              <label className="text-sm font-medium">Mô tả mục phụ cấp (tùy chọn)</label>
+              <Input
+                placeholder="VD: Hỗ trợ cước viễn thông liên lạc phục vụ công việc..."
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                disabled={submitting}
+              />
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                <span className="inline-block size-1.5 rounded-full bg-primary" />
+                Mức tiền phụ cấp sẽ được HR điều chỉnh riêng theo từng nhân sự trong Hồ sơ lương.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

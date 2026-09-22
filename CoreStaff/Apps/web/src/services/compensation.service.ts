@@ -88,6 +88,7 @@ export interface AllowanceCatalogItem {
   _id: string;
   code: string;
   defaultName: string;
+  description?: string;
   defaultTaxable: boolean;
   defaultInsuranceBased: boolean;
   active: boolean;
@@ -99,6 +100,7 @@ export interface OrganizationAllowance {
   catalogId?: string | null;
   code: string;
   name: string;
+  description?: string;
   amount?: number;
   taxable: boolean;
   insuranceBased: boolean;
@@ -115,6 +117,7 @@ export interface CreateAllowancePayload {
   catalogId?: string;
   code?: string;
   name?: string;
+  description?: string;
   amount?: number;
   taxable?: boolean;
   insuranceBased?: boolean;
@@ -126,6 +129,7 @@ export interface CreateAllowancePayload {
 export interface UpdateAllowancePayload {
   code?: string;
   name?: string;
+  description?: string;
   amount?: number;
   taxable?: boolean;
   insuranceBased?: boolean;
@@ -408,9 +412,10 @@ export interface UpdateKpiInputPayload {
   note?: string;
 }
 
-export async function getKpiInputs(base: string, period?: string): Promise<KpiPayrollInput[]> {
+export async function getKpiInputs(base: string, period?: string, departmentId?: string): Promise<KpiPayrollInput[]> {
   const query = new URLSearchParams();
   if (period?.trim()) query.set('period', period.trim());
+  if (departmentId?.trim()) query.set('departmentId', departmentId.trim());
   return hrRequest<KpiPayrollInput[]>(base, `/api/hr/kpi-inputs${query.size ? `?${query}` : ''}`, { method: 'GET' });
 }
 

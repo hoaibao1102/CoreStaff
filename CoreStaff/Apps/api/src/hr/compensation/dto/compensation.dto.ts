@@ -27,6 +27,7 @@ export class CreateAllowanceDto {
   @IsOptional() @IsMongoId() catalogId?: string;
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() description?: string;
   @IsOptional() @IsInt() @Min(0) amount?: number;
   @IsOptional() @IsBoolean() taxable?: boolean;
   @IsOptional() @IsBoolean() insuranceBased?: boolean;

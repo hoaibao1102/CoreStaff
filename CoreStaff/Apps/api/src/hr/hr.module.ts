@@ -9,6 +9,7 @@ import { ShiftTemplateModule } from './shift-template/shift-template.module';
 import { AssignmentModule } from './assignment/assignment.module';
 import { CompensationModule } from './compensation/compensation.module';
 import { PoliciesModule } from './policies/policies.module';
+import { ManagerModule } from './manager/manager.module';
 
 /**
  * HR Core: Sprint 2 catalogs + EmployeeProfile (TASK-020..023), Sprint 3
@@ -17,6 +18,18 @@ import { PoliciesModule } from './policies/policies.module';
  * (TASK-031..035) and effective-dated policies (TASK-036/037).
  */
 @Module({
-	imports: [DepartmentModule, PositionModule, EmployeeModule, EmploymentContractModule, EmployeeDocumentModule, WorkplaceModule, ShiftTemplateModule, AssignmentModule, CompensationModule, PoliciesModule],
+	imports: [
+		DepartmentModule,
+		PositionModule,
+		EmployeeModule,
+		EmploymentContractModule,
+		EmployeeDocumentModule,
+		WorkplaceModule,
+		ShiftTemplateModule,
+		AssignmentModule,
+		CompensationModule,
+		PoliciesModule,
+		ManagerModule,
+	],
 })
 export class HrModule {}

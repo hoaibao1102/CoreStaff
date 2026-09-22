@@ -103,26 +103,21 @@ function getNavGroups(user: AuthUser): NavGroup[] {
         ];
     }
 
-    // DEPARTMENT_MANAGER or EMPLOYEE
-    const managerItems: NavItem[] = [];
-    if (role === 'DEPARTMENT_MANAGER') {
-        managerItems.push(
-            { href: '/manager/approvals', label: 'Queue phê duyệt', icon: ClipboardCheck },
-            { href: '/hr/kpi-inputs', label: 'Đánh giá KPI phòng', icon: Target },
-        );
-    }
-    managerItems.push(
+    const personalItems: NavItem[] = [
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
         { href: '/app/leave', label: 'Nghỉ phép & OT', icon: FileText },
-    );
-
-    return [
-        {
-            title: 'Menu chính',
-            items: role === 'EMPLOYEE' ? [...managerItems, ...common] : [...common, ...managerItems],
-        },
     ];
+
+    if (role === 'DEPARTMENT_MANAGER') {
+        return [
+            { title: 'Cá nhân', items: personalItems },
+            { title: 'Quản lý', items: [{ href: '/manager/department', label: 'Phòng ban', icon: Building2 }] },
+        ];
+    }
+
+    return [{ title: 'Cá nhân', items: personalItems }];
+    
 }
 
 /* ───────── Sidebar Component ───────── */

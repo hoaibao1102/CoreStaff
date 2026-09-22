@@ -17,6 +17,7 @@ import {
   type UpdateKpiInputPayload,
 } from '@/services/compensation.service';
 import { getEmployees, hrErrorMessage, type EmployeeProfile } from '@/services/hrService';
+import { getManagerEmployees } from '@/services/manager.service';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -30,11 +31,15 @@ export function KpiInputCreateDialog({
   open,
   onClose,
   onCreated,
+  departmentId,
+  managerMode = false,
 }: {
   apiBase: string;
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  departmentId?: string;
+  managerMode?: boolean;
 }) {
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [loadingOpts, setLoadingOpts] = useState(false);
@@ -64,8 +69,21 @@ export function KpiInputCreateDialog({
     setAmount('');
     setCustomAmount(false);
 
-    // Fetch employees list
-    getEmployees(apiBase, {})
+    // Manager employee options must come from the scoped endpoint; HR keeps tenant-wide access.
+    (managerMode
+      ? getManagerEmployees(apiBase, departmentId).then(rows => ({ employees: rows.map(row => ({
+          _id: row.id,
+          userId: row.userId,
+          organizationId: '',
+          employeeCode: row.employeeCode,
+          fullName: row.fullName,
+          departmentId: row.departmentId ?? undefined,
+          positionId: row.positionId ?? undefined,
+          employmentStatus: row.employmentStatus as EmployeeProfile['employmentStatus'],
+          employmentType: 'FULL_TIME' as EmployeeProfile['employmentType'],
+          joinDate: '',
+        })) }))
+      : getEmployees(apiBase, departmentId ? { departmentId } : {}))
       .then(res => setEmployees(res.employees))
       .catch(err => setError(hrErrorMessage(err)))
       .finally(() => setLoadingOpts(false));
@@ -76,7 +94,7 @@ export function KpiInputCreateDialog({
       .then(pol => setPolicy(pol))
       .catch(() => setPolicy(null))
       .finally(() => setLoadingPolicy(false));
-  }, [apiBase, open]);
+  }, [apiBase, open, departmentId, managerMode]);
 
   // Refine applicable policy when employee changes
   useEffect(() => {

@@ -110,9 +110,9 @@ async function main() {
   const OvertimePolicy = db.model('OvertimePayPolicy', OvertimePayPolicySchema);
 
   const catalogRows = [
-    { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', defaultTaxable: false, defaultInsuranceBased: false },
-    { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', defaultTaxable: false, defaultInsuranceBased: false },
-    { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', defaultTaxable: true, defaultInsuranceBased: false },
+    { code: 'MEAL', defaultName: 'Phụ cấp ăn trưa', description: 'Hỗ trợ chi phí ăn trưa các ngày làm việc thực tế trong tháng', defaultTaxable: false, defaultInsuranceBased: false },
+    { code: 'FUEL', defaultName: 'Phụ cấp xăng xe', description: 'Hỗ trợ chi phí xăng xe đi lại theo vị trí và tính chất công việc', defaultTaxable: false, defaultInsuranceBased: false },
+    { code: 'PHONE', defaultName: 'Phụ cấp điện thoại', description: 'Hỗ trợ cước viễn thông liên lạc phục vụ công việc', defaultTaxable: true, defaultInsuranceBased: false },
   ];
   for (const row of catalogRows) {
     await insertIfMissing(Catalog, { code: row.code }, { ...row, active: true }, 'AllowanceCatalog');

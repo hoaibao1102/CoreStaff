@@ -28,18 +28,20 @@ export function SalaryProfileCreateDialog({
   open,
   onClose,
   onCreated,
+  defaultEmployeeId,
 }: {
   apiBase: string;
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  defaultEmployeeId?: string;
 }) {
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [allowances, setAllowances] = useState<OrganizationAllowance[]>([]);
   const [bonusPolicies, setBonusPolicies] = useState<AttendanceBonusPolicy[]>([]);
   const [loadingOpts, setLoadingOpts] = useState(false);
 
-  const [employeeId, setEmployeeId] = useState('');
+  const [employeeId, setEmployeeId] = useState(defaultEmployeeId || '');
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
   const [effectiveTo, setEffectiveTo] = useState('');
   const [baseSalary, setBaseSalary] = useState('');
@@ -57,6 +59,7 @@ export function SalaryProfileCreateDialog({
     if (!open) return;
     setLoadingOpts(true);
     setError(null);
+    if (defaultEmployeeId) setEmployeeId(defaultEmployeeId);
     Promise.all([
       getEmployees(apiBase, {}).then(res => res.employees),
       getOrganizationAllowances(apiBase).catch(() => []),
@@ -259,6 +262,7 @@ export function SalaryProfileCreateDialog({
                           <div className="font-medium text-foreground">{item.name}</div>
                           <div className="text-[11px] text-muted-foreground">
                             Mã: <code className="font-mono">{item.code}</code>
+                            {item.description ? ` • ${item.description}` : ''}
                             {item.taxable ? ' • Thuế PIT' : ''}
                             {item.insuranceBased ? ' • Đóng BHXH' : ''}
                             {item.prorated ? ' • Tính theo ngày công' : ''}
@@ -530,6 +534,7 @@ export function SalaryProfileEditDialog({
                           <div className="font-medium text-foreground">{item.name}</div>
                           <div className="text-[11px] text-muted-foreground">
                             Mã: <code className="font-mono">{item.code}</code>
+                            {item.description ? ` • ${item.description}` : ''}
                             {item.taxable ? ' • Thuế PIT' : ''}
                             {item.insuranceBased ? ' • Đóng BHXH' : ''}
                             {item.prorated ? ' • Tính theo ngày công' : ''}

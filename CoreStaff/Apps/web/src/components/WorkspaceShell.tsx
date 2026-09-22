@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Menu, Fingerprint, Clock, User } from 'lucide-react';
+import { Menu, Fingerprint, Clock, FileText, Building2, User } from 'lucide-react';
 import { Button } from './button';
 import { Sidebar } from './Sidebar';
 import { AppLink, navigationEvent } from './AppLink';
@@ -26,10 +26,16 @@ function readCollapsedPreference() {
 
 interface MobileBottomNavProps {
     currentPath: string;
+    manager?: boolean;
 }
 
-function MobileBottomNav({ currentPath }: MobileBottomNavProps) {
-    const tabs = [
+function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps) {
+    const tabs = manager ? [
+        { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint },
+        { href: '/app/attendance/history', label: 'Lịch sử', icon: Clock },
+        { href: '/app/leave', label: 'Đơn từ', icon: FileText },
+        { href: '/manager/department', label: 'Phòng ban', icon: Building2 },
+    ] : [
         { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint },
         { href: '/app/attendance/history', label: 'Lịch sử', icon: Clock },
         { href: '/app/profile', label: 'Cá nhân', icon: User },
@@ -72,7 +78,8 @@ export function WorkspaceShell({ user, currentPath, onLogout, children }: Worksp
     const [collapsed, setCollapsed] = useState(readCollapsedPreference);
     const [mobileOpen, setMobileOpen] = useState(false);
     const desktopContainer = useRef<HTMLDivElement>(null);
-    const isEmployee = user.role === 'EMPLOYEE';
+    const isEmployeeExperience = user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER';
+    const isManager = user.role === 'DEPARTMENT_MANAGER';
 
     useEffect(() => {
         try {
@@ -110,7 +117,7 @@ export function WorkspaceShell({ user, currentPath, onLogout, children }: Worksp
             {/* Main Application Area */}
             <div className="workspace-main">
                 {/* For non-employee (HR, Admin): show standard header + mobile sidebar drawer */}
-                {!isEmployee ? (
+                {!isEmployeeExperience ? (
                     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                         <header className="workspace-mobile-header">
                             <SheetTrigger render={<Button variant="ghost" size="icon" className="size-11 transition-colors" />} aria-label="Mở menu">
@@ -130,10 +137,10 @@ export function WorkspaceShell({ user, currentPath, onLogout, children }: Worksp
                 ) : null}
 
                 {/* Main Content Area */}
-                <main className={`min-w-0 flex-1 ${isEmployee ? 'pb-[68px] md:pb-0' : ''}`}>{children}</main>
+                <main className={`min-w-0 flex-1 ${isEmployeeExperience ? 'pb-[76px] md:pb-0' : ''}`}>{children}</main>
 
-                {/* For Employee on mobile: native-like Bottom Tab Bar */}
-                {isEmployee && <MobileBottomNav currentPath={currentPath} />}
+                {/* Employee and Department Manager share the mobile-web personal experience. */}
+                {isEmployeeExperience && <MobileBottomNav currentPath={currentPath} manager={isManager} />}
             </div>
         </div>
     );

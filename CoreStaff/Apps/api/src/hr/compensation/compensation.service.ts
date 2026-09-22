@@ -8,6 +8,7 @@ import {
 import { EmployeeProfile } from '../../database/schemas/employee-profile.schema';
 import { assertNoEffectiveOverlap, calculateProbationRate, evaluateAttendanceBonus, resolveConfirmedKpiAmount } from './compensation-domain';
 import { CreateAllowanceDto, CreateBonusPolicyDto, CreateKpiInputDto, CreateKpiPolicyDto, CreateSalaryProfileDto, UpdateAllowanceDto, UpdateBonusPolicyDto, UpdateKpiInputDto, UpdateKpiPolicyDto, UpdateSalaryProfileDto } from './dto/compensation.dto';
+import { ManagerScopeService } from '../manager/manager-scope.service';
 
 const duplicate = (e: unknown, code: string): never => {
   if (e && typeof e === 'object' && (e as { code?: number }).code === 11000) throw new ConflictException(code);
@@ -27,6 +28,7 @@ export class CompensationService {
     @InjectModel('KpiPayrollInput') private readonly kpis: Model<KpiPayrollInput>,
     @InjectModel('KpiPolicy') private readonly kpiPolicies: Model<KpiPolicy>,
     @InjectModel('EmployeeProfile') private readonly employees: Model<EmployeeProfile>,
+    private readonly managerScope: ManagerScopeService,
   ) {}
 
   private async assertEmployee(org: string, id: string) {
@@ -122,7 +124,7 @@ export class CompensationService {
     if (dto.catalogId) { seed = await this.catalog.findOne({ _id: dto.catalogId, active: true }).lean(); if (!seed) throw new NotFoundException('ALLOWANCE_CATALOG_NOT_FOUND'); }
     if (!seed && (!dto.code || !dto.name)) throw new BadRequestException('ALLOWANCE_CODE_NAME_REQUIRED');
     const start = date(dto.effectiveFrom), end = dto.effectiveTo ? date(dto.effectiveTo) : undefined; assertNoEffectiveOverlap([], start, end);
-    try { const row = await this.allowances.create({ organizationId: org, catalogId: dto.catalogId, code: (dto.code ?? seed!.code).trim().toUpperCase(), name: dto.name ?? seed!.defaultName, amount: dto.amount ?? 0, taxable: dto.taxable ?? seed?.defaultTaxable ?? true, insuranceBased: dto.insuranceBased ?? seed?.defaultInsuranceBased ?? false, prorated: dto.prorated ?? false, effectiveFrom: start, effectiveTo: end }); return row.toObject(); } catch (e) { return duplicate(e, 'ALLOWANCE_CODE_TAKEN'); }
+    try { const row = await this.allowances.create({ organizationId: org, catalogId: dto.catalogId, code: (dto.code ?? seed!.code).trim().toUpperCase(), name: dto.name ?? seed!.defaultName, description: dto.description ?? seed?.description, amount: dto.amount ?? 0, taxable: dto.taxable ?? seed?.defaultTaxable ?? true, insuranceBased: dto.insuranceBased ?? seed?.defaultInsuranceBased ?? false, prorated: dto.prorated ?? false, effectiveFrom: start, effectiveTo: end }); return row.toObject(); } catch (e) { return duplicate(e, 'ALLOWANCE_CODE_TAKEN'); }
   }
   async updateAllowance(org: string, id: string, dto: UpdateAllowanceDto) {
     const patch: Record<string, unknown> = { ...dto }; if (dto.code) patch.code = dto.code.trim().toUpperCase(); if (dto.effectiveFrom) patch.effectiveFrom = date(dto.effectiveFrom); if (dto.effectiveTo) patch.effectiveTo = date(dto.effectiveTo);
@@ -204,23 +206,20 @@ export class CompensationService {
     return allPolicy ?? null;
   }
 
-  private async getManagerDepartmentId(org: string, userId: string): Promise<string | null> {
-    const mgrEmp = await this.employees.findOne({ organizationId: org, userId }).select('departmentId').lean();
-    return mgrEmp?.departmentId ? String(mgrEmp.departmentId) : null;
-  }
-
   // ── KPI Inputs ──────────────────────────────────────────────────────────
-  async listKpis(org: string, period?: string, actor?: { role: string; id: string }) {
+  async listKpis(org: string, period?: string, actor?: { role: string; id: string }, departmentId?: string) {
     const filter: any = { organizationId: org, ...(period && { period }) };
 
     if (actor?.role === 'DEPARTMENT_MANAGER') {
-      const deptId = await this.getManagerDepartmentId(org, actor.id);
-      if (deptId) {
-        const deptEmps = await this.employees.find({ organizationId: org, departmentId: deptId }).select('_id').lean();
-        filter.employeeProfileId = { $in: deptEmps.map(e => e._id) };
-      } else {
-        return [];
-      }
+      const managedIds = await this.managerScope.getManagedDepartmentIds(org, actor.id);
+      if (departmentId) await this.managerScope.requireDepartment(org, actor.id, departmentId);
+      const scope = departmentId ? [departmentId] : managedIds;
+      if (!scope.length) return [];
+      const deptEmps = await this.employees.find({ organizationId: org, departmentId: { $in: scope } }).select('_id').lean();
+      filter.employeeProfileId = { $in: deptEmps.map(e => e._id) };
+    } else if (departmentId) {
+      const deptEmps = await this.employees.find({ organizationId: org, departmentId }).select('_id').lean();
+      filter.employeeProfileId = { $in: deptEmps.map(e => e._id) };
     }
 
     const list = await this.kpis.find(filter).sort({ period: -1 }).lean();
@@ -243,10 +242,8 @@ export class CompensationService {
     if (!emp) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
 
     if (actorRole === 'DEPARTMENT_MANAGER' && actorId) {
-      const deptId = await this.getManagerDepartmentId(org, actorId);
-      if (!deptId || String(emp.departmentId) !== String(deptId)) {
-        throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
-      }
+      if (!emp.departmentId) throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
+      await this.managerScope.requireDepartment(org, actorId, String(emp.departmentId));
     }
 
     let finalAmount = dto.amount;
@@ -276,10 +273,8 @@ export class CompensationService {
     if (old.status === KpiStatus.CONFIRMED) throw new ConflictException('KPI_INPUT_CONFIRMED_IMMUTABLE');
 
     if (actorRole === 'DEPARTMENT_MANAGER' && actorId) {
-      const deptId = await this.getManagerDepartmentId(org, actorId);
-      if (!deptId || String(old.departmentId) !== String(deptId)) {
-        throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
-      }
+      if (!old.departmentId) throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
+      await this.managerScope.requireDepartment(org, actorId, String(old.departmentId));
     }
 
     const setPayload: any = { ...dto };
