@@ -3,10 +3,17 @@ import { IsMongoId, IsNotEmpty, IsOptional, IsString, IsArray, ArrayMinSize } fr
 
 export class CreateAssignmentDto {
     @ApiProperty({ description: 'List of user IDs to assign (supports 1 or many users)' })
+    @IsOptional()
     @IsArray()
     @IsMongoId({ each: true })
     @ArrayMinSize(1)
     userIds!: string[];
+
+    /** Backward-compatible alias for clients that assign one employee. */
+    @ApiProperty({ required: false, description: 'Legacy alias for userIds when assigning one user' })
+    @IsOptional()
+    @IsMongoId()
+    userId?: string;
 
     @ApiProperty({ description: 'Department ID' })
     @IsMongoId()

@@ -48,13 +48,33 @@ import {
 } from "@/services/policies.service";
 import {
   formatEffectiveRange,
-  formatMinutes,
   PolicyLoadingRows,
   PolicyPaginationFooter,
   PolicyStatusBadge,
 } from "../Policies/policies.ui";
 
 const PAGE_SIZE = 10;
+
+const TIME_FIELDS = [
+  "normalDailyMinutes",
+  "normalWeeklyMinutes",
+  "maxCombinedDailyMinutes",
+  "maxMonthlyOvertimeMinutes",
+  "maxAnnualOvertimeMinutes",
+  "exceptionalAnnualOvertimeMinutes",
+] as const;
+
+function minutesToHours(minutes: number): string {
+  return String(minutes / 60);
+}
+
+function hoursToMinutes(hours: string): number {
+  return Math.round(Number(hours) * 60);
+}
+
+function formatHours(minutes: number): string {
+  return `${minutes / 60} giờ`;
+}
 
 type Form = Record<keyof CreateLaborPolicyPayload, string>;
 
@@ -76,12 +96,12 @@ const EMPTY: Form = {
 const LABELS: Record<keyof Form, string> = {
   effectiveFrom: "Hiệu lực từ",
   effectiveTo: "Hiệu lực đến (không bắt buộc)",
-  normalDailyMinutes: "Giờ làm thường ngày tối đa",
-  normalWeeklyMinutes: "Giờ làm thường tuần tối đa",
-  maxCombinedDailyMinutes: "Tổng giờ (thường + tăng ca) mỗi ngày",
-  maxMonthlyOvertimeMinutes: "Tăng ca tháng tối đa",
-  maxAnnualOvertimeMinutes: "Tăng ca năm tối đa",
-  exceptionalAnnualOvertimeMinutes: "Hạn mức ngoại lệ tăng ca năm",
+  normalDailyMinutes: "Giờ làm thường ngày tối đa (giờ)",
+  normalWeeklyMinutes: "Giờ làm thường tuần tối đa (giờ)",
+  maxCombinedDailyMinutes: "Tổng giờ (thường + tăng ca) mỗi ngày (giờ)",
+  maxMonthlyOvertimeMinutes: "Tăng ca tháng tối đa (giờ)",
+  maxAnnualOvertimeMinutes: "Tăng ca năm tối đa (giờ)",
+  exceptionalAnnualOvertimeMinutes: "Hạn mức ngoại lệ tăng ca năm (giờ)",
   warningThresholdPercent: "Ngưỡng cảnh báo (%)",
   probationMinimumRate: "Mức lương thử việc tối thiểu",
   legalReference: "Tham chiếu pháp lý",
@@ -115,8 +135,8 @@ function validate(form: Form): string {
     "warningThresholdPercent",
   ] as const) {
     const value = Number(form[key]);
-    if (form[key].trim() === "" || !Number.isInteger(value) || value < 0)
-      return `"${LABELS[key]}" phải là số nguyên không âm.`;
+    if (form[key].trim() === "" || !Number.isFinite(value) || value < 0)
+      return `"${LABELS[key]}" phải là số không âm.`;
   }
 
   const warningThreshold = Number(form.warningThresholdPercent);
@@ -136,12 +156,12 @@ function validate(form: Form): string {
 function payloadFrom(form: Form): CreateLaborPolicyPayload {
   const payload: CreateLaborPolicyPayload = {
     effectiveFrom: form.effectiveFrom.trim(),
-    normalDailyMinutes: Number(form.normalDailyMinutes),
-    normalWeeklyMinutes: Number(form.normalWeeklyMinutes),
-    maxCombinedDailyMinutes: Number(form.maxCombinedDailyMinutes),
-    maxMonthlyOvertimeMinutes: Number(form.maxMonthlyOvertimeMinutes),
-    maxAnnualOvertimeMinutes: Number(form.maxAnnualOvertimeMinutes),
-    exceptionalAnnualOvertimeMinutes: Number(form.exceptionalAnnualOvertimeMinutes),
+    normalDailyMinutes: hoursToMinutes(form.normalDailyMinutes),
+    normalWeeklyMinutes: hoursToMinutes(form.normalWeeklyMinutes),
+    maxCombinedDailyMinutes: hoursToMinutes(form.maxCombinedDailyMinutes),
+    maxMonthlyOvertimeMinutes: hoursToMinutes(form.maxMonthlyOvertimeMinutes),
+    maxAnnualOvertimeMinutes: hoursToMinutes(form.maxAnnualOvertimeMinutes),
+    exceptionalAnnualOvertimeMinutes: hoursToMinutes(form.exceptionalAnnualOvertimeMinutes),
     warningThresholdPercent: Number(form.warningThresholdPercent),
     probationMinimumRate: Number(form.probationMinimumRate),
     legalReference: form.legalReference.trim(),
@@ -155,12 +175,12 @@ function fromPolicy(policy: LaborCompliancePolicy): Form {
   return {
     effectiveFrom: policy.effectiveFrom.slice(0, 10),
     effectiveTo: policy.effectiveTo ? policy.effectiveTo.slice(0, 10) : "",
-    normalDailyMinutes: String(policy.normalDailyMinutes),
-    normalWeeklyMinutes: String(policy.normalWeeklyMinutes),
-    maxCombinedDailyMinutes: String(policy.maxCombinedDailyMinutes),
-    maxMonthlyOvertimeMinutes: String(policy.maxMonthlyOvertimeMinutes),
-    maxAnnualOvertimeMinutes: String(policy.maxAnnualOvertimeMinutes),
-    exceptionalAnnualOvertimeMinutes: String(policy.exceptionalAnnualOvertimeMinutes),
+    normalDailyMinutes: minutesToHours(policy.normalDailyMinutes),
+    normalWeeklyMinutes: minutesToHours(policy.normalWeeklyMinutes),
+    maxCombinedDailyMinutes: minutesToHours(policy.maxCombinedDailyMinutes),
+    maxMonthlyOvertimeMinutes: minutesToHours(policy.maxMonthlyOvertimeMinutes),
+    maxAnnualOvertimeMinutes: minutesToHours(policy.maxAnnualOvertimeMinutes),
+    exceptionalAnnualOvertimeMinutes: minutesToHours(policy.exceptionalAnnualOvertimeMinutes),
     warningThresholdPercent: String(policy.warningThresholdPercent),
     probationMinimumRate: String(policy.probationMinimumRate),
     legalReference: policy.legalReference,
@@ -200,12 +220,12 @@ function LaborDetailDialog({
 
           <div className="divide-y divide-border rounded-lg border border-border">
             {[
-              { label: "Giờ làm thường ngày tối đa", value: formatMinutes(policy.normalDailyMinutes) },
-              { label: "Giờ làm thường tuần tối đa", value: formatMinutes(policy.normalWeeklyMinutes) },
-              { label: "Tổng giờ (thường + tăng ca) mỗi ngày", value: formatMinutes(policy.maxCombinedDailyMinutes) },
-              { label: "Tăng ca tháng tối đa", value: formatMinutes(policy.maxMonthlyOvertimeMinutes) },
-              { label: "Tăng ca năm tối đa", value: formatMinutes(policy.maxAnnualOvertimeMinutes) },
-              { label: "Hạn mức ngoại lệ tăng ca năm", value: formatMinutes(policy.exceptionalAnnualOvertimeMinutes) },
+              { label: "Giờ làm thường ngày tối đa", value: formatHours(policy.normalDailyMinutes) },
+              { label: "Giờ làm thường tuần tối đa", value: formatHours(policy.normalWeeklyMinutes) },
+              { label: "Tổng giờ (thường + tăng ca) mỗi ngày", value: formatHours(policy.maxCombinedDailyMinutes) },
+              { label: "Tăng ca tháng tối đa", value: formatHours(policy.maxMonthlyOvertimeMinutes) },
+              { label: "Tăng ca năm tối đa", value: formatHours(policy.maxAnnualOvertimeMinutes) },
+              { label: "Hạn mức ngoại lệ tăng ca năm", value: formatHours(policy.exceptionalAnnualOvertimeMinutes) },
               { label: "Ngưỡng cảnh báo", value: `${policy.warningThresholdPercent}%` },
               { label: "Mức lương thử việc tối thiểu", value: `${Math.round(policy.probationMinimumRate * 100)}%` },
               { label: "Tham chiếu pháp lý", value: policy.legalReference },
@@ -314,7 +334,7 @@ function LaborPolicyDialog({
                         ? "text"
                         : "number"
                   }
-                  step={key === "probationMinimumRate" ? "0.01" : "1"}
+                  step={key === "probationMinimumRate" ? "0.01" : TIME_FIELDS.includes(key as typeof TIME_FIELDS[number]) ? "0.01" : "1"}
                   min="0"
                   max={key === "probationMinimumRate" ? "1" : undefined}
                   value={form[key]}
@@ -375,7 +395,9 @@ function diffPayload(
     } else if (key === "legalReference") {
       changed.legalReference = form[key].trim();
     } else {
-      (changed as Record<string, unknown>)[key] = Number(form[key]);
+      (changed as Record<string, unknown>)[key] = TIME_FIELDS.includes(key as typeof TIME_FIELDS[number])
+        ? hoursToMinutes(form[key])
+        : Number(form[key]);
     }
   }
   return changed;
@@ -556,9 +578,9 @@ export function LaborCompliancePolicyScreen({ apiBase }: { apiBase: string | nul
                     <TableCell className="pl-6 whitespace-nowrap">
                       {formatEffectiveRange(row.effectiveFrom, row.effectiveTo)}
                     </TableCell>
-                    <TableCell>{formatMinutes(row.normalDailyMinutes)}</TableCell>
-                    <TableCell>{formatMinutes(row.normalWeeklyMinutes)}</TableCell>
-                    <TableCell>{formatMinutes(row.maxCombinedDailyMinutes)}</TableCell>
+                    <TableCell>{formatHours(row.normalDailyMinutes)}</TableCell>
+                    <TableCell>{formatHours(row.normalWeeklyMinutes)}</TableCell>
+                    <TableCell>{formatHours(row.maxCombinedDailyMinutes)}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.warningThresholdPercent}%</TableCell>
                     <TableCell className="max-w-xs whitespace-normal break-words">
                       {row.legalReference}

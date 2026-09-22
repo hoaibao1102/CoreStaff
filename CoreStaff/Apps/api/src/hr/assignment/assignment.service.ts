@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
@@ -64,7 +64,10 @@ export class AssignmentService {
             batch.checkExists(workplace, 'workplaceId', 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT');
         }
 
-        const userIds = dto.userIds;
+        const userIds = dto.userIds?.length ? dto.userIds : dto.userId ? [dto.userId] : [];
+        if (!userIds.length) {
+            throw new BadRequestException('AT_LEAST_ONE_USER_REQUIRED');
+        }
 
         // Validate each user exists
         for (const userId of userIds) {
