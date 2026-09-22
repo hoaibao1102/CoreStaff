@@ -219,7 +219,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (route === '/app/attendance' && (user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER')) {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <AttendanceScreen user={user} />
+        <AttendanceScreen user={user} apiBase={apiBase} />
       </WorkspaceShell>
     );
   }
