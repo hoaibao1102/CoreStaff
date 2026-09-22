@@ -32,6 +32,8 @@
 
 | D31 | Bỏ Docker khỏi triển khai | **Không dùng Docker** để deploy. MongoDB chạy qua **Atlas (replica set managed)**; API/Web deploy bằng HTTPS hosting trực tiếp (không container). Xóa `docker-compose.yml`. Thay TASK-110 (Docker Compose clean run) bằng Atlas + HTTPS hosting. | **Synced:** SRS §23.2, Proposal §11, wiki, CORESTAFF_REPO_STRUCTURE.md; append TASK-119 |
 
+| D32 | Phạm vi TASK-038/039 (InsuranceProfile, InsurancePolicy rate/base/caps) | TASK-038/039 phụ thuộc `insuranceSalary` (SalaryProfile, §30D.1) và trạng thái hợp đồng (EmploymentContract, §30A.2) — cả hai chưa có code. Xây bản nền tối thiểu-đủ: TASK-028 (EmploymentContract) + TASK-032 (SalaryProfile), **không** kéo theo TASK-029/030/031/033–037 (Document upload, Contract expiry UI, Probation validation, Allowance, AttendanceBonusPolicy, KPI, LaborCompliancePolicy, OvertimePayPolicy) vì các module đó không ảnh hưởng công thức BHXH/BHYT/BHTN. Field-level spec của `InsuranceProfile` và shape của `salaryBaseRules`/`capRules` **không có sẵn trong Docs/** (xác nhận qua audit 2026-09-22) — mọi field/shape thêm vào SRS §30A.2/§30D.3/§30D.3A là **đề xuất kỹ thuật**, giá trị rate/floor/cap để `null`/chờ HR-legal xác nhận, không hard-code số liệu pháp lý. | **Synced 2026-09-22:** SRS §30A.2, §30D.3, §30D.3A, §30G, §30H, §30I (AC-INS-02..06); code tại `CoreStaff/Apps/api/src/hr/{contract,salary-profile,insurance-profile,insurance-policy}`; không sửa `TASK_BACKLOG_9_WEEKS.md`/`MILESTONE_9_WEEKS.md` (D30 freeze) — xem `Docs/TASK_038_039_IMPLEMENTATION.md` cho nhật ký triển khai |
+
 Các QC Low (chính tả, format, slug) không ghi ở đây; sẽ xử lý trực tiếp trong file.
 
 ## Ghi chú bổ sung (12/09/2026)

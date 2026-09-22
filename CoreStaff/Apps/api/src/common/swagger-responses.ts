@@ -172,3 +172,75 @@ export const employmentHistoryExample = {
 	changedBy: '66f1b2c3d4e5f60718293a4b',
 	createdAt: '2026-09-15T03:20:00.000Z',
 };
+
+/** TASK-028 — SRS §30A.2. */
+export const contractExample = {
+	_id: '66f1b2c3d4e5f60718293f01',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	employeeId: '66f1b2c3d4e5f60718293d01',
+	contractType: 'FIXED_TERM',
+	startDate: '2026-09-25T00:00:00.000Z',
+	endDate: '2027-09-24T00:00:00.000Z',
+	createdAt: '2026-09-22T03:20:00.000Z',
+	updatedAt: '2026-09-22T03:20:00.000Z',
+};
+
+/** TASK-032 — SRS §30D.1. */
+export const salaryProfileExample = {
+	_id: '66f1b2c3d4e5f60718293f02',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	employeeId: '66f1b2c3d4e5f60718293d01',
+	effectiveFrom: '2026-09-25T00:00:00.000Z',
+	baseSalary: 15000000,
+	insuranceSalary: 15000000,
+	currency: 'VND',
+	roundingRule: 'ROUND_HALF_UP_TO_VND',
+	version: 1,
+	createdAt: '2026-09-22T03:20:00.000Z',
+	updatedAt: '2026-09-22T03:20:00.000Z',
+};
+
+/** TASK-038 — field shape is an engineering proposal, see insurance-profile.schema.ts. */
+export const insuranceProfileExample = {
+	_id: '66f1b2c3d4e5f60718293f03',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	employeeId: '66f1b2c3d4e5f60718293d01',
+	effectiveFrom: '2026-09-25T00:00:00.000Z',
+	participatesSocialInsurance: true,
+	participatesHealthInsurance: true,
+	participatesUnemploymentInsurance: true,
+	version: 1,
+	createdAt: '2026-09-22T03:20:00.000Z',
+	updatedAt: '2026-09-22T03:20:00.000Z',
+};
+
+/** TASK-039 — SRS §30D.3. Rate/cap shapes are an engineering proposal, see insurance-policy.schema.ts. */
+export const insurancePolicyExample = {
+	_id: '66f1b2c3d4e5f60718293f04',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	effectiveFrom: '2026-09-25T00:00:00.000Z',
+	legalReference: 'Luật BHXH 41/2024/QH15',
+	socialInsuranceEmployeeRate: 0.08,
+	healthInsuranceEmployeeRate: 0.015,
+	unemploymentInsuranceEmployeeRate: 0.01,
+	salaryBaseRules: [
+		{ type: 'SOCIAL_INSURANCE', floorAmount: null },
+		{ type: 'HEALTH_INSURANCE', floorAmount: null },
+		{ type: 'UNEMPLOYMENT_INSURANCE', floorAmount: null },
+	],
+	capRules: [
+		{ type: 'SOCIAL_INSURANCE', capAmount: null },
+		{ type: 'HEALTH_INSURANCE', capAmount: null },
+		{ type: 'UNEMPLOYMENT_INSURANCE', capAmount: null },
+	],
+	// Illustrative only — no employer rate is documented anywhere in Docs/ (confirmed by the
+	// 2026-09-22 audit); real values must come from HR/legal before this policy is used for real.
+	employerContributionRates: [
+		{ type: 'SOCIAL_INSURANCE', rate: 0.1 },
+		{ type: 'HEALTH_INSURANCE', rate: 0.1 },
+		{ type: 'UNEMPLOYMENT_INSURANCE', rate: 0.1 },
+	],
+	version: 1,
+	createdAt: '2026-09-22T03:20:00.000Z',
+	updatedAt: '2026-09-22T03:20:00.000Z',
+};

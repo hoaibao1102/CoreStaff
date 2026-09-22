@@ -2479,6 +2479,19 @@ CoreStaff phục vụ văn phòng/doanh nghiệp nhỏ khoảng 10–50 nhân vi
 - Quản lý ngày hiệu lực/hết hạn, tài liệu hợp đồng private và lịch sử thay đổi.
 - Không hard-delete nhân viên/hợp đồng đã phát sinh bảng công hoặc payroll.
 
+**EmploymentContract (TASK-028, formalized 2026-09-22 — field names below are the
+first code-level rendering of the bullets above, not a new business rule):**
+
+```text
+EmploymentContract
+- id, organizationId, employeeId
+- contractType: PROBATION | FIXED_TERM | INDEFINITE_TERM
+- startDate, endDate (null chỉ khi INDEFINITE_TERM)
+- documentRef (tài liệu hợp đồng private, TASK-029)
+- createdBy, createdAt, updatedAt
+```
+Một document mỗi giai đoạn hợp đồng; gia hạn tạo document mới thay vì sửa document cũ (đây chính là cách "lịch sử thay đổi" được giữ mà không cần collection lịch sử riêng — cùng pattern effective-dating với SalaryProfile/InsurancePolicy ở §30D). Không có API update/delete: sửa sai = tạo lại giai đoạn mới; "không hard-delete" nghĩa là không có endpoint xóa nào cả trong MVP này.
+
 ### 30A.3. Thử việc
 
 - Lương thử việc do HR nhập theo thỏa thuận và không thấp hơn tỷ lệ tối thiểu trong `LaborCompliancePolicy` áp dụng tại ngày hiệu lực.
@@ -2613,15 +2626,51 @@ OT type do backend xác định theo Calendar: `OT_WORKING_DAY`, `OT_WEEKLY_OFF`
 
 ```text
 InsurancePolicy
+- id, organizationId
 - effectiveFrom, effectiveTo, version, legalReference
 - socialInsuranceEmployeeRate
 - healthInsuranceEmployeeRate
 - unemploymentInsuranceEmployeeRate
-- salaryBaseRules và capRules riêng từng khoản
-- employerContributionRates[]
+- salaryBaseRules[]: { type: SOCIAL_INSURANCE|HEALTH_INSURANCE|UNEMPLOYMENT_INSURANCE, floorAmount: number|null }
+- capRules[]: { type: SOCIAL_INSURANCE|HEALTH_INSURANCE|UNEMPLOYMENT_INSURANCE, capAmount: number|null }
+- employerContributionRates[]: { type: SOCIAL_INSURANCE|HEALTH_INSURANCE|UNEMPLOYMENT_INSURANCE, rate: number }
+- createdBy, createdAt, updatedAt
 ```
 
 Seed phía người lao động: BHXH 8%, BHYT 1,5%, BHTN 1%. Không tính `grossSalary × 10,5%`; mỗi khoản dùng insuranceSalary, đối tượng áp dụng và trần riêng. Phần doanh nghiệp đóng được tính để báo cáo employer cost nhưng không trừ Net Salary.
+
+**Đề xuất kỹ thuật (TASK-039, 2026-09-22, chưa xác nhận pháp lý — xem §30K):** shape
+`{type, floorAmount|capAmount}` ở trên là engineering proposal, không phải quy định
+đã có sẵn — SRS trước đó chỉ nêu tên `salaryBaseRules`/`capRules`, không có shape
+hay giá trị capMultiplier/lương tối thiểu vùng nào. Mọi `floorAmount`/`capAmount`
+seed mặc định là `null` (không áp trần/sàn) cho đến khi HR/chuyên gia pháp lý xác
+nhận số liệu thật; engine (`insurance-calculation.ts`) không hard-code bất kỳ số nào.
+`employerContributionRates` cũng chưa có giá trị seed nào được xác nhận trong Docs/.
+
+### 30D.3A. InsuranceProfile
+
+**Đề xuất kỹ thuật (TASK-038, 2026-09-22) — trước bản cập nhật này, SRS chỉ nêu tên
+`InsuranceProfile` (§30F) mà chưa có field-level spec nào.** Field list dưới đây do
+kỹ sư đề xuất để hoàn thiện artifact theo đúng khung đã có của TaxProfile (§30D.4:
+hồ sơ tham gia theo nhân viên, tách khỏi rate/cap của Policy), chưa phải quyết định
+nghiệp vụ đã chốt.
+
+```text
+InsuranceProfile
+- id, organizationId, employeeId
+- effectiveFrom, effectiveTo, version
+- participatesSocialInsurance: boolean
+- participatesHealthInsurance: boolean
+- participatesUnemploymentInsurance: boolean
+- note (lý do HR, tự do — không có taxonomy lý do miễn trừ cố định nào trong Docs/)
+- createdBy, createdAt, updatedAt
+```
+
+`insuranceSalary` không nằm ở đây — thuộc `SalaryProfile` (§30D.1) đúng như SRS gốc
+đã định nghĩa, không duplicate. Theo §30A.3, trạng thái thử việc/loại hợp đồng
+**không** tự động suy ra participation; HR cấu hình từng khoản một cách tường minh.
+Mỗi document là một giai đoạn hiệu lực, không sửa tại chỗ — cùng pattern
+effective-dating với SalaryProfile; không có API update/delete.
 
 ### 30D.4. TaxPolicy và TaxProfile
 
@@ -2682,7 +2731,7 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 | Nhóm | Route/API chính |
 |---|---|
 | Employee HR | `/hr/employees`, `/hr/positions`, `/hr/contracts`, `/hr/documents` |
-| Compensation | `/hr/salary-profiles`, `/hr/allowances`, `/hr/kpi-inputs` |
+| Compensation | `/hr/salary-profiles`, `/hr/allowances`, `/hr/kpi-inputs`, `/hr/insurance-profiles` (đề xuất TASK-038, 2026-09-22 — không có route nào được liệt kê sẵn cho InsuranceProfile) |
 | Policies | `/hr/policies/labor`, `/hr/policies/overtime`, `/hr/policies/insurance`, `/hr/policies/tax` |
 | Payroll | `/hr/payroll-periods`, `/hr/payroll-runs`, `/:id/calculate`, `/:id/approve`, `/:id/lock`, `/:id/mark-paid` |
 | Snapshot | `/hr/payroll-runs/:id/snapshots`, `/:id/regenerate` |
@@ -2702,6 +2751,12 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 | `PAYROLL_LOCKED` | 423 | Payroll đã khóa, không mutation trực tiếp |
 | `PAYROLL_POLICY_NOT_CONFIGURED` | 409 | Thiếu policy có hiệu lực |
 | `PAYSLIP_NOT_RELEASED` | 403 | Payroll chưa đạt LOCKED nên Payslip chưa được phát hành |
+| `CONTRACT_PERIOD_OVERLAPS` | 409 | Giai đoạn hợp đồng mới đè lên giai đoạn đã có của cùng nhân viên (TASK-028) |
+| `SALARY_PROFILE_PERIOD_OVERLAPS` | 409 | Giai đoạn SalaryProfile mới đè lên giai đoạn đã có (TASK-032) |
+| `INSURANCE_PROFILE_PERIOD_OVERLAPS` | 409 | Giai đoạn InsuranceProfile mới đè lên giai đoạn đã có (TASK-038) |
+| `INSURANCE_POLICY_PERIOD_OVERLAPS` | 409 | Giai đoạn InsurancePolicy mới đè lên giai đoạn đã có trong tổ chức (TASK-039) |
+| `INSURANCE_POLICY_NOT_CONFIGURED` | 404 | Không có InsurancePolicy hiệu lực tại ngày tính (TASK-039) |
+| `INSURANCE_POLICY_FLOOR_ABOVE_CAP` | 400 | `floorAmount` lớn hơn `capAmount` của cùng một khoản bảo hiểm (TASK-039) |
 
 ## 30I. Acceptance Criteria bổ sung
 
@@ -2715,6 +2770,11 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 - AC-SNAPSHOT-01: Payroll calculation chỉ đọc PayrollInputSnapshot, không đọc live AttendanceDay.
 - AC-SNAPSHOT-02: Mở lại timesheet làm payroll snapshot cũ STALE và không tự thay số tiền.
 - AC-INS-01: BHXH/BHYT/BHTN dùng insuranceSalary/cap/rate riêng; tổng không mặc định lấy Gross Income.
+- AC-INS-02 (đề xuất TASK-038, 2026-09-22): chỉ tính khoản có `InsuranceProfile.participates* = true` tại ngày hiệu lực; không tự suy participation từ contractType/employmentStatus (§30A.3).
+- AC-INS-03 (đề xuất TASK-039): `base` mỗi khoản bị chặn bởi `floorAmount`/`capAmount` của InsurancePolicy hiệu lực khi các giá trị này khác null.
+- AC-INS-04 (đề xuất TASK-038/039): đổi InsuranceProfile/InsurancePolicy tạo version mới, không sửa document cũ; PayrollInputSnapshot đã tạo trước đó không đổi số theo version mới.
+- AC-INS-05 (đề xuất TASK-039, trùng AC-PAYROLL-02): employerContributionRates vào employer cost, không trừ Net Salary.
+- AC-INS-06 (đề xuất TASK-038/039): tài nguyên ngoài tenant trả 404; chỉ role HR được CRUD.
 - AC-TAX-01: PIT dùng TaxProfile, dependent effective dates và TaxPolicy của kỳ.
 - AC-PAYROLL-01: Gross - employee insurance - PIT - other deductions = Net Salary.
 - AC-PAYROLL-02: Employer contribution xuất hiện trong employer cost nhưng không trừ Net Salary.
