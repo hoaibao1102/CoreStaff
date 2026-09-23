@@ -32,10 +32,19 @@ interface TypeRowForm {
 
 type TypeRowsForm = Record<InsuranceContributionType, TypeRowForm>;
 
+/**
+ * Employer rate defaults mirror the standard breakdown under Luật BHXH
+ * 41/2024/QH15 (hiệu lực 01/07/2025) + Luật BHYT/Luật Việc làm hiện hành:
+ * BHXH 17,5% (hưu trí-tử tuất 14% + ốm đau-thai sản 3% + TNLĐ-BNN 0,5%),
+ * BHYT 3%, BHTN 1%. Floor/capAmount vẫn để trống — mức sàn theo lương tối
+ * thiểu vùng và mức trần theo mức tham chiếu/lương tối thiểu vùng do Chính
+ * phủ điều chỉnh theo từng thời kỳ, HR cần xác nhận số hiện hành trước khi
+ * nhập (xem gợi ý ngay dưới bảng).
+ */
 const EMPTY_ROWS: TypeRowsForm = {
-  SOCIAL_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '' },
-  HEALTH_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '' },
-  UNEMPLOYMENT_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '' },
+  SOCIAL_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '17.5' },
+  HEALTH_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '3' },
+  UNEMPLOYMENT_INSURANCE: { floorAmount: '', capAmount: '', employerRate: '1' },
 };
 
 /* ───────── Create Dialog ───────── */
@@ -50,7 +59,7 @@ export function InsurancePolicyCreateDialog(props: {
   const [submitting, setSubmitting] = useState(false);
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [effectiveTo, setEffectiveTo] = useState('');
-  const [legalReference, setLegalReference] = useState('');
+  const [legalReference, setLegalReference] = useState('Luật BHXH 41/2024/QH15');
   const [employeeRates, setEmployeeRates] = useState<Record<InsuranceContributionType, string>>({
     SOCIAL_INSURANCE: '8',
     HEALTH_INSURANCE: '1.5',
@@ -62,7 +71,7 @@ export function InsurancePolicyCreateDialog(props: {
   const reset = () => {
     setEffectiveFrom('');
     setEffectiveTo('');
-    setLegalReference('');
+    setLegalReference('Luật BHXH 41/2024/QH15');
     setEmployeeRates({ SOCIAL_INSURANCE: '8', HEALTH_INSURANCE: '1.5', UNEMPLOYMENT_INSURANCE: '1' });
     setRows(EMPTY_ROWS);
     setErrors({});
@@ -174,6 +183,7 @@ export function InsurancePolicyCreateDialog(props: {
 
             <div className="space-y-3">
               <FormLabel>Tỷ lệ người lao động đóng (%)</FormLabel>
+              <p className="text-xs text-muted-foreground">Mặc định theo Luật BHXH 41/2024/QH15: BHXH 8%, BHYT 1,5%, BHTN 1%.</p>
               <div className="grid gap-4 sm:grid-cols-3">
                 {TYPES.map((type) => (
                   <div key={type} className="space-y-1.5">
@@ -198,7 +208,7 @@ export function InsurancePolicyCreateDialog(props: {
 
             <div className="space-y-3">
               <FormLabel>Mức sàn / trần / tỷ lệ doanh nghiệp đóng theo từng khoản</FormLabel>
-              <p className="text-xs text-muted-foreground">Để trống mức sàn/trần nếu chưa có quy định — hệ thống sẽ không áp trần/sàn cho khoản đó.</p>
+              <p className="text-xs text-muted-foreground">Tỷ lệ doanh nghiệp đóng mặc định 17,5% (BHXH) / 3% (BHYT) / 1% (BHTN) theo mức đóng hiện hành. Mức sàn/trần để trống theo mặc định — điền theo lương tối thiểu vùng (sàn) và 20 lần mức tham chiếu/lương tối thiểu vùng (trần BHXH-BHYT/BHTN) tại thời điểm áp dụng, vì hai mức này thay đổi theo Nghị định/vùng nên hệ thống không tự đặt sẵn số cụ thể.</p>
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">
                   <thead>
