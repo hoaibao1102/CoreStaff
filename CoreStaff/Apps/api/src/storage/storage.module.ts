@@ -12,10 +12,28 @@ import { StorageService } from './storage.service';
     {
       provide: S3Client,
       useFactory: () => {
-        const region = process.env.S3_REGION?.trim();
-        const endpoint = process.env.S3_ENDPOINT?.trim(); // MinIO / LocalStack dev override
-        if (!region || !process.env.S3_BUCKET?.trim()) return null;
-        return new S3Client({ region, ...(endpoint ? { endpoint } : {}) });
+        const region = process.env.S3_REGION?.trim() || 'auto';
+        const endpoint = process.env.S3_ENDPOINT?.trim(); // Cloudflare R2 / MinIO / LocalStack override
+        const bucket = process.env.S3_BUCKET?.trim();
+        if (!bucket) return null;
+
+        const accessKeyId =
+          process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+        const secretAccessKey =
+          process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+
+        return new S3Client({
+          region,
+          ...(endpoint ? { endpoint } : {}),
+          ...(accessKeyId && secretAccessKey
+            ? {
+                credentials: {
+                  accessKeyId,
+                  secretAccessKey,
+                },
+              }
+            : {}),
+        });
       },
     },
   ],

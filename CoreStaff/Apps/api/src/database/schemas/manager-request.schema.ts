@@ -15,6 +15,9 @@ export class ManagerRequest{
  @Prop({type:Date}) approvedStart?:Date;
  @Prop({type:Date}) approvedEnd?:Date;
  @Prop({required:true,enum:['PENDING','APPROVED','REJECTED','CLARIFICATION_REQUESTED'],default:'PENDING',index:true}) status:string;
+ @Prop({type:'ObjectId',ref:'AttendanceDay',required:false,index:true}) attendanceDayId?:string;
+ @Prop({type:'ObjectId',ref:'Evidence',required:false}) evidenceId?:string;
+ @Prop({type:Object,required:false}) metadata?:Record<string,any>;
  @Prop({type:'ObjectId',ref:'User'}) reviewedBy?:string;
  @Prop({maxlength:1000}) reviewComment?:string;
  @Prop({type:Date}) reviewedAt?:Date;

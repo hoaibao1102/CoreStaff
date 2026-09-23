@@ -65,6 +65,36 @@ export function SelfieAttendanceFlow({
       })
     : '--:--';
 
+  const renderApprovalBadge = (status?: string) => {
+    switch (status) {
+      case 'APPROVED':
+      case 'AUTO_APPROVED':
+        return (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Đã duyệt
+          </span>
+        );
+      case 'REJECTED':
+        return (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-800 border border-red-200">
+            Từ chối
+          </span>
+        );
+      case 'CLARIFICATION_REQUESTED':
+        return (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+            Cần giải trình
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+            Chờ duyệt
+          </span>
+        );
+    }
+  };
+
   const isDisabled = submitting || today.availableAction === 'NONE' || isCompleted;
 
   return (
@@ -107,9 +137,7 @@ export function SelfieAttendanceFlow({
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-xs text-muted-foreground font-medium">Giờ vào</span>
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800">
-                      Chờ duyệt
-                    </span>
+                    {renderApprovalBadge((today.checkIn as any)?.approvalStatus || today.overallApprovalStatus)}
                   </div>
                   <p className="text-base font-bold text-foreground font-mono mt-0.5">
                     {checkInTime}
@@ -127,9 +155,7 @@ export function SelfieAttendanceFlow({
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-xs text-muted-foreground font-medium">Giờ ra</span>
                     {isCompleted ? (
-                      <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800">
-                        Chờ duyệt
-                      </span>
+                      renderApprovalBadge((today.checkOut as any)?.approvalStatus || today.overallApprovalStatus)
                     ) : (
                       <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-muted text-muted-foreground">
                         Chưa có

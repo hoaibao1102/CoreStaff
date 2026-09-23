@@ -55,14 +55,31 @@ export type VerificationContext =
   | GpsVerification
   | SelfieVerification;
 
+export interface OvertimeInfo {
+  requestId: string;
+  status: string;
+  requestedStart?: string;
+  requestedEnd?: string;
+  approvedStart?: string;
+  approvedEnd?: string;
+  reason?: string;
+  reviewComment?: string;
+  reviewedAt?: string;
+  otMinutes?: number;
+}
+
 export interface AttendanceEventBase {
   eventId: string;
   recordedAt: string; // ISO string
   method: AttendanceMethod;
-  workplaceName: string | null;
-  status: EventApprovalStatus;
+  workplaceName?: string | null;
+  status?: EventApprovalStatus;
+  approvalStatus?: string;
   address?: string;
   accuracy?: number;
+  accuracyMeters?: number;
+  distanceMeters?: number;
+  evidenceUrl?: string | null;
 }
 
 export interface NetworkEvent extends AttendanceEventBase {
@@ -87,8 +104,8 @@ export interface SelfieEvent extends AttendanceEventBase {
   method: 'SELFIE';
   capturedAtClient?: string;
   evidence?: { previewUrl: string };
-  location: SelfieLocation;
-  approvalStatus: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  location?: SelfieLocation;
+  approvalStatus?: any;
   rejectionReason?: string | null;
 }
 
@@ -108,5 +125,12 @@ export interface DayAttendance {
   checkIn?: AttendanceEvent | null;
   checkOut?: AttendanceEvent | null;
   totalWorkingMinutes?: number;
+  workingMinutes?: number;
+  lateMinutes?: number;
+  earlyMinutes?: number;
   dayApprovalStatus?: DayApprovalStatus;
+  overallApprovalStatus?: string;
+  approvalComment?: string | null;
+  approvalReviewedAt?: string | null;
+  overtime?: OvertimeInfo | null;
 }

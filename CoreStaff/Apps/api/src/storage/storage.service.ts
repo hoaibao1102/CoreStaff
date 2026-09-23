@@ -21,29 +21,53 @@ import { Readable } from 'node:stream';
 @Injectable()
 export class StorageService {
   private readonly s3: S3Client | null;
+  private readonly injectedClient: boolean;
 
   constructor(s3?: S3Client) {
+    this.injectedClient = Boolean(s3);
     this.s3 = s3 ?? this.buildClient();
   }
 
   private buildClient(): S3Client | null {
-    const region = process.env.S3_REGION?.trim();
-    const endpoint = process.env.S3_ENDPOINT?.trim(); // MinIO / LocalStack dev override
-    if (!region || !process.env.S3_BUCKET?.trim()) return null;
+    const region = process.env.S3_REGION?.trim() || 'auto';
+    const endpoint = process.env.S3_ENDPOINT?.trim(); // Cloudflare R2 / MinIO / LocalStack override
+    const bucket = process.env.S3_BUCKET?.trim();
+    if (!bucket) return null;
+
+    const accessKeyId =
+      process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+    const secretAccessKey =
+      process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+
     return new S3Client({
       region,
       ...(endpoint ? { endpoint } : {}),
+      ...(accessKeyId && secretAccessKey
+        ? {
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
+          }
+        : {}),
     });
   }
 
-  /** True when region + bucket are configured (S3_REGION / S3_BUCKET present). */
+  /** True when a bucket and a usable client are available. */
   isConfigured(): boolean {
-    return Boolean(this.s3 && process.env.S3_BUCKET?.trim());
+    const bucket = process.env.S3_BUCKET?.trim();
+    if (!bucket || !this.s3) return false;
+    if (this.injectedClient) return true;
+    const accessKeyId =
+      process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+    const secretAccessKey =
+      process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+    return Boolean(accessKeyId && secretAccessKey);
   }
 
   /** Fail loudly, never hang: miss a key-looking 400 instead of a timeout. */
   private requireClient(): S3Client {
-    if (!this.s3 || !process.env.S3_BUCKET?.trim()) {
+    if (!this.s3 || !this.isConfigured()) {
       throw new BadRequestException('STORAGE_NOT_CONFIGURED');
     }
     return this.s3;

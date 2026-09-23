@@ -4,6 +4,8 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { HrModule } from './hr/hr.module';
 import { PlatformModule } from './platform/platform.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { EventsModule } from './events/events.module';
 import { HealthController } from './health.controller';
 import { loadEnv } from './config/env';
 
@@ -16,6 +18,8 @@ loadEnv();
     AuthModule,
     HrModule,
     PlatformModule,
+    AttendanceModule,
+    EventsModule,
   ],
   controllers: [HealthController],
 })
