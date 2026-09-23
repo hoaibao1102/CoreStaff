@@ -89,7 +89,12 @@ export function AuthScreen({
   };
 
   function getRouteForRole(role: string): string {
-    // Redirect to overview dashboard after login, let WorkspaceRoutes handle role-based redirects
+    if (role === 'EMPLOYEE' || role === 'DEPARTMENT_MANAGER') {
+      return '/app/attendance';
+    }
+    if (role === 'SYSTEM_ADMIN') {
+      return '/platform/organizations';
+    }
     return '/overview';
   }
 

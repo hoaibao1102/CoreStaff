@@ -109,4 +109,7 @@ export interface DayAttendance {
   checkOut?: AttendanceEvent | null;
   totalWorkingMinutes?: number;
   dayApprovalStatus?: DayApprovalStatus;
+  overallApprovalStatus?: string;
+  approvalComment?: string | null;
+  approvalReviewedAt?: string | null;
 }

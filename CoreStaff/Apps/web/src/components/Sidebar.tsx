@@ -20,6 +20,7 @@ import {
     X,
     type LucideIcon,
 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from './button';
 import { Avatar, AvatarFallback } from './avatar';
 import { Badge } from './badge';
@@ -29,6 +30,8 @@ import { roleLabel } from '@/lib/labels';
 import { CoreStaffLogo } from './CoreStaffLogo';
 import { Tooltip } from './tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './dropdown-menu';
+import { getSocket } from '@/services/socket';
+import { getManagerRequests } from '@/services/manager.service';
 
 /* ───────── Types ───────── */
 
@@ -41,12 +44,12 @@ interface NavItem {
     href: string;
     label: string;
     icon: LucideIcon;
-    badge?: string;
+    badge?: ReactNode;
 }
 
 /* ───────── Role-based menu definitions ───────── */
 
-function getNavGroups(user: AuthUser): NavGroup[] {
+function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
     const role = user.role;
 
     const common: NavItem[] = role === 'EMPLOYEE'
@@ -112,12 +115,25 @@ function getNavGroups(user: AuthUser): NavGroup[] {
     if (role === 'DEPARTMENT_MANAGER') {
         return [
             { title: 'Cá nhân', items: personalItems },
-            { title: 'Quản lý', items: [{ href: '/manager/department', label: 'Phòng ban', icon: Building2 }] },
+            {
+                title: 'Quản lý',
+                items: [
+                    {
+                        href: '/manager/department',
+                        label: 'Phòng ban',
+                        icon: Building2,
+                        badge: (pendingCount && pendingCount > 0) ? (
+                            <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-600 px-1.5 py-0.2 text-[10px] font-bold text-white shadow-xs animate-pulse">
+                                {pendingCount > 99 ? '99+' : pendingCount}
+                            </span>
+                        ) : undefined,
+                    },
+                ],
+            },
         ];
     }
 
     return [{ title: 'Cá nhân', items: personalItems }];
-    
 }
 
 /* ───────── Sidebar Component ───────── */
@@ -131,10 +147,44 @@ interface SidebarProps {
     onLogout: () => void;
     mobile?: boolean;
     onNavigate?: () => void;
+    apiBase?: string | null;
 }
 
-export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, mobile = false, onNavigate }: SidebarProps) {
-    const navGroups = getNavGroups(user);
+export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, mobile = false, onNavigate, apiBase }: SidebarProps) {
+    const [pendingCount, setPendingCount] = useState<number>(0);
+
+    useEffect(() => {
+        if (user.role !== 'DEPARTMENT_MANAGER') return;
+        const socket = getSocket(apiBase);
+
+        const uid = user.id || user._id;
+        const register = () => {
+            if (uid) {
+                socket.emit('register:user', { userId: uid, role: user.role });
+            }
+        };
+
+        register();
+        socket.on('connect', register);
+
+        getManagerRequests(apiBase || '', { status: 'PENDING' })
+            .then((rows) => setPendingCount(rows.length))
+            .catch(() => {});
+
+        const onNew = () => setPendingCount((p) => p + 1);
+        const onDecided = () => setPendingCount((p) => Math.max(0, p - 1));
+
+        socket.on('request:new', onNew);
+        socket.on('request:decided', onDecided);
+
+        return () => {
+            socket.off('connect', register);
+            socket.off('request:new', onNew);
+            socket.off('request:decided', onDecided);
+        };
+    }, [user.role, user.id, user._id, apiBase]);
+
+    const navGroups = getNavGroups(user, pendingCount);
     const path = currentPath.replace(/\/$/, '') || '/';
     // Prefer the longest match so attendance/history never activates two items.
     const activeHref = navGroups.flatMap(group => group.items)
@@ -188,13 +238,18 @@ export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, 
                                         aria-current={active ? 'page' : undefined}
                                         className="workspace-sidebar-item"
                                     >
-                                        <span className="workspace-sidebar-icon"><item.icon size={20} aria-hidden="true" /></span>
+                                        <span className="workspace-sidebar-icon relative">
+                                            <item.icon size={20} aria-hidden="true" />
+                                            {item.badge && collapsed && (
+                                                <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-600 animate-pulse" />
+                                            )}
+                                        </span>
                                         <span className="workspace-sidebar-label workspace-sidebar-item-text" aria-hidden={collapsed}>
                                             <span className="truncate">{item.label}</span>
                                             {item.badge && (
-                                                <Badge variant="secondary" className="ml-auto text-xs">
+                                                <span className="ml-auto flex items-center">
                                                     {item.badge}
-                                                </Badge>
+                                                </span>
                                             )}
                                         </span>
                                     </AppLink>

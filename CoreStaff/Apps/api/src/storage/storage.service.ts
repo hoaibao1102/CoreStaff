@@ -27,26 +27,47 @@ export class StorageService {
   }
 
   private buildClient(): S3Client | null {
-    const region = process.env.S3_REGION?.trim();
-    const endpoint = process.env.S3_ENDPOINT?.trim(); // MinIO / LocalStack dev override
-    if (!region || !process.env.S3_BUCKET?.trim()) return null;
+    const region = process.env.S3_REGION?.trim() || 'auto';
+    const endpoint = process.env.S3_ENDPOINT?.trim(); // Cloudflare R2 / MinIO / LocalStack override
+    const bucket = process.env.S3_BUCKET?.trim();
+    if (!bucket) return null;
+
+    const accessKeyId =
+      process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+    const secretAccessKey =
+      process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+
     return new S3Client({
       region,
       ...(endpoint ? { endpoint } : {}),
+      ...(accessKeyId && secretAccessKey
+        ? {
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
+          }
+        : {}),
     });
   }
 
-  /** True when region + bucket are configured (S3_REGION / S3_BUCKET present). */
+  /** True when region + bucket are configured and credentials present. */
   isConfigured(): boolean {
-    return Boolean(this.s3 && process.env.S3_BUCKET?.trim());
+    const bucket = process.env.S3_BUCKET?.trim();
+    const accessKeyId =
+      process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+    const secretAccessKey =
+      process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
+    return Boolean(bucket && accessKeyId && secretAccessKey);
   }
 
   /** Fail loudly, never hang: miss a key-looking 400 instead of a timeout. */
   private requireClient(): S3Client {
-    if (!this.s3 || !process.env.S3_BUCKET?.trim()) {
+    const client = this.buildClient();
+    if (!client || !this.isConfigured()) {
       throw new BadRequestException('STORAGE_NOT_CONFIGURED');
     }
-    return this.s3;
+    return client;
   }
 
   async upload(key: string, body: Buffer | Readable, contentType: string): Promise<void> {

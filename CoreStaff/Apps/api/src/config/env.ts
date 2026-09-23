@@ -12,7 +12,15 @@ import { ensureSrvCapableResolver } from './dns';
  * (see config/dns.ts) runs once everywhere a Mongo URI is about to be used.
  */
 export function loadEnv(): void {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'Apps/api/.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../../../.env'),
+  ];
+  for (const p of candidates) {
+    dotenv.config({ path: p });
+  }
   ensureSrvCapableResolver();
 }
 

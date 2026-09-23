@@ -79,9 +79,28 @@ export function deactivateAssignment(base: string, id: string): Promise<Assignme
 
 /** Public mapper for assignment screens; technical backend messages stay hidden. */
 export function assignmentErrorMessage(error: unknown): string {
-  const assignmentError = error as { code?: string; status?: number } | null;
-  if (assignmentError?.status === 409 && !assignmentError.code) {
+  const err = error as { code?: string; status?: number; message?: string } | null;
+  const raw = `${err?.code || ''} ${err?.message || ''}`;
+
+  if (raw.includes('EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST')) {
+    return 'Ngày bắt đầu phân công không thể ở trong quá khứ.';
+  }
+  if (raw.includes('EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM')) {
+    return 'Ngày kết thúc phân công phải sau ngày bắt đầu.';
+  }
+  if (raw.includes('OVERLAPPING_ASSIGNMENT_EXISTS') || err?.status === 409) {
     return 'Khoảng thời gian phân công của nhân viên đang bị trùng. Hãy chọn ngày khác hoặc ngưng phân công cũ trước.';
   }
-  return mapHrError((error as { code?: string } | null)?.code, 'Không thể xử lý phân công. Vui lòng thử lại.');
+  if (raw.includes('WORKPLACE_NOT_FOUND')) {
+    return 'Nơi làm việc được chọn không tồn tại hoặc đã ngừng hoạt động.';
+  }
+  if (raw.includes('DEPARTMENT_NOT_FOUND')) {
+    return 'Phòng ban được chọn không tồn tại hoặc đã ngừng hoạt động.';
+  }
+  if (raw.includes('USER_NOT_FOUND')) {
+    return 'Không tìm thấy thông tin nhân viên trong tổ chức.';
+  }
+
+  return mapHrError(err?.code, err?.message || 'Không thể xử lý phân công. Vui lòng thử lại.');
 }
+

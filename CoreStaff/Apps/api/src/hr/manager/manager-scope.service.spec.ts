@@ -27,10 +27,20 @@ function buildService(assignments: Row[], departments: Row[] = [], employees: Ro
     ))),
   };
   const employeeModel = {
-    find: jest.fn((filter: Row) => queryResult(employees.filter(row =>
-      String(row.organizationId) === String(filter.organizationId)
-      && (filter.departmentId?.$in ?? []).map(String).includes(String(row.departmentId)),
-    ))),
+    find: jest.fn((filter: Row) => queryResult(employees.filter(row => {
+      if (String(row.organizationId) !== String(filter.organizationId)) return false;
+      if (filter.departmentId?.$in) {
+        return (filter.departmentId.$in as any[]).map(String).includes(String(row.departmentId));
+      }
+      if (filter.$or) {
+        return filter.$or.some((sub: any) => {
+          if (sub.departmentId?.$in) return (sub.departmentId.$in as any[]).map(String).includes(String(row.departmentId));
+          if (sub.userId?.$in) return (sub.userId.$in as any[]).map(String).includes(String(row.userId));
+          return false;
+        });
+      }
+      return true;
+    }))),
   };
   const userModel = {
     find: jest.fn((filter: Row) => queryResult([
@@ -38,7 +48,17 @@ function buildService(assignments: Row[], departments: Row[] = [], employees: Ro
       { _id: 'u2', organizationId: filter.organizationId, fullName: 'Bình' },
     ].filter(row => (filter._id?.$in ?? []).map(String).includes(String(row._id))))),
   };
-  return new ManagerScopeService(assignmentModel as any, departmentModel as any, employeeModel as any, userModel as any);
+  const mockSub = { find: () => ({ select: () => ({ lean: async () => [] }), lean: async () => [] }) };
+  return new ManagerScopeService(
+    assignmentModel as any,
+    departmentModel as any,
+    employeeModel as any,
+    userModel as any,
+    mockSub as any,
+    mockSub as any,
+    mockSub as any,
+    mockSub as any,
+  );
 }
 
 describe('ManagerScopeService', () => {
@@ -95,7 +115,23 @@ describe('ManagerScopeService', () => {
     ]);
 
     await expect(service.listEmployees('org-1', 'manager-1', undefined, now)).resolves.toEqual([
-      { id: 'p1', userId: 'u1', employeeCode: 'E001', fullName: 'An', departmentId: 'd1', positionId: 'pos1', employmentStatus: 'ACTIVE' },
+      {
+        id: 'p1',
+        userId: 'u1',
+        employeeCode: 'E001',
+        fullName: 'An',
+        avatar: null,
+        email: null,
+        phone: null,
+        departmentId: 'd1',
+        positionId: 'pos1',
+        positionName: null,
+        workplaceId: null,
+        workplaceName: null,
+        workplaceType: null,
+        employmentStatus: 'ACTIVE',
+        todayAttendance: null,
+      },
     ]);
   });
 });

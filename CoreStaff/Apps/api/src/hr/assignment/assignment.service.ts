@@ -16,6 +16,11 @@ const LEGACY_UNIQUE_INDEXES = [
     'organizationId_1_employeeId_1_departmentId_1',
 ];
 
+function isDateBeforeToday(dateStr: string): boolean {
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    return dateStr.slice(0, 10) < todayStr;
+}
+
 @Injectable()
 export class AssignmentService {
     constructor(
@@ -50,7 +55,7 @@ export class AssignmentService {
             batch.check(new Date(dto.effectiveFrom) <= new Date(dto.effectiveTo), 'effectiveTo', 'EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM');
         }
         if (dto.effectiveFrom) {
-            batch.check(new Date(dto.effectiveFrom) >= new Date(), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+            batch.check(!isDateBeforeToday(dto.effectiveFrom), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
         }
 
         // Validate department exists and belongs to tenant
@@ -185,7 +190,7 @@ export class AssignmentService {
         const patch: Record<string, unknown> = { ...dto };
 
         // Validate references if being updated
-        if (patch.userId || patch.departmentId || patch.workplaceId) {
+        if (patch.userId || patch.departmentId || patch.workplaceId || patch.effectiveFrom || patch.effectiveTo) {
             const current = await this.assignmentModel.findById(id).lean();
             if (!current) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
 
@@ -201,8 +206,8 @@ export class AssignmentService {
             if (refs.effectiveFrom && refs.effectiveTo) {
                 batch.check(new Date(refs.effectiveFrom as string) <= new Date(refs.effectiveTo as string), 'effectiveTo', 'EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM');
             }
-            if (refs.effectiveFrom) {
-                batch.check(new Date(refs.effectiveFrom as string) >= new Date(), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+            if (patch.effectiveFrom && patch.effectiveFrom !== current.effectiveFrom) {
+                batch.check(!isDateBeforeToday(patch.effectiveFrom as string), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
             }
 
             // Validate user exists in tenant

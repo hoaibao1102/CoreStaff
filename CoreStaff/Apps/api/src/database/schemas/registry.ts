@@ -19,6 +19,9 @@ import {
   OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
   AttendanceBonusPolicySchema, KpiPayrollInputSchema, KpiPolicySchema, OvertimePayPolicySchema,
 } from './compensation.schema';
+import { AttendanceDaySchema, AttendanceDay } from './attendance-day.schema';
+import { AttendanceEventSchema, AttendanceEvent } from './attendance-event.schema';
+import { EvidenceSchema, Evidence } from './evidence.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -50,6 +53,9 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
   { name: 'KpiPolicy', schema: KpiPolicySchema },
   { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
+  { name: 'AttendanceDay', schema: AttendanceDaySchema },
+  { name: 'AttendanceEvent', schema: AttendanceEventSchema },
+  { name: 'Evidence', schema: EvidenceSchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
@@ -69,6 +75,9 @@ export { EmploymentContract } from './employment-contract.schema';
 export { EmployeeDocument } from './employee-document.schema';
 export { Workplace, WorkplaceType } from './workplace.schema';
 export { ShiftTemplate } from './shift-template.schema';
+export { AttendanceDay, AttendanceDaySchema } from './attendance-day.schema';
+export { AttendanceEvent, AttendanceEventSchema } from './attendance-event.schema';
+export { Evidence, EvidenceSchema } from './evidence.schema';
 
 export function registryEntries() {
   return SCHEMA_REGISTRY.map(({ name, schema }) => ({ name, schema } as const));

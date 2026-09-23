@@ -525,9 +525,9 @@ export function AttendanceHistoryView() {
   }, [selectedMonth]);
 
   return (
-    <div className="w-full max-w-md md:max-w-xl mx-auto space-y-3.5 pb-8">
+    <div className="w-full max-w-md md:max-w-xl lg:max-w-none mx-auto space-y-3.5 lg:space-y-5 pb-8">
       {/* ── Top App Bar (Mobile style) ────────────────────────── */}
-      <header className="flex items-center justify-between pt-1 pb-2">
+      <header className="flex items-center justify-between pt-1 pb-2 lg:pb-1">
         {/* Avatar */}
         <div className="relative">
           <div className="size-10 rounded-full border-2 border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center shadow-xs">
@@ -540,7 +540,7 @@ export function AttendanceHistoryView() {
         </div>
 
         {/* Title */}
-        <h1 className="text-xl font-bold tracking-tight text-[#102a43]">
+        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-[#102a43]">
           Chấm công
         </h1>
 
@@ -556,42 +556,44 @@ export function AttendanceHistoryView() {
       </header>
 
       {/* ── Subheader / Month Switcher Card ────────────────── */}
-      <div className="rounded-2xl bg-[#3f475b] p-3.5 sm:p-4 text-white flex items-center justify-between shadow-sm">
+      <div className="rounded-2xl bg-[#3f475b] p-3.5 sm:p-4 lg:px-6 lg:py-5 text-white flex items-center justify-between shadow-sm">
         <div className="min-w-0 pr-2">
-          <h2 className="text-sm sm:text-base font-bold text-white truncate leading-tight">
-            Lịch sử chấm...
+          <h2 className="text-sm sm:text-base lg:text-lg font-bold text-white truncate leading-tight">
+            <span className="lg:hidden">Lịch sử chấm...</span>
+            <span className="hidden lg:inline">Lịch sử chấm công</span>
           </h2>
-          <p className="text-xs text-white/70 truncate mt-0.5 leading-tight">
-            Bảng chấm công th...
+          <p className="text-xs lg:text-sm text-white/70 truncate mt-0.5 leading-tight">
+            <span className="lg:hidden">Bảng chấm công th...</span>
+            <span className="hidden lg:inline">Bảng chấm công tháng</span>
           </p>
         </div>
 
         {/* Month Selector Pill */}
-        <div className="flex items-center gap-1.5 rounded-xl bg-[#1c223a] px-2 py-1.5 shadow-xs shrink-0">
+        <div className="flex items-center gap-1.5 lg:gap-2 rounded-xl bg-[#1c223a] px-2 py-1.5 lg:px-3 lg:py-2 shadow-xs shrink-0">
           <button
             type="button"
             aria-label="Tháng trước"
             onClick={() => setSelectedMonth('2026-08')}
-            className="size-6 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            className="size-6 lg:size-8 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
           >
-            <ChevronLeft className="size-3.5" />
+            <ChevronLeft className="size-3.5 lg:size-4" />
           </button>
-          <span className="text-xs font-semibold text-white px-1 whitespace-nowrap">
+          <span className="text-xs lg:text-sm font-semibold text-white px-1 whitespace-nowrap">
             tháng 9 năm 2026
           </span>
           <button
             type="button"
             aria-label="Tháng sau"
             onClick={() => setSelectedMonth('2026-09')}
-            className="size-6 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            className="size-6 lg:size-8 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
           >
-            <ChevronRight className="size-3.5" />
+            <ChevronRight className="size-3.5 lg:size-4" />
           </button>
         </div>
       </div>
 
       {/* ── 4 KPI Statistic Cards ──────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
+      <div className="grid grid-cols-4 gap-2 sm:gap-2.5 lg:gap-4">
         {[
           { labelTop: 'Ngày', labelBottom: 'công', value: '14' },
           { labelTop: 'Ngày', labelBottom: 'đi muộn', value: '2' },
@@ -600,13 +602,13 @@ export function AttendanceHistoryView() {
         ].map((item) => (
           <div
             key={item.labelBottom}
-            className="bg-[#1c223a] text-white rounded-2xl py-3 px-1 sm:py-4 sm:px-2 flex flex-col items-center justify-center text-center shadow-md transition-transform active:scale-95"
+            className="bg-[#1c223a] text-white rounded-2xl py-3 px-1 sm:py-4 sm:px-2 lg:py-5 lg:px-4 flex flex-col items-center justify-center text-center shadow-md transition-transform active:scale-95"
           >
-            <div className="text-[11px] sm:text-xs font-medium text-white/80 leading-tight h-[28px] flex flex-col items-center justify-center">
+            <div className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 leading-tight h-[28px] lg:h-auto flex flex-col lg:flex-row lg:gap-1 items-center justify-center">
               <span>{item.labelTop}</span>
               <span>{item.labelBottom}</span>
             </div>
-            <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-white mt-1">
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-bold font-mono tracking-tight text-white mt-1">
               {item.value}
             </span>
           </div>
@@ -616,7 +618,7 @@ export function AttendanceHistoryView() {
       {/* ── Calendar Grid ──────────────────────────────────── */}
       <div className="pt-2">
         {/* Weekday Names */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-xs font-bold text-slate-400 pb-2">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center text-xs lg:text-sm font-bold text-slate-400 pb-2 lg:pb-3">
           {WEEKDAY_NAMES.map((d) => (
             <div key={d} className="py-0.5">
               {d}
@@ -625,7 +627,7 @@ export function AttendanceHistoryView() {
         </div>
 
         {/* Day Cells */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center">
           {calendarCells.map((dateStr, idx) => {
             if (!dateStr) {
               return <div key={`blank-${idx}`} className="aspect-square" />;
@@ -648,17 +650,17 @@ export function AttendanceHistoryView() {
                   if (day) setActiveDetailDay(day);
                 }}
                 disabled={!day}
-                className="aspect-square bg-[#1c223a] hover:bg-[#252c4a] text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default"
+                className="aspect-square bg-[#1c223a] hover:bg-[#252c4a] text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 lg:gap-2 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default"
               >
-                <span className="text-sm sm:text-base font-bold text-white leading-none">
+                <span className="text-sm sm:text-base lg:text-lg font-bold text-white leading-none">
                   {dayNum}
                 </span>
 
                 {hasRecord ? (
                   isDayOff ? (
-                    <span className="size-1.5 rounded-full bg-slate-300" />
+                    <span className="size-1.5 lg:size-2 rounded-full bg-slate-300" />
                   ) : (
-                    <span className="size-1.5 rounded-full bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]" />
+                    <span className="size-1.5 lg:size-2 rounded-full bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]" />
                   )
                 ) : null}
               </button>
@@ -668,23 +670,23 @@ export function AttendanceHistoryView() {
       </div>
 
       {/* ── Status Badges Legend ───────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 pt-3 pb-4">
-        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs font-medium px-4 py-1.5 rounded-full shadow-xs">
+      <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 pt-3 lg:pt-4 pb-4">
+        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
           Chưa vào
         </span>
-        <span className="bg-[#0c395b] text-white text-[11px] sm:text-xs font-medium px-4 py-1.5 rounded-full shadow-xs">
+        <span className="bg-[#0c395b] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
           Đã vào
         </span>
-        <span className="bg-[#0e6f3b] text-white text-[11px] sm:text-xs font-medium px-4 py-1.5 rounded-full shadow-xs">
+        <span className="bg-[#0e6f3b] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
           Hoàn
         </span>
-        <span className="bg-[#8f520a] text-white text-[11px] sm:text-xs font-medium px-4 py-1.5 rounded-full shadow-xs">
+        <span className="bg-[#8f520a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
           Chờ
         </span>
-        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs font-medium px-4 py-1.5 rounded-full shadow-xs">
+        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
           Nghỉ
         </span>
-        <span className="text-slate-500 text-[11px] sm:text-xs font-medium px-2 py-1 leading-tight flex flex-col items-center">
+        <span className="text-slate-500 text-[11px] sm:text-xs lg:text-sm font-medium px-2 py-1 leading-tight flex flex-col lg:flex-row lg:gap-1 items-center">
           <span>Đã</span>
           <span>khóa</span>
         </span>

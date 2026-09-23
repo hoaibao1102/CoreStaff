@@ -114,3 +114,56 @@ export function normalizeCode(code: string): string {
 export function normalizeEmployeeCode(code: string): string {
   return normalizeCode(code).toUpperCase();
 }
+
+export const WorkMode = {
+  IN_OFFICE: 'IN_OFFICE',
+  OUT_OFFICE: 'OUT_OFFICE',
+} as const;
+export type WorkMode = (typeof WorkMode)[keyof typeof WorkMode];
+
+export const AttendanceMethod = {
+  NETWORK: 'NETWORK',
+  GPS: 'GPS',
+  SELFIE: 'SELFIE',
+} as const;
+export type AttendanceMethod = (typeof AttendanceMethod)[keyof typeof AttendanceMethod];
+
+export const AttendanceStatus = {
+  NOT_CHECKED_IN: 'NOT_CHECKED_IN',
+  CHECKED_IN: 'CHECKED_IN',
+  COMPLETED: 'COMPLETED',
+  DAY_OFF: 'DAY_OFF',
+  LOCKED: 'LOCKED',
+} as const;
+export type AttendanceStatus = (typeof AttendanceStatus)[keyof typeof AttendanceStatus];
+
+export const AttendanceEventType = {
+  CHECK_IN: 'CHECK_IN',
+  CHECK_OUT: 'CHECK_OUT',
+} as const;
+export type AttendanceEventType = (typeof AttendanceEventType)[keyof typeof AttendanceEventType];
+
+export const AttendanceApprovalStatus = {
+  NOT_REQUIRED: 'NOT_REQUIRED',
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CLARIFICATION_REQUESTED: 'CLARIFICATION_REQUESTED',
+} as const;
+export type AttendanceApprovalStatus = (typeof AttendanceApprovalStatus)[keyof typeof AttendanceApprovalStatus];
+
+export const WorkdayType = {
+  WORKING_DAY: 'WORKING_DAY',
+  WEEKLY_OFF: 'WEEKLY_OFF',
+  PUBLIC_HOLIDAY: 'PUBLIC_HOLIDAY',
+  PAID_LEAVE: 'PAID_LEAVE',
+  UNPAID_LEAVE: 'UNPAID_LEAVE',
+} as const;
+export type WorkdayType = (typeof WorkdayType)[keyof typeof WorkdayType];
+
+export const DayResult = {
+  PRESENT: 'PRESENT',
+  ABSENT: 'ABSENT',
+  INCOMPLETE: 'INCOMPLETE',
+} as const;
+export type DayResult = (typeof DayResult)[keyof typeof DayResult];

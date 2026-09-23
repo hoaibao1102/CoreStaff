@@ -111,8 +111,15 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   // ── Dashboard / Tổng quan ────────────────────────────────────────────
   if (route === '/' || route === '/dashboard' || route === '/overview') {
+    if (user.role === 'EMPLOYEE') {
+      return (
+        <WorkspaceShell user={user} currentPath="/app/attendance" onLogout={onLogout} apiBase={apiBase}>
+          <AttendanceScreen user={user} apiBase={apiBase} />
+        </WorkspaceShell>
+      );
+    }
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} />
       </WorkspaceShell>
     );
@@ -121,7 +128,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   // ── Employee Profile ─────────────────────────────────────────────────
   if (route === '/app/profile') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <EmployeeProfileScreen user={user} apiBase={apiBase} />
         </section>
@@ -132,7 +139,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   // Department reads are available to every authenticated tenant member.
   if (route === '/hr/departments') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <DepartmentScreen user={user} apiBase={apiBase} />
         </section>
@@ -140,23 +147,23 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
   if (route === '/hr/positions') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><PositionScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><PositionScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
   }
   if (route === '/hr/workplaces' && user.role === 'HR') {
     if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
     if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><WorkplaceScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><WorkplaceScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
   }
   if (route === '/hr/shift-templates' && user.role === 'HR') {
     if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
     if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><ShiftTemplateScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><ShiftTemplateScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
   }
 
   // ── HR routes ────────────────────────────────────────────────────────
   if (route === '/app/attendance' && user.role === 'HR') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <AttendanceScreen user={user} />
       </WorkspaceShell>
     );
@@ -164,7 +171,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if (user.role === 'HR') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
           {route === '/hr/employees' || route.startsWith('/hr/employees/') ? (
             <EmployeeDirectoryScreen
@@ -207,7 +214,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   // ── Platform (SYSTEM_ADMIN) ─────────────────────────────────────────
   if (route === '/platform/organizations' && user.role === 'SYSTEM_ADMIN') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <PlatformOrganizationsScreen user={user} apiBase={apiBase} />
         </section>
@@ -218,7 +225,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   // ── Attendance (EMPLOYEE / DEPARTMENT_MANAGER) ───────────────────────
   if (route === '/app/attendance' && (user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER')) {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <AttendanceScreen user={user} apiBase={apiBase} />
       </WorkspaceShell>
     );
@@ -227,7 +234,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (user.role === 'DEPARTMENT_MANAGER' && (route === '/manager/department' || route === '/manager/approvals' || route === '/hr/kpi-inputs')) {
     const initialTab = route === '/hr/kpi-inputs' ? 'evaluations' : 'approvals';
     return (
-      <WorkspaceShell user={user} currentPath="/manager/department" onLogout={onLogout}>
+      <WorkspaceShell user={user} currentPath="/manager/department" onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
           <ManagerDepartmentScreen apiBase={apiBase} initialTab={initialTab} />
         </section>
@@ -237,8 +244,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/attendance/history') {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
-        <div className="mx-auto w-full max-w-md md:max-w-2xl px-3 py-2 sm:px-6 sm:py-6">
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <div className="mx-auto w-full max-w-md md:max-w-2xl lg:max-w-5xl px-3 py-2 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           <AttendanceHistoryScreen />
         </div>
       </WorkspaceShell>
@@ -246,12 +253,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
   // ── Fallback: show dashboard ─────────────────────────────────────────
   return (
-    <WorkspaceShell user={user} currentPath={route} onLogout={onLogout}>
+    <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
       <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} />
     </WorkspaceShell>
   );

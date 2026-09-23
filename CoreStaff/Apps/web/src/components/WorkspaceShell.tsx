@@ -12,6 +12,7 @@ interface WorkspaceShellProps {
     currentPath: string;
     onLogout: () => void;
     children: ReactNode;
+    apiBase?: string | null;
 }
 
 const SIDEBAR_PREFERENCE_KEY = 'corestaff:sidebar-collapsed';
@@ -74,7 +75,7 @@ function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps)
     );
 }
 
-export function WorkspaceShell({ user, currentPath, onLogout, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ user, currentPath, onLogout, children, apiBase }: WorkspaceShellProps) {
     const [collapsed, setCollapsed] = useState(readCollapsedPreference);
     const [mobileOpen, setMobileOpen] = useState(false);
     const desktopContainer = useRef<HTMLDivElement>(null);
@@ -111,7 +112,7 @@ export function WorkspaceShell({ user, currentPath, onLogout, children }: Worksp
             {/* Desktop Sidebar */}
             <div ref={desktopContainer} className="workspace-sidebar-desktop">
                 <Sidebar id="desktop-sidebar" user={user} currentPath={currentPath} collapsed={collapsed}
-                    onToggle={() => setCollapsed(value => !value)} onLogout={onLogout} />
+                    onToggle={() => setCollapsed(value => !value)} onLogout={onLogout} apiBase={apiBase} />
             </div>
 
             {/* Main Application Area */}
@@ -131,7 +132,7 @@ export function WorkspaceShell({ user, currentPath, onLogout, children }: Worksp
                             <SheetTitle className="sr-only">Menu điều hướng</SheetTitle>
                             <SheetDescription className="sr-only">Điều hướng và tài khoản CoreStaff</SheetDescription>
                             <Sidebar id="mobile-sidebar" user={user} currentPath={currentPath} collapsed={false} mobile
-                                onToggle={() => setMobileOpen(false)} onNavigate={() => setMobileOpen(false)} onLogout={onLogout} />
+                                onToggle={() => setMobileOpen(false)} onNavigate={() => setMobileOpen(false)} onLogout={onLogout} apiBase={apiBase} />
                         </SheetContent>
                     </Sheet>
                 ) : null}
