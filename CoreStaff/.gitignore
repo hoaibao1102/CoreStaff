@@ -15,3 +15,4 @@ Apps/mobile/android/
 Apps/mobile/ios/
 
 # Never commit real credentials — .env files are local-only, see .env.example
+scratch/

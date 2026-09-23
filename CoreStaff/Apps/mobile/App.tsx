@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { resolveApiBase } from './src/config';
-import { changePassword, forgotPassword, friendlyAuthError, getCurrentUser, login, logout, resetPassword, type AuthUser } from './src/auth';
+import { changePassword, forgotPassword, friendlyAuthError, getCurrentUser, login, logout, resetPassword, setSignedOutHandler, type AuthUser } from './src/auth';
 import { BottomTabBar, type BottomTabKey } from './src/components/BottomTabBar';
 
 type Screen = 'login' | 'forgot' | 'reset' | 'change-password' | 'home';
@@ -31,6 +31,14 @@ export default function App() {
   }, []);
   useEffect(() => { void bootstrap(); }, [bootstrap]);
 
+  // src/auth.ts renews the short-lived session cookie silently (SRS §4.4).
+  // This is what's left when renewal itself fails — the refresh token expired
+  // too, so the only honest move is the login screen.
+  useEffect(() => {
+    setSignedOutHandler(() => { setUser(null); setForcedPasswordChange(false); setScreen('login'); });
+    return () => setSignedOutHandler(null);
+  }, []);
+
   if (connecting) return <LoadingScreen />;
   if (!apiBase || connectionError) return <ConnectionError message={connectionError || 'Không tìm thấy API.'} onRetry={bootstrap} />;
   const clearSession = () => { setUser(null); setForcedPasswordChange(false); setScreen('login'); };
@@ -58,7 +66,7 @@ function Logo({ large = false }: { large?: boolean }) {
 }
 
 function AuthLayout({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
-  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled"><Logo /><View style={styles.authHeader}><Text style={styles.eyebrow}>{eyebrow}</Text><Text style={styles.authTitle}>{title}</Text><Text style={styles.authDescription}>{description}</Text></View><View style={styles.authCard}>{children}</View><Text style={styles.securityNote}>Phiên đăng nhập được bảo vệ và tự động hết hạn sau 30 phút.</Text></ScrollView></KeyboardAvoidingView>;
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled"><Logo /><View style={styles.authHeader}><Text style={styles.eyebrow}>{eyebrow}</Text><Text style={styles.authTitle}>{title}</Text><Text style={styles.authDescription}>{description}</Text></View><View style={styles.authCard}>{children}</View><Text style={styles.securityNote}>Phiên đăng nhập được tự động làm mới khi bạn còn dùng; dừng quá 14 ngày thì cần đăng nhập lại.</Text></ScrollView></KeyboardAvoidingView>;
 }
 
 function LoginScreen({ apiBase, onAuthenticated, onForgot, onReset }: { apiBase: string; onAuthenticated: (user: AuthUser, forced: boolean) => void; onForgot: () => void; onReset: () => void }) {
