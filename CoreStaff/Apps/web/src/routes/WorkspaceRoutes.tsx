@@ -12,6 +12,8 @@ import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScre
 import { HrOverviewScreen } from '../screens/HrOverview/HrOverviewScreen';
 import { CompensationScreen } from '../screens/Compensation/CompensationScreen';
 import { SalaryProfilesScreen } from '../screens/SalaryProfiles/SalaryProfilesScreen';
+import { InsuranceProfilesScreen } from '../screens/InsuranceProfiles/InsuranceProfilesScreen';
+import { InsurancePolicyScreen } from '../screens/InsurancePolicy/InsurancePolicyScreen';
 import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
@@ -100,7 +102,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/contracts' || route.startsWith('/hr/contracts/') ||
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
-    route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay';
+    route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay' ||
+    route === '/hr/insurance-profiles' || route === '/hr/policies/insurance';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
@@ -182,6 +185,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <AssignmentScreen user={user} apiBase={apiBase} />
           ) : route === '/hr/salary-profiles' ? (
             <SalaryProfilesScreen apiBase={apiBase} />
+          ) : route === '/hr/insurance-profiles' ? (
+            <InsuranceProfilesScreen user={user} apiBase={apiBase} />
+          ) : route === '/hr/policies/insurance' ? (
+            <InsurancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/organization-allowances' ? (
             <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
           ) : route === '/hr/attendance-bonus-policies' ? (

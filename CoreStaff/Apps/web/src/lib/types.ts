@@ -119,6 +119,27 @@ export const CONTRACT_STATUS_TRANSITIONS: Record<ContractStatus, ContractStatus[
     TERMINATED: [],
 };
 
+/** Insurance contribution type enum (database/schemas/enums.ts, TASK-038/039). */
+export const INSURANCE_CONTRIBUTION_TYPE = {
+    SOCIAL_INSURANCE: 'SOCIAL_INSURANCE',
+    HEALTH_INSURANCE: 'HEALTH_INSURANCE',
+    UNEMPLOYMENT_INSURANCE: 'UNEMPLOYMENT_INSURANCE',
+} as const;
+
+export type InsuranceContributionType = (typeof INSURANCE_CONTRIBUTION_TYPE)[keyof typeof INSURANCE_CONTRIBUTION_TYPE];
+
+export const INSURANCE_CONTRIBUTION_TYPE_LABELS: Record<InsuranceContributionType, string> = {
+    SOCIAL_INSURANCE: 'BHXH',
+    HEALTH_INSURANCE: 'BHYT',
+    UNEMPLOYMENT_INSURANCE: 'BHTN',
+};
+
+export const INSURANCE_CONTRIBUTION_TYPE_FULL_LABELS: Record<InsuranceContributionType, string> = {
+    SOCIAL_INSURANCE: 'Bảo hiểm xã hội',
+    HEALTH_INSURANCE: 'Bảo hiểm y tế',
+    UNEMPLOYMENT_INSURANCE: 'Bảo hiểm thất nghiệp',
+};
+
 /** Compliance finding labels (codes mirror the API; see hrService.ContractFindingCode). */
 export const CONTRACT_FINDING_LABELS: Record<string, string> = {
     NO_CONTRACT: 'Chưa có hợp đồng',
