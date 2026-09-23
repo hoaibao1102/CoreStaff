@@ -1,28 +1,16 @@
-import { Controller, Post, Get, Body, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CookieOptions, Request, Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AllowTempPassword, AuthGuard } from './guards/auth.guard';
 import { CurrentUser, SessionUser } from '../common/tenant-context';
 import { getCookie } from '../common/parse-cookies';
 import { ApiCreatedSuccess, ApiErrorExamples, ApiSuccess, userExample } from '../common/swagger-responses';
+import { COOKIE_NAME, REFRESH_COOKIE_NAME, clearSessionCookies, setSessionCookies } from './session-cookies';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-
-const COOKIE_NAME = 'sid';
-const SESSION_TTL_MS = 30 * 60 * 1000;
-
-export function sessionCookieOptions(): CookieOptions {
-	const production = process.env.NODE_ENV === 'production';
-	return {
-		httpOnly: true,
-		secure: production,
-		sameSite: production ? 'none' : 'lax',
-		path: '/',
-	};
-}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -30,8 +18,8 @@ export class AuthController {
 	constructor(private readonly authService: AuthService) {}
 
 	@Post('login')
-	@ApiOperation({ summary: 'Log in; sets the HttpOnly `sid` session cookie.' })
-	@ApiCreatedSuccess('Authenticated. `sessionId` is cookie-only, never in the body.', {
+	@ApiOperation({ summary: 'Log in; sets the HttpOnly `sid` session cookie and the `rt` refresh cookie.' })
+	@ApiCreatedSuccess('Authenticated. Tokens are cookie-only, never in the body.', {
 		user: userExample,
 		mustChangePassword: false,
 	})
@@ -45,10 +33,7 @@ export class AuthController {
 	): Promise<{ success: true; data: { user: Record<string, unknown>; mustChangePassword: boolean } }> {
 		const result = await this.authService.login(dto);
 
-		res.cookie(COOKIE_NAME, result.sessionId, {
-			...sessionCookieOptions(),
-			maxAge: SESSION_TTL_MS,
-		});
+		setSessionCookies(res, result.sessionId, result.refreshToken);
 
 		return {
 			success: true,
@@ -56,9 +41,34 @@ export class AuthController {
 		};
 	}
 
+	/**
+	 * SRS §4.4 — renew the session cookie from the refresh cookie, so an
+	 * authorized user whose `sid` expired silently gets a new one instead of the
+	 * login screen. No guard, no body: `rt` is the whole credential, and the
+	 * response shape matches login so the client can treat the two alike.
+	 */
+	@Post('refresh')
+	@ApiOperation({ summary: 'Exchange the `rt` refresh cookie for a new `sid` session cookie.' })
+	@ApiSuccess('Session renewed.', { user: userExample })
+	@ApiResponse({ status: 401, description: 'AUTH_SESSION_EXPIRED (refresh cookie missing/expired/revoked)' })
+	@ApiErrorExamples()
+	async refresh(
+		@Req() req: Request,
+		@Res({ passthrough: true }) res: Response,
+	): Promise<{ success: true; data: { user: Record<string, unknown> } }> {
+		const rt = getCookie(req.headers.cookie, REFRESH_COOKIE_NAME);
+		if (!rt) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
+
+		const result = await this.authService.refreshSession(rt);
+		// Refresh cookie is deliberately not rotated — see AuthService.refreshSession.
+		setSessionCookies(res, result.sessionId);
+
+		return { success: true, data: { user: result.user } };
+	}
+
 	@Post('logout')
-	@ApiOperation({ summary: 'Revoke the current session and clear the `sid` cookie.' })
-	@ApiCreatedSuccess('Current session revoked and `sid` cookie cleared.')
+	@ApiOperation({ summary: 'Revoke the current session and clear the session + refresh cookies.' })
+	@ApiCreatedSuccess('Current session revoked and both cookies cleared.')
 	@ApiErrorExamples()
 	async logout(
 		@Req() req: Request,
@@ -66,7 +76,7 @@ export class AuthController {
 	): Promise<{ success: true }> {
 		const sid = getCookie(req.headers.cookie, COOKIE_NAME);
 		if (sid) await this.authService.logout(sid);
-		res.clearCookie(COOKIE_NAME, sessionCookieOptions());
+		clearSessionCookies(res);
 		return { success: true };
 	}
 

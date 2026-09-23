@@ -13,6 +13,7 @@ import { UserDocument } from '../../database/schemas/user.schema';
 import { UserSessionDocument } from '../../database/schemas/user-session.schema';
 import { hashToken } from '../strategies/token-strategy';
 import { getCookie } from '../../common/parse-cookies';
+import { COOKIE_NAME } from '../session-cookies';
 
 export const PASSWORD_CHANGE_EXEMPT_KEY = 'auth:allowedWithTempPassword';
 
@@ -21,6 +22,10 @@ export const PASSWORD_CHANGE_EXEMPT_KEY = 'auth:allowedWithTempPassword';
  * may only reach the change-password screen — AuthGuard 403s everything else
  * with AUTH_PASSWORD_CHANGE_REQUIRED (SRS §17). Routes the forced-change
  * screen itself needs (me/change-password/logout) opt out via this decorator.
+ *
+ * This guard stays a pure read. A 401 here is what tells the client to renew
+ * the session cookie through POST /api/auth/refresh (SRS §4.4), so sliding the
+ * expiry per request would only add a write to every hot path for no gain.
  */
 export const AllowTempPassword = () => SetMetadata(PASSWORD_CHANGE_EXEMPT_KEY, true);
 
@@ -37,7 +42,7 @@ export class AuthGuard implements CanActivate {
 		const rawCookie = req.headers.cookie;
 		if (!rawCookie) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 
-		const sid = getCookie(rawCookie, 'sid');
+		const sid = getCookie(rawCookie, COOKIE_NAME);
 		if (!sid) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 
 		const session = await this.sessionModel.findOne({

@@ -4,7 +4,7 @@ import { WorkspaceRoutes } from './routes/WorkspaceRoutes';
 import { CoreStaffLogo } from './components/CoreStaffLogo';
 import { navigationEvent } from './components/AppLink';
 import { resolveApiBase, type ApiSource, type HealthResponse } from './config/api';
-import { type AuthUser, me } from './services/auth';
+import { type AuthUser, me, signedOutEvent } from './services/auth';
 import { forgetSession, hasRememberedSession } from './lib/session';
 import { ToastViewport } from './components/toast';
 
@@ -83,6 +83,19 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // The API session cookie is short-lived; services/auth.ts renews it silently
+  // (SRS §4.4). This is what's left when renewal itself fails — the refresh
+  // token expired too, so the only honest move is the login screen.
+  useEffect(() => {
+    const onSignedOut = () => {
+      forgetSession();
+      setUser(null);
+      setMustChangePassword(false);
+    };
+    window.addEventListener(signedOutEvent, onSignedOut);
+    return () => window.removeEventListener(signedOutEvent, onSignedOut);
   }, []);
 
   const signOut = () => {

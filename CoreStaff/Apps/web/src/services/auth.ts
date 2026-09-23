@@ -44,6 +44,14 @@ export class AuthApiError extends Error {
   }
 }
 
+/** Broadcast when the refresh token is gone too: the app drops to the login screen. */
+export const signedOutEvent = 'corestaff:signed-out';
+
+/** Guarded: the service modules are also imported by unit tests with no DOM. */
+export function notifySignedOut(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(signedOutEvent));
+}
+
 async function parseJson<T>(res: Response): Promise<T | null> {
   const text = await res.text();
   if (!text) return null;
@@ -54,7 +62,20 @@ async function parseJson<T>(res: Response): Promise<T | null> {
   }
 }
 
-async function request<T>(base: string, path: string, init?: RequestInit): Promise<T> {
+/**
+ * Credential endpoints. A 401 from these is the answer to the credential the
+ * call just sent, not an expired session, so renewing first would be pointless
+ * (and for login, actively wrong — it would fire a refresh before there is a
+ * session to refresh).
+ */
+const NO_REFRESH_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/refresh',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+]);
+
+async function request<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
   const res = await fetch(apiUrl(base, path), {
     ...init,
     credentials: 'include',
@@ -63,6 +84,15 @@ async function request<T>(base: string, path: string, init?: RequestInit): Promi
       ...init?.headers,
     },
   });
+
+  // SRS §4.4: the session cookie is short-lived, so a 401 usually means
+  // "renew me", not "log in again". Retry once behind the refresh token.
+  if (res.status === 401 && allowRefresh && !NO_REFRESH_PATHS.has(path)) {
+    if (await tryRefreshSession(base)) {
+      return request<T>(base, path, init, false);
+    }
+    notifySignedOut();
+  }
 
   const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
 
@@ -77,6 +107,23 @@ async function request<T>(base: string, path: string, init?: RequestInit): Promi
   }
 
   return body.data as T;
+}
+
+/**
+ * One refresh in flight at a time: a screen that fires five requests after the
+ * cookie expired must send one refresh, not five, or they race each other to
+ * rewrite the session token.
+ */
+let refreshInflight: Promise<boolean> | null = null;
+
+export function tryRefreshSession(base: string): Promise<boolean> {
+  refreshInflight ??= request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      refreshInflight = null;
+    });
+  return refreshInflight;
 }
 
 export function login(base: string, identifier: string, password: string): Promise<LoginResult> {
