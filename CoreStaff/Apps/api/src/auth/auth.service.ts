@@ -17,6 +17,7 @@ import { OrganizationStatus, UserStatus, normalizeEmail, normalizeEmployeeCode }
 import { comparePassword, hashPassword } from './strategies/bcrypt.strategy';
 import { isWeakPassword } from './strategies/password-policy';
 import { generateSessionToken, hashToken } from './strategies/token-strategy';
+import { REFRESH_TTL_MS, SESSION_TTL_MS } from './session-ttl';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { PasswordResetTokenDocument } from '../database/schemas/password-reset-token.schema';
@@ -24,7 +25,6 @@ import { ResetMailer, RESET_MAILER } from './strategies/reset-mailer';
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
-const SESSION_TTL_MS = 30 * 60 * 1000;
 /** FR-AUTH-05 / SRS §4.8: one-time reset tokens expire after 15 minutes. */
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -54,6 +54,7 @@ export class AuthService {
 		user: Record<string, unknown>;
 		mustChangePassword: boolean;
 		sessionId: string;
+		refreshToken: string;
 	}> {
 		const resolved = await this.resolveLoginUser(dto.identifier);
 		const candidate = resolved?.user;
@@ -89,20 +90,72 @@ export class AuthService {
 		}
 
 		const rawToken = generateSessionToken();
-		const tokenHash = hashToken(rawToken);
+		const refreshToken = generateSessionToken();
 
 		await this.sessionModel.create({
 			userId: candidate._id,
 			organizationId: candidate.organizationId ?? undefined,
-			tokenHash,
+			tokenHash: hashToken(rawToken),
+			refreshTokenHash: hashToken(refreshToken),
 			expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+			refreshExpiresAt: new Date(Date.now() + REFRESH_TTL_MS),
 		});
 
 		return {
 			user: toSafeUser(candidate, resolved.employeeCode),
 			mustChangePassword: !!candidate.mustChangePassword,
 			sessionId: rawToken,
+			refreshToken,
 		};
+	}
+
+	/**
+	 * SRS §4.4 — exchange the `rt` cookie for a new session cookie so a
+	 * returning user is not bounced to the login screen every 30 minutes.
+	 * Deliberately NOT behind AuthGuard: the whole point is being callable once
+	 * the access cookie has expired. Tenant context comes from the session row,
+	 * never from the client (BR-TENANT-01).
+	 *
+	 * ponytail: the refresh token is NOT rotated — one per login until it
+	 * expires or the session is revoked. Rotation would invalidate every other
+	 * tab's token mid-flight; if this ever needs it, do it with a grace window
+	 * and reuse detection, not a plain swap.
+	 */
+	async refreshSession(refreshToken: string): Promise<{ sessionId: string; user: Record<string, unknown> }> {
+		const session = await this.sessionModel
+			.findOne({
+				refreshTokenHash: hashToken(refreshToken),
+				revokedAt: null,
+				refreshExpiresAt: { $gte: new Date() },
+			})
+			.lean();
+
+		if (!session) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
+
+		// Parity with login: the suspend route revokes live sessions, but a
+		// refresh must not be a way back in for a tenant that is closed.
+		await this.assertNotTenantLocked(session.organizationId);
+
+		// Lean, like AuthGuard: `-passwordHash` is applied by the query, so
+		// `toSafeUser`'s `toObject()` is not available and nothing needs
+		// stripping — the payload is the plain doc.
+		const doc = await this.userModel.findById(session.userId).select('-passwordHash').lean();
+		if (!doc || doc.status !== UserStatus.ACTIVE) {
+			throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
+		}
+
+		const rawToken = generateSessionToken();
+		await this.sessionModel.updateOne(
+			{ _id: session._id },
+			{ tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + SESSION_TTL_MS) },
+		);
+
+		const profile = await this.profileModel
+			.findOne({ organizationId: doc.organizationId, userId: doc._id })
+			.lean()
+			.exec();
+
+		return { sessionId: rawToken, user: { ...doc, employeeCode: profile?.employeeCode } };
 	}
 
 	/**

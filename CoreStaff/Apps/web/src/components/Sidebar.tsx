@@ -77,6 +77,8 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                     { href: '/hr/kpi-inputs', label: 'KPI kỳ lương', icon: ClipboardList },
                     { href: '/hr/policies/labor-compliance', label: 'Tuân thủ lao động', icon: ShieldAlert },
                     { href: '/hr/policies/overtime-pay', label: 'Lương tăng ca', icon: WalletCards },
+                    { href: '/hr/insurance-profiles', label: 'Hồ sơ bảo hiểm', icon: ShieldCheck },
+                    { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
                 ],
             },
             {

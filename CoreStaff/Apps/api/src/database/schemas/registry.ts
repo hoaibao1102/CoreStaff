@@ -12,6 +12,8 @@ import { EmployeeDocumentSchema } from './employee-document.schema';
 import { WorkplaceSchema } from './workplace.schema';
 import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
+import { InsuranceProfileSchema } from './insurance-profile.schema';
+import { InsurancePolicySchema } from './insurance-policy.schema';
 import { ManagerAssignmentSchema } from './manager-assignment.schema';
 import { ManagerRequestSchema } from './manager-request.schema';
 import {
@@ -44,6 +46,8 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Workplace', schema: WorkplaceSchema },
   { name: 'ShiftTemplate', schema: ShiftTemplateSchema },
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
+  { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
+  { name: 'InsurancePolicy', schema: InsurancePolicySchema },
   { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
   { name: 'ManagerRequest', schema: ManagerRequestSchema },
   { name: 'SalaryProfile', schema: SalaryProfileSchema },
@@ -67,6 +71,10 @@ export { DepartmentSchema, PositionSchema, EmployeeProfileSchema, EmploymentHist
 export { EmploymentContractSchema, EmployeeDocumentSchema };
 export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
+export { InsuranceProfileSchema };
+export { InsurancePolicySchema };
+export { InsuranceProfile } from './insurance-profile.schema';
+export { InsurancePolicy } from './insurance-policy.schema';
 export { Organization } from './organization.schema';
 export { User } from './user.schema';
 export { UserSession } from './user-session.schema';

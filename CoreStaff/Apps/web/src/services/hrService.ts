@@ -1,10 +1,12 @@
 import { apiUrl } from '../config/api';
+import { notifySignedOut, tryRefreshSession } from './auth';
 import type {
     ContractStatus,
     ContractType,
     EmploymentStatus,
     EmploymentType,
     Gender,
+    InsuranceContributionType,
 } from '../lib/types';
 
 // ───────── API Response Types ─────────
@@ -163,6 +165,81 @@ export interface ContractStatusUpdateDto {
     reason?: string;
 }
 
+// ── InsuranceProfile (TASK-038) — per-employee participation, versioned ──
+
+export interface InsuranceProfile {
+    _id: string;
+    organizationId: string;
+    employeeId: string;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+    participatesSocialInsurance: boolean;
+    participatesHealthInsurance: boolean;
+    participatesUnemploymentInsurance: boolean;
+    note?: string;
+    version: number;
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface InsuranceProfileCreateDto {
+    employeeId: string;
+    effectiveFrom: string;
+    effectiveTo?: string;
+    participatesSocialInsurance: boolean;
+    participatesHealthInsurance: boolean;
+    participatesUnemploymentInsurance: boolean;
+    note?: string;
+}
+
+// ── InsurancePolicy (TASK-039) — org-wide rate/base/cap, versioned ──────
+
+export interface InsuranceSalaryBaseRule {
+    type: InsuranceContributionType;
+    floorAmount?: number | null;
+}
+
+export interface InsuranceCapRule {
+    type: InsuranceContributionType;
+    capAmount?: number | null;
+}
+
+export interface InsuranceEmployerContributionRate {
+    type: InsuranceContributionType;
+    rate: number;
+}
+
+export interface InsurancePolicy {
+    _id: string;
+    organizationId: string;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+    version: number;
+    legalReference: string;
+    socialInsuranceEmployeeRate: number;
+    healthInsuranceEmployeeRate: number;
+    unemploymentInsuranceEmployeeRate: number;
+    salaryBaseRules: InsuranceSalaryBaseRule[];
+    capRules: InsuranceCapRule[];
+    employerContributionRates: InsuranceEmployerContributionRate[];
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface InsurancePolicyCreateDto {
+    effectiveFrom: string;
+    effectiveTo?: string;
+    legalReference: string;
+    socialInsuranceEmployeeRate: number;
+    healthInsuranceEmployeeRate: number;
+    unemploymentInsuranceEmployeeRate: number;
+    salaryBaseRules: InsuranceSalaryBaseRule[];
+    capRules: InsuranceCapRule[];
+    employerContributionRates: InsuranceEmployerContributionRate[];
+}
+
 // ── EmployeeDocument (TASK-029) ───────────────────────────────────────
 
 export interface EmployeeDocument {
@@ -256,6 +333,22 @@ export const HR_ERROR_CODES: Record<string, string> = {
     KPI_INPUT_CONFIRMED_IMMUTABLE: 'Dữ liệu KPI đã được xác nhận và không thể chỉnh sửa.',
     KPI_INPUT_NOT_DRAFT: 'Chỉ có thể xác nhận bản ghi KPI ở trạng thái Nháp.',
 
+    // Insurance Profile errors (TASK-038)
+    INSURANCE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ tham gia bảo hiểm.',
+    INSURANCE_PROFILE_NOT_EFFECTIVE: 'Nhân viên chưa có hồ sơ tham gia bảo hiểm hiệu lực tại thời điểm này.',
+    INSURANCE_PROFILE_DATE_RANGE_INVALID: 'Ngày hiệu lực đến phải sau ngày hiệu lực từ.',
+    INSURANCE_PROFILE_PERIOD_OVERLAPS: 'Khoảng thời gian hiệu lực bị trùng với hồ sơ bảo hiểm hiện có của nhân viên này.',
+
+    // Insurance Policy errors (TASK-039)
+    INSURANCE_POLICY_NOT_FOUND: 'Không tìm thấy chính sách bảo hiểm.',
+    INSURANCE_POLICY_NOT_CONFIGURED: 'Chưa có chính sách bảo hiểm hiệu lực tại thời điểm tính.',
+    INSURANCE_POLICY_DATE_RANGE_INVALID: 'Ngày hiệu lực đến phải sau ngày hiệu lực từ.',
+    INSURANCE_POLICY_PERIOD_OVERLAPS: 'Khoảng thời gian hiệu lực bị trùng với chính sách bảo hiểm hiện có.',
+    INSURANCE_POLICY_FLOOR_ABOVE_CAP: 'Mức sàn của một khoản bảo hiểm đang lớn hơn mức trần. Vui lòng kiểm tra lại.',
+    SALARYBASERULES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình mức sàn cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
+    CAPRULES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình mức trần cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
+    EMPLOYERCONTRIBUTIONRATES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình tỷ lệ đóng của doanh nghiệp cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
+
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
 
@@ -330,6 +423,15 @@ interface ApiFailure {
 }
 
 export async function hrRequest<T>(base: string, path: string, options?: RequestInit): Promise<T> {
+    return send<T>(base, path, options, true);
+}
+
+/**
+ * Same 401 → refresh → retry-once dance as services/auth.ts, so every HR call
+ * survives an expired session cookie the way the SRS §4.4 refresh is meant to.
+ * `allowRefresh=false` on the retry stops a second expiry from looping.
+ */
+async function send<T>(base: string, path: string, options: RequestInit | undefined, allowRefresh: boolean): Promise<T> {
     const res = await fetch(apiUrl(base, path), {
         ...options,
         credentials: 'include',
@@ -338,6 +440,15 @@ export async function hrRequest<T>(base: string, path: string, options?: Request
             ...(options?.headers || {}),
         },
     });
+
+    // `allowRefresh` is what bounds the loop: a retry that still gets 401 (a
+    // real permission error behind a valid session) must not refresh again.
+    if (res.status === 401 && allowRefresh) {
+        // Same rule as services/auth.ts: renewal failed for good, so the app
+        // must drop to the login screen rather than show a dead page.
+        if (await tryRefreshSession(base)) return send<T>(base, path, options, false);
+        notifySignedOut();
+    }
 
     const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
 
@@ -621,7 +732,7 @@ export interface UploadDocumentResult {
 }
 
 /** Multipart upload via raw fetch — never set Content-Type manually. */
-export async function uploadDocument(
+export function uploadDocument(
     base: string,
     dto: { employeeProfileId: string; contractId?: string },
     file: File,
@@ -631,13 +742,20 @@ export async function uploadDocument(
     if (dto.contractId) form.append('contractId', dto.contractId);
     form.append('file', file);
 
-    const res = await fetch(apiUrl(base, '/api/hr/documents/upload'), {
-        method: 'POST',
-        credentials: 'include',
-        body: form,
-    });
+    // Raw fetch keeps multipart's boundary out of our hands; the same
+    // 401 → refresh → retry-once applies, so it goes through `fetchRaw`.
+    return fetchRaw<UploadDocumentResult>(base, '/api/hr/documents/upload', { method: 'POST', body: form }, true);
+}
 
-    const body = await parseJson<ApiSuccess<UploadDocumentResult> | ApiFailure>(res);
+async function fetchRaw<T>(base: string, path: string, options: RequestInit, allowRefresh: boolean): Promise<T> {
+    const res = await fetch(apiUrl(base, path), { ...options, credentials: 'include' });
+
+    if (res.status === 401 && allowRefresh) {
+        if (await tryRefreshSession(base)) return fetchRaw<T>(base, path, options, false);
+        notifySignedOut();
+    }
+
+    const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
     if (!res.ok || body?.success === false) {
         const code = body?.success === false ? body.error?.code : undefined;
         const message = body?.success === false ? body.error?.message : `HTTP ${res.status}`;
@@ -649,7 +767,7 @@ export async function uploadDocument(
     if (!body || body.success !== true) {
         throw new Error('Phản hồi từ máy chủ không hợp lệ.');
     }
-    return body.data as UploadDocumentResult;
+    return body.data as T;
 }
 
 /** Get a signed-out-of-band download: fetch the blob, open an object URL, click
@@ -682,4 +800,42 @@ export async function downloadDocument(base: string, id: string): Promise<void> 
 
 export async function deleteDocument(base: string, id: string): Promise<void> {
     return hrRequest<undefined>(base, `/api/hr/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// ── Insurance Profiles (HR-only, TASK-038) ─────────────────────────────
+// Never updated in place — a correction is a new effective-dated version.
+
+export async function listInsuranceProfiles(base: string, employeeId?: string): Promise<InsuranceProfile[]> {
+    const params = new URLSearchParams();
+    if (employeeId) params.set('employeeId', employeeId);
+    return hrRequest<InsuranceProfile[]>(base, `/api/hr/insurance-profiles?${params}`, { method: 'GET' });
+}
+
+export async function getInsuranceProfileById(base: string, id: string): Promise<InsuranceProfile> {
+    return hrRequest<InsuranceProfile>(base, `/api/hr/insurance-profiles/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createInsuranceProfile(base: string, dto: InsuranceProfileCreateDto): Promise<InsuranceProfile> {
+    return hrRequest<InsuranceProfile>(base, '/api/hr/insurance-profiles', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+// ── Insurance Policy (HR-only, TASK-039) ───────────────────────────────
+// Org-wide rate/base/cap engine input — never updated in place.
+
+export async function listInsurancePolicies(base: string): Promise<InsurancePolicy[]> {
+    return hrRequest<InsurancePolicy[]>(base, '/api/hr/policies/insurance', { method: 'GET' });
+}
+
+export async function getInsurancePolicyById(base: string, id: string): Promise<InsurancePolicy> {
+    return hrRequest<InsurancePolicy>(base, `/api/hr/policies/insurance/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createInsurancePolicy(base: string, dto: InsurancePolicyCreateDto): Promise<InsurancePolicy> {
+    return hrRequest<InsurancePolicy>(base, '/api/hr/policies/insurance', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
 }
