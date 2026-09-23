@@ -25,12 +25,40 @@ export class AuthApiError extends Error {
   }
 }
 
-async function request<T>(base: string, path: string, init?: RequestInit): Promise<T> {
+/**
+ * Credential endpoints. A 401 from these answers the credential the call just
+ * sent, not an expired session — renewing first would be pointless (and for
+ * login, wrong: there is no session to renew yet).
+ */
+const NO_REFRESH_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/refresh',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+]);
+
+/** App registers this so the UI drops to the login screen when `rt` is dead too. */
+let signedOutHandler: (() => void) | null = null;
+export function setSignedOutHandler(handler: (() => void) | null): void {
+  signedOutHandler = handler;
+}
+
+async function request<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
   const response = await fetch(apiUrl(base, path), {
     ...init,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
+
+  // SRS §4.4: the session cookie is short-lived, so a 401 usually means
+  // "renew me", not "log in again". Retry once behind the refresh cookie.
+  if (response.status === 401 && allowRefresh && !NO_REFRESH_PATHS.has(path)) {
+    if (await tryRefreshSession(base)) {
+      return request<T>(base, path, init, false);
+    }
+    signedOutHandler?.();
+  }
+
   const text = await response.text();
   let body: ApiSuccess<T> | ApiFailure | null = null;
   try { body = text ? JSON.parse(text) as ApiSuccess<T> | ApiFailure : null; } catch { body = null; }
@@ -41,6 +69,23 @@ async function request<T>(base: string, path: string, init?: RequestInit): Promi
   }
   if (!body || body.success !== true) throw new AuthApiError('Phản hồi từ máy chủ không hợp lệ.', response.status);
   return body.data as T;
+}
+
+/**
+ * One refresh in flight at a time: several requests failing on an expired
+ * cookie must send one refresh, not one each, or they race to rewrite the
+ * session token. Same contract as the web client (services/auth.ts).
+ */
+let refreshInflight: Promise<boolean> | null = null;
+
+export function tryRefreshSession(base: string): Promise<boolean> {
+  refreshInflight ??= request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      refreshInflight = null;
+    });
+  return refreshInflight;
 }
 
 export const login = (base: string, identifier: string, password: string) => request<LoginResult>(base, '/api/auth/login', {

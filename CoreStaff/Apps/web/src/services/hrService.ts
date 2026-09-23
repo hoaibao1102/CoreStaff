@@ -1,4 +1,5 @@
 import { apiUrl } from '../config/api';
+import { notifySignedOut, tryRefreshSession } from './auth';
 import type {
     ContractStatus,
     ContractType,
@@ -422,6 +423,15 @@ interface ApiFailure {
 }
 
 export async function hrRequest<T>(base: string, path: string, options?: RequestInit): Promise<T> {
+    return send<T>(base, path, options, true);
+}
+
+/**
+ * Same 401 → refresh → retry-once dance as services/auth.ts, so every HR call
+ * survives an expired session cookie the way the SRS §4.4 refresh is meant to.
+ * `allowRefresh=false` on the retry stops a second expiry from looping.
+ */
+async function send<T>(base: string, path: string, options: RequestInit | undefined, allowRefresh: boolean): Promise<T> {
     const res = await fetch(apiUrl(base, path), {
         ...options,
         credentials: 'include',
@@ -430,6 +440,15 @@ export async function hrRequest<T>(base: string, path: string, options?: Request
             ...(options?.headers || {}),
         },
     });
+
+    // `allowRefresh` is what bounds the loop: a retry that still gets 401 (a
+    // real permission error behind a valid session) must not refresh again.
+    if (res.status === 401 && allowRefresh) {
+        // Same rule as services/auth.ts: renewal failed for good, so the app
+        // must drop to the login screen rather than show a dead page.
+        if (await tryRefreshSession(base)) return send<T>(base, path, options, false);
+        notifySignedOut();
+    }
 
     const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
 
@@ -713,7 +732,7 @@ export interface UploadDocumentResult {
 }
 
 /** Multipart upload via raw fetch — never set Content-Type manually. */
-export async function uploadDocument(
+export function uploadDocument(
     base: string,
     dto: { employeeProfileId: string; contractId?: string },
     file: File,
@@ -723,13 +742,20 @@ export async function uploadDocument(
     if (dto.contractId) form.append('contractId', dto.contractId);
     form.append('file', file);
 
-    const res = await fetch(apiUrl(base, '/api/hr/documents/upload'), {
-        method: 'POST',
-        credentials: 'include',
-        body: form,
-    });
+    // Raw fetch keeps multipart's boundary out of our hands; the same
+    // 401 → refresh → retry-once applies, so it goes through `fetchRaw`.
+    return fetchRaw<UploadDocumentResult>(base, '/api/hr/documents/upload', { method: 'POST', body: form }, true);
+}
 
-    const body = await parseJson<ApiSuccess<UploadDocumentResult> | ApiFailure>(res);
+async function fetchRaw<T>(base: string, path: string, options: RequestInit, allowRefresh: boolean): Promise<T> {
+    const res = await fetch(apiUrl(base, path), { ...options, credentials: 'include' });
+
+    if (res.status === 401 && allowRefresh) {
+        if (await tryRefreshSession(base)) return fetchRaw<T>(base, path, options, false);
+        notifySignedOut();
+    }
+
+    const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
     if (!res.ok || body?.success === false) {
         const code = body?.success === false ? body.error?.code : undefined;
         const message = body?.success === false ? body.error?.message : `HTTP ${res.status}`;
@@ -741,7 +767,7 @@ export async function uploadDocument(
     if (!body || body.success !== true) {
         throw new Error('Phản hồi từ máy chủ không hợp lệ.');
     }
-    return body.data as UploadDocumentResult;
+    return body.data as T;
 }
 
 /** Get a signed-out-of-band download: fetch the blob, open an object URL, click

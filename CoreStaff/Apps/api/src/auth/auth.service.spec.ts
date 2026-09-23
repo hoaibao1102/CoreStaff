@@ -1,5 +1,6 @@
 import { AuthService } from './auth.service';
-import { UserStatus } from '../database/schemas/enums';
+import { OrganizationStatus, UserStatus } from '../database/schemas/enums';
+import { REFRESH_TTL_MS, SESSION_TTL_MS } from './session-ttl';
 import { hashPassword } from './strategies/bcrypt.strategy';
 import { hashToken } from './strategies/token-strategy';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -30,6 +31,12 @@ interface ProfileRow {
 	organizationId?: string;
 	userId: string;
 	employeeCode: string;
+}
+
+/** What `.select('-passwordHash').lean()` yields in the real driver. */
+function stripPassword(u: UserRow): Record<string, unknown> {
+	const { passwordHash, toObject: _t, save: _s, ...rest } = u as unknown as Record<string, unknown>;
+	return rest;
 }
 
 function makeUser(partial: Partial<UserRow> & { _id: string; passwordHash: string }): UserRow {
@@ -89,6 +96,9 @@ function build(userOrUsers: UserRow | UserRow[] | null, profiles: ProfileRow[] =
 					if (!u) throw new Error('NotFound');
 					return u;
 				},
+				// refreshSession mirrors the guard's `-passwordHash` projection.
+				select: () => chain,
+				lean: async () => (u ? stripPassword(u) : null),
 			};
 			return chain;
 		},
@@ -110,11 +120,25 @@ function build(userOrUsers: UserRow | UserRow[] | null, profiles: ProfileRow[] =
 	};
 	const sessionModel = {
 		create: async (doc: Record<string, unknown>) => {
-			sessions.push({ revokedAt: null, ...doc });
+			sessions.push({ _id: `sess-${sessions.length + 1}`, revokedAt: null, ...doc });
 			return doc;
 		},
+		// Only the shapes the tests query: an unrevoked session matching the
+		// requested (refresh) token hash, past no expiry bound.
+		findOne(filter: Record<string, unknown>) {
+			const gte = (filter.refreshExpiresAt as { $gte?: Date } | undefined)?.$gte;
+			const run = async () =>
+				sessions.find(
+					(s) =>
+						(filter.tokenHash === undefined || s.tokenHash === filter.tokenHash) &&
+						(filter.refreshTokenHash === undefined || s.refreshTokenHash === filter.refreshTokenHash) &&
+						(filter.revokedAt === undefined || s.revokedAt === filter.revokedAt) &&
+						(!gte || (s.refreshExpiresAt as Date) >= gte),
+				) ?? null;
+			return { lean: run };
+		},
 		updateOne: (filter: Record<string, unknown>, update: Record<string, unknown>) => {
-			const s = sessions.find((x) => x.tokenHash === filter.tokenHash);
+			const s = sessions.find((x) => x.tokenHash === filter.tokenHash || x._id === filter._id);
 			if (s) Object.assign(s, update);
 			return Promise.resolve({ modifiedCount: s ? 1 : 0 });
 		},
@@ -361,6 +385,96 @@ describe('AuthService.login (TASK-016)', () => {
 		await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
 		expect(user.failedLoginCount).toBe(0);
 		expect(user.lockedUntil).toBeUndefined();
+	});
+});
+
+describe('AuthService.refreshSession (SRS §4.4)', () => {
+	it('login issues a refresh token; the session stores its HASH and a 14-day ceiling', async () => {
+		const user = await activeUser();
+		const { service, sessions } = build(user, [HR_PROFILE]);
+		const res = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+
+		expect(res.refreshToken).toHaveLength(64);
+		expect(res.refreshToken).not.toBe(res.sessionId);
+		expect(sessions[0].refreshTokenHash).toBe(hashToken(res.refreshToken));
+		expect(sessions[0].refreshTokenHash).not.toBe(res.refreshToken);
+		expect((sessions[0].refreshExpiresAt as Date).getTime()).toBeGreaterThan(
+			Date.now() + REFRESH_TTL_MS - 60_000,
+		);
+	});
+
+	it('exchanges the refresh token for a NEW session token, same session row', async () => {
+		const user = await activeUser();
+		const { service, sessions } = build(user, [HR_PROFILE]);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+		const oldHash = sessions[0].tokenHash;
+
+		const refreshed = await service.refreshSession(login.refreshToken);
+
+		expect(refreshed.sessionId).not.toBe(login.sessionId);
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0].tokenHash).toBe(hashToken(refreshed.sessionId));
+		expect(sessions[0].tokenHash).not.toBe(oldHash);
+		expect((sessions[0].expiresAt as Date).getTime()).toBeGreaterThan(Date.now() + SESSION_TTL_MS - 60_000);
+		// The refresh ceiling is NOT extended by refreshing (absolute cap).
+		expect((sessions[0].refreshExpiresAt as Date).getTime()).toBeGreaterThan(
+			Date.now() + REFRESH_TTL_MS - 60_000,
+		);
+		// Same payload login returns, so the client can reuse its user state.
+		expect(refreshed.user).toMatchObject({ _id: 'u1', employeeCode: 'HR-A' });
+		expect(refreshed.user).not.toHaveProperty('passwordHash');
+	});
+
+	it('unknown / rotated-away token → 401', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		await expect(service.refreshSession('f'.repeat(64))).rejects.toMatchObject({
+			response: { message: 'AUTH_SESSION_EXPIRED' },
+			status: 401,
+		});
+	});
+
+	it('past the refresh ceiling → 401 even though the row is unrevoked', async () => {
+		const user = await activeUser();
+		const { service, sessions } = build(user);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+		(sessions[0].refreshExpiresAt as Date) = new Date(Date.now() - 1);
+
+		await expect(service.refreshSession(login.refreshToken)).rejects.toMatchObject({ status: 401 });
+	});
+
+	it('a session revoked by logout / password change / admin reset cannot refresh', async () => {
+		const user = await activeUser();
+		const { service, sessions } = build(user);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+
+		await service.logout(login.sessionId);
+		await expect(service.refreshSession(login.refreshToken)).rejects.toMatchObject({ status: 401 });
+		expect(sessions).toHaveLength(1);
+	});
+
+	it('non-ACTIVE account → 401 (a refresh is not a way back in for a disabled user)', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+		user.status = UserStatus.DISABLED;
+
+		await expect(service.refreshSession(login.refreshToken)).rejects.toMatchObject({ status: 401 });
+	});
+
+	it('tenant suspended after login → 423, the same gate login applies', async () => {
+		const user = await activeUser();
+		user.organizationId = 'orgA';
+		const org: { _id: string; status: string } = { _id: 'orgA', status: OrganizationStatus.ACTIVE };
+		const { service } = build(user, [], [org]);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+
+		// The suspend route revokes live sessions; a refresh must not be a way
+		// back in for a tenant that closed meanwhile. The fake reads org status
+		// at query time, so flipping the seeded row is the whole simulation.
+		org.status = OrganizationStatus.SUSPENDED;
+
+		await expect(service.refreshSession(login.refreshToken)).rejects.toMatchObject({ status: 423 });
 	});
 });
 
