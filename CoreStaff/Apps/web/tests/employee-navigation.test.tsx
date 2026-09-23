@@ -152,7 +152,7 @@ test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER'] as const)('%s login has profile but
   }
 
   expect(container.querySelector('#desktop-sidebar .workspace-sidebar-account')).not.toBeNull();
-  expect(container.textContent).toContain('current@example.test');
+  expect(container.textContent).toContain('Current User');
 });
 
 test.each(['/hr/employees', '/app/profile'])('guest and mandatory password change guard %s', async path => {

@@ -99,9 +99,9 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** Case-insensitive, trimmed employee code. */
+/** Case-insensitive, trimmed code used by tenant-scoped identifiers. */
 export function normalizeCode(code: string): string {
-  return code.trim();
+  return code.trim().toUpperCase();
 }
 
 /**
@@ -166,4 +166,4 @@ export const DayResult = {
   ABSENT: 'ABSENT',
   INCOMPLETE: 'INCOMPLETE',
 } as const;
-export type DayResult = (typeof DayResult)[keyof typeof DayResult];
+export type DayResult = (typeof DayResult)[keyof typeof DayResult];

@@ -20,8 +20,8 @@ import { AttendanceHistoryView } from '../Attendance/components/AttendanceHistor
 import { toast } from '../../components/toast';
 import { getSocket } from '../../services/socket';
 
-export function AttendanceHistoryScreen() {
-  return <AttendanceHistoryView />;
+export function AttendanceHistoryScreen({ apiBase }: { apiBase?: string | null }) {
+  return <AttendanceHistoryView apiBase={apiBase} />;
 }
 
 export function LeaveOvertimeScreen() {
@@ -122,17 +122,42 @@ export function LeaveOvertimeScreen() {
           </CardHeader>
           <CardContent>
             <form className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
-              <label className="grid gap-2 text-sm font-medium">
-                Loại yêu cầu
-                <select
-                  className="min-h-11 rounded-lg border bg-background px-3"
-                  value={type}
-                  onChange={(e) => setType(e.target.value as RequestType)}
-                >
-                  <option value="ATTENDANCE">Điều chỉnh công / giải trình</option>
-                  <option value="OVERTIME">Làm thêm giờ (OT)</option>
-                </select>
-              </label>
+              <div className="grid gap-2 sm:col-span-2">
+                <span className="text-sm font-medium">Chọn loại yêu cầu</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setType('OVERTIME')}
+                    className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
+                      type === 'OVERTIME'
+                        ? 'border-indigo-600 bg-indigo-50/70 font-semibold text-indigo-950 ring-2 ring-indigo-500/40'
+                        : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <Clock3 className={`size-5 shrink-0 mt-0.5 ${type === 'OVERTIME' ? 'text-indigo-600' : 'text-muted-foreground'}`} />
+                    <div>
+                      <p className="font-semibold text-sm">Làm thêm giờ (OT)</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Đăng ký ca làm thêm giờ ngoài ca làm việc</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setType('ATTENDANCE')}
+                    className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
+                      type === 'ATTENDANCE'
+                        ? 'border-blue-600 bg-blue-50/70 font-semibold text-blue-950 ring-2 ring-blue-500/40'
+                        : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <CalendarDays className={`size-5 shrink-0 mt-0.5 ${type === 'ATTENDANCE' ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                    <div>
+                      <p className="font-semibold text-sm">Điều chỉnh / Giải trình công</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Báo quên chấm công, sự cố thiết bị hoặc giải trình</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               <label className="grid gap-2 text-sm font-medium">
                 Ngày

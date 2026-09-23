@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   Optional,
   UnprocessableEntityException,
@@ -9,6 +10,7 @@ import {
 import { EventsGateway } from '../events/events.gateway';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { createHash } from 'node:crypto';
 import { AttendanceDay, AttendanceDayDocument } from '../database/schemas/attendance-day.schema';
 import { AttendanceEvent, AttendanceEventDocument } from '../database/schemas/attendance-event.schema';
 import { Evidence, EvidenceDocument } from '../database/schemas/evidence.schema';
@@ -38,6 +40,7 @@ export class AttendanceService {
     @InjectModel('ManagerAssignment') private managerAssignmentModel: Model<any>,
     @InjectModel('ManagerRequest') private managerRequestModel: Model<any>,
     @InjectModel('EmployeeProfile') private employeeProfileModel: Model<any>,
+    @InjectModel('IdempotencyRecord') private idempotencyModel: Model<any>,
     private haversineService: HaversineService,
     private networkValidatorService: NetworkValidatorService,
     private calculatorService: AttendanceCalculatorService,
@@ -177,6 +180,48 @@ export class AttendanceService {
     };
   }
 
+  private requestHash(operation: 'CHECK_IN' | 'CHECK_OUT', dto: unknown, file?: Express.Multer.File): string {
+    return createHash('sha256')
+      .update(JSON.stringify({ operation, dto, file: file ? createHash('sha256').update(file.buffer).digest('hex') : null }))
+      .digest('hex');
+  }
+
+  private async idempotencyReplay(
+    organizationId: string,
+    userId: string,
+    key: string | undefined,
+    operation: 'CHECK_IN' | 'CHECK_OUT',
+    hash: string,
+  ) {
+    if (!key?.trim()) throw new BadRequestException('IDEMPOTENCY_KEY_REQUIRED');
+    const existing: any = await this.idempotencyModel.findOne({ organizationId, userId, key: key.trim() }).lean();
+    if (!existing) return null;
+    if (existing.operation !== operation || existing.requestHash !== hash) {
+      throw new ConflictException('IDEMPOTENCY_KEY_REUSED');
+    }
+    return existing.responseBody;
+  }
+
+  private async saveIdempotency(
+    organizationId: string,
+    userId: string,
+    key: string,
+    operation: 'CHECK_IN' | 'CHECK_OUT',
+    requestHash: string,
+    responseBody: Record<string, unknown>,
+  ) {
+    await this.idempotencyModel.create({
+      organizationId,
+      userId,
+      key: key.trim(),
+      operation,
+      requestHash,
+      responseStatus: 200,
+      responseBody,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+  }
+
   /**
    * Xử lý Check-in
    */
@@ -187,7 +232,11 @@ export class AttendanceService {
     file?: Express.Multer.File,
     clientIp?: string,
     userAgent?: string,
+    idempotencyKey?: string,
   ) {
+    const requestHash = this.requestHash('CHECK_IN', dto, file);
+    const replay = await this.idempotencyReplay(organizationId, employeeId, idempotencyKey, 'CHECK_IN', requestHash);
+    if (replay) return replay;
     const orgObjectId = new Types.ObjectId(organizationId);
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
@@ -258,8 +307,9 @@ export class AttendanceService {
       if (this.storageService.isConfigured()) {
         try {
           await this.storageService.upload(storageKey, file.buffer, file.mimetype);
-        } catch (uploadErr) {
-          console.warn('[AttendanceService] Storage upload failed:', uploadErr);
+        } catch (uploadErr: any) {
+          console.error('[AttendanceService] Storage upload failed:', uploadErr);
+          throw new InternalServerErrorException('EVIDENCE_STORAGE_UPLOAD_FAILED');
         }
       }
 
@@ -416,7 +466,7 @@ export class AttendanceService {
       );
     }
 
-    return {
+    const response = {
       workDate,
       attendanceStatus: AttendanceStatus.CHECKED_IN,
       availableAction: 'CHECK_OUT',
@@ -431,6 +481,8 @@ export class AttendanceService {
         approvalStatus: event.approvalStatus,
       },
     };
+    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_IN', requestHash, response as any);
+    return response;
   }
 
   /**
@@ -443,7 +495,11 @@ export class AttendanceService {
     file?: Express.Multer.File,
     clientIp?: string,
     userAgent?: string,
+    idempotencyKey?: string,
   ) {
+    const requestHash = this.requestHash('CHECK_OUT', dto, file);
+    const replay = await this.idempotencyReplay(organizationId, employeeId, idempotencyKey, 'CHECK_OUT', requestHash);
+    if (replay) return replay;
     const orgObjectId = new Types.ObjectId(organizationId);
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
@@ -519,8 +575,9 @@ export class AttendanceService {
       if (this.storageService.isConfigured()) {
         try {
           await this.storageService.upload(storageKey, file.buffer, file.mimetype);
-        } catch (uploadErr) {
-          console.warn('[AttendanceService] Storage upload failed:', uploadErr);
+        } catch (uploadErr: any) {
+          console.error('[AttendanceService] Storage upload failed:', uploadErr);
+          throw new InternalServerErrorException('EVIDENCE_STORAGE_UPLOAD_FAILED');
         }
       }
 
@@ -640,7 +697,7 @@ export class AttendanceService {
       );
     }
 
-    return {
+    const response = {
       workDate,
       attendanceStatus: AttendanceStatus.COMPLETED,
       availableAction: 'NONE',
@@ -656,6 +713,8 @@ export class AttendanceService {
         approvalStatus: outEvent.approvalStatus,
       },
     };
+    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_OUT', requestHash, response as any);
+    return response;
   }
 
   /**
@@ -667,43 +726,181 @@ export class AttendanceService {
 
     // monthStr ví dụ '2026-09'
     const targetMonth = monthStr || this.getTodayWorkDate().substring(0, 7);
-    const regex = new RegExp(`^${targetMonth}`);
+    const startMonthStr = `${targetMonth}-01`;
+    const endMonthStr = `${targetMonth}-31`;
 
-    const days = await this.attendanceDayModel
-      .find({
-        organizationId: orgObjectId,
-        employeeId: empObjectId,
-        workDate: { $regex: regex },
-      })
-      .sort({ workDate: -1 })
-      .lean();
+    const startOfMonth = new Date(`${targetMonth}-01T00:00:00.000Z`);
+    const [y, m] = targetMonth.split('-').map(Number);
+    const endOfMonth = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+
+    // Chạy song song query days và otRequests sử dụng B-tree index
+    const [days, otRequests]: [any[], any[]] = await Promise.all([
+      this.attendanceDayModel
+        .find({
+          organizationId: orgObjectId,
+          employeeId: empObjectId,
+          workDate: { $gte: startMonthStr, $lte: endMonthStr },
+        })
+        .sort({ workDate: -1 })
+        .lean(),
+      this.managerRequestModel
+        .find({
+          organizationId: orgObjectId,
+          $or: [{ employeeUserId: empObjectId }, { employeeId: empObjectId }],
+          type: 'OVERTIME',
+          status: 'APPROVED',
+          workDate: { $gte: startOfMonth, $lt: endOfMonth },
+        })
+        .lean(),
+    ]);
+
+    const dayIds = days.map((d) => d._id);
+    const events: any[] = dayIds.length > 0
+      ? await this.attendanceEventModel
+          .find({
+            organizationId: orgObjectId,
+            attendanceDayId: { $in: dayIds },
+          })
+          .populate('evidenceId')
+          .lean()
+      : [];
+
+    let totalWorkingMinutes = 0;
+    let totalLateDays = 0;
+    let totalEarlyDays = 0;
+    let totalOtMinutes = 0;
+
+    const items = days.map((day) => {
+      const dayEvents = events.filter((e) => String(e.attendanceDayId) === String(day._id));
+      const inEvt = dayEvents.find((e) => e.eventType === AttendanceEventType.CHECK_IN);
+      const outEvt = dayEvents.find((e) => e.eventType === AttendanceEventType.CHECK_OUT);
+
+      const dayOt = otRequests.find((ot) => {
+        const otDateStr = new Date(ot.workDate).toISOString().slice(0, 10);
+        return otDateStr === day.workDate;
+      });
+
+      let otInfo = null;
+      if (dayOt) {
+        let otMinutes = 0;
+        const start = dayOt.approvedStart || dayOt.requestedStart;
+        const end = dayOt.approvedEnd || dayOt.requestedEnd;
+        if (start && end) {
+          otMinutes = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000));
+        }
+        totalOtMinutes += otMinutes;
+
+        otInfo = {
+          requestId: dayOt._id,
+          status: dayOt.status,
+          requestedStart: dayOt.requestedStart,
+          requestedEnd: dayOt.requestedEnd,
+          approvedStart: dayOt.approvedStart,
+          approvedEnd: dayOt.approvedEnd,
+          reason: dayOt.reason,
+          reviewComment: dayOt.reviewComment,
+          reviewedAt: dayOt.reviewedAt,
+          otMinutes,
+        };
+      }
+
+      if (day.workingMinutes) totalWorkingMinutes += day.workingMinutes;
+      if (day.lateMinutes > 0) totalLateDays++;
+      if (day.earlyMinutes > 0) totalEarlyDays++;
+
+      return {
+        ...day,
+        checkIn: inEvt
+          ? {
+              eventId: inEvt._id,
+              eventType: inEvt.eventType,
+              method: inEvt.method,
+              recordedAt: inEvt.recordedAt,
+              address: inEvt.address,
+              distanceMeters: inEvt.distanceFromWorkplaceMeters,
+              accuracyMeters: inEvt.accuracyMeters,
+              latitude: inEvt.latitude,
+              longitude: inEvt.longitude,
+              approvalStatus: inEvt.approvalStatus,
+              evidenceUrl: inEvt.evidenceId ? `/api/attendance/evidence/${inEvt.evidenceId._id || inEvt.evidenceId}` : null,
+            }
+          : null,
+        checkOut: outEvt
+          ? {
+              eventId: outEvt._id,
+              eventType: outEvt.eventType,
+              method: outEvt.method,
+              recordedAt: outEvt.recordedAt,
+              address: outEvt.address,
+              distanceMeters: outEvt.distanceFromWorkplaceMeters,
+              accuracyMeters: outEvt.accuracyMeters,
+              latitude: outEvt.latitude,
+              longitude: outEvt.longitude,
+              approvalStatus: outEvt.approvalStatus,
+              evidenceUrl: outEvt.evidenceId ? `/api/attendance/evidence/${outEvt.evidenceId._id || outEvt.evidenceId}` : null,
+            }
+          : null,
+        overtime: otInfo,
+      };
+    });
 
     return {
       month: targetMonth,
-      totalDays: days.length,
-      items: days,
+      totalDays: items.length,
+      summary: {
+        workingDays: items.filter((d) => d.attendanceStatus === AttendanceStatus.COMPLETED || d.attendanceStatus === AttendanceStatus.CHECKED_IN).length,
+        totalWorkingMinutes,
+        lateDays: totalLateDays,
+        earlyDays: totalEarlyDays,
+        otMinutes: totalOtMinutes,
+        otDays: items.filter((d) => Boolean(d.overtime)).length,
+      },
+      items,
     };
   }
 
   /**
    * Tải evidence stream có kiểm tra quyền
    */
-  async getEvidenceStream(evidenceId: string, userId: string, organizationId: string) {
+  async getEvidenceStream(
+    evidenceId: string,
+    actor: { userId: string; organizationId: string; role: string },
+  ) {
     const evidence = await this.evidenceModel.findOne({
       _id: new Types.ObjectId(evidenceId),
-      organizationId: new Types.ObjectId(organizationId),
-    });
+      organizationId: new Types.ObjectId(actor.organizationId),
+    }).lean();
 
-    if (!evidence) {
-      throw new NotFoundException('RESOURCE_NOT_FOUND');
+    if (!evidence) throw new NotFoundException('RESOURCE_NOT_FOUND');
+
+    const ownsEvidence = String(evidence.ownerUserId) === String(actor.userId);
+    let authorized = ownsEvidence || actor.role === 'HR';
+
+    if (!authorized && actor.role === 'DEPARTMENT_MANAGER') {
+      const request: any = await this.managerRequestModel.findOne({
+        organizationId: new Types.ObjectId(actor.organizationId),
+        evidenceId: new Types.ObjectId(evidenceId),
+      }).lean();
+      if (request?.departmentId) {
+        const now = new Date();
+        const assignment: any = await this.managerAssignmentModel.findOne({
+          organizationId: new Types.ObjectId(actor.organizationId),
+          managerUserId: new Types.ObjectId(actor.userId),
+          departmentId: request.departmentId,
+          active: true,
+        }).lean();
+        authorized = Boolean(
+          assignment
+          && (!assignment.effectiveFrom || new Date(assignment.effectiveFrom) <= now)
+          && (!assignment.effectiveTo || new Date(assignment.effectiveTo) >= now),
+        );
+      }
     }
 
+    if (!authorized) throw new NotFoundException('RESOURCE_NOT_FOUND');
+
     const stream = await this.storageService.download(evidence.storageKey);
-    return {
-      stream,
-      mimeType: evidence.mimeType,
-      originalFileName: evidence.originalFileName,
-    };
+    return { stream, mimeType: evidence.mimeType, originalFileName: evidence.originalFileName };
   }
 
   private validateImageFile(file: Express.Multer.File) {

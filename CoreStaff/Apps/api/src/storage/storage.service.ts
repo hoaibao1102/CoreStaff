@@ -21,8 +21,10 @@ import { Readable } from 'node:stream';
 @Injectable()
 export class StorageService {
   private readonly s3: S3Client | null;
+  private readonly injectedClient: boolean;
 
   constructor(s3?: S3Client) {
+    this.injectedClient = Boolean(s3);
     this.s3 = s3 ?? this.buildClient();
   }
 
@@ -51,23 +53,24 @@ export class StorageService {
     });
   }
 
-  /** True when region + bucket are configured and credentials present. */
+  /** True when a bucket and a usable client are available. */
   isConfigured(): boolean {
     const bucket = process.env.S3_BUCKET?.trim();
+    if (!bucket || !this.s3) return false;
+    if (this.injectedClient) return true;
     const accessKeyId =
       process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
     const secretAccessKey =
       process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
-    return Boolean(bucket && accessKeyId && secretAccessKey);
+    return Boolean(accessKeyId && secretAccessKey);
   }
 
   /** Fail loudly, never hang: miss a key-looking 400 instead of a timeout. */
   private requireClient(): S3Client {
-    const client = this.buildClient();
-    if (!client || !this.isConfigured()) {
+    if (!this.s3 || !this.isConfigured()) {
       throw new BadRequestException('STORAGE_NOT_CONFIGURED');
     }
-    return client;
+    return this.s3;
   }
 
   async upload(key: string, body: Buffer | Readable, contentType: string): Promise<void> {

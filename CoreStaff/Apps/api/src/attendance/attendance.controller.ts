@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
   Query,
@@ -44,6 +45,7 @@ export class AttendanceController {
   async checkIn(
     @Req() req: any,
     @Body() dto: CheckInDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const userId = this.getUserId(req);
@@ -63,6 +65,7 @@ export class AttendanceController {
       file,
       clientIp,
       userAgent,
+      idempotencyKey,
     );
     return { success: true, data };
   }
@@ -72,6 +75,7 @@ export class AttendanceController {
   async checkOut(
     @Req() req: any,
     @Body() dto: CheckOutDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const userId = this.getUserId(req);
@@ -90,6 +94,7 @@ export class AttendanceController {
       file,
       clientIp,
       userAgent,
+      idempotencyKey,
     );
     return { success: true, data };
   }
@@ -104,13 +109,13 @@ export class AttendanceController {
 
   @Get('evidence/:id')
   async getEvidence(@Req() req: any, @Param('id') id: string, @Res() res: Response) {
-    const userId = req.user.userId || req.user.id || req.user.sub;
+    const userId = this.getUserId(req);
     const organizationId = req.user.organizationId;
-    const { stream, mimeType } = await this.attendanceService.getEvidenceStream(
-      id,
+    const { stream, mimeType } = await this.attendanceService.getEvidenceStream(id, {
       userId,
       organizationId,
-    );
+      role: req.user.role,
+    });
     res.setHeader('Content-Type', mimeType);
     stream.pipe(res);
   }

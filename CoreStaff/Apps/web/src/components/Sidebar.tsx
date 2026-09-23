@@ -157,16 +157,6 @@ export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, 
         if (user.role !== 'DEPARTMENT_MANAGER') return;
         const socket = getSocket(apiBase);
 
-        const uid = user.id || user._id;
-        const register = () => {
-            if (uid) {
-                socket.emit('register:user', { userId: uid, role: user.role });
-            }
-        };
-
-        register();
-        socket.on('connect', register);
-
         getManagerRequests(apiBase || '', { status: 'PENDING' })
             .then((rows) => setPendingCount(rows.length))
             .catch(() => {});
@@ -178,7 +168,6 @@ export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, 
         socket.on('request:decided', onDecided);
 
         return () => {
-            socket.off('connect', register);
             socket.off('request:new', onNew);
             socket.off('request:decided', onDecided);
         };

@@ -20,6 +20,7 @@ import {
   Mail,
   UserCheck,
   UserX,
+  FileText,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/alert';
 import { Badge } from '@/components/badge';
@@ -93,20 +94,7 @@ export function ManagerDepartmentScreen({
     if (!apiBase) return;
     const socket = getSocket(apiBase);
 
-    const registerAndJoin = () => {
-      if (ctx?.managerUserId) {
-        socket.emit('register:user', { userId: ctx.managerUserId, role: 'DEPARTMENT_MANAGER', departmentId: dept || undefined });
-      }
-      if (dept) {
-        socket.emit('join:department', { departmentId: dept });
-      }
-    };
-
-    registerAndJoin();
-    socket.on('connect', registerAndJoin);
-
     const onNewRequest = (data: any) => {
-      console.log('[ManagerDepartmentScreen] Real-time request:new received:', data);
       toast.info(
         'Yêu cầu mới cần phê duyệt',
         `Nhân viên ${data.employeeName || 'nhân sự'} vừa gửi yêu cầu ${
@@ -117,8 +105,7 @@ export function ManagerDepartmentScreen({
       setSocketRev((r) => r + 1);
     };
 
-    const onRequestDecided = (data: any) => {
-      console.log('[ManagerDepartmentScreen] Real-time request:decided received:', data);
+    const onRequestDecided = () => {
       setPendingCount((prev) => Math.max(0, prev - 1));
       setSocketRev((r) => r + 1);
     };
@@ -127,11 +114,10 @@ export function ManagerDepartmentScreen({
     socket.on('request:decided', onRequestDecided);
 
     return () => {
-      socket.off('connect', registerAndJoin);
       socket.off('request:new', onNewRequest);
       socket.off('request:decided', onRequestDecided);
     };
-  }, [apiBase, dept, ctx?.managerUserId]);
+  }, [apiBase]);
 
   if (!apiBase) {
     return (
@@ -567,19 +553,27 @@ function DecisionDialog({
     resolvedAddress ||
     (rawAddress && !rawAddress.startsWith('📍') && !rawAddress.includes('Tọa độ:') ? rawAddress : null);
 
+  const isOt = request.type === 'OVERTIME';
+  const isSelfie = request.type === 'ATTENDANCE' && (Boolean(request.evidenceId) || Boolean(request.metadata?.actionType));
+  const isAdjustment = request.type === 'ATTENDANCE' && !isSelfie;
+
   return (
     <>
       <Dialog open onOpenChange={onClose}>
         <DialogContent className="h-dvh max-h-dvh w-screen max-w-none rounded-none sm:h-auto sm:max-h-[90vh] sm:w-full sm:max-w-2xl sm:rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-              {request.type === 'OVERTIME' ? (
+              {isOt ? (
                 <>
                   <Clock3 className="size-5 text-indigo-600" /> Duyệt làm thêm giờ (OT)
                 </>
-              ) : (
+              ) : isSelfie ? (
                 <>
                   <Camera className="size-5 text-blue-600" /> Duyệt Chấm công Selfie
+                </>
+              ) : (
+                <>
+                  <FileText className="size-5 text-blue-600" /> Duyệt Giải trình / Điều chỉnh công
                 </>
               )}
               <span className="font-normal text-muted-foreground">— {employee}</span>
@@ -600,7 +594,7 @@ function DecisionDialog({
             </div>
 
             {/* Chi tiết cho luồng CHẤM CÔNG SELFIE */}
-            {request.type === 'ATTENDANCE' && (
+            {isSelfie && (
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Khối Ảnh Selfie */}
                 <div className="space-y-2 rounded-xl border bg-card p-3 shadow-sm">
@@ -675,6 +669,18 @@ function DecisionDialog({
               </div>
             )}
 
+            {/* Chi tiết cho yêu cầu ĐIỀU CHỈNH / GIẢI TRÌNH CÔNG */}
+            {isAdjustment && (
+              <div className="rounded-xl border bg-blue-50/50 p-4 space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                  Phân loại yêu cầu
+                </span>
+                <p className="text-sm font-medium text-blue-950">
+                  Điều chỉnh / giải trình công nhân viên gửi trực tiếp (không yêu cầu ảnh selfie hay tọa độ).
+                </p>
+              </div>
+            )}
+
             {/* Chi tiết cho luồng OVERTIME */}
             {request.type === 'OVERTIME' && (
               <div className="rounded-xl border bg-indigo-50/50 p-4 space-y-1">
@@ -715,7 +721,7 @@ function DecisionDialog({
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                 onClick={() => act('approve')}
               >
-                <Check className="mr-1.5 size-4" /> Phê duyệt công
+                <Check className="mr-1.5 size-4" /> {isOt ? 'Phê duyệt OT' : isAdjustment ? 'Duyệt điều chỉnh' : 'Phê duyệt công'}
               </Button>
               <Button
                 disabled={sending || reason.trim().length < 10}

@@ -44,6 +44,7 @@ export class WorkplaceService {
 		try {
 			const payload = {
 				...dto,
+				code: normalizeCode(dto.code),
 				type,
 				organizationId,
 				latitude: dto.latitude ?? 0,
@@ -86,7 +87,15 @@ export class WorkplaceService {
 
 		const batch = new BatchValidator();
 		const patch: Record<string, unknown> = { ...dto };
-		if (typeof patch.code === 'string') patch.code = normalizeCode(patch.code);
+		if (typeof patch.code === 'string') {
+			patch.code = normalizeCode(patch.code);
+			const existingByCode = await this.workplaceModel.findOne({
+				organizationId,
+				code: patch.code,
+				_id: { $ne: id },
+			}).lean();
+			batch.check(!existingByCode, 'code', 'WORKPLACE_CODE_ALREADY_EXISTS');
+		}
 
 		const effectiveType = (patch.type as WorkplaceType) ?? current.type;
 
@@ -138,6 +147,7 @@ export class WorkplaceService {
 		if (!active) {
 			// BR-WORKPLACE-DEACTIVATE: Cannot deactivate if still in use by active assignments
 			const activeAssignments = await this.assignmentModel.countDocuments({
+				organizationId,
 				workplaceId: id,
 				active: true,
 			});
@@ -149,7 +159,9 @@ export class WorkplaceService {
 			}
 		}
 
-		const updated = await this.workplaceModel.findByIdAndUpdate(id, { active }, { new: true }).lean();
+		const updated = await this.workplaceModel
+			.findOneAndUpdate({ _id: id, organizationId }, { $set: { active } }, { new: true, runValidators: true })
+			.lean();
 		return updated;
 	}
 }

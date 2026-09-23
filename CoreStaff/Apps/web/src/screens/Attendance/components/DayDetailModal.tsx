@@ -37,9 +37,32 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
     ? new Date(day.checkOut.recordedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     : '--:--';
 
-  const workingHours = day.totalWorkingMinutes
-    ? `${Math.floor(day.totalWorkingMinutes / 60)} giờ ${day.totalWorkingMinutes % 60} phút`
-    : 'Chưa chốt';
+  let workingHours = 'Chưa chốt';
+  const mins = day.totalWorkingMinutes ?? day.workingMinutes;
+  if (day.status === 'COMPLETED' || (day.checkIn && day.checkOut)) {
+    if (typeof mins === 'number' && mins > 0) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      workingHours = h > 0 ? `${h} giờ ${m} phút` : `${m} phút`;
+    } else if (day.checkIn?.recordedAt && day.checkOut?.recordedAt) {
+      const diffMs = new Date(day.checkOut.recordedAt).getTime() - new Date(day.checkIn.recordedAt).getTime();
+      const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+      const diffSecs = Math.max(0, Math.floor((diffMs % 60000) / 1000));
+      if (diffMins > 0) {
+        const h = Math.floor(diffMins / 60);
+        const m = diffMins % 60;
+        workingHours = h > 0 ? `${h} giờ ${m} phút` : `${m} phút`;
+      } else {
+        workingHours = `${diffSecs} giây`;
+      }
+    } else {
+      workingHours = '0 phút';
+    }
+  } else if (typeof mins === 'number' && mins > 0) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    workingHours = h > 0 ? `${h} giờ ${m} phút` : `${m} phút`;
+  }
 
   return (
     <div
@@ -120,6 +143,44 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
             )}
           </div>
         </div>
+
+        {/* Overtime (OT) section */}
+        {day.overtime && (
+          <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="size-4 text-indigo-600" />
+                <span className="text-xs font-bold text-indigo-950">Làm thêm giờ (OT) được duyệt</span>
+              </div>
+              <Badge className="bg-emerald-600 text-white text-[10px]">Đã duyệt</Badge>
+            </div>
+            <div className="text-xs text-indigo-900 space-y-1">
+              <p className="font-semibold">
+                Thời gian:{' '}
+                {day.overtime.approvedStart
+                  ? new Date(day.overtime.approvedStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  : day.overtime.requestedStart
+                  ? new Date(day.overtime.requestedStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  : '—'}
+                {' → '}
+                {day.overtime.approvedEnd
+                  ? new Date(day.overtime.approvedEnd).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  : day.overtime.requestedEnd
+                  ? new Date(day.overtime.requestedEnd).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                  : '—'}
+                {day.overtime.otMinutes ? ` (${Math.floor(day.overtime.otMinutes / 60)}h${day.overtime.otMinutes % 60 > 0 ? ` ${day.overtime.otMinutes % 60}p` : ''})` : ''}
+              </p>
+              {day.overtime.reason && (
+                <p className="text-indigo-800/80">Lý do: {day.overtime.reason}</p>
+              )}
+              {day.overtime.reviewComment && (
+                <p className="text-indigo-950 italic text-[11px] bg-white/70 rounded p-1.5 border border-indigo-100">
+                  Ý kiến Quản lý: "{day.overtime.reviewComment}"
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Close button */}
         <button

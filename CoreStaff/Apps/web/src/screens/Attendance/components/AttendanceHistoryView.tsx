@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Bell,
+  Loader2,
 } from 'lucide-react';
-import type { DayAttendance, NetworkVerification } from '../types';
+import type { DayAttendance, AttendanceMethod, NetworkVerification } from '../types';
 import { DayDetailModal } from './DayDetailModal';
+import { resolveApiBase, apiUrl } from '../../../config/api';
+import { getAttendanceHistory } from '../../../services/attendance.service';
 
 const DEFAULT_NETWORK_CONTEXT: NetworkVerification = {
   method: 'NETWORK',
@@ -13,499 +15,164 @@ const DEFAULT_NETWORK_CONTEXT: NetworkVerification = {
   canAttend: true,
   networkId: 'net-office-1',
   networkName: 'CoreStaff-Office-5G',
-  workplaceId: 'wp-q8',
-  workplaceName: 'Văn phòng CoreStaff Quận 8',
+  workplaceId: 'wp-default',
+  workplaceName: 'Văn phòng CoreStaff',
 };
-
-const DEFAULT_DAY_OFF_CONTEXT: NetworkVerification = {
-  method: 'NETWORK',
-  status: 'NOT_CONNECTED_TO_ALLOWED_NETWORK',
-  canAttend: false,
-  networkId: null,
-  networkName: null,
-  workplaceId: null,
-  workplaceName: null,
-};
-
-// Mock list of days with full evidence matching the 14 days work, 2 late, 2 early, 0 absence
-const MOCK_HISTORY_DAYS: DayAttendance[] = [
-  {
-    id: 'att-1',
-    workDate: '2026-09-01',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-1',
-      recordedAt: '2026-09-01T08:00:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-1',
-      recordedAt: '2026-09-01T17:30:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 480,
-  },
-  {
-    id: 'att-2',
-    workDate: '2026-09-02',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'GPS',
-    verificationContext: { method: 'GPS', workplace: null },
-    checkIn: {
-      eventId: 'evt-in-2',
-      recordedAt: '2026-09-02T07:55:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 12,
-      distanceMeters: 18,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    checkOut: {
-      eventId: 'evt-out-2',
-      recordedAt: '2026-09-02T17:32:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 10,
-      distanceMeters: 15,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    totalWorkingMinutes: 485,
-  },
-  {
-    id: 'att-3',
-    workDate: '2026-09-03',
-    shiftName: 'Ca Hiện Trường',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Địa bàn Khách Hàng Quận 1',
-    workplaceAddress: 'Toà nhà Bitexco, Bến Nghé, Quận 1, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'SELFIE',
-    verificationContext: { method: 'SELFIE' },
-    checkIn: {
-      eventId: 'evt-in-3',
-      recordedAt: '2026-09-03T08:05:00Z',
-      method: 'SELFIE',
-      workplaceName: 'Địa bàn Khách Hàng Quận 1',
-      status: 'AUTO_APPROVED',
-      approvalStatus: 'APPROVED',
-      evidence: {
-        previewUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-      },
-      location: {
-        latitude: 10.7718,
-        longitude: 106.7042,
-        accuracyMeters: 8,
-        address: 'Số 2 Hải Triều, Bến Nghé, Quận 1, TP.HCM',
-      },
-    },
-    checkOut: {
-      eventId: 'evt-out-3',
-      recordedAt: '2026-09-03T17:30:00Z',
-      method: 'SELFIE',
-      workplaceName: 'Địa bàn Khách Hàng Quận 1',
-      status: 'AUTO_APPROVED',
-      approvalStatus: 'APPROVED',
-      evidence: {
-        previewUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80',
-      },
-      location: {
-        latitude: 10.7718,
-        longitude: 106.7042,
-        accuracyMeters: 10,
-        address: 'Số 2 Hải Triều, Bến Nghé, Quận 1, TP.HCM',
-      },
-    },
-    totalWorkingMinutes: 480,
-  },
-  {
-    id: 'att-4',
-    workDate: '2026-09-04',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'EARLY_LEAVE',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-4',
-      recordedAt: '2026-09-04T08:00:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-4',
-      recordedAt: '2026-09-04T17:00:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 450,
-  },
-  {
-    id: 'att-5',
-    workDate: '2026-09-05',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-5',
-      recordedAt: '2026-09-05T07:58:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-5',
-      recordedAt: '2026-09-05T17:35:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 485,
-  },
-  {
-    id: 'att-6',
-    workDate: '2026-09-06',
-    shiftName: 'Chủ Nhật',
-    shiftHours: 'Nghỉ',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'DAY_OFF',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_DAY_OFF_CONTEXT,
-  },
-  {
-    id: 'att-7',
-    workDate: '2026-09-07',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-7',
-      recordedAt: '2026-09-07T08:01:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-7',
-      recordedAt: '2026-09-07T17:31:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 482,
-  },
-  {
-    id: 'att-8',
-    workDate: '2026-09-08',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'EARLY_LEAVE',
-    availableAction: 'NONE',
-    attendanceMethod: 'GPS',
-    verificationContext: { method: 'GPS', workplace: null },
-    checkIn: {
-      eventId: 'evt-in-8',
-      recordedAt: '2026-09-08T07:59:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 14,
-      distanceMeters: 20,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    checkOut: {
-      eventId: 'evt-out-8',
-      recordedAt: '2026-09-08T17:05:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 15,
-      distanceMeters: 22,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    totalWorkingMinutes: 455,
-  },
-  {
-    id: 'att-9',
-    workDate: '2026-09-09',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-9',
-      recordedAt: '2026-09-09T08:03:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-9',
-      recordedAt: '2026-09-09T17:33:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 481,
-  },
-  {
-    id: 'att-10',
-    workDate: '2026-09-10',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'LATE',
-    availableAction: 'NONE',
-    attendanceMethod: 'GPS',
-    verificationContext: { method: 'GPS', workplace: null },
-    checkIn: {
-      eventId: 'evt-in-10',
-      recordedAt: '2026-09-10T08:24:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 14,
-      distanceMeters: 30,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    checkOut: {
-      eventId: 'evt-out-10',
-      recordedAt: '2026-09-10T17:35:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 12,
-      distanceMeters: 25,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    totalWorkingMinutes: 491,
-  },
-  {
-    id: 'att-11',
-    workDate: '2026-09-11',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-11',
-      recordedAt: '2026-09-11T08:00:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-11',
-      recordedAt: '2026-09-11T17:30:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 480,
-  },
-  {
-    id: 'att-12',
-    workDate: '2026-09-12',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-12',
-      recordedAt: '2026-09-12T08:02:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-12',
-      recordedAt: '2026-09-12T17:32:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 482,
-  },
-  {
-    id: 'att-13',
-    workDate: '2026-09-13',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-13',
-      recordedAt: '2026-09-13T08:00:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-13',
-      recordedAt: '2026-09-13T17:30:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 480,
-  },
-  {
-    id: 'att-14',
-    workDate: '2026-09-14',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'COMPLETED',
-    availableAction: 'NONE',
-    attendanceMethod: 'GPS',
-    verificationContext: { method: 'GPS', workplace: null },
-    checkIn: {
-      eventId: 'evt-in-14',
-      recordedAt: '2026-09-14T07:58:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 16,
-      distanceMeters: 15,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    checkOut: {
-      eventId: 'evt-out-14',
-      recordedAt: '2026-09-14T17:32:00Z',
-      method: 'GPS',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      accuracyMeters: 18,
-      distanceMeters: 20,
-      address: '123 Đường mẫu, Quận 8, TP.HCM',
-    },
-    totalWorkingMinutes: 484,
-  },
-  {
-    id: 'att-15',
-    workDate: '2026-09-15',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'LATE',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_NETWORK_CONTEXT,
-    checkIn: {
-      eventId: 'evt-in-15',
-      recordedAt: '2026-09-15T08:35:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    checkOut: {
-      eventId: 'evt-out-15',
-      recordedAt: '2026-09-15T17:30:00Z',
-      method: 'NETWORK',
-      workplaceName: 'Văn phòng CoreStaff Quận 8',
-      status: 'AUTO_APPROVED',
-      networkName: 'CoreStaff-Office-5G',
-    },
-    totalWorkingMinutes: 460,
-  },
-  {
-    id: 'att-16',
-    workDate: '2026-09-16',
-    shiftName: 'Ca Hành Chính',
-    shiftHours: '08:00 – 17:30',
-    workplace: 'Văn phòng CoreStaff Quận 8',
-    workplaceAddress: '123 Đường mẫu, Phường 4, Quận 8, TP.HCM',
-    status: 'DAY_OFF',
-    availableAction: 'NONE',
-    attendanceMethod: 'NETWORK',
-    verificationContext: DEFAULT_DAY_OFF_CONTEXT,
-  },
-];
 
 const WEEKDAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-export function AttendanceHistoryView() {
-  const [selectedMonth, setSelectedMonth] = useState('2026-09');
+function getInitialMonth(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+export interface AttendanceHistoryViewProps {
+  apiBase?: string | null;
+}
+
+export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistoryViewProps) {
+  const [selectedMonth, setSelectedMonth] = useState<string>(getInitialMonth);
   const [activeDetailDay, setActiveDetailDay] = useState<DayAttendance | null>(null);
+  const [days, setDays] = useState<DayAttendance[]>([]);
+  const [summary, setSummary] = useState({
+    workingDays: 0,
+    lateDays: 0,
+    earlyDays: 0,
+    otDays: 0,
+    otMinutes: 0,
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Bộ nhớ đệm phía Client theo từng tháng để chuyển tháng tức thì (0ms)
+  const monthCache = useRef<Map<string, { days: DayAttendance[]; summary: typeof summary }>>(new Map());
+
+  const fetchHistory = useCallback(async (month: string) => {
+    // 1. Kiểm tra cache trước: Nếu đã tải tháng này rồi thì nạp ngay không để user phải chờ
+    const cached = monthCache.current.get(month);
+    if (cached) {
+      setDays(cached.days);
+      setSummary(cached.summary);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const base = propApiBase || (await resolveApiBase()).base;
+      const res = await getAttendanceHistory(base, month);
+      
+      const rawItems: any[] = res?.items || [];
+      const mappedDays: DayAttendance[] = rawItems.map((item: any) => ({
+        id: item._id || item.id || `att-${item.workDate}`,
+        workDate: item.workDate,
+        shiftName: item.shiftName || 'Ca Hành Chính',
+        shiftHours: item.shiftHours || '08:00 – 17:30',
+        workplace: item.workplaceName || item.workplace || 'Văn phòng CoreStaff',
+        workplaceAddress: item.workplaceAddress || '',
+        status: item.attendanceStatus || (item.workingMinutes ? 'COMPLETED' : 'DAY_OFF'),
+        availableAction: 'NONE',
+        attendanceMethod: (item.checkIn?.method || 'NETWORK') as AttendanceMethod,
+        verificationContext: DEFAULT_NETWORK_CONTEXT,
+        checkIn: item.checkIn
+          ? {
+              ...item.checkIn,
+              evidenceUrl: item.checkIn.evidenceUrl ? apiUrl(base, item.checkIn.evidenceUrl) : null,
+              status: item.checkIn.approvalStatus || 'AUTO_APPROVED',
+            }
+          : null,
+        checkOut: item.checkOut
+          ? {
+              ...item.checkOut,
+              evidenceUrl: item.checkOut.evidenceUrl ? apiUrl(base, item.checkOut.evidenceUrl) : null,
+              status: item.checkOut.approvalStatus || 'AUTO_APPROVED',
+            }
+          : null,
+        totalWorkingMinutes: item.workingMinutes ?? item.totalWorkingMinutes ?? 0,
+        workingMinutes: item.workingMinutes,
+        lateMinutes: item.lateMinutes ?? 0,
+        earlyMinutes: item.earlyMinutes ?? 0,
+        overtime: item.overtime ?? null,
+      }));
+
+      let calculatedSummary = {
+        workingDays: 0,
+        lateDays: 0,
+        earlyDays: 0,
+        otDays: 0,
+        otMinutes: 0,
+      };
+
+      if (res?.summary) {
+        calculatedSummary = {
+          workingDays: res.summary.workingDays ?? 0,
+          lateDays: res.summary.lateDays ?? 0,
+          earlyDays: res.summary.earlyDays ?? 0,
+          otDays: res.summary.otDays ?? 0,
+          otMinutes: res.summary.otMinutes ?? 0,
+        };
+      } else {
+        const completed = mappedDays.filter((d) => d.status === 'COMPLETED' || d.status === 'CHECKED_IN').length;
+        const late = mappedDays.filter((d) => (d.lateMinutes || 0) > 0).length;
+        const early = mappedDays.filter((d) => (d.earlyMinutes || 0) > 0).length;
+        const otWithInfo = mappedDays.filter((d) => Boolean(d.overtime));
+        const otMins = otWithInfo.reduce((acc, d) => acc + (d.overtime?.otMinutes || 0), 0);
+        calculatedSummary = {
+          workingDays: completed,
+          lateDays: late,
+          earlyDays: early,
+          otDays: otWithInfo.length,
+          otMinutes: otMins,
+        };
+      }
+
+      setDays(mappedDays);
+      setSummary(calculatedSummary);
+
+      // Lưu vào cache
+      monthCache.current.set(month, { days: mappedDays, summary: calculatedSummary });
+    } catch (err: any) {
+      console.error('Failed to fetch attendance history:', err);
+      setError(err?.message || 'Không thể tải lịch sử chấm công');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [propApiBase]);
+
+  useEffect(() => {
+    fetchHistory(selectedMonth);
+  }, [selectedMonth, fetchHistory]);
 
   const daysMap = useMemo(() => {
     const map = new Map<string, DayAttendance>();
-    for (const d of MOCK_HISTORY_DAYS) map.set(d.workDate, d);
+    for (const d of days) map.set(d.workDate, d);
     return map;
-  }, []);
+  }, [days]);
+
+  // Month navigation
+  const handlePrevMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const prevDate = new Date(y, m - 2, 1);
+    const newY = prevDate.getFullYear();
+    const newM = String(prevDate.getMonth() + 1).padStart(2, '0');
+    setSelectedMonth(`${newY}-${newM}`);
+  };
+
+  const handleNextMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const nextDate = new Date(y, m, 1);
+    const newY = nextDate.getFullYear();
+    const newM = String(nextDate.getMonth() + 1).padStart(2, '0');
+    setSelectedMonth(`${newY}-${newM}`);
+  };
+
+  const formattedMonthLabel = useMemo(() => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    return `tháng ${m} năm ${y}`;
+  }, [selectedMonth]);
 
   // Generate 7-column calendar cells for current month
   const calendarCells = useMemo(() => {
@@ -524,91 +191,67 @@ export function AttendanceHistoryView() {
     return cells;
   }, [selectedMonth]);
 
+  // Số hàng của lịch trong tháng (5 hoặc 6 hàng)
+  const rowCount = Math.ceil(calendarCells.length / 7) || 5;
+
   return (
-    <div className="w-full max-w-md md:max-w-xl lg:max-w-none mx-auto space-y-3.5 lg:space-y-5 pb-8">
-      {/* ── Top App Bar (Mobile style) ────────────────────────── */}
-      <header className="flex items-center justify-between pt-1 pb-2 lg:pb-1">
-        {/* Avatar */}
-        <div className="relative">
-          <div className="size-10 rounded-full border-2 border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center shadow-xs">
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-              alt="Avatar"
-              className="size-full object-cover"
-            />
-          </div>
-        </div>
-
-        {/* Title */}
-        <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-[#102a43]">
-          Chấm công
-        </h1>
-
-        {/* Bell notification */}
-        <button
-          type="button"
-          aria-label="Thông báo"
-          className="relative size-10 rounded-full flex items-center justify-center text-[#102a43] hover:bg-slate-100 transition-colors"
-        >
-          <Bell className="size-6" />
-          <span className="absolute top-2 right-2 size-2.5 rounded-full bg-pink-400 ring-2 ring-white" />
-        </button>
-      </header>
-
+    <div className="w-full h-full flex flex-col justify-between space-y-2.5 sm:space-y-3 flex-1 min-h-0">
       {/* ── Subheader / Month Switcher Card ────────────────── */}
-      <div className="rounded-2xl bg-[#3f475b] p-3.5 sm:p-4 lg:px-6 lg:py-5 text-white flex items-center justify-between shadow-sm">
+      <div className="rounded-xl sm:rounded-2xl bg-[#3f475b] p-3 sm:p-3.5 lg:px-6 lg:py-3 text-white flex items-center justify-between shadow-sm shrink-0">
         <div className="min-w-0 pr-2">
           <h2 className="text-sm sm:text-base lg:text-lg font-bold text-white truncate leading-tight">
-            <span className="lg:hidden">Lịch sử chấm...</span>
-            <span className="hidden lg:inline">Lịch sử chấm công</span>
+            <span>Bảng công nhân viên</span>
           </h2>
-          <p className="text-xs lg:text-sm text-white/70 truncate mt-0.5 leading-tight">
-            <span className="lg:hidden">Bảng chấm công th...</span>
-            <span className="hidden lg:inline">Bảng chấm công tháng</span>
+          <p className="text-[11px] sm:text-xs text-white/70 truncate mt-0.5 leading-tight">
+            <span>{isLoading ? 'Đang cập nhật dữ liệu...' : `Tổng ${days.length} ngày ghi nhận`}</span>
           </p>
         </div>
 
         {/* Month Selector Pill */}
-        <div className="flex items-center gap-1.5 lg:gap-2 rounded-xl bg-[#1c223a] px-2 py-1.5 lg:px-3 lg:py-2 shadow-xs shrink-0">
+        <div className="flex items-center gap-1.5 lg:gap-2 rounded-lg bg-[#1c223a] px-2 py-1 lg:px-3 lg:py-1.5 shadow-xs shrink-0">
           <button
             type="button"
             aria-label="Tháng trước"
-            onClick={() => setSelectedMonth('2026-08')}
-            className="size-6 lg:size-8 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            onClick={handlePrevMonth}
+            className="size-6 lg:size-7 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
           >
-            <ChevronLeft className="size-3.5 lg:size-4" />
+            <ChevronLeft className="size-3.5" />
           </button>
           <span className="text-xs lg:text-sm font-semibold text-white px-1 whitespace-nowrap">
-            tháng 9 năm 2026
+            {formattedMonthLabel}
           </span>
           <button
             type="button"
             aria-label="Tháng sau"
-            onClick={() => setSelectedMonth('2026-09')}
-            className="size-6 lg:size-8 rounded-lg bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            onClick={handleNextMonth}
+            className="size-6 lg:size-7 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
           >
-            <ChevronRight className="size-3.5 lg:size-4" />
+            <ChevronRight className="size-3.5" />
           </button>
         </div>
       </div>
 
       {/* ── 4 KPI Statistic Cards ──────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-2.5 lg:gap-4">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4 shrink-0">
         {[
-          { labelTop: 'Ngày', labelBottom: 'công', value: '14' },
-          { labelTop: 'Ngày', labelBottom: 'đi muộn', value: '2' },
-          { labelTop: 'Ngày', labelBottom: 'về sớm', value: '2' },
-          { labelTop: 'Ngày', labelBottom: 'vắng', value: '0' },
+          { labelTop: 'Ngày', labelBottom: 'công', value: summary.workingDays },
+          { labelTop: 'Ngày', labelBottom: 'đi muộn', value: summary.lateDays },
+          { labelTop: 'Ngày', labelBottom: 'về sớm', value: summary.earlyDays },
+          {
+            labelTop: 'Tăng ca',
+            labelBottom: 'OT (giờ)',
+            value: summary.otMinutes > 0 ? (summary.otMinutes / 60).toFixed(1) : summary.otDays,
+          },
         ].map((item) => (
           <div
             key={item.labelBottom}
-            className="bg-[#1c223a] text-white rounded-2xl py-3 px-1 sm:py-4 sm:px-2 lg:py-5 lg:px-4 flex flex-col items-center justify-center text-center shadow-md transition-transform active:scale-95"
+            className="bg-[#1c223a] text-white rounded-xl sm:rounded-2xl py-2 sm:py-2.5 lg:py-3 px-2 flex flex-col items-center justify-center text-center shadow-md transition-transform active:scale-95"
           >
-            <div className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 leading-tight h-[28px] lg:h-auto flex flex-col lg:flex-row lg:gap-1 items-center justify-center">
+            <div className="text-[10px] sm:text-xs font-medium text-white/80 leading-tight flex flex-col sm:flex-row sm:gap-1 items-center justify-center">
               <span>{item.labelTop}</span>
               <span>{item.labelBottom}</span>
             </div>
-            <span className="text-2xl sm:text-3xl lg:text-4xl font-bold font-mono tracking-tight text-white mt-1">
+            <span className="text-xl sm:text-2xl lg:text-3xl font-bold font-mono tracking-tight text-white mt-0.5">
               {item.value}
             </span>
           </div>
@@ -616,9 +259,21 @@ export function AttendanceHistoryView() {
       </div>
 
       {/* ── Calendar Grid ──────────────────────────────────── */}
-      <div className="pt-2">
+      <div className="flex-1 flex flex-col min-h-0 justify-between py-1 relative">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-slate-900/10 backdrop-blur-2xs rounded-xl flex items-center justify-center">
+            <Loader2 className="size-7 text-primary animate-spin" />
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-2 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs text-center">
+            {error}
+          </div>
+        )}
+
         {/* Weekday Names */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center text-xs lg:text-sm font-bold text-slate-400 pb-2 lg:pb-3">
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center text-xs sm:text-sm font-bold text-slate-400 pb-1 shrink-0">
           {WEEKDAY_NAMES.map((d) => (
             <div key={d} className="py-0.5">
               {d}
@@ -626,21 +281,21 @@ export function AttendanceHistoryView() {
           ))}
         </div>
 
-        {/* Day Cells */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center">
+        {/* Day Cells - gridTemplateRows linh hoạt chia đều 1fr không bị tràn đè lên legend */}
+        <div
+          className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-2.5 flex-1 min-h-0 text-center"
+          style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
+        >
           {calendarCells.map((dateStr, idx) => {
             if (!dateStr) {
-              return <div key={`blank-${idx}`} className="aspect-square" />;
+              return <div key={`blank-${idx}`} className="w-full h-full min-h-0" />;
             }
             const day = daysMap.get(dateStr);
             const dayNum = Number(dateStr.slice(-2));
 
-            // Dot color matching the user's design:
-            // - Days 1 to 15 (except 6): mint green dot
-            // - Days 6 & 16: white/slate dot for DAY_OFF
-            // - Days 17+: future days, no dot
             const isDayOff = day?.status === 'DAY_OFF';
             const hasRecord = Boolean(day);
+            const hasOvertime = Boolean(day?.overtime);
 
             return (
               <button
@@ -650,19 +305,33 @@ export function AttendanceHistoryView() {
                   if (day) setActiveDetailDay(day);
                 }}
                 disabled={!day}
-                className="aspect-square bg-[#1c223a] hover:bg-[#252c4a] text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 lg:gap-2 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default"
+                className="relative w-full h-full min-h-0 bg-[#1c223a] hover:bg-[#252c4a] text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-30"
               >
-                <span className="text-sm sm:text-base lg:text-lg font-bold text-white leading-none">
+                <span className="text-xs sm:text-sm md:text-base font-bold text-white leading-none">
                   {dayNum}
                 </span>
 
-                {hasRecord ? (
-                  isDayOff ? (
-                    <span className="size-1.5 lg:size-2 rounded-full bg-slate-300" />
-                  ) : (
-                    <span className="size-1.5 lg:size-2 rounded-full bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]" />
-                  )
-                ) : null}
+                {/* Status indicator dots */}
+                <div className="flex items-center gap-1">
+                  {hasRecord ? (
+                    isDayOff ? (
+                      <span className="size-1.5 sm:size-2 rounded-full bg-slate-400" title="Nghỉ" />
+                    ) : (
+                      <span
+                        className="size-1.5 sm:size-2 rounded-full bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]"
+                        title="Đã chấm công"
+                      />
+                    )
+                  ) : null}
+
+                  {/* Overtime indicator dot */}
+                  {hasOvertime && (
+                    <span
+                      className="size-1.5 sm:size-2 rounded-full bg-indigo-400 shadow-[0_0_6px_#818cf8]"
+                      title="Có tăng ca (OT)"
+                    />
+                  )}
+                </div>
               </button>
             );
           })}
@@ -670,25 +339,18 @@ export function AttendanceHistoryView() {
       </div>
 
       {/* ── Status Badges Legend ───────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 pt-3 lg:pt-4 pb-4">
-        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
-          Chưa vào
+      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2.5 pb-1 mt-auto shrink-0 border-t border-slate-700/30">
+        <span className="flex items-center gap-1.5 bg-[#1c223a] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs">
+          <span className="size-1.5 sm:size-2 rounded-full bg-[#3ae39f]" />
+          Đã chấm công
         </span>
-        <span className="bg-[#0c395b] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
-          Đã vào
+        <span className="flex items-center gap-1.5 bg-[#1c223a] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs">
+          <span className="size-1.5 sm:size-2 rounded-full bg-indigo-400" />
+          Có OT được duyệt
         </span>
-        <span className="bg-[#0e6f3b] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
-          Hoàn
-        </span>
-        <span className="bg-[#8f520a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
-          Chờ
-        </span>
-        <span className="bg-[#1c223a] text-white text-[11px] sm:text-xs lg:text-sm font-medium px-4 lg:px-5 py-1.5 lg:py-2 rounded-full shadow-xs">
-          Nghỉ
-        </span>
-        <span className="text-slate-500 text-[11px] sm:text-xs lg:text-sm font-medium px-2 py-1 leading-tight flex flex-col lg:flex-row lg:gap-1 items-center">
-          <span>Đã</span>
-          <span>khóa</span>
+        <span className="flex items-center gap-1.5 bg-[#1c223a] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs">
+          <span className="size-1.5 sm:size-2 rounded-full bg-slate-400" />
+          Nghỉ phép / Lễ
         </span>
       </div>
 

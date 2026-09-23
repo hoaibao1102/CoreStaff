@@ -3,9 +3,6 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  SubscribeMessage,
-  ConnectedSocket,
-  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { InjectModel } from '@nestjs/mongoose';
@@ -41,7 +38,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const rawCookie = client.handshake.headers.cookie;
       const sid = getCookie(rawCookie, 'sid');
 
-      if (!sid) return;
+      if (!sid) {
+        client.disconnect(true);
+        return;
+      }
 
       const tokenHash = hashToken(sid);
       const session = await this.sessionModel
@@ -52,10 +52,16 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         })
         .lean();
 
-      if (!session) return;
+      if (!session) {
+        client.disconnect(true);
+        return;
+      }
 
       const user = await this.userModel.findById(session.userId).lean();
-      if (!user) return;
+      if (!user) {
+        client.disconnect(true);
+        return;
+      }
 
       const userIdStr = String(user._id);
       const orgIdStr = user.organizationId ? String(user.organizationId) : undefined;
@@ -72,19 +78,23 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (orgIdStr) {
           client.join(`org:${orgIdStr}:managers`);
 
-          // Tìm các phòng ban quản lý
+          const now = new Date();
           const managed = await this.managerAssignmentModel
             .find({
               organizationId: orgIdStr,
               managerUserId: userIdStr,
               active: true,
+              effectiveFrom: { $lte: now },
+              $or: [{ effectiveTo: null }, { effectiveTo: { $exists: false } }, { effectiveTo: { $gte: now } }],
             })
             .lean();
 
-          managed.forEach((m) => {
-            const deptId = String(m.departmentId);
-            client.join(`dept:${deptId}`);
-          });
+          managed
+            .filter((assignment) =>
+              (!assignment.effectiveFrom || new Date(assignment.effectiveFrom) <= now)
+              && (!assignment.effectiveTo || new Date(assignment.effectiveTo) >= now),
+            )
+            .forEach((assignment) => client.join(`dept:${String(assignment.departmentId)}`));
         }
       }
     } catch (err) {
@@ -93,46 +103,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(_client: Socket) {}
-
-  @SubscribeMessage('register:user')
-  async handleRegisterUser(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { userId: string; role?: string; departmentId?: string },
-  ) {
-    if (data?.userId) {
-      client.join(`user:${data.userId}`);
-      if (data.departmentId) {
-        client.join(`dept:${data.departmentId}`);
-      }
-      if (data.role === 'DEPARTMENT_MANAGER' || data.role === 'HR') {
-        try {
-          const managed = await this.managerAssignmentModel
-            .find({
-              managerUserId: data.userId,
-              active: true,
-            })
-            .lean();
-
-          managed.forEach((m) => {
-            const deptId = String(m.departmentId);
-            client.join(`dept:${deptId}`);
-          });
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
-
-  @SubscribeMessage('join:department')
-  handleJoinDepartment(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { departmentId: string },
-  ) {
-    if (data?.departmentId) {
-      client.join(`dept:${data.departmentId}`);
-    }
-  }
 
   /**
    * Phát thông báo yêu cầu mới (Chấm công Selfie / OT) tới Quản lý phòng ban

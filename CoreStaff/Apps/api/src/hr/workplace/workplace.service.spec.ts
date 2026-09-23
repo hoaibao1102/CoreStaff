@@ -29,6 +29,7 @@ interface WorkplaceRow extends BaseRow {
 
 interface AssignmentRow extends Record<string, unknown> {
 	_id: string;
+	organizationId: string;
 	workplaceId: string;
 	active: boolean;
 }
@@ -39,6 +40,7 @@ const DUPLICATE_KEY_ERROR = 11000;
 
 function matches(row: Record<string, unknown>, filter: Record<string, unknown>): boolean {
 	return Object.entries(filter).every(([k, v]) => {
+		if (v instanceof RegExp) return v.test(String(row[k] ?? ''));
 		if (typeof v === 'object' && v !== null && '$ne' in v) {
 			return (row[k] as unknown) !== (v as { $ne: unknown }).$ne;
 		}
@@ -139,9 +141,8 @@ function buildWorkplaceModel(rows: WorkplaceRow[]) {
 /** Fake Mongoose model for Assignments */
 function buildAssignmentModel(rows: AssignmentRow[]) {
 	return {
-		countDocuments(filter: Record<string, unknown>) {
-			const run = async () => rows.filter((r) => matches(r, filter)).length;
-			return { exec: run };
+		async countDocuments(filter: Record<string, unknown>) {
+			return rows.filter((r) => matches(r, filter)).length;
 		},
 	};
 }
@@ -175,9 +176,10 @@ function seedWorkplace(
 	} as unknown as WorkplaceRow;
 }
 
-function seedAssignment(opts: { workplaceId: string; active?: boolean }): AssignmentRow {
+function seedAssignment(opts: { workplaceId: string; organizationId?: string; active?: boolean }): AssignmentRow {
 	return {
 		_id: `asgn-${opts.workplaceId}`,
+		organizationId: opts.organizationId ?? 'org1',
 		workplaceId: opts.workplaceId,
 		active: opts.active ?? true,
 	};
@@ -227,7 +229,7 @@ describe('POST /hr/workplaces — WorkplaceService.create', () => {
 				allowedRadiusMeters: 200,
 				maximumAccuracyMeters: 100,
 			}),
-		).rejects.toThrow('WORKPLACE_CODE_ALREADY_EXISTS');
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_CODE_ALREADY_EXISTS') } } });
 	});
 
 	it('C3: rejects duplicate coordinates within the same tenant', async () => {
@@ -244,7 +246,7 @@ describe('POST /hr/workplaces — WorkplaceService.create', () => {
 				allowedRadiusMeters: 200,
 				maximumAccuracyMeters: 100,
 			}),
-		).rejects.toThrow('WORKPLACE_COORDINATES_ALREADY_EXISTS');
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
 	});
 
 	it('C4: allows same code/coords in different tenants', async () => {
@@ -403,7 +405,7 @@ describe('PATCH /hr/workplaces/:id — WorkplaceService.update', () => {
 				latitude: 10.8,
 				longitude: 106.7,
 			}),
-		).rejects.toThrow('WORKPLACE_COORDINATES_ALREADY_EXISTS');
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
 	});
 
 	it('U3: throws NotFoundException when workplace does not exist', async () => {

@@ -17,6 +17,7 @@ import { ManagerRequestSchema } from '../database/schemas/manager-request.schema
 import { EmployeeProfileSchema } from '../database/schemas/employee-profile.schema';
 import { UserSchema } from '../database/schemas/user.schema';
 import { UserSessionSchema } from '../database/schemas/user-session.schema';
+import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.schema';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UserSessionSchema } from '../database/schemas/user-session.schema';
       { name: 'EmployeeProfile', schema: EmployeeProfileSchema },
       { name: 'User', schema: UserSchema },
       { name: 'UserSession', schema: UserSessionSchema },
+      { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
     ]),
     StorageModule,
   ],

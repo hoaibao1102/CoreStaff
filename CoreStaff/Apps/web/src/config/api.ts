@@ -48,21 +48,27 @@ export async function getHealth(base: string, timeoutMs = 4000): Promise<HealthR
   }
 }
 
+let cachedResolveBasePromise: Promise<{ base: string; source: ApiSource; health: HealthResponse }> | null = null;
+
 /**
  * Dev: use same-origin Vite proxies so the browser can retain session cookies.
  * Production build: chỉ dùng VITE_API_URL (không trỏ localhost của máy user).
  */
-export async function resolveApiBase(): Promise<{ base: string; source: ApiSource; health: HealthResponse }> {
-  if (import.meta.env.PROD) {
-    return { base: REMOTE_API_URL, source: 'remote', health: await getHealth(REMOTE_API_URL) };
-  }
-  try {
-    const base = window.location.origin;
-    return { base, source: 'remote', health: await getHealth(base) };
-  } catch {
-    const base = `${window.location.origin}/local-api`;
-    return { base, source: 'local', health: await getHealth(base) };
-  }
+export function resolveApiBase(): Promise<{ base: string; source: ApiSource; health: HealthResponse }> {
+  if (cachedResolveBasePromise) return cachedResolveBasePromise;
+  cachedResolveBasePromise = (async () => {
+    if (import.meta.env.PROD) {
+      return { base: REMOTE_API_URL, source: 'remote', health: await getHealth(REMOTE_API_URL) };
+    }
+    try {
+      const base = window.location.origin;
+      return { base, source: 'remote', health: await getHealth(base, 1500) };
+    } catch {
+      const base = `${window.location.origin}/local-api`;
+      return { base, source: 'local', health: await getHealth(base, 2000) };
+    }
+  })();
+  return cachedResolveBasePromise;
 }
 
 export function apiUrl(base: string, path: string): string {

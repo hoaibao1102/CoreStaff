@@ -114,18 +114,24 @@ export function getTodayAttendance(base: string): Promise<TodayAttendanceData> {
   return request<TodayAttendanceData>(base, '/api/attendance/today', { method: 'GET' });
 }
 
-export function checkIn(base: string, payload: CheckInPayload | FormData): Promise<any> {
+function newIdempotencyKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function checkIn(base: string, payload: CheckInPayload | FormData, idempotencyKey = newIdempotencyKey()): Promise<any> {
   const isFormData = payload instanceof FormData;
   return request<any>(base, '/api/attendance/check-in', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: isFormData ? payload : JSON.stringify(payload),
   });
 }
 
-export function checkOut(base: string, payload: CheckOutPayload | FormData): Promise<any> {
+export function checkOut(base: string, payload: CheckOutPayload | FormData, idempotencyKey = newIdempotencyKey()): Promise<any> {
   const isFormData = payload instanceof FormData;
   return request<any>(base, '/api/attendance/check-out', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: isFormData ? payload : JSON.stringify(payload),
   });
 }

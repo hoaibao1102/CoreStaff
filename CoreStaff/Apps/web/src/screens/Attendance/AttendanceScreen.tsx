@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { Avatar, AvatarFallback } from '../../components/avatar';
+import { Button } from '../../components/button';
 import { toast } from '../../components/toast';
 import { getMyEmployeeProfile } from '../../services/hrService';
 import { getWorkplaceById, type Workplace } from '../../services/workplace.service';
@@ -216,6 +217,7 @@ function ApprovalStatusNotification({
 export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: string | null }) {
   const [userWorkplace, setUserWorkplace] = useState<Workplace | null>(null);
   const [isLoadingWorkplace, setIsLoadingWorkplace] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('NETWORK');
   const [attendanceRecord, setAttendanceRecord] = useState<DayAttendance>({
     id: 'att-today',
@@ -256,11 +258,16 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
 
   // Fetch employee's today attendance state & assigned workplace
   const fetchTodayData = useCallback(async () => {
-    if (!apiBase) return;
+    if (!apiBase) {
+      setLoadError('Chưa kết nối được API chấm công.');
+      setIsLoadingWorkplace(false);
+      return;
+    }
     setIsLoadingWorkplace(true);
+    setLoadError(null);
     try {
       const todayData = await getTodayAttendance(apiBase);
-      console.log('[AttendanceScreen] fetchTodayData SUCCESS:', todayData);
+      if (!todayData?.assignment) throw new Error('ATTENDANCE_RESPONSE_INVALID');
       const isOutOffice = todayData.assignment.workplaceType === 'OUT_OFFICE';
 
       // Thông báo Toast khi trạng thái phê duyệt thay đổi hoặc khi load trang
@@ -374,8 +381,8 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
               workplaceName: todayData.assignment.workplaceName,
             },
       }));
-    } catch (err: any) {
-      console.warn('Lỗi tải trạng thái công hôm nay:', err);
+    } catch {
+      setLoadError('Không thể tải trạng thái chấm công hôm nay. Vui lòng thử lại.');
     } finally {
       setIsLoadingWorkplace(false);
     }
@@ -390,18 +397,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     if (!apiBase) return;
     const socket = getSocket(apiBase);
 
-    const uid = user?._id || user?.id;
-    const register = () => {
-      if (uid) {
-        socket.emit('register:user', { userId: String(uid), role: user?.role });
-      }
-    };
-
-    register();
-    socket.on('connect', register);
-
     const onDecision = (data: any) => {
-      console.log('[AttendanceScreen] Real-time request:decided received:', data);
       if (data?.status) {
         notifiedStatusRef.current = data.status;
       }
@@ -429,10 +425,9 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
 
     socket.on('request:decided', onDecision);
     return () => {
-      socket.off('connect', register);
       socket.off('request:decided', onDecision);
     };
-  }, [apiBase, user?.id, user?._id, user?.role, fetchTodayData]);
+  }, [apiBase, fetchTodayData]);
 
   // GPS verification config based on employee's actual workplace
   const location = useLocation();
@@ -739,6 +734,13 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
           <div className="flex flex-col items-center justify-center min-h-[380px] gap-3 text-muted-foreground">
             <RefreshCw className="size-8 animate-spin text-primary" />
             <span className="text-sm font-medium">Đang tải thông tin phân công và địa điểm làm việc...</span>
+          </div>
+        ) : loadError ? (
+          <div role="alert" className="flex min-h-[380px] flex-col items-center justify-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+            <p className="text-sm font-medium text-destructive">{loadError}</p>
+            <Button variant="outline" onClick={() => void fetchTodayData()}>
+              <RefreshCw className="mr-2 size-4" /> Thử lại
+            </Button>
           </div>
         ) : (
           <>

@@ -245,8 +245,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/attendance/history') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
-        <div className="mx-auto w-full max-w-md md:max-w-2xl lg:max-w-5xl px-3 py-2 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-          <AttendanceHistoryScreen />
+        <div className="mx-auto w-full max-w-5xl lg:max-w-6xl h-full md:h-[calc(100vh-1rem)] flex flex-col p-2.5 sm:p-4 lg:p-6">
+          <AttendanceHistoryScreen apiBase={apiBase} />
         </div>
       </WorkspaceShell>
     );

@@ -46,7 +46,7 @@ export class AttendanceCalculatorService {
       // Tính workingMinutes = (checkOutAt - checkInAt) - breakMinutes
       const totalSpanMinutes = Math.floor((checkOutAt.getTime() - checkInAt.getTime()) / 60000);
       const breakMins = shift.breakMinutes || 0;
-      workingMinutes = Math.max(0, totalSpanMinutes - breakMins);
+      workingMinutes = totalSpanMinutes >= breakMins ? totalSpanMinutes - breakMins : totalSpanMinutes;
     }
 
     return {
