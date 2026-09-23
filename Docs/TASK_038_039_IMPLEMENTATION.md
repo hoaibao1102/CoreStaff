@@ -109,6 +109,21 @@ Theo yêu cầu rà soát lại toàn bộ để chắc không có lỗi logic:
   scope lần này giới hạn ở phần InsuranceProfile/InsurancePolicy cần, không mở
   rộng sang màn hình quản lý hợp đồng đầy đủ).
 
+**Cập nhật (2026-09-23): đã bổ sung UI web cho InsuranceProfile/InsurancePolicy**
+(EmploymentContract/SalaryProfile không đụng tới — hai module đó là bản của team,
+xem ghi chú đầu file). Hai màn hình mới, theo đúng route đã định ở trên:
+- `Apps/web/src/screens/InsuranceProfiles/` — danh sách + tạo hồ sơ tham gia
+  bảo hiểm theo nhân viên (`/hr/insurance-profiles`). Chỉ Tạo + Xem, không có Sửa/Xoá
+  vì API không có endpoint update/delete (sửa sai = tạo hồ sơ mới, đúng model
+  effective-dating của TASK-038).
+- `Apps/web/src/screens/InsurancePolicy/` — danh sách + tạo chính sách BHXH/BHYT/BHTN
+  toàn tổ chức (`/hr/policies/insurance`). Cùng lý do, chỉ Tạo + Xem.
+- `hrService.ts` bổ sung types/API functions/error-code mapping cho cả hai; nav
+  mới trong `Sidebar.tsx` ("Hồ sơ bảo hiểm", "Chính sách bảo hiểm").
+- Kiểm chứng: `npm run build --workspace @corestaff/web` (tsc --noEmit + vite build)
+  và `npm run lint --workspace @corestaff/web` đều PASS. Chưa test UI trên trình
+  duyệt thật với API/DB sống — cần một phiên có backend chạy để làm việc đó.
+
 ## Kiểm chứng
 
 - `npm run build --workspace @corestaff/api`: PASS.
