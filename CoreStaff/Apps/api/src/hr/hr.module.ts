@@ -10,12 +10,15 @@ import { AssignmentModule } from './assignment/assignment.module';
 import { CompensationModule } from './compensation/compensation.module';
 import { PoliciesModule } from './policies/policies.module';
 import { ManagerModule } from './manager/manager.module';
+import { InsuranceProfileModule } from './insurance-profile/insurance-profile.module';
+import { InsurancePolicyModule } from './insurance-policy/insurance-policy.module';
 
 /**
  * HR Core: Sprint 2 catalogs + EmployeeProfile (TASK-020..023), Sprint 3
  * EmploymentContract + EmployeeDocument (TASK-028..029, SRS §30A.2),
  * Workplace/ShiftTemplate/Assignment (TASK-024), compensation foundations
- * (TASK-031..035) and effective-dated policies (TASK-036/037).
+ * (TASK-031..035), effective-dated policies (TASK-036/037), and Insurance
+ * (TASK-038/039, see Docs/DOCS_DECISION_LOG.md D32 for scope notes).
  */
 @Module({
 	imports: [
@@ -30,6 +33,8 @@ import { ManagerModule } from './manager/manager.module';
 		CompensationModule,
 		PoliciesModule,
 		ManagerModule,
+		InsuranceProfileModule,
+		InsurancePolicyModule,
 	],
 })
 export class HrModule {}

@@ -94,6 +94,19 @@ export const Gender = {
 } as const;
 export type Gender = (typeof Gender)[keyof typeof Gender];
 
+/**
+ * SRS §30D.3 names three insurance contributions (BHXH/BHYT/BHTN) but never a
+ * short code for them. This enum is an engineering addition (TASK-038/039) to
+ * key `InsuranceProfile.participates*` against `InsurancePolicy` rate/base/cap
+ * rows without repeating three parallel fields — not a new legal category.
+ */
+export const InsuranceContributionType = {
+  SOCIAL_INSURANCE: 'SOCIAL_INSURANCE',
+  HEALTH_INSURANCE: 'HEALTH_INSURANCE',
+  UNEMPLOYMENT_INSURANCE: 'UNEMPLOYMENT_INSURANCE',
+} as const;
+export type InsuranceContributionType = (typeof InsuranceContributionType)[keyof typeof InsuranceContributionType];
+
 /** Case-insensitive, trimmed email used for tenant-scoped uniqueness. */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
