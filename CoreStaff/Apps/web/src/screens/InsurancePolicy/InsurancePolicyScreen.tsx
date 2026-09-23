@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Eye, Plus, Search, ShieldCheck, X } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -26,7 +26,8 @@ export function InsurancePolicyScreen({ apiBase }: { apiBase: string | null }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailPolicy, setDetailPolicy] = useState<InsurancePolicy | null>(null);
 
-  const resource = useHrResource(apiBase ? () => listInsurancePolicies(apiBase) : null);
+  const loader = useCallback(() => listInsurancePolicies(apiBase!), [apiBase]);
+  const resource = useHrResource(apiBase ? loader : null);
   const loading = resource.loading;
   const error = resource.error ? hrErrorMessage(resource.error) : null;
   const policies: InsurancePolicy[] = resource.data ?? [];
