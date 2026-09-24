@@ -34,7 +34,10 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
   rows = [contract];
-  const employees = [{ _id: 'p1', userId: 'u1', organizationId: 'org1', employeeCode: 'E001', fullName: 'Test Employee', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', joinDate: '2026-09-16' }];
+  const employees = [
+    { _id: 'p1', userId: 'u1', organizationId: 'org1', employeeCode: 'E001', fullName: 'Test Employee', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', joinDate: '2026-09-16' },
+    { _id: 'p2', userId: 'u2', organizationId: 'org1', employeeCode: 'E002', fullName: 'No Contract Employee', employmentType: 'FULL_TIME', employmentStatus: 'ACTIVE', joinDate: '2026-09-16' },
+  ];
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
     const path = new URL(url);
     const method = init?.method ?? 'GET';
@@ -97,7 +100,7 @@ test('create posts the HR payload and never sets status', async () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   };
-  await setSelect('contract-employee', 'p1');
+  await setSelect('contract-employee', 'p2');
   await setSelect('contract-type', 'FIXED_TERM');
   await setInput('contract-effective', '2026-09-01');
   await setInput('contract-expiry', '2027-08-31');
@@ -105,7 +108,7 @@ test('create posts the HR payload and never sets status', async () => {
   await act(async () => (document.body.querySelector('form button[type="submit"]') as HTMLButtonElement).click());
   const request = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/api/hr/contracts') && init?.method === 'POST');
   const body = JSON.parse(String(request![1].body));
-  expect(body).toEqual({ employeeId: 'p1', contractType: 'FIXED_TERM', effectiveDate: '2026-09-01', expiryDate: '2027-08-31', note: 'Hợp đồng chính năm 2026' });
+  expect(body).toEqual({ employeeId: 'p2', contractType: 'FIXED_TERM', effectiveDate: '2026-09-01', expiryDate: '2027-08-31', note: 'Hợp đồng chính năm 2026' });
   expect(body).not.toHaveProperty('status');
 });
 
@@ -120,7 +123,7 @@ test('INDEFINITE_TERM hides the expiry field and omits it from the payload', asy
   expect(document.getElementById('contract-expiry')).toBeNull();
   await act(async () => {
     const select = document.getElementById('contract-employee') as HTMLSelectElement;
-    select.value = 'p1';
+    select.value = 'p2';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     const input = document.getElementById('contract-effective') as HTMLInputElement;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '2026-09-01');
@@ -129,8 +132,31 @@ test('INDEFINITE_TERM hides the expiry field and omits it from the payload', asy
   await act(async () => (document.body.querySelector('form button[type="submit"]') as HTMLButtonElement).click());
   const request = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/api/hr/contracts') && init?.method === 'POST');
   const body = JSON.parse(String(request![1].body));
-  expect(body).toEqual({ employeeId: 'p1', contractType: 'INDEFINITE_TERM', effectiveDate: '2026-09-01' });
+  expect(body).toEqual({ employeeId: 'p2', contractType: 'INDEFINITE_TERM', effectiveDate: '2026-09-01' });
   expect(body).not.toHaveProperty('expiryDate');
+});
+
+test('create picker excludes employees with an open contract and keeps those without one', async () => {
+  await render(screenEl());
+  await clickText('Tạo hợp đồng');
+  const select = document.getElementById('contract-employee') as HTMLSelectElement;
+  const values = [...select.options].map((o) => o.value).filter(Boolean);
+  expect(values).not.toContain('p1');            // p1 holds an ACTIVE contract
+  expect(values).toContain('p2');                // p2 has none
+  expect([...select.options].map((o) => o.textContent).join()).not.toContain('E001');
+});
+
+test('edit dialog stacks above the detail dialog (no UI stack-up)', async () => {
+  await render(<ContractsScreen user={user} apiBase="https://api.test" contractId="c1" />);
+  await act(async () => { await Promise.resolve(); });
+  const zIndexes = () =>
+    [...document.body.querySelectorAll<HTMLElement>('[data-slot="dialog-content"]')].map((el) => Number(el.style.zIndex));
+  const before = zIndexes();
+  expect(before.length).toBe(1);
+  await clickText('Chỉnh sửa');
+  const after = zIndexes();
+  expect(after.length).toBe(2);
+  expect(Math.max(...after)).toBeGreaterThan(Math.min(...after));
 });
 
 test('edit dialog PATCHes only mutable fields and never sends status or type', async () => {
