@@ -291,7 +291,7 @@ export function ContractEditDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={(next) => { if (!submitting) props.onOpenChange(next); }}>
-      <DialogContent className="max-w-2xl gap-0">
+      <DialogContent className="max-w-2xl gap-0" layerOffset={1}>
         <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
           <DialogTitle className="text-xl font-semibold">Chỉnh sửa hợp đồng</DialogTitle>
           <DialogDescription className="mt-1.5">
@@ -594,7 +594,7 @@ export function ContractDetailDialog(props: {
       </DialogContent>
 
       <Dialog open={statusMode} onOpenChange={(open) => { if (!open && !saving) setStatusMode(false); }}>
-        <DialogContent className="max-w-[520px] gap-0" showCloseButton={!saving}>
+        <DialogContent className="max-w-[520px] gap-0" layerOffset={1} showCloseButton={!saving}>
           <DialogHeader className="border-b border-border px-5 py-5 pr-14">
             <div className="flex items-start gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">

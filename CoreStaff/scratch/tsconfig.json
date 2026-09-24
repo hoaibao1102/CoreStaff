@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "typeRoots": ["../node_modules/@types"],
+    "types": ["node"],
+    "outDir": "out",
+    "rootDir": ".."
+  },
+  "files": ["mobile-refresh-check.ts", "globals.d.ts", "../Apps/mobile/src/auth.ts", "../Apps/mobile/src/config.ts"]
+}

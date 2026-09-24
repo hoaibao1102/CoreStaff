@@ -80,9 +80,11 @@ export function ContractsScreen({
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
+  // All statuses, unfiltered: the status filter is applied client-side below so the
+  // create picker always sees every contract an employee already holds.
   const loader = useCallback(async () => {
     const [contracts, employees, compliance] = await Promise.all([
-      import('../../services/hrService').then((m) => m.listContracts(apiBase!, { status })),
+      import('../../services/hrService').then((m) => m.listContracts(apiBase!)),
       import('../../services/hrService').then((m) => m.listEmployees(apiBase!, '', '')),
       import('../../services/hrService').then((m) => m.getContractCompliance(apiBase!).catch(() => ({ findings: [], counts: {} }))),
     ]);
@@ -98,7 +100,7 @@ export function ContractsScreen({
       };
     });
     return { contracts: enriched, employees: tenantEmployees, compliance };
-  }, [apiBase, status, user.organizationId]);
+  }, [apiBase, user.organizationId]);
 
   const resource = useHrResource(allowed && apiBase ? loader : null);
   const loading = resource.loading;
@@ -108,7 +110,11 @@ export function ContractsScreen({
   const findings: ContractFinding[] = resource.data?.compliance?.findings ?? [];
 
   const term = query.trim().toLocaleLowerCase('vi');
-  const filtered = contracts.filter((c) => !term || `${c.employeeCode ?? ''} ${c.employeeFullName ?? ''}`.toLocaleLowerCase('vi').includes(term));
+  const filtered = contracts.filter(
+    (c) =>
+      (!status || c.status === status) &&
+      (!term || `${c.employeeCode ?? ''} ${c.employeeFullName ?? ''}`.toLocaleLowerCase('vi').includes(term)),
+  );
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / 10));
   const current = Math.max(1, Math.min(page, totalPages));
@@ -116,6 +122,14 @@ export function ContractsScreen({
 
   const activeCount = contracts.filter((c) => c.status === 'ACTIVE').length;
   const expiringSoon = contracts.filter((c) => c.isExpiringSoon).length;
+
+  // The create picker only offers employees with no open contract. DRAFT counts as
+  // open (one unsigned draft per person); EXPIRED / TERMINATED do not, so renewals
+  // and rehires stay possible — the backend still refuses overlapping ACTIVE
+  // windows on DRAFT → ACTIVE (EMPLOYMENT_CONTRACT_OVERLAPS_ACTIVE).
+  const employeesForCreate = employees.filter(
+    (e) => !contracts.some((c) => c.employeeProfileId === e._id && (c.status === 'ACTIVE' || c.status === 'DRAFT')),
+  );
 
   if (!allowed) return <EmployeeDataState status="forbidden" />;
   if (!apiBase) return <EmployeeDataState status="unavailable" />;
@@ -239,7 +253,7 @@ export function ContractsScreen({
           <ContractCreateDialog
             apiBase={apiBase}
             open={createOpen}
-            employees={employees}
+            employees={employeesForCreate}
             onOpenChange={setCreateOpen}
             onCreated={resource.retry}
           />
