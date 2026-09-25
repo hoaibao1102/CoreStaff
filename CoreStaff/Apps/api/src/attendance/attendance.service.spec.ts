@@ -43,6 +43,7 @@ function build(options: {
     {} as any,
     {} as any,
     storage as any,
+    { resolveForEmployeeDate: jest.fn(async () => null) } as any,
   );
   return { service, storage };
 }

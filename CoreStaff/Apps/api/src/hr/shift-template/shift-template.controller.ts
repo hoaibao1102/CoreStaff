@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -6,6 +6,7 @@ import { Tenant, requireOrganizationId } from '../../common/tenant-context';
 import { ShiftTemplateService } from './shift-template.service';
 import { CreateShiftTemplateDto } from './dto/create-shift-template.dto';
 import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
+import { ShiftScope } from '../../database/schemas/enums';
 
 @ApiTags('HR / Shift Templates')
 @UseGuards(AuthGuard, RolesGuard)
@@ -15,9 +16,7 @@ export class ShiftTemplateController {
 
 	@Roles('HR')
 	@Post()
-	@ApiOperation({ summary: 'Create a shift template for a workplace (FR-SCH-01). One per workplace.' })
-	@ApiResponse({ status: 409, description: 'SHIFT_START_TIME_MUST_BE_BEFORE_END or SHIFT_TEMPLATE_ALREADY_EXISTS_FOR_WORKPLACE or CANNOT_CREATE_SHIFT_FOR_INACTIVE_WORKPLACE' })
-	@ApiResponse({ status: 404, description: 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT' })
+	@ApiOperation({ summary: 'Create a company-wide or department shift with its recurring weekdays.' })
 	async create(
 		@Tenant() organizationId: string | null,
 		@Body() dto: CreateShiftTemplateDto,
@@ -31,12 +30,13 @@ export class ShiftTemplateController {
 	@ApiOperation({ summary: 'List shift templates in the current tenant.' })
 	async findAll(
 		@Tenant() organizationId: string | null,
-		@Query('workplaceId') workplaceId?: string,
+		@Query('scope') scope?: ShiftScope,
+		@Query('departmentId') departmentId?: string,
 		@Query('active') active?: string,
 	) {
 		const orgId = requireOrganizationId(organizationId);
 		const filter = active === undefined ? undefined : active === 'true';
-		const data = await this.shiftTemplates.findAll(orgId, workplaceId, filter);
+		const data = await this.shiftTemplates.findAll(orgId, scope, departmentId, filter);
 		return { success: true, data };
 	}
 
@@ -51,9 +51,7 @@ export class ShiftTemplateController {
 
 	@Roles('HR')
 	@Patch(':id')
-	@ApiOperation({ summary: 'Update shift template times/workplace.' })
-	@ApiResponse({ status: 409, description: 'SHIFT_START_TIME_MUST_BE_BEFORE_END or SHIFT_TEMPLATE_ALREADY_EXISTS_FOR_WORKPLACE' })
-	@ApiResponse({ status: 404, description: 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT' })
+	@ApiOperation({ summary: 'Update shift template and recurring schedule.' })
 	async update(
 		@Tenant() organizationId: string | null,
 		@Param('id') id: string,
@@ -81,5 +79,15 @@ export class ShiftTemplateController {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.shiftTemplates.setActive(orgId, id, false);
 		return { success: true, data };
+	}
+
+	@Roles('HR')
+	@Delete(':id')
+	@ApiOperation({ summary: 'Permanently delete an unused shift template.' })
+	@ApiResponse({ status: 409, description: 'SHIFT_TEMPLATE_IN_USE' })
+	async remove(@Tenant() organizationId: string | null, @Param('id') id: string) {
+		const orgId = requireOrganizationId(organizationId);
+		await this.shiftTemplates.remove(orgId, id);
+		return { success: true, data: { id } };
 	}
 }

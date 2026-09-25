@@ -174,9 +174,36 @@ export const WorkdayType = {
 } as const;
 export type WorkdayType = (typeof WorkdayType)[keyof typeof WorkdayType];
 
+export const ShiftScope = {
+  ORGANIZATION: 'ORGANIZATION',
+  DEPARTMENT: 'DEPARTMENT',
+} as const;
+export type ShiftScope = (typeof ShiftScope)[keyof typeof ShiftScope];
+
 export const DayResult = {
   PRESENT: 'PRESENT',
   ABSENT: 'ABSENT',
   INCOMPLETE: 'INCOMPLETE',
 } as const;
 export type DayResult = (typeof DayResult)[keyof typeof DayResult];
+
+export const CalendarExceptionType = {
+  WEEKLY_OFF: 'WEEKLY_OFF',
+  PUBLIC_HOLIDAY: 'PUBLIC_HOLIDAY',
+  SPECIAL_WORKING_DAY: 'SPECIAL_WORKING_DAY',
+} as const;
+export type CalendarExceptionType = (typeof CalendarExceptionType)[keyof typeof CalendarExceptionType];
+
+export const LeaveType = {
+  PAID_LEAVE: 'PAID_LEAVE',
+  UNPAID_LEAVE: 'UNPAID_LEAVE',
+} as const;
+export type LeaveType = (typeof LeaveType)[keyof typeof LeaveType];
+
+export const LeaveRequestStatus = {
+  PENDING_MANAGER: 'PENDING_MANAGER',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  HR_APPLIED: 'HR_APPLIED',
+} as const;
+export type LeaveRequestStatus = (typeof LeaveRequestStatus)[keyof typeof LeaveRequestStatus];

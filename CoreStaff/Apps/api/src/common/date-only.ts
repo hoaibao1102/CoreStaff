@@ -1,0 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
+export function dateOnly(value:string){const match=value.match(/^\d{4}-\d{2}-\d{2}/);if(!match)throw new BadRequestException('INVALID_DATE');const[y,m,d]=match[0].split('-').map(Number),parsed=new Date(Date.UTC(y,m-1,d));if(parsed.getUTCFullYear()!==y||parsed.getUTCMonth()!==m-1||parsed.getUTCDate()!==d)throw new BadRequestException('INVALID_DATE');return match[0]}
+export function enumerateDates(from:string,to:string){if(to<from)return[];const result:string[]=[];for(let cursor=new Date(`${from}T00:00:00Z`);cursor<=new Date(`${to}T00:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()+1))result.push(cursor.toISOString().slice(0,10));return result}
+export function isoWeekday(date:string){const day=new Date(`${date}T00:00:00Z`).getUTCDay();return day===0?7:day}

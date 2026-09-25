@@ -26,6 +26,10 @@ import { AttendanceEventSchema, AttendanceEvent } from './attendance-event.schem
 import { EvidenceSchema, Evidence } from './evidence.schema';
 import { IdempotencyRecordSchema } from './idempotency-record.schema';
 import { ApprovalHistorySchema } from './approval-history.schema';
+import { CalendarExceptionSchema } from './calendar-exception.schema';
+import { LeaveRequestSchema } from './leave-request.schema';
+import { EmployeeDayOverrideSchema } from './employee-day-override.schema';
+import { LeaveActionSchema } from './leave-action.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -64,6 +68,10 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Evidence', schema: EvidenceSchema },
   { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
   { name: 'ApprovalHistory', schema: ApprovalHistorySchema },
+  { name: 'CalendarException', schema: CalendarExceptionSchema },
+  { name: 'LeaveRequest', schema: LeaveRequestSchema },
+  { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
+  { name: 'LeaveAction', schema: LeaveActionSchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
@@ -90,6 +98,10 @@ export { ShiftTemplate } from './shift-template.schema';
 export { AttendanceDay, AttendanceDaySchema } from './attendance-day.schema';
 export { AttendanceEvent, AttendanceEventSchema } from './attendance-event.schema';
 export { Evidence, EvidenceSchema } from './evidence.schema';
+export { CalendarException, CalendarExceptionSchema } from './calendar-exception.schema';
+export { LeaveRequest, LeaveRequestSchema } from './leave-request.schema';
+export { EmployeeDayOverride, EmployeeDayOverrideSchema } from './employee-day-override.schema';
+export { LeaveAction, LeaveActionSchema } from './leave-action.schema';
 
 export function registryEntries() {
   return SCHEMA_REGISTRY.map(({ name, schema }) => ({ name, schema } as const));

@@ -18,6 +18,7 @@ import { EmployeeProfileSchema } from '../database/schemas/employee-profile.sche
 import { UserSchema } from '../database/schemas/user.schema';
 import { UserSessionSchema } from '../database/schemas/user-session.schema';
 import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.schema';
+import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.
       { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
     ]),
     StorageModule,
+    ShiftTemplateModule,
   ],
   controllers: [AttendanceController],
   providers: [

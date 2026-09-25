@@ -27,6 +27,7 @@ import { AttendanceCalculatorService } from './services/attendance-calculator.se
 import { StorageService } from '../storage/storage.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
+import { ShiftResolverService } from '../hr/shift-template/shift-resolver.service';
 
 @Injectable()
 export class AttendanceService {
@@ -45,6 +46,7 @@ export class AttendanceService {
     private networkValidatorService: NetworkValidatorService,
     private calculatorService: AttendanceCalculatorService,
     private storageService: StorageService,
+    private shiftResolver: ShiftResolverService,
     @Optional() private readonly eventsGateway?: EventsGateway,
   ) {}
 
@@ -76,7 +78,7 @@ export class AttendanceService {
       .lean();
 
     const workplace = assignment?.workplaceId;
-    const shift = assignment?.shiftTemplateId || assignment?.shiftId;
+    const shift = await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate) || assignment?.shiftTemplateId || assignment?.shiftId;
 
     // 2. Tìm AttendanceDay hôm nay
     const day = await this.attendanceDayModel
@@ -268,7 +270,7 @@ export class AttendanceService {
     }
 
     const workplace = assignment.workplaceId;
-    const shift = assignment.shiftTemplateId || assignment.shiftId;
+    const shift = await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate) || assignment.shiftTemplateId || assignment.shiftId;
     const recordedAt = new Date();
 
     let method: AttendanceMethod;
