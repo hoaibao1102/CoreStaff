@@ -3,7 +3,7 @@ import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDi
 import { ContractsScreen } from '../screens/Contracts/ContractsScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
-import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
+import { AttendanceHistoryScreen } from '../screens/Employee/EmployeeWorkScreens';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
 import { PositionScreen } from '../screens/Positions/PositionScreen';
 import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
@@ -23,6 +23,10 @@ import { WorkspaceShell } from '../components/WorkspaceShell';
 import type { ApiSource, HealthResponse } from '../config/api';
 import type { AuthUser } from '../services/auth';
 import { roleLabel, statusPill } from '../lib/labels';
+import { CalendarScreen } from '../screens/Scheduling/CalendarScreen';
+import { HrLeaveScreen } from '../screens/Leave/HrLeaveScreen';
+import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
+import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -103,7 +107,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
     route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay' ||
-    route === '/hr/insurance-profiles' || route === '/hr/policies/insurance';
+    route === '/hr/insurance-profiles' || route === '/hr/policies/insurance' ||
+    route === '/hr/calendar' || route === '/hr/leave-requests';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
@@ -206,6 +211,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
             <OvertimePayPolicyScreen apiBase={apiBase} />
+          ) : route === '/hr/calendar' && apiBase ? (
+            <CalendarScreen apiBase={apiBase} />
+          ) : route === '/hr/leave-requests' && apiBase ? (
+            <HrLeaveScreen apiBase={apiBase} />
+          ) : route === '/app/leave' && apiBase ? (
+            <EmployeeLeaveScreen apiBase={apiBase} />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.
@@ -249,6 +260,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
+  if (user.role === 'DEPARTMENT_MANAGER' && route === '/manager/leave-requests' && apiBase) {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8"><ManagerLeaveScreen apiBase={apiBase}/></section></WorkspaceShell>;
+  }
+
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/attendance/history') {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
@@ -259,8 +274,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave' && apiBase) {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><EmployeeLeaveScreen apiBase={apiBase}/></section></WorkspaceShell>;
   }
 
   // ── Fallback: show dashboard ─────────────────────────────────────────

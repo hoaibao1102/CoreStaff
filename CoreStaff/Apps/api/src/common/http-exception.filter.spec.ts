@@ -27,6 +27,15 @@ function run(exception: unknown): { status: number; body: Record<string, unknown
 }
 
 describe('AllExceptionsFilter — SRS §16.1 envelope', () => {
+  it('preserves structured policy violation details', () => {
+    const details = { usedMinutes: 540, limitMinutes: 480 };
+    const result = run(new HttpException({ message: 'SHIFT_DAILY_LABOR_LIMIT_EXCEEDED', details }, 409));
+    expect(result.body.error).toEqual({
+      code: 'SHIFT_DAILY_LABOR_LIMIT_EXCEEDED',
+      message: 'SHIFT_DAILY_LABOR_LIMIT_EXCEEDED',
+      details,
+    });
+  });
 	it('maps a coded HttpException (string message) to { success:false, error:{ code } }', () => {
 		const r = run(new UnauthorizedException('AUTH_INVALID_CREDENTIALS'));
 		expect(r.status).toBe(401);

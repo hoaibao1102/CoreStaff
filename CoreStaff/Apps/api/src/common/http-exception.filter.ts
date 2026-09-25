@@ -49,12 +49,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
 			if (typeof body === 'string') {
 				envelope = { success: false, error: { code: codeFromBody(body, status), message: body, details: null } };
 			} else {
-				const obj = body as { message?: string | string[]; error?: string };
+				const obj = body as { code?: string; message?: string | string[]; error?: string; details?: unknown };
 				if (Array.isArray(obj.message)) {
 					envelope = { success: false, error: { code: STATUS_DEFAULT_CODE[status] ?? 'VALIDATION_FAILED', message: obj.error ?? 'Invalid request.', details: obj.message } };
 				} else {
 					const msg = typeof obj.message === 'string' ? obj.message : (obj.error ?? 'Request failed.');
-					envelope = { success: false, error: { code: codeFromBody(msg, status), message: msg, details: null } };
+					envelope = { success: false, error: { code: typeof obj.code === 'string' && looksLikeCode(obj.code) ? obj.code : codeFromBody(msg, status), message: msg, details: obj.details ?? null } };
 				}
 			}
 		} else {

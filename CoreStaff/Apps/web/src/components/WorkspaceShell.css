@@ -119,6 +119,38 @@
 
 .workspace-sidebar-item + .workspace-sidebar-item { margin-top: 0.25rem; }
 
+.workspace-sidebar-tree + .workspace-sidebar-tree,
+.workspace-sidebar-item + .workspace-sidebar-tree,
+.workspace-sidebar-tree + .workspace-sidebar-item { margin-top: 0.25rem; }
+
+.workspace-sidebar-parent[data-active="true"] {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.workspace-sidebar-children {
+  position: relative;
+  margin: 0.25rem 0 0.4rem 1.75rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid var(--border);
+}
+
+.workspace-sidebar-child {
+  height: 2.375rem;
+  font-size: 0.8125rem;
+}
+
+.workspace-sidebar-child .workspace-sidebar-icon {
+  flex-basis: 2.5rem;
+  width: 2.5rem;
+}
+
+.workspace-sidebar[data-collapsed="true"] .workspace-sidebar-children {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
 .workspace-sidebar-item:hover,
 .workspace-sidebar-account:hover,
 .workspace-sidebar-account[aria-expanded="true"] {

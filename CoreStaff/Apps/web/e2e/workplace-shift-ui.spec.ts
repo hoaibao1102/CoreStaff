@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Isolated browser fixtures: never send mutations to the real HR backend.
 const workplace = { _id: 'workplace', organizationId: 'org', code: 'VP-01', name: 'Văn phòng chính', address: '123 Nguyễn Huệ, TP.HCM', latitude: 10.77, longitude: 106.7, allowedRadiusMeters: 200, maximumAccuracyMeters: 100, active: true };
-const shift = { _id: 'shift', organizationId: 'org', workplaceId: 'workplace', startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 5, active: true };
+const shift = { _id: 'shift', organizationId: 'org', workplaceId: 'workplace', code: 'OFFICE-01', name: 'Ca hành chính', startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 5, active: true };
 
 for (const width of [1440, 768, 390]) {
   for (const module of ['workplaces', 'shift-templates']) {
@@ -36,6 +36,10 @@ for (const width of [1440, 768, 390]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeLessThanOrEqual(868);
       await expect(dialog.getByLabel(module === 'workplaces' ? 'Tên nơi làm việc' : 'Giờ bắt đầu', { exact: false })).toBeVisible();
+      if (module === 'shift-templates') {
+        await expect(dialog.getByLabel('Mã ca', { exact: false })).toBeVisible();
+        await expect(dialog.getByLabel('Tên ca', { exact: false })).toBeVisible();
+      }
       await page.screenshot({ path: `test-results/${module}-${width}-create.png` });
       await dialog.getByRole('button', { name: 'Hủy', exact: true }).click();
       for (const action of ['Xem chi tiết', 'Chỉnh sửa', 'Ngưng hoạt động']) {

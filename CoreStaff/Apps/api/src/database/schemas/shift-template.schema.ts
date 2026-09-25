@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { normalizeCode, ShiftScope } from './enums';
 
 export type ShiftTemplateDocument = HydratedDocument<ShiftTemplate>;
 
@@ -9,8 +10,27 @@ export class ShiftTemplate {
 	@Prop({ type: 'ObjectId', ref: 'Organization', required: true, index: true })
 	organizationId: string;
 
-	@Prop({ type: 'ObjectId', ref: 'Workplace', required: true, index: true })
-	workplaceId: string;
+	@Prop({ required: true, enum: Object.values(ShiftScope), default: ShiftScope.ORGANIZATION, index: true })
+	scope: ShiftScope;
+
+	@Prop({ type: 'ObjectId', ref: 'Department', required: false, index: true })
+	departmentId?: string;
+
+	@Prop({ type: [Number], required: true, default: [1, 2, 3, 4, 5] })
+	weekdays: number[];
+
+	@Prop({ required: true, default: '2026-01-01' })
+	effectiveFrom: string;
+
+	@Prop({ required: false })
+	effectiveTo?: string;
+
+	/** New scheduling API identity. Optional only for backward-compatible TASK-024 rows. */
+	@Prop({ required: false })
+	code?: string;
+
+	@Prop({ required: false, maxlength: 200 })
+	name?: string;
 
 	@Prop({ required: true })
 	startTime: string; // HH:mm format (e.g., "08:00")
@@ -37,5 +57,13 @@ export class ShiftTemplate {
 
 export const ShiftTemplateSchema = SchemaFactory.createForClass(ShiftTemplate);
 
-// One active shift template per workplace (tenant-scoped).
-ShiftTemplateSchema.index({ organizationId: 1, workplaceId: 1 }, { unique: true });
+ShiftTemplateSchema.index({ organizationId: 1, scope: 1, departmentId: 1, active: 1 });
+ShiftTemplateSchema.index(
+	{ organizationId: 1, code: 1 },
+	{ unique: true, partialFilterExpression: { code: { $type: 'string' } } },
+);
+ShiftTemplateSchema.pre('validate', function (next) {
+	if (this.code) this.code = normalizeCode(this.code);
+	if (this.name) this.name = this.name.trim();
+	next();
+});
