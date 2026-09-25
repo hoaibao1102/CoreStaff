@@ -6,7 +6,8 @@ import { createMyRequest, getMyRequests, type ManagerRequest, type RequestType }
 import { resolveApiBase } from '../../config/api';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
 
 const attendanceRows = [
   ['18/09/2026', '08:02', '17:05', '8 giờ 03 phút', 'Hoàn thành'],
@@ -101,7 +102,7 @@ export function LeaveOvertimeScreen() {
             Gửi yêu cầu điều chỉnh công hoặc OT và theo dõi quyết định từ Quản lý phòng ban.
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
+        <Button onClick={() => setShowForm(true)}>
           <Plus className="mr-1.5 size-4" /> Tạo yêu cầu
         </Button>
       </div>
@@ -113,15 +114,21 @@ export function LeaveOvertimeScreen() {
       )}
 
       {showForm && (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Tạo yêu cầu mới</CardTitle>
-            <CardDescription>
-              Yêu cầu được gửi đến quản lý phòng ban theo dữ liệu phân công của bạn.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+        <Dialog open onOpenChange={(next) => !busy && !next && setShowForm(false)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="border-b pr-16">
+              <DialogTitle>Tạo yêu cầu mới</DialogTitle>
+              <DialogDescription>Yêu cầu được gửi đến quản lý phòng ban theo dữ liệu phân công của bạn.</DialogDescription>
+            </DialogHeader>
+            <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
+                {error && (
+                  <div className="sm:col-span-2">
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </div>
+                )}
               <div className="grid gap-2 sm:col-span-2">
                 <span className="text-sm font-medium">Chọn loại yêu cầu</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -187,17 +194,18 @@ export function LeaveOvertimeScreen() {
                 />
               </label>
 
-              <div className="flex gap-2 sm:col-span-2">
-                <Button disabled={busy} type="submit">
-                  Gửi yêu cầu
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+              </div>
+              <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
+                <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>
                   Hủy
+                </Button>
+                <Button disabled={busy} type="submit">
+                  {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

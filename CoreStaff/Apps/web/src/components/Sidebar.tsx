@@ -128,7 +128,8 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
     const personalItems: NavItem[] = [
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
-        { href: '/app/leave', label: 'Nghỉ phép & OT', icon: FileText },
+        { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
+        { href: '/app/ot', label: 'Tăng ca & điều chỉnh công', icon: Clock3 },
     ];
 
     if (role === 'DEPARTMENT_MANAGER') {
