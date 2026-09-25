@@ -30,7 +30,43 @@ export function EmployeeLeaveScreen({apiBase}:{apiBase:string}){
     <div className="overflow-hidden rounded-xl border bg-card"><div className="grid gap-4 border-b p-4 sm:grid-cols-[1fr_220px_auto] sm:items-end sm:p-6"><FormLabel className="space-y-2"><span>Tìm kiếm</span><Input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Lý do, ngày hoặc loại nghỉ…"/></FormLabel><FormLabel className="space-y-2"><span>Trạng thái</span><select className="h-10 rounded-lg border bg-background px-3" value={status} onChange={e=>setStatus(e.target.value as typeof status)}><option value="all">Tất cả trạng thái</option><option value="PENDING_MANAGER">Chờ quản lý</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Đã từ chối</option><option value="HR_APPLIED">HR đã áp dụng</option></select></FormLabel><Button variant="outline" onClick={()=>setRev(x=>x+1)}><RefreshCw/>Làm mới</Button></div>
       {loading?<Loading/>:!visible.length?<Empty/>:<><div className="hidden overflow-x-auto md:block"><Table className="min-w-[900px]"><TableHeader><TableRow><TableHead className="pl-6">Khoảng nghỉ</TableHead><TableHead>Loại nghỉ</TableHead><TableHead>Số ngày</TableHead><TableHead>Lý do</TableHead><TableHead>Trạng thái</TableHead><TableHead className="pr-6 text-right">Chi tiết</TableHead></TableRow></TableHeader><TableBody>{visible.map(row=><TableRow key={row._id}><TableCell className="pl-6 font-medium">{formatLeaveDate(row.startDate)} → {formatLeaveDate(row.endDate)}</TableCell><TableCell><Badge variant="outline">{leaveTypeLabel[row.leaveType]}</Badge></TableCell><TableCell>{leaveDays(row)} ngày</TableCell><TableCell className="max-w-64 truncate">{row.reason}</TableCell><TableCell><LeaveStatusBadge status={row.status}/></TableCell><TableCell className="pr-6 text-right"><Button size="icon" variant="ghost" aria-label="Xem yêu cầu nghỉ" onClick={()=>setDetail(row)}><Eye/></Button></TableCell></TableRow>)}</TableBody></Table></div><div className="grid gap-3 p-4 md:hidden">{visible.map(row=><Card key={row._id} className="shadow-none"><CardHeader className="pb-2"><div className="flex items-start justify-between gap-2"><CardTitle className="text-base">{formatLeaveDate(row.startDate)} → {formatLeaveDate(row.endDate)}</CardTitle><LeaveStatusBadge status={row.status}/></div></CardHeader><CardContent className="space-y-2 text-sm"><Badge variant="outline">{leaveTypeLabel[row.leaveType]}</Badge><p className="line-clamp-2 text-muted-foreground">{row.reason}</p><Button size="sm" variant="outline" onClick={()=>setDetail(row)}>Xem chi tiết</Button></CardContent></Card>)}</div></>}
     </div>
-    <Dialog open={open} onOpenChange={next=>!busy&&setOpen(next)}><DialogContent className="max-w-2xl"><DialogHeader className="border-b pr-16"><DialogTitle>Tạo yêu cầu nghỉ phép</DialogTitle><DialogDescription>MVP hỗ trợ nghỉ nguyên ngày. Yêu cầu sẽ được gửi đến quản lý phòng ban.</DialogDescription></DialogHeader><div className="px-6"><FormError message={formError}/></div><div className="grid gap-5 px-6 pb-2 sm:grid-cols-2"><FormLabel className="space-y-2"><span>Từ ngày <span className="text-destructive">*</span></span><Input type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value,endDate:e.target.value>form.endDate?e.target.value:form.endDate})} disabled={busy}/></FormLabel><FormLabel className="space-y-2"><span>Đến ngày <span className="text-destructive">*</span></span><Input type="date" min={form.startDate} value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})} disabled={busy}/></FormLabel><FormLabel className="space-y-2 sm:col-span-2"><span>Loại nghỉ <span className="text-destructive">*</span></span><select className="h-11 rounded-lg border bg-background px-3" value={form.leaveType} onChange={e=>setForm({...form,leaveType:e.target.value as LeaveType})} disabled={busy}><option value="PAID_LEAVE">Nghỉ hưởng lương</option><option value="UNPAID_LEAVE">Nghỉ không lương</option></select></FormLabel><FormLabel className="space-y-2 sm:col-span-2"><span>Lý do <span className="text-destructive">*</span></span><textarea className="min-h-28 rounded-lg border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} maxLength={1000} placeholder="Nhập lý do nghỉ (10–1000 ký tự)…" disabled={busy}/><small className="text-muted-foreground">{form.reason.length}/1000 ký tự · {leaveDays(form)} ngày nghỉ</small></FormLabel></div><div className="mx-6 mb-6 flex justify-end gap-3 border-t pt-5"><Button variant="outline" disabled={busy} onClick={()=>setOpen(false)}>Hủy</Button><Button disabled={busy} onClick={submit}>{busy?'Đang gửi…':'Gửi yêu cầu'}</Button></div></DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={next=>!busy&&setOpen(next)}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader className="border-b pr-16">
+          <DialogTitle>Tạo yêu cầu nghỉ phép</DialogTitle>
+          <DialogDescription>MVP hỗ trợ nghỉ nguyên ngày. Yêu cầu sẽ được gửi đến quản lý phòng ban.</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          {formError&&<div className="mb-4"><FormError message={formError}/></div>}
+          <div className="grid items-start gap-5 sm:grid-cols-2">
+            <FormLabel className="flex min-w-0 flex-col gap-2">
+              <span>Từ ngày <span className="text-destructive">*</span></span>
+              <Input className="h-10 w-full" type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value,endDate:e.target.value>form.endDate?e.target.value:form.endDate})} disabled={busy}/>
+            </FormLabel>
+            <FormLabel className="flex min-w-0 flex-col gap-2">
+              <span>Đến ngày <span className="text-destructive">*</span></span>
+              <Input className="h-10 w-full" type="date" min={form.startDate} value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})} disabled={busy}/>
+            </FormLabel>
+            <FormLabel className="flex min-w-0 flex-col gap-2 sm:col-span-2">
+              <span>Loại nghỉ <span className="text-destructive">*</span></span>
+              <select className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50" value={form.leaveType} onChange={e=>setForm({...form,leaveType:e.target.value as LeaveType})} disabled={busy}>
+                <option value="PAID_LEAVE">Nghỉ hưởng lương</option>
+                <option value="UNPAID_LEAVE">Nghỉ không lương</option>
+              </select>
+            </FormLabel>
+            <FormLabel className="flex min-w-0 flex-col gap-2 sm:col-span-2">
+              <span>Lý do <span className="text-destructive">*</span></span>
+              <textarea className="min-h-28 w-full resize-y rounded-lg border border-input bg-background p-3 text-sm font-normal outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50" value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} maxLength={1000} placeholder="Nhập lý do nghỉ (10–1000 ký tự)…" disabled={busy}/>
+              <small className="font-normal text-muted-foreground">{form.reason.length}/1000 ký tự · {leaveDays(form)} ngày nghỉ</small>
+            </FormLabel>
+          </div>
+        </div>
+        <div className="flex shrink-0 justify-end gap-3 border-t px-6 py-4">
+          <Button variant="outline" disabled={busy} onClick={()=>setOpen(false)}>Hủy</Button>
+          <Button disabled={busy} onClick={submit}>{busy?'Đang gửi…':'Gửi yêu cầu'}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     <LeaveDetail row={detail} onClose={()=>setDetail(null)}/>
   </div>
 }
