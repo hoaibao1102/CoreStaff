@@ -16,6 +16,7 @@ import { InsuranceProfileSchema } from './insurance-profile.schema';
 import { InsurancePolicySchema } from './insurance-policy.schema';
 import { ManagerAssignmentSchema } from './manager-assignment.schema';
 import { ManagerRequestSchema } from './manager-request.schema';
+import { OvertimeResultSchema } from './overtime-result.schema';
 import {
   SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
   OrganizationAllowanceSchema, AttendanceBonusTemplateSchema,
@@ -54,6 +55,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'InsurancePolicy', schema: InsurancePolicySchema },
   { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
   { name: 'ManagerRequest', schema: ManagerRequestSchema },
+  { name: 'OvertimeResult', schema: OvertimeResultSchema },
   { name: 'SalaryProfile', schema: SalaryProfileSchema },
   { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
   { name: 'AllowanceCatalog', schema: AllowanceCatalogSchema },

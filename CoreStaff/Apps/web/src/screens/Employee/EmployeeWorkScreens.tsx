@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../../components/alert';
 import { Input } from '../../components/input';
-import { createMyRequest, getMyRequests, type ManagerRequest, type RequestType } from '../../services/manager.service';
+import { createMyRequest, createOvertimeRequest, getMyRequests, getMyScheduleForDate, type EmployeeSchedule, type LaborEvaluation, type ManagerRequest, type RequestType } from '../../services/manager.service';
+import { hrErrorMessage } from '../../services/hrService';
 import { resolveApiBase } from '../../config/api';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
 
 const attendanceRows = [
   ['18/09/2026', '08:02', '17:05', '8 giờ 03 phút', 'Hoàn thành'],
@@ -24,6 +26,29 @@ export function AttendanceHistoryScreen({ apiBase }: { apiBase?: string | null }
   return <AttendanceHistoryView apiBase={apiBase} />;
 }
 
+/** `HH:mm` → minutes since midnight; NaN for anything unparseable. */
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
+};
+
+/** Today as the employee sees it (VN), without shipping a timezone library. */
+const vnToday = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+
+/** `YYYY-MM-DD` shifted by `days`, in UTC so no DST/local edge can move it. */
+const shiftDay = (day: string, days: number) => {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+
+/** 540 → "9 giờ"; 570 → "9 giờ 30 phút". Same shape as the policy screens use. */
+const formatMinutes = (minutes: number) => {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h ? (m ? `${h} giờ ${m} phút` : `${h} giờ`) : `${m} phút`;
+};
+
 export function LeaveOvertimeScreen() {
   const [apiBase, setApiBase] = useState<string | null>(null);
   const [rows, setRows] = useState<ManagerRequest[]>([]);
@@ -33,6 +58,10 @@ export function LeaveOvertimeScreen() {
   const [reason, setReason] = useState('');
   const [start, setStart] = useState('18:00');
   const [end, setEnd] = useState('20:00');
+  const [workDescription, setWorkDescription] = useState('');
+  const [retroReason, setRetroReason] = useState('');
+  const [schedule, setSchedule] = useState<EmployeeSchedule | null>(null);
+  const [compliance, setCompliance] = useState<LaborEvaluation | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [rev, setRev] = useState(0);
@@ -55,34 +84,112 @@ export function LeaveOvertimeScreen() {
     if (!apiBase) return;
     const socket = getSocket(apiBase);
     const onDecision = () => setRev((r) => r + 1);
+    // D39 — the server pushes `compliance:warning` for two things an employee
+    // owns: minutes that trip a §30B limit, and hours worked outside the shift
+    // that were never reported. Both are warnings by design (D38), so the only
+    // job here is to make them visible.
+    type Warning = {
+      reason?: string;
+      workDate?: string;
+      unreportedOvertimeMinutes?: number;
+      violations?: { message: string }[];
+    };
+    const onWarning = (w: Warning) => {
+      if (w?.reason === 'UNREPORTED_OVERTIME' && w.unreportedOvertimeMinutes) {
+        toast.warning(
+          'Giờ làm ngoài ca chưa được đăng ký',
+          `Ngày ${w.workDate ?? ''}: còn ${formatMinutes(w.unreportedOvertimeMinutes)} làm thêm chưa có yêu cầu OT. Nếu đúng, hãy gửi yêu cầu bổ sung.`
+        );
+        setRev((r) => r + 1);
+      } else if (w?.violations?.length) {
+        toast.warning('Cảnh báo giới hạn lao động', w.violations.map((v) => v.message).join(' '));
+        setRev((r) => r + 1);
+      }
+    };
     socket.on('request:decided', onDecision);
+    socket.on('compliance:warning', onWarning);
     return () => {
       socket.off('request:decided', onDecision);
+      socket.off('compliance:warning', onWarning);
     };
   }, [apiBase]);
+
+  // D39 — the OT window may not touch the shift assigned on this date, so the
+  // form asks the same resolver the guard uses rather than assuming 08:00–17:00
+  // (BR-SHIFT-01: that pair is seed data, not a business constant).
+  useEffect(() => {
+    if (!apiBase || type !== 'OVERTIME' || !workDate) {
+      setSchedule(null);
+      return;
+    }
+    let live = true;
+    getMyScheduleForDate(apiBase, workDate)
+      .then((s) => live && setSchedule(s))
+      .catch(() => live && setSchedule(null));
+    return () => {
+      live = false;
+    };
+  }, [apiBase, type, workDate]);
+
+  // Past the 1-day grace window (`RETROACTIVE_GRACE_DAYS`, D38) the server
+  // requires `retroactiveReason`, so surface the field before the 409 does:
+  // a report is ordinary through the end of the day *after* the work date.
+  const graceOver = type === 'OVERTIME' && workDate < shiftDay(vnToday(), -1);
+
+  /** Mirrors `assertOutsideSchedule`: half-open windows share no minute. */
+  const encroaches = (() => {
+    if (type !== 'OVERTIME' || !schedule?.scheduled) return false;
+    const s = toMinutes(start);
+    const e = toMinutes(end);
+    const ss = toMinutes(schedule.scheduled.startTime);
+    const se = toMinutes(schedule.scheduled.endTime);
+    return Number.isFinite(s) && Number.isFinite(e) && s < e && s < se && ss < e;
+  })();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiBase || reason.trim().length < 10) return setError('Lý do phải có ít nhất 10 ký tự.');
+    if (type === 'OVERTIME') {
+      if (toMinutes(start) >= toMinutes(end)) return setError('Giờ kết thúc phải sau giờ bắt đầu.');
+      if (workDescription.trim() && workDescription.trim().length < 3) {
+        return setError('Mô tả công việc cần ít nhất 3 ký tự (hoặc để trống).');
+      }
+      if (encroaches && schedule?.scheduled) {
+        return setError(`Giờ tăng ca không được lấn vào ca ${schedule.scheduled.startTime}–${schedule.scheduled.endTime} của ngày này.`);
+      }
+      if (graceOver && retroReason.trim().length < 10) {
+        return setError('Yêu cầu gửi trễ hạn, vui lòng nhập lý do bổ sung (ít nhất 10 ký tự).');
+      }
+    }
     setBusy(true);
     setError('');
+    setCompliance(null);
     try {
-      await createMyRequest(apiBase, {
-        type,
-        workDate,
-        reason: reason.trim(),
-        requestedStart: type === 'OVERTIME' ? `${workDate}T${start}:00` : undefined,
-        requestedEnd: type === 'OVERTIME' ? `${workDate}T${end}:00` : undefined,
-      });
+      if (type === 'OVERTIME') {
+        const created = await createOvertimeRequest(apiBase, {
+          workDate,
+          requestedStart: `${workDate}T${start}:00`,
+          requestedEnd: `${workDate}T${end}:00`,
+          reason: reason.trim(),
+          workDescription: workDescription.trim() || undefined,
+          retroactiveReason: retroReason.trim() || undefined,
+        });
+        // §30B.2 at filing is projection-only: a warning is shown, never a block.
+        setCompliance(created.compliance ?? null);
+      } else {
+        await createMyRequest(apiBase, { type, workDate, reason: reason.trim() });
+      }
       toast.success(
         'Gửi yêu cầu thành công',
         `Yêu cầu ${type === 'OVERTIME' ? 'làm thêm giờ (OT)' : 'điều chỉnh công'} đã được gửi tới Quản lý phòng ban.`
       );
       setShowForm(false);
       setReason('');
+      setWorkDescription('');
+      setRetroReason('');
       setRev((x) => x + 1);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Không thể gửi yêu cầu.';
+      const msg = hrErrorMessage(e);
       setError(msg);
       toast.error('Gửi yêu cầu thất bại', msg);
     } finally {
@@ -101,7 +208,7 @@ export function LeaveOvertimeScreen() {
             Gửi yêu cầu điều chỉnh công hoặc OT và theo dõi quyết định từ Quản lý phòng ban.
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
+        <Button onClick={() => setShowForm(true)}>
           <Plus className="mr-1.5 size-4" /> Tạo yêu cầu
         </Button>
       </div>
@@ -113,15 +220,21 @@ export function LeaveOvertimeScreen() {
       )}
 
       {showForm && (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Tạo yêu cầu mới</CardTitle>
-            <CardDescription>
-              Yêu cầu được gửi đến quản lý phòng ban theo dữ liệu phân công của bạn.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+        <Dialog open onOpenChange={(next) => !busy && !next && setShowForm(false)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="border-b pr-16">
+              <DialogTitle>Tạo yêu cầu mới</DialogTitle>
+              <DialogDescription>Yêu cầu được gửi đến quản lý phòng ban theo dữ liệu phân công của bạn.</DialogDescription>
+            </DialogHeader>
+            <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
+                {error && (
+                  <div className="sm:col-span-2">
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </div>
+                )}
               <div className="grid gap-2 sm:col-span-2">
                 <span className="text-sm font-medium">Chọn loại yêu cầu</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -177,6 +290,25 @@ export function LeaveOvertimeScreen() {
                 </>
               )}
 
+              {type === 'OVERTIME' && (
+                <div className="sm:col-span-2 grid gap-2 text-sm">
+                  <p className="text-muted-foreground">
+                    {!schedule
+                      ? 'Đang tải ca được phân công…'
+                      : schedule.scheduled
+                        ? `Ca được phân công: ${schedule.scheduled.startTime}–${schedule.scheduled.endTime} (nghỉ ${schedule.scheduled.breakMinutes} phút). Giờ OT phải ngoài khung này.`
+                        : 'Ngày này không có ca được phân công — khung giờ đăng ký không bị giới hạn.'}
+                  </p>
+                  {encroaches && schedule?.scheduled ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Khung giờ bạn nhập lấn vào ca {schedule.scheduled.startTime}–{schedule.scheduled.endTime}.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                </div>
+              )}
+
               <label className="grid gap-2 text-sm font-medium sm:col-span-2">
                 Lý do
                 <textarea
@@ -187,17 +319,56 @@ export function LeaveOvertimeScreen() {
                 />
               </label>
 
-              <div className="flex gap-2 sm:col-span-2">
-                <Button disabled={busy} type="submit">
-                  Gửi yêu cầu
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+              {type === 'OVERTIME' && (
+                <>
+                  <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                    Mô tả công việc làm thêm giờ
+                    <textarea
+                      className="min-h-20 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={workDescription}
+                      onChange={(e) => setWorkDescription(e.target.value)}
+                      placeholder="VD: Hoàn tất kiểm thử bản vá 2.4 cùng bộ phận hỗ trợ (tùy chọn)"
+                    />
+                  </label>
+
+                  {graceOver && (
+                    <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                      Lý do bổ sung yêu cầu trễ hạn
+                      <textarea
+                        className="min-h-20 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={retroReason}
+                        onChange={(e) => setRetroReason(e.target.value)}
+                        placeholder="Bắt buộc vì ngày này đã quá 1 ngày so với hôm nay (ít nhất 10 ký tự)..."
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+
+              {compliance?.violations?.length ? (
+                <div className="sm:col-span-2 grid gap-2">
+                  {compliance.violations.map((v) => (
+                    <Alert key={v.code} className={v.severity === 'WARNING' ? 'border-amber-500/60 text-amber-700' : undefined}>
+                      <AlertDescription>
+                        {v.message} ({formatMinutes(v.usedMinutes)} / hạn mức {formatMinutes(v.limitMinutes)})
+                      </AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              ) : null}
+
+              </div>
+              <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
+                <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>
                   Hủy
+                </Button>
+                <Button disabled={busy} type="submit">
+                  {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

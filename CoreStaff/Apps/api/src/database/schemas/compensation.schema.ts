@@ -27,6 +27,14 @@ export class LaborCompliancePolicy {
   @Prop({ required: true, min: 0 }) exceptionalAnnualOvertimeMinutes: number;
   /** Below this % of a limit the engine treats usage as normal; at/above it warns. */
   @Prop({ required: true, min: 0, max: 100 }) warningThresholdPercent: number;
+  /**
+   * D39 — how many days after the work date an OT report may still be filed.
+   * Within the grace window a report is ordinary; past the grace window but
+   * inside this ceiling it is retroactive and owes a reason; beyond it the
+   * filing is refused (`OVERTIME_FILING_WINDOW_CLOSED`). A number, not a
+   * constant, so §30B.1's rule that limits live in policy config holds.
+   */
+  @Prop({ min: 0, max: 365 }) maxRetroactiveFilingDays?: number;
   @Prop({ required: true, min: 0.01, max: 1 }) probationMinimumRate: number;
   @Prop({ required: true, trim: true }) legalReference: string;
   @Prop({ required: true, min: 1, default: 1 }) version: number;

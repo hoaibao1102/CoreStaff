@@ -3,7 +3,7 @@ import { EmployeeDirectoryScreen } from '../screens/EmployeeDirectory/EmployeeDi
 import { ContractsScreen } from '../screens/Contracts/ContractsScreen';
 import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfileScreen';
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
-import { AttendanceHistoryScreen } from '../screens/Employee/EmployeeWorkScreens';
+import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
 import { PositionScreen } from '../screens/Positions/PositionScreen';
 import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
@@ -217,6 +217,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <HrLeaveScreen apiBase={apiBase} />
           ) : route === '/app/leave' && apiBase ? (
             <EmployeeLeaveScreen apiBase={apiBase} />
+          ) : route === '/app/ot' ? (
+            <LeaveOvertimeScreen />
           ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
             // Sprint 3+ — built in later phases; pronounced instead of landing
             // silently on the dashboard.
@@ -276,6 +278,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/leave' && apiBase) {
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><EmployeeLeaveScreen apiBase={apiBase}/></section></WorkspaceShell>;
+  }
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/ot') {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
   // ── Fallback: show dashboard ─────────────────────────────────────────

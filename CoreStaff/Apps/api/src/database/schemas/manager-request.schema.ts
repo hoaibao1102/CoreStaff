@@ -21,6 +21,16 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'User'}) reviewedBy?:string;
  @Prop({maxlength:1000}) reviewComment?:string;
  @Prop({type:Date}) reviewedAt?:Date;
+ /**
+  * TASK-068 §15.11 additions for `type:'OVERTIME'`. All optional: existing web
+  * payloads and existing rows stay valid, and `ATTENDANCE` requests ignore them.
+  */
+ @Prop({required:false,maxlength:1000}) workDescription?:string;
+ /** Set when the report arrived after the grace window (FR-OT-01 retroactive path). */
+ @Prop({required:false,default:false}) isRetroactive?:boolean;
+ @Prop({required:false,maxlength:1000}) retroactiveReason?:string;
+ /** Bumped on every OT recompute so readers can tell which pass produced their numbers. */
+ @Prop({required:false,min:0}) otComputationVersion?:number;
  @Prop({required:true,min:1,default:1}) version:number;
  @Prop() createdAt?:Date; @Prop() updatedAt?:Date;
 }

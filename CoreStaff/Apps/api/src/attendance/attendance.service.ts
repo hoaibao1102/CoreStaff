@@ -28,6 +28,7 @@ import { StorageService } from '../storage/storage.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { ShiftResolverService } from '../hr/shift-template/shift-resolver.service';
+import { OvertimeService } from '../hr/overtime/overtime.service';
 
 @Injectable()
 export class AttendanceService {
@@ -48,6 +49,8 @@ export class AttendanceService {
     private storageService: StorageService,
     private shiftResolver: ShiftResolverService,
     @Optional() private readonly eventsGateway?: EventsGateway,
+    // TASK-069 — last so positional construction in existing specs is unaffected.
+    @Optional() private readonly overtime?: OvertimeService,
   ) {}
 
   /**
@@ -699,6 +702,35 @@ export class AttendanceService {
       );
     }
 
+    // TASK-069 — an OT day approved before today may now have real punches.
+    // Fire-and-forget like the WS notifies: the day's own check-out must never
+    // fail because a derived figure could not be refreshed.
+    if (this.overtime) {
+      this.overtime.recomputeForDay(organizationId, employeeId, workDate).catch((otErr) => {
+        console.warn('[AttendanceService] overtime recomputeForDay error:', otErr);
+      });
+      // D39 — the punch also measures the hours nobody filed. §30B only counts
+      // approved minutes, so unreported time outside the shift is invisible to
+      // the cap unless something looks at the clock-out directly. Warning only:
+      // the hours are already worked, and blocking a check-out over them would
+      // punish the employee for work the manager asked for on site (D38).
+      this.overtime.unreportedOvertimeMinutes(organizationId, employeeId, workDate)
+        .then((flag) => {
+          if (!flag) return;
+          const departmentId = day.employeeSnapshot?.departmentId ?? assignment?.departmentId?._id ?? assignment?.departmentId;
+          this.eventsGateway?.notifyComplianceWarning(employeeId, organizationId, departmentId, {
+            workDate,
+            employeeUserId: employeeId,
+            unreportedOvertimeMinutes: flag.unreportedMinutes,
+            workedTo: flag.workedTo,
+            reason: 'UNREPORTED_OVERTIME',
+          });
+        })
+        .catch((flagErr) => {
+          console.warn('[AttendanceService] overtime unreportedOvertimeMinutes error:', flagErr);
+        });
+    }
+
     const response = {
       workDate,
       attendanceStatus: AttendanceStatus.COMPLETED,
@@ -735,8 +767,8 @@ export class AttendanceService {
     const [y, m] = targetMonth.split('-').map(Number);
     const endOfMonth = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
 
-    // Chạy song song query days và otRequests sử dụng B-tree index
-    const [days, otRequests]: [any[], any[]] = await Promise.all([
+    // Chạy song song query days, otRequests và results đã tính, sử dụng B-tree index
+    const [days, otRequests, otResults]: [any[], any[], any[]] = await Promise.all([
       this.attendanceDayModel
         .find({
           organizationId: orgObjectId,
@@ -754,6 +786,8 @@ export class AttendanceService {
           workDate: { $gte: startOfMonth, $lt: endOfMonth },
         })
         .lean(),
+      // Absent when AttendanceModule is loaded without OvertimeModule.
+      this.overtime?.resultsForRange(organizationId, employeeId, startMonthStr, endMonthStr) ?? Promise.resolve([]),
     ]);
 
     const dayIds = days.map((d) => d._id);
@@ -772,6 +806,10 @@ export class AttendanceService {
     let totalEarlyDays = 0;
     let totalOtMinutes = 0;
 
+    // Keyed by requestId — one current result per approved request (the unique
+    // (organizationId, overtimeRequestId) index guarantees that).
+    const dayResults = new Map(otResults.map((r) => [String(r.overtimeRequestId), r]));
+
     const items = days.map((day) => {
       const dayEvents = events.filter((e) => String(e.attendanceDayId) === String(day._id));
       const inEvt = dayEvents.find((e) => e.eventType === AttendanceEventType.CHECK_IN);
@@ -784,11 +822,20 @@ export class AttendanceService {
 
       let otInfo = null;
       if (dayOt) {
-        let otMinutes = 0;
-        const start = dayOt.approvedStart || dayOt.requestedStart;
-        const end = dayOt.approvedEnd || dayOt.requestedEnd;
-        if (start && end) {
-          otMinutes = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000));
+        // TASK-069/AC-OT-04 — the number the day shows is the *eligible* one the
+        // engine derived from real punches, not the approved window's wall-clock
+        // length (which paid out minutes nobody worked).
+        const result = dayResults.get(String(dayOt._id));
+        let otMinutes = result?.eligibleMinutes ?? 0;
+        if (!result) {
+          // Pre-TASK-069 approval with no stored result: fall back to the window,
+          // floored like the engine, until `POST /api/hr/overtime-results/recalculate`
+          // backfills it.
+          const start = dayOt.approvedStart || dayOt.requestedStart;
+          const end = dayOt.approvedEnd || dayOt.requestedEnd;
+          if (start && end) {
+            otMinutes = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000));
+          }
         }
         totalOtMinutes += otMinutes;
 
@@ -803,6 +850,9 @@ export class AttendanceService {
           reviewComment: dayOt.reviewComment,
           reviewedAt: dayOt.reviewedAt,
           otMinutes,
+          overtimeType: result?.overtimeType ?? null,
+          actualMinutes: result?.actualMinutes ?? 0,
+          classificationStatus: result?.classificationStatus ?? null,
         };
       }
 

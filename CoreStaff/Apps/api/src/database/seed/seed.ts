@@ -141,6 +141,9 @@ async function main(): Promise<void> {
             maxAnnualOvertimeMinutes: 20000,
             exceptionalAnnualOvertimeMinutes: 24000,
             warningThresholdPercent: 80,
+            // D39 — how far back an OT report may be filed at all. Matches the
+            // service default, spelled out here so HR can see it is a knob.
+            maxRetroactiveFilingDays: 7,
             probationMinimumRate: 0.85,
             legalReference: 'BLLĐ 45/2019/QH14',
             version: 1,

@@ -130,4 +130,17 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(`dept:${deptId}`).emit('request:decided', payload);
     }
   }
+
+  /**
+   * TASK-070 / SRS §30B.2 — a labor-limit WARNING does not block the approval, so
+   * the three people who carry responsibility for it (Employee, their Manager, HR)
+   * must be told. HR and managers share the `org:*:managers` room, so three emits
+   * cover all three audiences. Fired only when something needs an owner's eye.
+   */
+  notifyComplianceWarning(employeeUserId: any, organizationId: any, departmentId: any, payload: any) {
+    if (!this.server) return;
+    if (employeeUserId) this.server.to(`user:${String(employeeUserId?._id ?? employeeUserId)}`).emit('compliance:warning', payload);
+    if (departmentId) this.server.to(`dept:${String(departmentId?._id ?? departmentId)}`).emit('compliance:warning', payload);
+    if (organizationId) this.server.to(`org:${String(organizationId)}:managers`).emit('compliance:warning', payload);
+  }
 }

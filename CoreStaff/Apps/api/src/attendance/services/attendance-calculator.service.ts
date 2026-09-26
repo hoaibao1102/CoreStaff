@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { vnTimeToUtc } from '../../common/vietnam-time';
 
 export interface ShiftInfo {
   startTime: string; // "08:30"
@@ -60,8 +61,6 @@ export class AttendanceCalculatorService {
    * Chuyển đổi workDate (YYYY-MM-DD) và time (HH:mm) thành Date object
    */
   private parseDateTime(workDate: string, timeStr: string): Date {
-    const [year, month, day] = workDate.split('-').map((v) => parseInt(v, 10));
-    const [hour, minute] = timeStr.split(':').map((v) => parseInt(v, 10));
-    return new Date(Date.UTC(year, month - 1, day, hour - 7, minute, 0)); // Chuyển đổi từ múi giờ VN (UTC+7) sang UTC
+    return new Date(vnTimeToUtc(workDate, timeStr));
   }
 }

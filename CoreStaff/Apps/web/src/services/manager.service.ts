@@ -18,6 +18,10 @@ export interface ManagerRequest {
   approvedEnd?: string;
   status: RequestStatus;
   reviewComment?: string;
+  /** OT filing detail (D38/D39) — what the work actually was, and any late-report reason. */
+  workDescription?: string;
+  isRetroactive?: boolean;
+  retroactiveReason?: string;
   version: number;
   createdAt?: string;
   attendanceDayId?: string;
@@ -31,6 +35,8 @@ export interface ManagerRequest {
     actionType?: string;
     [key: string]: any;
   };
+  /** §30B.2 — attached to an approval response whose minutes trip a limit. */
+  compliance?: LaborEvaluation;
 }
 
 export interface TodayAttendance {
@@ -64,6 +70,22 @@ export const getManagerEmployees=(base:string,departmentId?:string)=>hrRequest<M
 export async function getManagerRequests(base:string,params:{departmentId?:string;type?:string;status?:string}){const q=new URLSearchParams();Object.entries(params).forEach(([k,v])=>{if(v)q.set(k,v)});return hrRequest<ManagerRequest[]>(base,`/api/manager/approvals${q.size?`?${q}`:''}`,{method:'GET'});}
 export const getMyRequests=(base:string)=>hrRequest<ManagerRequest[]>(base,'/api/requests/mine',{method:'GET'});
 export const createMyRequest=(base:string,payload:{type:RequestType;workDate:string;reason:string;requestedStart?:string;requestedEnd?:string})=>hrRequest<ManagerRequest>(base,'/api/requests',{method:'POST',body:JSON.stringify(payload)});
+
+/** §30B.2 projection the server attaches to a filing: warnings, never a block. */
+export interface LaborViolation{key:string;code:string;severity:'BLOCK'|'WARNING';message:string;usedMinutes:number;limitMinutes:number}
+export interface LaborEvaluation{policyVersion:number;legalReference:string;violations:LaborViolation[];approvable:boolean}
+
+/**
+ * D39 — OT goes through the dedicated route rather than the generic
+ * `/api/requests`: it is the only one that runs the full filing guards and
+ * returns the `compliance` projection, and the shape is exactly
+ * `CreateOvertimeRequestDto` (the pipe forbids any other field).
+ */
+export const createOvertimeRequest=(base:string,payload:{workDate:string;requestedStart:string;requestedEnd:string;reason:string;workDescription?:string;retroactiveReason?:string})=>hrRequest<ManagerRequest&{compliance?:LaborEvaluation|null;complianceNote?:string}>(base,'/api/overtime',{method:'POST',body:JSON.stringify(payload)});
+
+/** The shift assigned to the current user on one date, as the guard reads it. */
+export interface EmployeeSchedule{workDate:string;scheduled:{startTime:string;endTime:string;breakMinutes:number;from:string;to:string}|null;calendarType:string|null;overrideType:string|null;overtimeType:string}
+export const getMyScheduleForDate=(base:string,date:string)=>hrRequest<EmployeeSchedule>(base,`/api/overtime/schedule?date=${encodeURIComponent(date)}`,{method:'GET'});
 export const decideManagerRequest=(base:string,id:string,action:'approve'|'reject'|'request-clarification',payload:{expectedVersion:number;reason?:string;approvedStart?:string;approvedEnd?:string})=>hrRequest<ManagerRequest>(base,`/api/manager/approvals/${encodeURIComponent(id)}/${action}`,{method:'POST',body:JSON.stringify(payload)});
 export interface ManagerAssignment{_id:string;managerUserId:string;departmentId:string;effectiveFrom:string;effectiveTo?:string;active:boolean}
 export const getManagerAssignments=(base:string)=>hrRequest<ManagerAssignment[]>(base,'/api/hr/manager-assignments',{method:'GET'});

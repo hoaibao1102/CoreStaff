@@ -14,6 +14,7 @@ import { InsuranceProfileModule } from './insurance-profile/insurance-profile.mo
 import { InsurancePolicyModule } from './insurance-policy/insurance-policy.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
+import { OvertimeModule } from './overtime/overtime.module';
 
 /**
  * HR Core: Sprint 2 catalogs + EmployeeProfile (TASK-020..023), Sprint 3
@@ -39,6 +40,7 @@ import { LeaveModule } from './leave/leave.module';
 		InsurancePolicyModule,
 		CalendarModule,
 		LeaveModule,
+		OvertimeModule,
 	],
 })
 export class HrModule {}

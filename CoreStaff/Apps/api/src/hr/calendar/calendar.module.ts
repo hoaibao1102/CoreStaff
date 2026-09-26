@@ -8,9 +8,10 @@ import { RolesGuard } from '../../common/rbac.decorator';
 import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { PoliciesModule } from '../policies/policies.module';
+import { OvertimeModule } from '../overtime/overtime.module';
 
 @Module({
-  imports: [AuthModule, PoliciesModule, MongooseModule.forFeature([
+  imports: [AuthModule, PoliciesModule, OvertimeModule, MongooseModule.forFeature([
     { name: 'CalendarException', schema: CalendarExceptionSchema },
     { name: 'User', schema: UserSchema },
     { name: 'UserSession', schema: UserSessionSchema },
