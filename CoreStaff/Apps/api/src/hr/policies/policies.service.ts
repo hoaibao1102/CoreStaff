@@ -8,6 +8,7 @@ import {
 import { assertNoEffectiveOverlap } from '../compensation/compensation-domain';
 import {
   evaluateLaborLimits,
+  laborLimitsFromPolicy,
   LaborUsage,
   resolveOvertimeRates,
 } from './policies-domain';
@@ -138,13 +139,7 @@ export class PoliciesService {
       {
         version: policy.version,
         legalReference: policy.legalReference,
-        normalDailyMinutes: policy.normalDailyMinutes!,
-        normalWeeklyMinutes: policy.normalWeeklyMinutes!,
-        maxCombinedDailyMinutes: policy.maxCombinedDailyMinutes!,
-        maxMonthlyOvertimeMinutes: policy.maxMonthlyOvertimeMinutes!,
-        maxAnnualOvertimeMinutes: policy.maxAnnualOvertimeMinutes!,
-        exceptionalAnnualOvertimeMinutes: policy.exceptionalAnnualOvertimeMinutes!,
-        warningThresholdPercent: policy.warningThresholdPercent!,
+        ...laborLimitsFromPolicy(policy),
       },
       usage,
     );

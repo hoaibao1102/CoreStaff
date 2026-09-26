@@ -38,11 +38,14 @@ import {
   getManagerContext,
   getManagerEmployees,
   getManagerRequests,
+  type LaborViolation,
   type ManagerContext,
   type ManagerEmployee,
   type ManagerRequest,
 } from '@/services/manager.service';
+import { hrErrorMessage } from '@/services/hrService';
 import { fetchAddressFromCoords } from '../Attendance/verification/useLocation';
+import { formatMinutes } from '../Policies/policies.ui';
 import { getSocket } from '@/services/socket';
 
 function formatDate(v?: string | Date) {
@@ -110,12 +113,28 @@ export function ManagerDepartmentScreen({
       setSocketRev((r) => r + 1);
     };
 
+    // D39 — punches that fall outside both the shift and any OT request arrive
+    // here as `UNREPORTED_OVERTIME` when the employee checks out. The manager
+    // cannot approve what was never reported, so this only nags them to ask.
+    const onComplianceWarning = (data: any) => {
+      if (data?.reason === 'UNREPORTED_OVERTIME' && data.unreportedOvertimeMinutes) {
+        toast.warning(
+          'Nhân viên làm ngoài ca chưa đăng ký OT',
+          `Ngày ${data.workDate ?? ''}: ${formatMinutes(data.unreportedOvertimeMinutes)} nằm ngoài ca mà không có yêu cầu tăng ca. Hãy kiểm tra với nhân viên.`
+        );
+      } else if (data?.violations?.length) {
+        toast.warning('Vượt giới hạn lao động', data.violations.map((v: any) => v.message).join(' '));
+      }
+    };
+
     socket.on('request:new', onNewRequest);
     socket.on('request:decided', onRequestDecided);
+    socket.on('compliance:warning', onComplianceWarning);
 
     return () => {
       socket.off('request:new', onNewRequest);
       socket.off('request:decided', onRequestDecided);
+      socket.off('compliance:warning', onComplianceWarning);
     };
   }, [apiBase]);
 
@@ -475,18 +494,24 @@ function DecisionDialog({
   const [reason, setReason] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<LaborViolation[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const act = async (a: 'approve' | 'reject' | 'request-clarification') => {
     setSending(true);
     setError('');
+    setWarnings([]);
     try {
-      await decideManagerRequest(apiBase, request._id, a, {
+      const decided = await decideManagerRequest(apiBase, request._id, a, {
         expectedVersion: request.version,
         reason: reason || undefined,
         approvedStart: request.requestedStart,
         approvedEnd: request.requestedEnd,
       });
+      // §30B.2 — a WARNING never blocks an approval, so the only thing that makes
+      // it visible is this response (and the WS push to the same rooms).
+      const violations = decided.compliance?.violations ?? [];
+      setWarnings(violations);
 
       if (a === 'approve') {
         toast.success(
@@ -505,11 +530,19 @@ function DecisionDialog({
         );
       }
 
+      // A labor warning does not un-approve anything, so it has to be loud: the
+      // dialog stays open with the details and a toast repeats it after closing.
+      if (violations.length) {
+        toast.warning(
+          `Vượt ${violations.length} giới hạn lao động`,
+          violations.map((v) => v.message).join(' ')
+        );
+        return;
+      }
       onDone();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Không thể xử lý yêu cầu.';
-      setError(msg);
-      toast.error('Thao tác thất bại', msg);
+      setError(hrErrorMessage(e));
+      toast.error('Thao tác thất bại', hrErrorMessage(e));
     } finally {
       setSending(false);
     }
@@ -693,6 +726,14 @@ function DecisionDialog({
                   {' → '}
                   {request.requestedEnd ? new Date(request.requestedEnd).toLocaleString('vi-VN') : '—'}
                 </p>
+                {request.workDescription && (
+                  <p className="text-xs text-indigo-900/80">Mô tả công việc: {request.workDescription}</p>
+                )}
+                {request.isRetroactive && (
+                  <p className="text-xs text-amber-800">
+                    Báo bổ sung sau ngày làm việc{request.retroactiveReason ? ` — ${request.retroactiveReason}` : ''}
+                  </p>
+                )}
               </div>
             )}
 
@@ -711,6 +752,29 @@ function DecisionDialog({
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {warnings.length > 0 && (
+              <>
+                <Alert className="border-amber-500/60 text-amber-800">
+                  <AlertTitle>Đã duyệt, nhưng vượt giới hạn lao động</AlertTitle>
+                  <AlertDescription className="space-y-1">
+                    {warnings.map((v) => (
+                      <p key={v.code}>
+                        {v.message} — đã dùng {formatMinutes(v.usedMinutes)}/{formatMinutes(v.limitMinutes)}.
+                      </p>
+                    ))}
+                    <p className="text-xs opacity-80">
+                      Cần điều chỉnh thì từ chối hoặc yêu cầu giải trình ở bước tiếp theo.
+                    </p>
+                  </AlertDescription>
+                </Alert>
+                <div className="justify-end flex gap-2">
+                  <Button variant="outline" disabled={sending} onClick={onDone}>
+                    Đóng
+                  </Button>
+                </div>
+              </>
             )}
           </div>
 

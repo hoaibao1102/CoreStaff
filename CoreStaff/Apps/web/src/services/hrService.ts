@@ -349,6 +349,29 @@ export const HR_ERROR_CODES: Record<string, string> = {
     CAPRULES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình mức trần cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
     EMPLOYERCONTRIBUTIONRATES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình tỷ lệ đóng của doanh nghiệp cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
 
+    // Overtime errors (TASK-066..071, D38/D39)
+    OVERTIME_SELF_TYPE_FORBIDDEN: 'Hệ thống tự xác định loại tăng ca từ lịch và calendar, bạn không chọn thủ công.',
+    OVERTIME_WINDOW_INVALID: 'Giờ kết thúc phải sau giờ bắt đầu.',
+    OVERTIME_REQUEST_WINDOW_INVALID: 'Khung giờ tăng ca đề xuất không hợp lệ. Vui lòng kiểm tra lại giờ bắt đầu và kết thúc.',
+    OVERTIME_OVERLAP: 'Khoảng thời gian này trùng với một yêu cầu tăng ca đang chờ hoặc đã duyệt trong ngày.',
+    OVERTIME_OVERLAPS_SCHEDULE: 'Giờ tăng ca không được nằm trong ca làm việc được phân công của ngày này. Hãy đăng ký phần ngoài ca (trước hoặc sau ca).',
+    OVERTIME_FILING_WINDOW_CLOSED: 'Đã quá hạn cho phép để bổ sung yêu cầu tăng ca của ngày này. Vui lòng liên hệ HR.',
+    OVERTIME_RETROACTIVE_REASON_REQUIRED: 'Yêu cầu gửi trễ hạn, vui lòng nhập lý do bổ sung (tối thiểu 10 ký tự).',
+    OVERTIME_DEPARTMENT_UNKNOWN: 'Chưa xác định được phòng ban của nhân viên để tính tăng ca.',
+    OVERTIME_RESULT_NOT_FOUND: 'Không tìm thấy kết quả tính tăng ca cho yêu cầu này.',
+    OVERTIME_NOT_APPROVED: 'Chưa có yêu cầu tăng ca được duyệt cho khoảng thời gian này.',
+    OVERTIME_RECALCULATION_REQUIRED: 'Lịch hoặc calendar của ngày này đã thay đổi, hệ thống cần tính lại tăng ca.',
+    OVERTIME_DATE_RANGE_INVALID: 'Khoảng ngày không hợp lệ.',
+    OVERTIME_DATE_RANGE_TOO_LARGE: 'Khoảng ngày yêu cầu quá dài, tối đa 366 ngày.',
+    NORMAL_HOURS_LIMIT_EXCEEDED: 'Giờ làm việc bình thường đã vượt giới hạn theo Chính sách tuân thủ lao động.',
+    OVERTIME_DAILY_LIMIT_EXCEEDED: 'Tổng giờ làm việc trong ngày (gồm tăng ca) vượt giới hạn theo chính sách lao động.',
+    OVERTIME_MONTHLY_LIMIT_EXCEEDED: 'Giờ tăng ca trong tháng vượt giới hạn theo chính sách lao động.',
+    OVERTIME_ANNUAL_LIMIT_EXCEEDED: 'Giờ tăng ca trong năm vượt giới hạn theo chính sách lao động.',
+    // `LABOR_POLICY_NOT_FOUND` already maps in the salary/policy block above.
+    SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt yêu cầu của chính mình.',
+    REVIEW_REASON_REQUIRED: 'Vui lòng nhập lý do (tối thiểu 10 ký tự) khi từ chối hoặc yêu cầu giải trình.',
+    REQUEST_STATE_CHANGED: 'Yêu cầu đã được xử lý bởi người khác. Vui lòng tải lại danh sách.',
+
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
 

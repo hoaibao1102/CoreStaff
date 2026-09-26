@@ -19,6 +19,7 @@ import { UserSchema } from '../database/schemas/user.schema';
 import { UserSessionSchema } from '../database/schemas/user-session.schema';
 import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.schema';
 import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module';
+import { OvertimeModule } from '../hr/overtime/overtime.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module'
     ]),
     StorageModule,
     ShiftTemplateModule,
+    OvertimeModule,
   ],
   controllers: [AttendanceController],
   providers: [

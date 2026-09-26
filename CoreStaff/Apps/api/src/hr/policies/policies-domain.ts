@@ -45,8 +45,39 @@ export interface LaborPolicyLimits {
   warningThresholdPercent: number;
 }
 
-export type LaborViolationSeverity = 'BLOCK' | 'WARNING';
+/**
+ * TASK-068/070 — project a stored `LaborCompliancePolicy` row onto the limit
+ * shape this module consumes. Single source for the §30B.1 field list, so no
+ * caller re-lists it (SRS §30B.1:2619 — the values must not be scattered
+ * through calculation services). Throws rather than feeding `undefined` into a
+ * comparison: a missing column means an under-seeded policy, not an infinite
+ * allowance.
+ */
+export function laborLimitsFromPolicy(row: {
+  normalDailyMinutes?: number | null;
+  normalWeeklyMinutes?: number | null;
+  maxCombinedDailyMinutes?: number | null;
+  maxMonthlyOvertimeMinutes?: number | null;
+  maxAnnualOvertimeMinutes?: number | null;
+  exceptionalAnnualOvertimeMinutes?: number | null;
+  warningThresholdPercent?: number | null;
+}): LaborPolicyLimits {
+  const pick = (value: number | null | undefined, field: string): number => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`LABOR_POLICY_FIELD_MISSING:${field}`);
+    return value;
+  };
+  return {
+    normalDailyMinutes: pick(row.normalDailyMinutes, 'normalDailyMinutes'),
+    normalWeeklyMinutes: pick(row.normalWeeklyMinutes, 'normalWeeklyMinutes'),
+    maxCombinedDailyMinutes: pick(row.maxCombinedDailyMinutes, 'maxCombinedDailyMinutes'),
+    maxMonthlyOvertimeMinutes: pick(row.maxMonthlyOvertimeMinutes, 'maxMonthlyOvertimeMinutes'),
+    maxAnnualOvertimeMinutes: pick(row.maxAnnualOvertimeMinutes, 'maxAnnualOvertimeMinutes'),
+    exceptionalAnnualOvertimeMinutes: pick(row.exceptionalAnnualOvertimeMinutes, 'exceptionalAnnualOvertimeMinutes'),
+    warningThresholdPercent: pick(row.warningThresholdPercent, 'warningThresholdPercent'),
+  };
+}
 
+export type LaborViolationSeverity = 'BLOCK' | 'WARNING';
 export interface LaborViolation {
   key: LaborLimitKey;
   code: string;

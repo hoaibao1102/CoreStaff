@@ -17,9 +17,11 @@ import { ManagerController } from './manager.controller';
 import { ManagerScopeService } from './manager-scope.service';
 import { ManagerAssignmentService } from './manager-assignment.service';
 import { ManagerRequestService } from './manager-request.service';
+import { OvertimeModule } from '../overtime/overtime.module';
+import { HrOvertimeController, ManagerOvertimeController, OvertimeController } from '../overtime/overtime.controller';
 
 @Module({
-  imports: [AuthModule, MongooseModule.forFeature([
+  imports: [AuthModule, OvertimeModule, MongooseModule.forFeature([
     { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
     { name: 'ManagerRequest', schema: ManagerRequestSchema },
     { name: 'Assignment', schema: EmployeeAssignmentSchema },
@@ -32,7 +34,7 @@ import { ManagerRequestService } from './manager-request.service';
     { name: 'AttendanceDay', schema: AttendanceDaySchema },
     { name: 'AttendanceEvent', schema: AttendanceEventSchema },
   ])],
-  controllers: [ManagerController],
+  controllers: [ManagerController, OvertimeController, ManagerOvertimeController, HrOvertimeController],
   providers: [ManagerScopeService, ManagerAssignmentService, ManagerRequestService, RolesGuard],
   exports: [ManagerScopeService, ManagerAssignmentService, ManagerRequestService],
 })

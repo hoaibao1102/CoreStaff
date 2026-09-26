@@ -4,6 +4,9 @@ import {ManagerRequestDocument} from '../../database/schemas/manager-request.sch
 import {EmployeeProfileDocument} from '../../database/schemas/employee-profile.schema';
 import {CreateManagerRequestDto} from './dto/manager-request.dto';import {ManagerScopeService} from './manager-scope.service';
 import {EventsGateway} from '../../events/events.gateway';
+import {dateOnly} from '../../common/date-only';
+import {parseWindowInstant} from '../../common/vietnam-time';
+import {OvertimeService} from '../overtime/overtime.service';
 @Injectable()
 export class ManagerRequestService {
   constructor(
@@ -13,6 +16,8 @@ export class ManagerRequestService {
     @InjectModel('AttendanceEvent') private readonly attendanceEvents: Model<any>,
     private readonly scope: ManagerScopeService,
     @Optional() private readonly eventsGateway?: EventsGateway,
+    // TASK-068/070 — last so the existing spec's five positional args keep working.
+    @Optional() private readonly ot?: OvertimeService,
   ) {}
 
   async createMine(org: string, userId: string, dto: CreateManagerRequestDto) {
@@ -24,12 +29,14 @@ export class ManagerRequestService {
     ) {
       throw new ConflictException('OVERTIME_WINDOW_INVALID');
     }
+    const retro = dto.type === 'OVERTIME' ? await this.otGuards(org, userId, dto) : {};
     const row = await this.requests.create({
       organizationId: org,
       employeeId: emp._id,
       employeeUserId: userId,
       departmentId: emp.departmentId,
       ...dto,
+      ...retro,
       workDate: new Date(dto.workDate),
       requestedStart: dto.requestedStart ? new Date(dto.requestedStart) : undefined,
       requestedEnd: dto.requestedEnd ? new Date(dto.requestedEnd) : undefined,
@@ -52,6 +59,28 @@ export class ManagerRequestService {
     }
 
     return row.toObject();
+  }
+
+  /**
+   * The guards a filing must clear (FR-OT-01 / BR-OT-04 / D39), run in the same
+   * places so `POST /api/requests` and `POST /api/overtime` cannot drift apart.
+   * Absent `OvertimeService` (a module that does not import it) OT filing stays
+   * as permissive as it was before TASK-068, which is the point of `@Optional()`.
+   *
+   * The window is resolved with `parseWindowInstant`, not `new Date()`, so a
+   * naive `2026-09-22T18:00:00` means 18:00 Vietnam on the work date for the
+   * schedule guard too — the same reading the payable calculation uses.
+   */
+  private async otGuards(org: string, userId: string, dto: CreateManagerRequestDto) {
+    if (!this.ot) return {};
+    this.ot.assertNoClientType(dto as unknown as Record<string, unknown>);
+    const workDate = dateOnly(dto.workDate);
+    // `createMine` has already refused an OVERTIME dto without both bounds.
+    const window = {
+      from: parseWindowInstant(dto.requestedStart!, workDate),
+      to: parseWindowInstant(dto.requestedEnd!, workDate),
+    };
+    return this.ot.assertFilingAllowed(org, userId, window, workDate, new Date(), (dto as any).retroactiveReason);
   }
 
   async listMine(org: string, userId: string) {
@@ -107,6 +136,16 @@ export class ManagerRequestService {
     if (current.type === 'OVERTIME' && status === 'APPROVED' && approvedStart && approvedEnd && new Date(approvedStart) >= new Date(approvedEnd)) {
       throw new ConflictException('OVERTIME_WINDOW_INVALID');
     }
+    // TASK-069/070 — the decision the calculator will see, before it is written.
+    const asOt = current.type === 'OVERTIME' && status === 'APPROVED' && this.ot
+      // `detail()` populates employeeUserId, so the id has to be unwrapped the same
+      // way the two lines above do it; `otEmployeeUserId` handles both shapes.
+      ? { ...current, _id: id, approvedStart: approvedStart ? new Date(approvedStart) : current.approvedStart, approvedEnd: approvedEnd ? new Date(approvedEnd) : current.approvedEnd }
+      : null;
+    // §30B.2 BLOCK lands here, deliberately *before* the update: a rejected
+    // approval must leave status and version untouched so the manager's queue
+    // does not show a decision that never happened.
+    const precheck = asOt ? await this.ot!.precheckApproval(org, asOt) : undefined;
     const row: any = await this.requests
       .findOneAndUpdate(
         { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
@@ -126,7 +165,42 @@ export class ManagerRequestService {
       .lean();
     if (!row) throw new ConflictException('REQUEST_STATE_CHANGED');
 
-    // Đồng bộ sang ngày công chấm công (AttendanceDay & AttendanceEvent)
+    // §7.7 — approval creates the PROVISIONAL overtime result. After the write, so
+    // a concurrent second approver loses the version filter above and never gets
+    // here. A failure must not un-approve the request: the upsert is idempotent and
+    // `POST /api/hr/overtime-results/recalculate` recovers it.
+    if (asOt) {
+      try {
+        await this.ot!.onApproved(org, { ...asOt, _id: id, status: 'APPROVED', reviewedBy: managerId });
+      } catch (otErr) {
+        console.warn('[ManagerRequestService] overtime result write failed:', otErr);
+      }
+    }
+
+    // §30B.2 — a WARNING never blocks, so it has to be loud instead: on the
+    // response for the approver's UI, and over WS for the three accountable people.
+    if (precheck?.labor.violations.length) {
+      try {
+        this.eventsGateway?.notifyComplianceWarning(
+          current.employeeUserId ?? current.employeeId,
+          org,
+          row.departmentId ?? current.departmentId,
+          {
+            requestId: id,
+            employeeUserId: currentEmpUserId,
+            workDate: current.workDate,
+            eligibleMinutes: precheck.computation.eligibleMinutes,
+            violations: precheck.labor.violations,
+            policyVersion: precheck.labor.policyVersion,
+          },
+        );
+      } catch (wsErr) {
+        console.warn('[ManagerRequestService] notifyComplianceWarning error:', wsErr);
+      }
+      row.compliance = precheck.labor;
+    }
+
+
     if (current.type === 'ATTENDANCE' && current.attendanceDayId && (status === 'APPROVED' || status === 'REJECTED' || status === 'CLARIFICATION_REQUESTED')) {
       try {
         await this.attendanceDays.updateOne(
