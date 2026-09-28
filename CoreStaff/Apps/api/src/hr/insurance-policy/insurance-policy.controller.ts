@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -6,6 +6,7 @@ import { CurrentUser, SessionUser, Tenant, requireOrganizationId } from '../../c
 import { ApiCreatedSuccess, ApiErrorExamples, ApiSuccess, insurancePolicyExample } from '../../common/swagger-responses';
 import { InsurancePolicyService } from './insurance-policy.service';
 import { CreateInsurancePolicyDto } from './dto/create-insurance-policy.dto';
+import { CloseInsurancePolicyDto } from './dto/close-insurance-policy.dto';
 
 /** TASK-039, route per SRS §30G ("/hr/policies/insurance"). HR only. */
 @ApiTags('HR / Insurance Policy')
@@ -45,6 +46,18 @@ export class InsurancePolicyController {
 	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.insurancePolicies.findOne(orgId, id);
+		return { success: true, data };
+	}
+
+	@Patch(':id/close')
+	@ApiOperation({ summary: 'D42: close an open-ended insurance policy (set effectiveTo) so a next version can be created. The only allowed mutation on an existing policy.' })
+	@ApiSuccess('Insurance policy closed.', insurancePolicyExample)
+	@ApiResponse({ status: 404, description: 'INSURANCE_POLICY_NOT_FOUND' })
+	@ApiResponse({ status: 409, description: 'INSURANCE_POLICY_ALREADY_CLOSED | INSURANCE_POLICY_DATE_RANGE_INVALID' })
+	@ApiErrorExamples()
+	async close(@Tenant() organizationId: string | null, @Param('id') id: string, @Body() dto: CloseInsurancePolicyDto) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.insurancePolicies.close(orgId, id, dto.effectiveTo);
 		return { success: true, data };
 	}
 }

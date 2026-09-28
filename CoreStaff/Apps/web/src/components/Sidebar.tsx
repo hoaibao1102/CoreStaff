@@ -93,6 +93,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/hr/policies/overtime-pay', label: 'Chính sách lương tăng ca', icon: Clock3 },
                         { href: '/hr/insurance-profiles', label: 'Hồ sơ bảo hiểm', icon: ShieldCheck },
                         { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
+                        { href: '/hr/policies/enterprise-insurance', label: 'Bảo hiểm doanh nghiệp', icon: ShieldCheck },
                     ]},
                 ],
             },

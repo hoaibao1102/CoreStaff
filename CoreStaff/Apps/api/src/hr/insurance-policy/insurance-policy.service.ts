@@ -57,6 +57,23 @@ export class InsurancePolicyService {
 		return doc;
 	}
 
+	/**
+	 * D42: the ONE mutation allowed on an existing policy — set `effectiveTo`
+	 * on a currently open-ended one, so `create()` (blocked otherwise by the
+	 * overlap check against an infinite-ended sibling) can add a next version.
+	 * Never touches rates/floor/cap — those stay creation-only.
+	 */
+	async close(organizationId: string, id: string, effectiveToInput: string) {
+		const doc = await this.policyModel.findOne({ _id: id, organizationId }).lean();
+		if (!doc) throw new NotFoundException('INSURANCE_POLICY_NOT_FOUND');
+		if (doc.effectiveTo) throw new ConflictException('INSURANCE_POLICY_ALREADY_CLOSED');
+
+		const effectiveTo = new Date(effectiveToInput);
+		if (effectiveTo <= new Date(doc.effectiveFrom)) throw new ConflictException('INSURANCE_POLICY_DATE_RANGE_INVALID');
+
+		return this.policyModel.findOneAndUpdate({ _id: id, organizationId }, { $set: { effectiveTo } }, { new: true }).lean();
+	}
+
 	/** The policy in effect at `asOf` — AC-INS-01/AC-INS-04 input. */
 	async findEffective(organizationId: string, asOf: Date = new Date()) {
 		const rows = await this.policyModel.find({ organizationId }).lean();

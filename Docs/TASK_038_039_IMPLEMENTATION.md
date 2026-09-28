@@ -124,6 +124,29 @@ xem ghi chú đầu file). Hai màn hình mới, theo đúng route đã định 
   và `npm run lint --workspace @corestaff/web` đều PASS. Chưa test UI trên trình
   duyệt thật với API/DB sống — cần một phiên có backend chạy để làm việc đó.
 
+## Cập nhật (2026-09-28, D40/D41)
+
+- **D40:** BHXH/BHYT/BHTN đổi từ "HR tự chọn tham gia" (`participates*` default
+  `false`) sang **bắt buộc theo luật** (default `true`). Web bỏ 3 checkbox
+  trên form tạo `InsuranceProfile`, luôn gửi `true`; DTO cho phép bỏ trống 3
+  field (server tự set `true`); field vẫn giữ boolean để còn chỗ ghi nhận
+  miễn trừ hợp pháp hiếm gặp qua API trực tiếp. `InsuranceProfilesScreen` gọn
+  lại: bỏ 3 cột dot riêng, thêm 1 badge trạng thái tổng + cột "Đóng/tháng"
+  tính số tiền VNĐ ước tính (client-side, dùng `SalaryProfile.insuranceSalary`
+  + `InsurancePolicy` hiệu lực hiện tại — không phải số chốt lương thật).
+- **D41:** Thêm module mới `EnterpriseInsurancePolicy` — "bảo hiểm doanh
+  nghiệp" (thương mại, tự nguyện, khác BHXH/BHYT/BHTN), trước đó **chưa có**
+  ở đâu trong repo (xác nhận qua audit). Route `/hr/policies/enterprise-insurance`,
+  web screen riêng, cùng pattern effective-dating/versioned/immutable như
+  `InsurancePolicy`.
+- Xem `Docs/DOCS_DECISION_LOG.md` D40/D41 cho chi tiết quyết định; `Docs/SRS_CORESTAFF.md`
+  §30D.3A (cập nhật)/§30D.3B (mới).
+- Kiểm chứng: `npm run test --workspace @corestaff/api` — 48/48 suite, 504/504
+  test PASS (không suite nào fail, kể cả 2 suite từng flaky trước đây —
+  `auth/auth.service.spec.ts`, `hr/workplace/workplace.service.spec.ts` — nay
+  PASS lại, không liên quan thay đổi này). `npm run lint`/`build --workspace
+  @corestaff/web` PASS. Chưa test UI trên trình duyệt thật với API/DB sống.
+
 ## Kiểm chứng
 
 - `npm run build --workspace @corestaff/api`: PASS.

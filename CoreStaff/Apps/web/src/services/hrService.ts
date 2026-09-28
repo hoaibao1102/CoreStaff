@@ -187,9 +187,10 @@ export interface InsuranceProfileCreateDto {
     employeeId: string;
     effectiveFrom: string;
     effectiveTo?: string;
-    participatesSocialInsurance: boolean;
-    participatesHealthInsurance: boolean;
-    participatesUnemploymentInsurance: boolean;
+    // Bắt buộc theo luật (D40) — mặc định true ở server nếu bỏ trống; UI luôn gửi true.
+    participatesSocialInsurance?: boolean;
+    participatesHealthInsurance?: boolean;
+    participatesUnemploymentInsurance?: boolean;
     note?: string;
 }
 
@@ -238,6 +239,40 @@ export interface InsurancePolicyCreateDto {
     salaryBaseRules: InsuranceSalaryBaseRule[];
     capRules: InsuranceCapRule[];
     employerContributionRates: InsuranceEmployerContributionRate[];
+}
+
+// ── EnterpriseInsurancePolicy (D40) — bảo hiểm thương mại tự nguyện, khác BHXH/BHYT/BHTN ──
+
+export type EnterpriseInsuranceCostBearer = 'EMPLOYER' | 'EMPLOYEE' | 'SHARED';
+
+export interface EnterpriseInsurancePolicy {
+    _id: string;
+    organizationId: string;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+    version: number;
+    provider: string;
+    policyNumber?: string;
+    coverageDescription: string;
+    premiumPerEmployee?: number | null;
+    costBearer: EnterpriseInsuranceCostBearer;
+    employeeContributionAmount?: number | null;
+    note?: string;
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface EnterpriseInsurancePolicyCreateDto {
+    effectiveFrom: string;
+    effectiveTo?: string;
+    provider: string;
+    policyNumber?: string;
+    coverageDescription: string;
+    premiumPerEmployee?: number | null;
+    costBearer: EnterpriseInsuranceCostBearer;
+    employeeContributionAmount?: number | null;
+    note?: string;
 }
 
 // ── EmployeeDocument (TASK-029) ───────────────────────────────────────
@@ -338,6 +373,7 @@ export const HR_ERROR_CODES: Record<string, string> = {
     INSURANCE_PROFILE_NOT_EFFECTIVE: 'Nhân viên chưa có hồ sơ tham gia bảo hiểm hiệu lực tại thời điểm này.',
     INSURANCE_PROFILE_DATE_RANGE_INVALID: 'Ngày hiệu lực đến phải sau ngày hiệu lực từ.',
     INSURANCE_PROFILE_PERIOD_OVERLAPS: 'Khoảng thời gian hiệu lực bị trùng với hồ sơ bảo hiểm hiện có của nhân viên này.',
+    INSURANCE_PROFILE_ALREADY_CLOSED: 'Hồ sơ này đã có ngày kết thúc hiệu lực rồi.',
 
     // Insurance Policy errors (TASK-039)
     INSURANCE_POLICY_NOT_FOUND: 'Không tìm thấy chính sách bảo hiểm.',
@@ -348,6 +384,15 @@ export const HR_ERROR_CODES: Record<string, string> = {
     SALARYBASERULES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình mức sàn cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
     CAPRULES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình mức trần cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
     EMPLOYERCONTRIBUTIONRATES_MUST_COVER_ALL_TYPES: 'Vui lòng cấu hình tỷ lệ đóng của doanh nghiệp cho đủ cả 3 khoản BHXH, BHYT, BHTN.',
+    INSURANCE_POLICY_ALREADY_CLOSED: 'Chính sách này đã có ngày kết thúc hiệu lực rồi.',
+
+    // Enterprise Insurance Policy errors (D40)
+    ENTERPRISE_INSURANCE_POLICY_NOT_FOUND: 'Không tìm thấy bảo hiểm doanh nghiệp.',
+    ENTERPRISE_INSURANCE_POLICY_NOT_CONFIGURED: 'Chưa có bảo hiểm doanh nghiệp hiệu lực tại thời điểm này.',
+    ENTERPRISE_INSURANCE_POLICY_DATE_RANGE_INVALID: 'Ngày hiệu lực đến phải sau ngày hiệu lực từ.',
+    ENTERPRISE_INSURANCE_POLICY_PERIOD_OVERLAPS: 'Khoảng thời gian hiệu lực bị trùng với bảo hiểm doanh nghiệp hiện có.',
+    ENTERPRISE_INSURANCE_EMPLOYEE_CONTRIBUTION_NOT_ALLOWED: 'Công ty đã chọn tự chi trả toàn bộ — không thể nhập số tiền nhân viên đóng góp.',
+    ENTERPRISE_INSURANCE_POLICY_ALREADY_CLOSED: 'Bảo hiểm doanh nghiệp này đã có ngày kết thúc hiệu lực rồi.',
 
     // Overtime errors (TASK-066..071, D38/D39)
     OVERTIME_SELF_TYPE_FORBIDDEN: 'Hệ thống tự xác định loại tăng ca từ lịch và calendar, bạn không chọn thủ công.',
@@ -845,6 +890,14 @@ export async function createInsuranceProfile(base: string, dto: InsuranceProfile
     });
 }
 
+/** D42 — the only allowed mutation on an existing record: closes an open-ended one so a next version can be created. */
+export async function closeInsuranceProfile(base: string, id: string, effectiveTo: string): Promise<InsuranceProfile> {
+    return hrRequest<InsuranceProfile>(base, `/api/hr/insurance-profiles/${encodeURIComponent(id)}/close`, {
+        method: 'PATCH',
+        body: JSON.stringify({ effectiveTo }),
+    });
+}
+
 // ── Insurance Policy (HR-only, TASK-039) ───────────────────────────────
 // Org-wide rate/base/cap engine input — never updated in place.
 
@@ -860,5 +913,39 @@ export async function createInsurancePolicy(base: string, dto: InsurancePolicyCr
     return hrRequest<InsurancePolicy>(base, '/api/hr/policies/insurance', {
         method: 'POST',
         body: JSON.stringify(dto),
+    });
+}
+
+/** D42 — the only allowed mutation on an existing policy: closes an open-ended one so a next version can be created. */
+export async function closeInsurancePolicy(base: string, id: string, effectiveTo: string): Promise<InsurancePolicy> {
+    return hrRequest<InsurancePolicy>(base, `/api/hr/policies/insurance/${encodeURIComponent(id)}/close`, {
+        method: 'PATCH',
+        body: JSON.stringify({ effectiveTo }),
+    });
+}
+
+// ── Enterprise Insurance Policy (HR-only, D40) ─────────────────────────
+// Voluntary commercial policy (accident/health…), org-wide, never updated in place.
+
+export async function listEnterpriseInsurancePolicies(base: string): Promise<EnterpriseInsurancePolicy[]> {
+    return hrRequest<EnterpriseInsurancePolicy[]>(base, '/api/hr/policies/enterprise-insurance', { method: 'GET' });
+}
+
+export async function getEnterpriseInsurancePolicyById(base: string, id: string): Promise<EnterpriseInsurancePolicy> {
+    return hrRequest<EnterpriseInsurancePolicy>(base, `/api/hr/policies/enterprise-insurance/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createEnterpriseInsurancePolicy(base: string, dto: EnterpriseInsurancePolicyCreateDto): Promise<EnterpriseInsurancePolicy> {
+    return hrRequest<EnterpriseInsurancePolicy>(base, '/api/hr/policies/enterprise-insurance', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+/** D42 — the only allowed mutation on an existing policy: closes an open-ended one so a next version can be created. */
+export async function closeEnterpriseInsurancePolicy(base: string, id: string, effectiveTo: string): Promise<EnterpriseInsurancePolicy> {
+    return hrRequest<EnterpriseInsurancePolicy>(base, `/api/hr/policies/enterprise-insurance/${encodeURIComponent(id)}/close`, {
+        method: 'PATCH',
+        body: JSON.stringify({ effectiveTo }),
     });
 }
