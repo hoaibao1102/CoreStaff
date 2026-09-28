@@ -31,6 +31,11 @@ function buildModel(rows: Row[]) {
 		findOne(filter: Record<string, unknown>) {
 			return { lean: async () => rows.find((r) => Object.entries(filter).every(([k, v]) => (r as never)[k] === v)) ?? null };
 		},
+		findOneAndUpdate(filter: Record<string, unknown>, update: { $set: Partial<Row> }) {
+			const row = rows.find((r) => Object.entries(filter).every(([k, v]) => (r as never)[k] === v));
+			if (row) Object.assign(row, update.$set);
+			return { lean: async () => row ?? null };
+		},
 	};
 }
 
@@ -97,5 +102,35 @@ describe('InsurancePolicyService (TASK-039)', () => {
 	it('404s INSURANCE_POLICY_NOT_CONFIGURED when no policy is effective', async () => {
 		const svc = new InsurancePolicyService(buildModel([]) as never);
 		await expect(svc.findEffective('org1', new Date())).rejects.toBeInstanceOf(NotFoundException);
+	});
+
+	describe('close (D42)', () => {
+		it('sets effectiveTo on an open-ended policy, unblocking a next version', async () => {
+			const rows: Row[] = [{ _id: '1', organizationId: 'org1', ...fullDto(), effectiveFrom: new Date('2026-01-01'), version: 1 } as unknown as Row];
+			const svc = new InsurancePolicyService(buildModel(rows) as never);
+			const closed = await svc.close('org1', '1', '2026-06-30');
+			expect(closed).toMatchObject({ effectiveTo: new Date('2026-06-30') });
+
+			const next = await svc.create('org1', 'hr1', fullDto({ effectiveFrom: '2026-07-01' }) as never);
+			expect(next.version).toBe(2);
+		});
+
+		it('rejects closing an already-closed policy', async () => {
+			const rows: Row[] = [{ _id: '1', organizationId: 'org1', ...fullDto(), effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-06-30') } as unknown as Row];
+			const svc = new InsurancePolicyService(buildModel(rows) as never);
+			await expect(svc.close('org1', '1', '2026-08-01')).rejects.toBeInstanceOf(ConflictException);
+		});
+
+		it('rejects a close date on/before effectiveFrom', async () => {
+			const rows: Row[] = [{ _id: '1', organizationId: 'org1', ...fullDto(), effectiveFrom: new Date('2026-01-01') } as unknown as Row];
+			const svc = new InsurancePolicyService(buildModel(rows) as never);
+			await expect(svc.close('org1', '1', '2025-12-31')).rejects.toBeInstanceOf(ConflictException);
+		});
+
+		it('404s when the policy is outside the tenant', async () => {
+			const rows: Row[] = [{ _id: '1', organizationId: 'org1', ...fullDto(), effectiveFrom: new Date('2026-01-01') } as unknown as Row];
+			const svc = new InsurancePolicyService(buildModel(rows) as never);
+			await expect(svc.close('org2', '1', '2026-06-30')).rejects.toBeInstanceOf(NotFoundException);
+		});
 	});
 });

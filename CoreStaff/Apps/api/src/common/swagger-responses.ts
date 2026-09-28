@@ -225,6 +225,22 @@ export const insuranceProfileExample = {
 	updatedAt: '2026-09-22T03:20:00.000Z',
 };
 
+/** New module (D40, 2026-09-28) — see enterprise-insurance-policy.schema.ts; field shape is an engineering proposal. */
+export const enterpriseInsurancePolicyExample = {
+	_id: '66f1b2c3d4e5f60718293f05',
+	organizationId: '66f1b2c3d4e5f60718293a40',
+	effectiveFrom: '2026-09-25T00:00:00.000Z',
+	provider: 'Bảo Việt',
+	policyNumber: 'HD-2026-00123',
+	coverageDescription: 'Bảo hiểm tai nạn con người 24/24 + chăm sóc sức khỏe cơ bản',
+	premiumPerEmployee: null,
+	costBearer: 'EMPLOYER',
+	employeeContributionAmount: null,
+	version: 1,
+	createdAt: '2026-09-28T03:20:00.000Z',
+	updatedAt: '2026-09-28T03:20:00.000Z',
+};
+
 /** TASK-039 — SRS §30D.3. Rate/cap shapes are an engineering proposal, see insurance-policy.schema.ts. */
 export const insurancePolicyExample = {
 	_id: '66f1b2c3d4e5f60718293f04',

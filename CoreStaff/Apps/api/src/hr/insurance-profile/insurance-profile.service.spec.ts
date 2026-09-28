@@ -28,6 +28,11 @@ function buildModel(rows: Row[]) {
 		findOne(filter: Record<string, unknown>) {
 			return { lean: async () => rows.find((r) => Object.entries(filter).every(([k, v]) => (r as never)[k] === v)) ?? null };
 		},
+		findOneAndUpdate(filter: Record<string, unknown>, update: { $set: Partial<Row> }) {
+			const row = rows.find((r) => Object.entries(filter).every(([k, v]) => (r as never)[k] === v));
+			if (row) Object.assign(row, update.$set);
+			return { lean: async () => row ?? null };
+		},
 	};
 }
 
@@ -49,6 +54,17 @@ describe('InsuranceProfileService (TASK-038)', () => {
 		const svc = new InsuranceProfileService(buildModel([]) as never, buildProfileModel(profiles) as never);
 		const doc = await svc.create('org1', 'hr1', dto);
 		expect(doc).toMatchObject({ participatesSocialInsurance: true, version: 1 });
+	});
+
+	it('D40: defaults all three participation flags to true when omitted — mandatory by law, not an HR choice', async () => {
+		const svc = new InsuranceProfileService(buildModel([]) as never, buildProfileModel(profiles) as never);
+		const { participatesSocialInsurance, participatesHealthInsurance, participatesUnemploymentInsurance, ...rest } = dto;
+		const doc = await svc.create('org1', 'hr1', rest as never);
+		expect(doc).toMatchObject({
+			participatesSocialInsurance: true,
+			participatesHealthInsurance: true,
+			participatesUnemploymentInsurance: true,
+		});
 	});
 
 	it('allows a false participation flag with a note, without inventing an exemption taxonomy', async () => {
@@ -79,5 +95,44 @@ describe('InsuranceProfileService (TASK-038)', () => {
 		const svc = new InsuranceProfileService(buildModel(rows) as never, buildProfileModel(profiles) as never);
 		const effective = await svc.findEffectiveForEmployee('org1', 'emp1', new Date('2026-08-01'));
 		expect(effective).toMatchObject({ _id: '2', participatesSocialInsurance: true });
+	});
+
+	describe('close (D42)', () => {
+		it('sets effectiveTo on an open-ended record, unblocking a next version', async () => {
+			const rows: Row[] = [
+				{ _id: '1', organizationId: 'org1', employeeId: 'emp1', effectiveFrom: new Date('2026-01-01'), participatesSocialInsurance: true, participatesHealthInsurance: true, participatesUnemploymentInsurance: true, version: 1 },
+			];
+			const svc = new InsuranceProfileService(buildModel(rows) as never, buildProfileModel(profiles) as never);
+			const closed = await svc.close('org1', '1', '2026-06-30');
+			expect(closed).toMatchObject({ effectiveTo: new Date('2026-06-30') });
+
+			// The next version is now unblocked because the sibling no longer stretches to Infinity.
+			const next = await svc.create('org1', 'hr1', { ...dto, effectiveFrom: '2026-07-01' });
+			expect(next.version).toBe(2);
+		});
+
+		it('rejects closing a record that is already closed', async () => {
+			const rows: Row[] = [
+				{ _id: '1', organizationId: 'org1', employeeId: 'emp1', effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-06-30'), participatesSocialInsurance: true, participatesHealthInsurance: true, participatesUnemploymentInsurance: true, version: 1 },
+			];
+			const svc = new InsuranceProfileService(buildModel(rows) as never, buildProfileModel(profiles) as never);
+			await expect(svc.close('org1', '1', '2026-08-01')).rejects.toBeInstanceOf(ConflictException);
+		});
+
+		it('rejects a close date on/before effectiveFrom', async () => {
+			const rows: Row[] = [
+				{ _id: '1', organizationId: 'org1', employeeId: 'emp1', effectiveFrom: new Date('2026-01-01'), participatesSocialInsurance: true, participatesHealthInsurance: true, participatesUnemploymentInsurance: true, version: 1 },
+			];
+			const svc = new InsuranceProfileService(buildModel(rows) as never, buildProfileModel(profiles) as never);
+			await expect(svc.close('org1', '1', '2025-12-31')).rejects.toBeInstanceOf(ConflictException);
+		});
+
+		it('404s when the record is outside the tenant', async () => {
+			const rows: Row[] = [
+				{ _id: '1', organizationId: 'org1', employeeId: 'emp1', effectiveFrom: new Date('2026-01-01'), participatesSocialInsurance: true, participatesHealthInsurance: true, participatesUnemploymentInsurance: true, version: 1 },
+			];
+			const svc = new InsuranceProfileService(buildModel(rows) as never, buildProfileModel(profiles) as never);
+			await expect(svc.close('org2', '1', '2026-06-30')).rejects.toBeInstanceOf(NotFoundException);
+		});
 	});
 });

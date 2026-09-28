@@ -107,6 +107,19 @@ export const InsuranceContributionType = {
 } as const;
 export type InsuranceContributionType = (typeof InsuranceContributionType)[keyof typeof InsuranceContributionType];
 
+/**
+ * EnterpriseInsurancePolicy (2026-09-28, D40) — who pays the premium for a
+ * voluntary commercial policy the employer buys, distinct from the mandatory
+ * BHXH/BHYT/BHTN scheme above. Engineering addition, not a documented legal
+ * taxonomy.
+ */
+export const EnterpriseInsuranceCostBearer = {
+  EMPLOYER: 'EMPLOYER',
+  EMPLOYEE: 'EMPLOYEE',
+  SHARED: 'SHARED',
+} as const;
+export type EnterpriseInsuranceCostBearer = (typeof EnterpriseInsuranceCostBearer)[keyof typeof EnterpriseInsuranceCostBearer];
+
 /** Case-insensitive, trimmed email used for tenant-scoped uniqueness. */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
