@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle, ShieldCheck } from 'lucide-react';
+import { LoaderCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Input } from '../../../components/input';
@@ -37,9 +37,6 @@ export function InsuranceProfileCreateDialog(props: {
     employeeId: '',
     effectiveFrom: '',
     effectiveTo: '',
-    participatesSocialInsurance: true,
-    participatesHealthInsurance: true,
-    participatesUnemploymentInsurance: true,
     note: '',
   });
   const [errors, setErrors] = useState<Record<string, string | null>>({});
@@ -49,9 +46,6 @@ export function InsuranceProfileCreateDialog(props: {
       employeeId: '',
       effectiveFrom: '',
       effectiveTo: '',
-      participatesSocialInsurance: true,
-      participatesHealthInsurance: true,
-      participatesUnemploymentInsurance: true,
       note: '',
     });
     setErrors({});
@@ -86,9 +80,10 @@ export function InsuranceProfileCreateDialog(props: {
         employeeId: form.employeeId,
         effectiveFrom: form.effectiveFrom,
         ...(form.effectiveTo ? { effectiveTo: form.effectiveTo } : {}),
-        participatesSocialInsurance: form.participatesSocialInsurance,
-        participatesHealthInsurance: form.participatesHealthInsurance,
-        participatesUnemploymentInsurance: form.participatesUnemploymentInsurance,
+        // BHXH/BHYT/BHTN bắt buộc theo luật — không cho chọn qua UI này, server default true.
+        participatesSocialInsurance: true,
+        participatesHealthInsurance: true,
+        participatesUnemploymentInsurance: true,
         ...(form.note.trim() ? { note: form.note.trim() } : {}),
       };
       await createInsuranceProfile(props.apiBase, dto);
@@ -100,29 +95,6 @@ export function InsuranceProfileCreateDialog(props: {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const checkboxRow = (
-    key: 'participatesSocialInsurance' | 'participatesHealthInsurance' | 'participatesUnemploymentInsurance',
-    label: string,
-    hint: string,
-  ) => {
-    const checked = form[key];
-    return (
-      <label className={`flex items-start gap-3 rounded-lg border p-2.5 cursor-pointer select-none transition-colors ${checked ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:bg-muted/40'}`}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.checked }))}
-          className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-primary"
-          disabled={submitting}
-        />
-        <div>
-          <div className="text-sm font-medium text-foreground">{label}</div>
-          <div className="text-xs text-muted-foreground">{hint}</div>
-        </div>
-      </label>
-    );
   };
 
   return (
@@ -184,9 +156,19 @@ export function InsuranceProfileCreateDialog(props: {
 
             <div className="space-y-2">
               <FormLabel>Tham gia bảo hiểm</FormLabel>
-              {checkboxRow('participatesSocialInsurance', 'BHXH — Bảo hiểm xã hội', 'Bỏ chọn nếu nhân viên không tham gia BHXH bắt buộc trong giai đoạn này.')}
-              {checkboxRow('participatesHealthInsurance', 'BHYT — Bảo hiểm y tế', 'Bỏ chọn nếu nhân viên không tham gia BHYT bắt buộc trong giai đoạn này.')}
-              {checkboxRow('participatesUnemploymentInsurance', 'BHTN — Bảo hiểm thất nghiệp', 'Bỏ chọn nếu nhân viên không tham gia BHTN bắt buộc trong giai đoạn này.')}
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                <div className="flex items-start gap-2.5">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">BHXH, BHYT, BHTN là bắt buộc theo luật</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Nhân viên có hợp đồng lao động phải tham gia đủ cả ba khoản — không phải lựa chọn của HR. Hồ sơ này sẽ ghi nhận cả ba khoản
+                      ở trạng thái "Có tham gia". Trường hợp miễn trừ hợp pháp hiếm gặp (đã hưởng lương hưu, lao động nước ngoài theo hiệp định
+                      song phương…) cần xử lý riêng, ngoài form này.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -196,7 +178,7 @@ export function InsuranceProfileCreateDialog(props: {
                 className="min-h-20"
                 value={form.note}
                 maxLength={500}
-                placeholder="Lý do HR, đặc biệt khi bỏ chọn một khoản tham gia (tùy chọn)..."
+                placeholder="Ghi chú của HR cho giai đoạn này (tùy chọn)..."
                 onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
                 disabled={submitting}
               />

@@ -9,6 +9,7 @@ import { EmployeeProfileSchema } from './schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from './schemas/employment-history.schema';
 import { InsuranceProfileSchema } from './schemas/insurance-profile.schema';
 import { InsurancePolicySchema } from './schemas/insurance-policy.schema';
+import { EnterpriseInsurancePolicySchema } from './schemas/enterprise-insurance-policy.schema';
 import { EmploymentContractSchema } from './schemas/employment-contract.schema';
 import { EmployeeDocumentSchema } from './schemas/employee-document.schema';
 import { normalizeEmail, normalizeCode, normalizeEmployeeCode } from './schemas/enums';
@@ -61,6 +62,10 @@ describe('mongodb index contracts (TASK-015)', () => {
 
   it('InsurancePolicy: tenant-scoped effective-dating lookup (TASK-039)', () => {
     expect(hasCompoundIndex(InsurancePolicySchema, ['organizationId', 'effectiveFrom'])).toBe(true);
+  });
+
+  it('EnterpriseInsurancePolicy: tenant-scoped effective-dating lookup (D40)', () => {
+    expect(hasCompoundIndex(EnterpriseInsurancePolicySchema, ['organizationId', 'effectiveFrom'])).toBe(true);
   });
 
   it('EmploymentContract: tenant/employee lookup + status filter (TASK-028)', () => {

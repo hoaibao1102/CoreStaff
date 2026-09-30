@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -6,6 +6,7 @@ import { CurrentUser, SessionUser, Tenant, requireOrganizationId } from '../../c
 import { ApiCreatedSuccess, ApiErrorExamples, ApiSuccess, insuranceProfileExample } from '../../common/swagger-responses';
 import { InsuranceProfileService } from './insurance-profile.service';
 import { CreateInsuranceProfileDto } from './dto/create-insurance-profile.dto';
+import { CloseInsuranceProfileDto } from './dto/close-insurance-profile.dto';
 
 /**
  * TASK-038. Route path is an engineering proposal — the SRS route table
@@ -20,7 +21,7 @@ export class InsuranceProfileController {
 	constructor(private readonly insuranceProfiles: InsuranceProfileService) {}
 
 	@Post()
-	@ApiOperation({ summary: 'Create an insurance participation period (TASK-038). Never updated in place; corrections are a new version.' })
+	@ApiOperation({ summary: 'Create an insurance participation period (TASK-038). BHXH/BHYT/BHTN default to true (mandatory by law); pass false with a note only for a documented legal exemption. Never updated in place; corrections are a new version.' })
 	@ApiCreatedSuccess('Insurance profile created.', insuranceProfileExample)
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiResponse({ status: 409, description: 'INSURANCE_PROFILE_DATE_RANGE_INVALID | INSURANCE_PROFILE_PERIOD_OVERLAPS' })
@@ -49,6 +50,18 @@ export class InsuranceProfileController {
 	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.insuranceProfiles.findOne(orgId, id);
+		return { success: true, data };
+	}
+
+	@Patch(':id/close')
+	@ApiOperation({ summary: 'D42: close an open-ended insurance profile (set effectiveTo) so a next version can be created. The only allowed mutation on an existing record.' })
+	@ApiSuccess('Insurance profile closed.', insuranceProfileExample)
+	@ApiResponse({ status: 404, description: 'INSURANCE_PROFILE_NOT_FOUND' })
+	@ApiResponse({ status: 409, description: 'INSURANCE_PROFILE_ALREADY_CLOSED | INSURANCE_PROFILE_DATE_RANGE_INVALID' })
+	@ApiErrorExamples()
+	async close(@Tenant() organizationId: string | null, @Param('id') id: string, @Body() dto: CloseInsuranceProfileDto) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.insuranceProfiles.close(orgId, id, dto.effectiveTo);
 		return { success: true, data };
 	}
 }

@@ -2758,9 +2758,117 @@ InsuranceProfile
 
 `insuranceSalary` không nằm ở đây — thuộc `SalaryProfile` (§30D.1) đúng như SRS gốc
 đã định nghĩa, không duplicate. Theo §30A.3, trạng thái thử việc/loại hợp đồng
-**không** tự động suy ra participation; HR cấu hình từng khoản một cách tường minh.
+**không** tự động suy ra participation.
 Mỗi document là một giai đoạn hiệu lực, không sửa tại chỗ — cùng pattern
-effective-dating với SalaryProfile; không có API update/delete.
+effective-dating với SalaryProfile; không có API update/delete field nghiệp vụ
+nào (participates*/note không sửa được). **Ngoại lệ duy nhất (D42, xem dưới):**
+`PATCH .../:id/close` chỉ set `effectiveTo` trên một bản ghi đang mở, để mở
+đường tạo phiên bản kế tiếp — không đổi field nghiệp vụ nào.
+
+**Cập nhật (D40, 2026-09-28):** BHXH/BHYT/BHTN là nghĩa vụ **bắt buộc** theo pháp
+luật lao động hiện hành đối với người lao động có hợp đồng lao động — không phải
+một khoản HR được tự do bật/tắt cho từng nhân viên. Theo thông tin người dùng cung
+cấp (nguồn báo chí/tổng hợp, **chưa đối chiếu văn bản luật gốc** — cần HR/pháp lý
+xác nhận trước khi coi là chốt):
+- BHXH bắt buộc với HĐLĐ không xác định thời hạn hoặc có thời hạn ≥1 tháng (Luật
+  BHXH 2024, hiệu lực từ 01/07/2025), kể cả khi hai bên gọi hợp đồng bằng tên khác
+  nhưng thực chất có trả công + có quản lý/giám sát.
+- BHTN trước đây chỉ bắt buộc với HĐLĐ ≥3 tháng; theo Luật Việc làm 2025, ngưỡng mở
+  rộng xuống ≥1 tháng.
+- BHYT bắt buộc với người có HĐLĐ; ngưỡng thời hạn chính xác sau các lần sửa luật
+  gần nhất **chưa xác nhận được trong lần cập nhật này**.
+- Thời gian thử việc (chưa ký HĐLĐ chính thức) thường chưa thuộc diện đóng; bắt đầu
+  đóng từ khi ký HĐLĐ. Hợp đồng dịch vụ/cộng tác viên vẫn có thể bị coi là quan hệ
+  lao động nếu thực chất có trả công + quản lý/giám sát (áp dụng nghĩa vụ như trên).
+- BHXH tự nguyện chỉ dành cho người **không** thuộc diện bắt buộc — không áp dụng
+  cho nhân viên đang có HĐLĐ, nên không phải một lựa chọn thay thế trong phạm vi
+  `InsuranceProfile`.
+
+Áp dụng vào field list trên: ba `participates*` **default `true`** (đổi từ `false`),
+DTO cho phép bỏ trống (server tự set `true`). Field vẫn giữ dạng boolean — không xoá
+— để còn chỗ ghi nhận các trường hợp miễn trừ hợp pháp hiếm gặp (đã hưởng lương hưu,
+lao động nước ngoài theo hiệp định song phương…) qua gọi API trực tiếp kèm `note`;
+form tạo hồ sơ trên web đã **bỏ 3 checkbox**, luôn gửi `true`, chỉ hiển thị banner
+"bắt buộc theo luật". Cố tình **không** thêm logic suy ra điều kiện bắt buộc theo
+thời hạn HĐLĐ (ví dụ check `EmploymentContract.startDate/endDate` ≥1/≥3 tháng) —
+giữ đúng tinh thần §30A.3 (participation không tự suy từ Contract), tránh đụng vào
+module `hr/employment-contract` của team và tránh hard-code một ngưỡng luật chưa
+được xác nhận đầy đủ (đặc biệt là BHYT, xem trên). Nếu sau này cần enforce ngưỡng
+này, đó là một quyết định nghiệp vụ riêng, cần HR/pháp lý chốt trước.
+
+### 30D.3B. EnterpriseInsurancePolicy (bảo hiểm doanh nghiệp, D40)
+
+**Module mới (2026-09-28)** — bổ sung sau khi rà soát phát hiện Docs/code chưa
+có bất kỳ chỗ nào cho "bảo hiểm doanh nghiệp": khái niệm khác hẳn BHXH/BHYT/BHTN
+ở §30D.3/§30D.3A. Ba khoản trên là bảo hiểm xã hội **bắt buộc** theo Luật
+BHXH/BHYT/Việc làm, trừ thẳng vào lương. `EnterpriseInsurancePolicy` là một
+hợp đồng bảo hiểm **thương mại tự nguyện** (tai nạn con người, chăm sóc sức
+khỏe…) mà công ty có thể mua thêm cho nhân viên từ một công ty bảo hiểm, theo
+Luật Kinh doanh bảo hiểm — không bị luật lao động bắt buộc, không có tỷ lệ/
+sàn/trần cố định theo quy định như InsurancePolicy.
+
+```text
+EnterpriseInsurancePolicy
+- id, organizationId
+- effectiveFrom, effectiveTo, version
+- provider (nhà cung cấp, vd Bảo Việt/PVI/Manulife)
+- policyNumber (tùy chọn)
+- coverageDescription (mô tả phạm vi bảo hiểm, dạng free-text)
+- premiumPerEmployee (mức phí/nhân viên, null = chưa xác định)
+- costBearer: EMPLOYER | EMPLOYEE | SHARED
+- employeeContributionAmount (chỉ có ý nghĩa khi costBearer ≠ EMPLOYER)
+- note
+- createdBy, createdAt, updatedAt
+```
+
+Toàn bộ field-list trên là **đề xuất kỹ thuật**, cùng nguyên tắc "không tự
+chế" đã áp dụng ở D37/§30D.3A: `coverageDescription` là free text (không có
+taxonomy loại bảo hiểm cố định nào được xác nhận), không seed mức phí/tỷ lệ
+pháp lý nào. Org-wide, effective-dated, immutable — cùng pattern
+InsuranceProfile/InsurancePolicy: sửa = tạo phiên bản mới, không có API
+update/delete field nghiệp vụ nào (xem §30D.3C cho ngoại lệ `close`). Route
+`/hr/policies/enterprise-insurance`, chỉ HR, tenant scope (cùng pattern
+`@Roles('HR')` + `requireOrganizationId`).
+
+### 30D.3C. `PATCH .../:id/close` — đóng một bản ghi đang mở (D42, 2026-09-28)
+
+Áp dụng cho cả ba entity effective-dated ở trên (`InsuranceProfile`,
+`InsurancePolicy`, `EnterpriseInsurancePolicy`). Lỗ hổng phát hiện khi vận
+hành: `rangesOverlap` (§30D.3 helper) coi một bản ghi không có `effectiveTo`
+là kéo dài tới vô hạn — nên nó luôn "chồng" với bất kỳ khoảng thời gian nào
+trong tương lai. Hệ quả: một khi HR tạo một bản ghi không điền "Hiệu lực đến"
+(trường hợp phổ biến, vì field này luôn optional), `create()` sẽ **từ chối
+mọi lần tạo phiên bản kế tiếp cho đối tượng đó vĩnh viễn** — 409 lỗi trùng
+giai đoạn — không có cách nào "sửa" qua API/UI nữa.
+
+`close` là ngoại lệ duy nhất được phép sửa một bản ghi đã tồn tại — nhưng chỉ
+set field `effectiveTo`, không đổi field nghiệp vụ nào khác (participates*,
+rate, coverageDescription... vẫn immutable). Điều kiện:
+- Bản ghi phải thuộc tenant hiện tại (404 nếu không).
+- Bản ghi phải đang mở (`effectiveTo` chưa có) — 409
+  `*_ALREADY_CLOSED` nếu đã đóng rồi.
+- Ngày đóng phải sau `effectiveFrom` của bản ghi — 409 `*_DATE_RANGE_INVALID`
+  (dùng chung code với validate lúc tạo).
+
+Không giới hạn ngày đóng phải ≥ hôm nay (cho phép đóng lùi ngày nếu cần) — vì
+hệ thống **chưa có PayrollInputSnapshot/PayrollRun thật** kết nối vào các
+entity này (xem giới hạn ở `Docs/TASK_038_039_IMPLEMENTATION.md`), nên rủi ro
+đóng lùi ngày làm lệch payroll đã chốt hiện chưa phát sinh; khi PayrollRun
+thật được nối vào, cần xét lại có nên chặn đóng lùi ngày trước kỳ lương đã
+LOCKED hay không (chưa chốt ở đây). Web UI: nút "Kết thúc hiệu lực" (icon
+CalendarOff) chỉ hiện trên dòng đang mở, mở dialog nhập ngày, gọi
+`PATCH .../:id/close` rồi refresh danh sách — nút "Tạo..." dùng để thêm
+phiên bản kế tiếp sau khi đóng, không có nút "Sửa" nào khác.
+
+**Cập nhật (2026-09-28):** nút này chỉ hiện trên 2 màn "Chính sách bảo hiểm"
+và "Bảo hiểm doanh nghiệp" — nơi field nghiệp vụ (tỷ lệ/sàn-trần/nhà cung
+cấp...) thật sự có thể cần sửa. Màn "Hồ sơ tham gia bảo hiểm" (InsuranceProfile)
+**không** có nút này: theo D40, participation luôn `true` cho mọi nhân viên
+(quy định nằm ở InsurancePolicy dùng chung, không phải ở từng hồ sơ), nên
+không có tình huống HR cần "sửa" một hồ sơ đã tạo. Endpoint
+`PATCH /hr/insurance-profiles/:id/close` vẫn giữ ở API (không xoá) để dùng
+trực tiếp cho trường hợp hiếm cần sửa ngày hiệu lực của một miễn trừ đã tạo
+sai — chỉ không có nút trên UI.
 
 ### 30D.4. TaxPolicy và TaxProfile
 
@@ -2810,7 +2918,7 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 - `EmploymentContract`, `EmployeeDocument`
 - `SalaryProfile`, `AllowanceDefinition`, `KpiPayrollInput`
 - `LaborCompliancePolicy`, `OvertimePayPolicy`
-- `InsuranceProfile`, `InsurancePolicy`
+- `InsuranceProfile`, `InsurancePolicy`, `EnterpriseInsurancePolicy` (D40)
 - `TaxProfile`, `DependentRegistration`, `TaxPolicy`
 - `PayrollPeriod`, `PayrollInputSnapshot`, `PayrollRun`
 - `PayrollEarningLine`, `PayrollDeductionLine`, `EmployerContributionLine`
@@ -2822,7 +2930,7 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 |---|---|
 | Employee HR | `/hr/employees`, `/hr/positions`, `/hr/contracts`, `/hr/documents` |
 | Compensation | `/hr/salary-profiles`, `/hr/allowances`, `/hr/kpi-inputs`, `/hr/insurance-profiles` (đề xuất TASK-038, 2026-09-22 — không có route nào được liệt kê sẵn cho InsuranceProfile) |
-| Policies | `/hr/policies/labor`, `/hr/policies/overtime`, `/hr/policies/insurance`, `/hr/policies/tax` |
+| Policies | `/hr/policies/labor`, `/hr/policies/overtime`, `/hr/policies/insurance`, `/hr/policies/enterprise-insurance` (D40), `/hr/policies/tax` |
 | Payroll | `/hr/payroll-periods`, `/hr/payroll-runs`, `/:id/calculate`, `/:id/approve`, `/:id/lock`, `/:id/mark-paid` |
 | Snapshot | `/hr/payroll-runs/:id/snapshots`, `/:id/regenerate` |
 | Payslip | `/app/payslips`, `/app/payslips/:id`, `/hr/payroll-runs/:id/export` |
@@ -2847,6 +2955,12 @@ DRAFT → CALCULATED → REVIEWING → APPROVED → LOCKED → PAID
 | `INSURANCE_POLICY_PERIOD_OVERLAPS` | 409 | Giai đoạn InsurancePolicy mới đè lên giai đoạn đã có trong tổ chức (TASK-039) |
 | `INSURANCE_POLICY_NOT_CONFIGURED` | 404 | Không có InsurancePolicy hiệu lực tại ngày tính (TASK-039) |
 | `INSURANCE_POLICY_FLOOR_ABOVE_CAP` | 400 | `floorAmount` lớn hơn `capAmount` của cùng một khoản bảo hiểm (TASK-039) |
+| `ENTERPRISE_INSURANCE_POLICY_PERIOD_OVERLAPS` | 409 | Giai đoạn EnterpriseInsurancePolicy mới đè lên giai đoạn đã có trong tổ chức (D40) |
+| `ENTERPRISE_INSURANCE_POLICY_NOT_CONFIGURED` | 404 | Không có EnterpriseInsurancePolicy hiệu lực tại ngày tính (D40) |
+| `ENTERPRISE_INSURANCE_EMPLOYEE_CONTRIBUTION_NOT_ALLOWED` | 400 | `employeeContributionAmount` > 0 trong khi `costBearer = EMPLOYER` (D40) |
+| `INSURANCE_PROFILE_ALREADY_CLOSED` | 409 | `PATCH .../:id/close` gọi trên một hồ sơ đã có `effectiveTo` (D42) |
+| `INSURANCE_POLICY_ALREADY_CLOSED` | 409 | `PATCH .../:id/close` gọi trên một chính sách đã có `effectiveTo` (D42) |
+| `ENTERPRISE_INSURANCE_POLICY_ALREADY_CLOSED` | 409 | `PATCH .../:id/close` gọi trên một bảo hiểm doanh nghiệp đã có `effectiveTo` (D42) |
 
 ## 30I. Acceptance Criteria bổ sung
 

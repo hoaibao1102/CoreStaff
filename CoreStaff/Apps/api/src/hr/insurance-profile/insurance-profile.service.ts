@@ -34,9 +34,10 @@ export class InsuranceProfileService {
 			employeeId: dto.employeeId,
 			effectiveFrom,
 			effectiveTo,
-			participatesSocialInsurance: dto.participatesSocialInsurance,
-			participatesHealthInsurance: dto.participatesHealthInsurance,
-			participatesUnemploymentInsurance: dto.participatesUnemploymentInsurance,
+			// D40: BHXH/BHYT/BHTN is a legal obligation, not an HR choice — default true when omitted.
+			participatesSocialInsurance: dto.participatesSocialInsurance ?? true,
+			participatesHealthInsurance: dto.participatesHealthInsurance ?? true,
+			participatesUnemploymentInsurance: dto.participatesUnemploymentInsurance ?? true,
 			note: dto.note,
 			version: nextVersion,
 			createdBy,
@@ -54,6 +55,29 @@ export class InsuranceProfileService {
 		const doc = await this.insuranceProfileModel.findOne({ _id: id, organizationId }).lean();
 		if (!doc) throw new NotFoundException('INSURANCE_PROFILE_NOT_FOUND');
 		return doc;
+	}
+
+	/**
+	 * The ONE mutation allowed on an existing record: set `effectiveTo` on a
+	 * currently open-ended one. Without this, an open-ended record overlaps
+	 * every possible future period (see `rangesOverlap`), so `create()` would
+	 * reject any attempt at a next version forever — closing it first is what
+	 * actually makes "correction = new version" usable via the API instead of
+	 * only via a DB script. Never touches `participates*`/`note` — those are
+	 * still only settable at creation.
+	 */
+	async close(organizationId: string, id: string, effectiveToInput: string) {
+		const doc = await this.insuranceProfileModel.findOne({ _id: id, organizationId }).lean();
+		if (!doc) throw new NotFoundException('INSURANCE_PROFILE_NOT_FOUND');
+		if (doc.effectiveTo) throw new ConflictException('INSURANCE_PROFILE_ALREADY_CLOSED');
+
+		const effectiveTo = new Date(effectiveToInput);
+		if (effectiveTo <= new Date(doc.effectiveFrom)) throw new ConflictException('INSURANCE_PROFILE_DATE_RANGE_INVALID');
+
+		const updated = await this.insuranceProfileModel
+			.findOneAndUpdate({ _id: id, organizationId }, { $set: { effectiveTo } }, { new: true })
+			.lean();
+		return updated;
 	}
 
 	/** The participation flags in effect for `employeeId` at `asOf` — AC-INS-02 gate. */

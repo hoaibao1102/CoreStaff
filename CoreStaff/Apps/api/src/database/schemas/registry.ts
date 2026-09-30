@@ -14,6 +14,7 @@ import { ShiftTemplateSchema } from './shift-template.schema';
 import { EmployeeAssignmentSchema } from './assignment.schema';
 import { InsuranceProfileSchema } from './insurance-profile.schema';
 import { InsurancePolicySchema } from './insurance-policy.schema';
+import { EnterpriseInsurancePolicySchema } from './enterprise-insurance-policy.schema';
 import { ManagerAssignmentSchema } from './manager-assignment.schema';
 import { ManagerRequestSchema } from './manager-request.schema';
 import { OvertimeResultSchema } from './overtime-result.schema';
@@ -59,6 +60,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Assignment', schema: EmployeeAssignmentSchema },
   { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
   { name: 'InsurancePolicy', schema: InsurancePolicySchema },
+  { name: 'EnterpriseInsurancePolicy', schema: EnterpriseInsurancePolicySchema },
   { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
   { name: 'ManagerRequest', schema: ManagerRequestSchema },
   { name: 'OvertimeResult', schema: OvertimeResultSchema },
@@ -95,8 +97,11 @@ export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
 export { InsuranceProfileSchema };
 export { PayrollInputSnapshotSchema };
+export { InsurancePolicySchema };
+export { EnterpriseInsurancePolicySchema };
 export { InsuranceProfile } from './insurance-profile.schema';
 export { InsurancePolicy } from './insurance-policy.schema';
+export { EnterpriseInsurancePolicy } from './enterprise-insurance-policy.schema';
 export { Organization } from './organization.schema';
 export { User } from './user.schema';
 export { UserSession } from './user-session.schema';

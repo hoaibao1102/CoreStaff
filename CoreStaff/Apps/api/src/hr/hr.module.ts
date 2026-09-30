@@ -12,6 +12,7 @@ import { PoliciesModule } from './policies/policies.module';
 import { ManagerModule } from './manager/manager.module';
 import { InsuranceProfileModule } from './insurance-profile/insurance-profile.module';
 import { InsurancePolicyModule } from './insurance-policy/insurance-policy.module';
+import { EnterpriseInsurancePolicyModule } from './enterprise-insurance-policy/enterprise-insurance-policy.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
 import { OvertimeModule } from './overtime/overtime.module';
@@ -44,6 +45,7 @@ import { PayrollModule } from './payroll/payroll.module';
 		ManagerModule,
 		InsuranceProfileModule,
 		InsurancePolicyModule,
+		EnterpriseInsurancePolicyModule,
 		CalendarModule,
 		LeaveModule,
 		OvertimeModule,
