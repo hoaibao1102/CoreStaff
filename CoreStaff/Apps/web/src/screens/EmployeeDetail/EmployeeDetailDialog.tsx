@@ -1,5 +1,5 @@
-import { hrErrorMessage, mapHrError } from '../../services/hrService';
-import { useState, useCallback, useEffect } from 'react';
+import { cn } from 'cn';
+import { useCallback, useEffect, useState } from 'react';
 import {
     User,
     Briefcase,
@@ -10,27 +10,13 @@ import {
     History,
     Coins,
     Plus,
+    UsersRound,
 } from 'lucide-react';
-import {
-    listSalaryProfiles,
-    getOrganizationAllowances,
-    type SalaryProfile,
-    type OrganizationAllowance,
-} from '../../services/compensation.service';
-import {
-    SalaryProfileCreateDialog,
-    SalaryProfileEditDialog,
-} from '../Compensation/SalaryProfileDialogs';
-
-function formatVnd(val?: number | null): string {
-    if (val === undefined || val === null || Number.isNaN(val)) return '—';
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
-}
-import { cn } from 'cn';
+import { Badge } from '@/components/badge';
 import type { AuthUser } from '../../services/auth';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
 import { Button } from '../../components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/dialog';
 import { Input } from '../../components/input';
 import { Label } from '../../components/label';
 import { Skeleton } from '../../components/skeleton';
@@ -48,6 +34,7 @@ import {
     type EmploymentType,
     type Gender,
 } from '../../lib/types';
+import { hrErrorMessage, mapHrError } from '../../services/hrService';
 import {
     getEmployeeById,
     updateEmployee,
@@ -57,12 +44,27 @@ import {
     getPositions,
     getWorkplaces,
     getEmployees,
+    addDependent,
+    updateDependent,
     type EmployeeProfile,
     type EmploymentHistoryRecord,
     type Department,
     type Position,
     type Workplace,
+    type DependentItem,
+    type DependentRelationship,
+    DEPENDENT_RELATIONSHIP_LABELS,
 } from '../../services/hrService';
+import {
+    listSalaryProfiles,
+    getOrganizationAllowances,
+    type SalaryProfile,
+    type OrganizationAllowance,
+} from '../../services/compensation.service';
+import {
+    SalaryProfileCreateDialog,
+    SalaryProfileEditDialog,
+} from '../Compensation/SalaryProfileDialogs';
 import {
     validateEditPhone,
     validateEditEmail,
@@ -70,6 +72,12 @@ import {
     validateEditJoinDate,
     validateStatusEffectiveDate,
 } from './validation';
+
+/* ───────── Helpers ───────── */
+function formatVnd(val?: number | null): string {
+    if (val === undefined || val === null || Number.isNaN(val)) return '—';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+}
 
 /* ───────── Field Row (display mode) ───────── */
 interface FieldRowProps {
@@ -205,7 +213,7 @@ export function EmployeeDetailDialog(props: {
     );
 }
 
-type TabType = 'personal' | 'employment' | 'compensation' | 'status';
+type TabType = 'personal' | 'employment' | 'compensation' | 'tax' | 'status';
 
 /* ───────── Main Content ───────── */
 function EmployeeDetailContent({
@@ -244,6 +252,23 @@ function EmployeeDetailContent({
 
     const [statusChangeMode, setStatusChangeMode] = useState(false);
     const [savingStatus, setSavingStatus] = useState(false);
+
+    /* Tab 4: Dependents */
+    const [dependentsForm, setDependentsForm] = useState({
+        fullName: '',
+        birthDate: '',
+        idCardNumber: '',
+        relationship: '' as DependentRelationship | '',
+    });
+    const [addingDependent, setAddingDependent] = useState(false);
+    const [editingDependentIndex, setEditingDependentIndex] = useState<number | null>(null);
+    const [editDependentsForm, setEditDependentsForm] = useState({
+        fullName: '',
+        birthDate: '',
+        idCardNumber: '',
+        relationship: '' as DependentRelationship | '',
+        status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
+    });
 
     /* Tab 1: Personal info form state */
     const [personalForm, setPersonalForm] = useState({
@@ -683,6 +708,24 @@ function EmployeeDetailContent({
                                 {salaryProfile?.allowances && salaryProfile.allowances.length > 0 && (
                                     <span className="ml-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-semibold">
                                         {salaryProfile.allowances.length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                className={cn(
+                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    activeTab === 'tax'
+                                        ? "border-primary text-primary font-semibold"
+                                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                                )}
+                                onClick={() => setActiveTab('tax')}
+                            >
+                                <UsersRound className="h-4 w-4" />
+                                <span>Người phụ thuộc</span>
+                                {employee?.dependents && employee.dependents.length > 0 && (
+                                    <span className="ml-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-semibold">
+                                        {employee.dependents.length}
                                     </span>
                                 )}
                             </button>
@@ -1151,7 +1194,124 @@ function EmployeeDetailContent({
                             )}
                         </div>
 
-                        {/* ───────── TAB 3: TRẠNG THÁI & LỊCH SỬ ───────── */}
+                        {/* ───────── TAB 4: NGƯỜI PHỤ THUỘC ───────── */}
+                        <div className={activeTab === 'tax' ? 'block space-y-4' : 'hidden'}>
+                            {!employee?.dependents || employee.dependents.length === 0 ? (
+                                <Card className="rounded-xl border-border shadow-none">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                                    <UsersRound className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <CardTitle className="text-base">Danh sách người phụ thuộc</CardTitle>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {employee?.dependents?.length ?? 0} người phụ thuộc đã đăng ký
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="gap-2 shrink-0 self-start sm:self-auto"
+                                                onClick={() => setAddingDependent(true)}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Thêm người phụ thuộc
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                                            <UsersRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+                                            <h3 className="text-base font-semibold text-foreground">Chưa có người phụ thuộc</h3>
+                                            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                                                Nhân viên này chưa đăng ký người phụ thuộc nào. Bấm <b>"Thêm người phụ thuộc"</b> để bắt đầu.
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <Card className="rounded-xl border-border shadow-none">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                                    <UsersRound className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <CardTitle className="text-base">Danh sách người phụ thuộc</CardTitle>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {employee.dependents.length} người phụ thuộc đã đăng ký
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="gap-2 shrink-0 self-start sm:self-auto"
+                                                onClick={() => setAddingDependent(true)}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Thêm người phụ thuộc
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-3">
+                                            {employee.dependents.map((dep, index) => (
+                                                <div key={index} className={`flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border p-4 transition-colors hover:border-border hover:bg-muted/20 ${dep.status === 'INACTIVE' ? 'opacity-60 bg-muted/10' : ''}`}>
+                                                    <div className="space-y-2 flex-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-semibold text-foreground">{dep.fullName}</span>
+                                                            <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                                                                {DEPENDENT_RELATIONSHIP_LABELS[dep.relationship as DependentRelationship] || dep.relationship}
+                                                            </span>
+                                                            {dep.status && (
+                                                                <Badge variant={dep.status === 'ACTIVE' ? 'success' : 'secondary'}>
+                                                                    {dep.status === 'ACTIVE' ? 'Đang áp dụng' : 'Đã vô hiệu hóa'}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                                            {dep.birthDate && (
+                                                                <p>Ngày sinh: {new Date(dep.birthDate).toLocaleDateString('vi-VN')}</p>
+                                                            )}
+                                                            {dep.idCardNumber && (
+                                                                <p>CCCD: {dep.idCardNumber}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-2 sm:mt-0 sm:ml-4 shrink-0">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                                                            onClick={() => {
+                                                                setEditDependentsForm({
+                                                                    fullName: dep.fullName,
+                                                                    birthDate: dep.birthDate || '',
+                                                                    idCardNumber: dep.idCardNumber || '',
+                                                                    relationship: dep.relationship as DependentRelationship,
+                                                                    status: dep.status || 'ACTIVE',
+                                                                });
+                                                                setEditingDependentIndex(index);
+                                                            }}
+                                                        >
+                                                            <Pencil className="h-4 w-4 mr-1.5" />
+                                                            Sửa
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+
+                        {/* ───────── TAB 5: TRẠNG THÁI & LỊCH SỬ ───────── */}
                         <div className={activeTab === 'status' ? 'block space-y-4' : 'hidden'}>
                             {/* Current Status Overview Card */}
                             <Card className="rounded-xl border-border shadow-none">
@@ -1379,6 +1539,254 @@ function EmployeeDetailContent({
                     }}
                 />
             )}
+
+            {/* Add Dependent Dialog */}
+            <Dialog open={addingDependent} onOpenChange={(open) => { if (!open) { setAddingDependent(false); setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' }); } }}>
+                <DialogContent className="max-w-[520px] gap-0">
+                    <DialogHeader className="border-b border-border px-5 py-5 pr-14">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <UsersRound className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                            <div>
+                                <DialogTitle>Thêm người phụ thuộc</DialogTitle>
+                                <DialogDescription className="mt-1.5">
+                                    Đăng ký thông tin người phụ thuộc để áp dụng giảm trừ thuế TNCN.
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-6">
+                        <div className="space-y-1.5">
+                            <FormLabel htmlFor="dep-full-name" required>Họ và tên</FormLabel>
+                            <Input
+                                id="dep-full-name"
+                                className="h-11"
+                                value={dependentsForm.fullName}
+                                onChange={(e) => setDependentsForm(prev => ({ ...prev, fullName: e.target.value }))}
+                                maxLength={128}
+                                placeholder="VD: Nguyễn Văn B"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <FormLabel htmlFor="dep-birth-date">Ngày sinh</FormLabel>
+                                <Input
+                                    id="dep-birth-date"
+                                    type="date"
+                                    className="h-11"
+                                    value={dependentsForm.birthDate}
+                                    onChange={(e) => setDependentsForm(prev => ({ ...prev, birthDate: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <FormLabel htmlFor="dep-id-card">CCCD/CMND</FormLabel>
+                                <Input
+                                    id="dep-id-card"
+                                    className="h-11"
+                                    value={dependentsForm.idCardNumber}
+                                    onChange={(e) => setDependentsForm(prev => ({ ...prev, idCardNumber: e.target.value.replace(/[^0-9]/g, '').slice(0, 12) }))}
+                                    maxLength={12}
+                                    inputMode="numeric"
+                                    placeholder="VD: 0123456789"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <FormLabel htmlFor="dep-relationship" required>Mối quan hệ với nhân viên</FormLabel>
+                            <select
+                                id="dep-relationship"
+                                className="block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                value={dependentsForm.relationship}
+                                onChange={(event) => {
+                                    const rel = event.target.value as DependentRelationship;
+                                    setDependentsForm(prev => ({ ...prev, relationship: rel }));
+                                }}
+                            >
+                                <option value="">Chọn mối quan hệ</option>
+                                {Object.entries(DEPENDENT_RELATIONSHIP_LABELS).map(([key, label]) => (
+                                    <option key={key} value={key}>{label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">
+                        <Button type="button" variant="outline" onClick={() => {
+                            setAddingDependent(false);
+                            setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' });
+                        }}>Hủy</Button>
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                if (!apiBase || !employeeId) return;
+                                if (!dependentsForm.fullName || !dependentsForm.relationship) {
+                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên và mối quan hệ là bắt buộc.');
+                                    return;
+                                }
+                                setAddingDependent(false);
+                                try {
+                                    await addDependent(apiBase, employeeId, {
+                                        fullName: dependentsForm.fullName,
+                                        birthDate: dependentsForm.birthDate || undefined,
+                                        idCardNumber: dependentsForm.idCardNumber || undefined,
+                                        relationship: dependentsForm.relationship,
+                                    });
+                                    toast.success('Đã thêm người phụ thuộc', 'Thông tin đã được cập nhật.');
+                                    setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' });
+                                    await loadEmployee();
+                                } catch (err: unknown) {
+                                    toast.error('Không thể thêm', mapHrError((err as any)?.code, 'Không thể thêm người phụ thuộc lúc này.'));
+                                }
+                            }}
+                        >
+                            Xác nhận
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Dependent Dialog */}
+            <Dialog open={editingDependentIndex !== null} onOpenChange={(open) => { if (!open) { setEditingDependentIndex(null); } }}>
+                <DialogContent className="max-w-[520px] gap-0">
+                    <DialogHeader className="border-b border-border px-5 py-5 pr-14">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                <Pencil className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                            <div>
+                                <DialogTitle>Cập nhật người phụ thuộc</DialogTitle>
+                                <DialogDescription className="mt-1.5">
+                                    Chỉnh sửa thông tin người phụ thuộc để cập nhật giảm trừ thuế TNCN.
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-6 py-6">
+                        <div className="space-y-1.5">
+                            <FormLabel htmlFor="edit-dep-full-name" required>Họ và tên</FormLabel>
+                            <Input
+                                id="edit-dep-full-name"
+                                className="h-11"
+                                value={editDependentsForm.fullName}
+                                onChange={(e) => setEditDependentsForm(prev => ({ ...prev, fullName: e.target.value }))}
+                                maxLength={128}
+                                placeholder="VD: Nguyễn Văn B"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <FormLabel htmlFor="edit-dep-birth-date">Ngày sinh</FormLabel>
+                                <Input
+                                    id="edit-dep-birth-date"
+                                    type="date"
+                                    className="h-11"
+                                    value={editDependentsForm.birthDate}
+                                    onChange={(e) => setEditDependentsForm(prev => ({ ...prev, birthDate: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <FormLabel htmlFor="edit-dep-id-card">CCCD/CMND</FormLabel>
+                                <Input
+                                    id="edit-dep-id-card"
+                                    className="h-11"
+                                    value={editDependentsForm.idCardNumber}
+                                    onChange={(e) => setEditDependentsForm(prev => ({ ...prev, idCardNumber: e.target.value.replace(/[^0-9]/g, '').slice(0, 12) }))}
+                                    maxLength={12}
+                                    inputMode="numeric"
+                                    placeholder="VD: 0123456789"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <FormLabel htmlFor="edit-dep-relationship" required>Mối quan hệ với nhân viên</FormLabel>
+                            <select
+                                id="edit-dep-relationship"
+                                className="block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                value={editDependentsForm.relationship}
+                                onChange={(event) => {
+                                    const rel = event.target.value as DependentRelationship;
+                                    setEditDependentsForm(prev => ({ ...prev, relationship: rel }));
+                                }}
+                            >
+                                <option value="">Chọn mối quan hệ</option>
+                                {Object.entries(DEPENDENT_RELATIONSHIP_LABELS).map(([key, label]) => (
+                                    <option key={key} value={key}>{label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <FormLabel htmlFor="edit-dep-status">Trạng thái</FormLabel>
+                            <select
+                                id="edit-dep-status"
+                                className="block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                value={editDependentsForm.status}
+                                onChange={(event) => {
+                                    const status = event.target.value as 'ACTIVE' | 'INACTIVE';
+                                    setEditDependentsForm(prev => ({ ...prev, status }));
+                                }}
+                            >
+                                <option value="ACTIVE">Đang áp dụng</option>
+                                <option value="INACTIVE">Đã vô hiệu hóa</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">
+                        <Button type="button" variant="outline" onClick={() => {
+                            setEditingDependentIndex(null);
+                        }}>Hủy</Button>
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                if (!apiBase || !employeeId || editingDependentIndex === null) return;
+                                if (!editDependentsForm.fullName || !editDependentsForm.relationship) {
+                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên và mối quan hệ là bắt buộc.');
+                                    return;
+                                }
+                                try {
+                                    const updatedEmployee = await updateDependent(apiBase, employeeId, editingDependentIndex, {
+                                        fullName: editDependentsForm.fullName,
+                                        birthDate: editDependentsForm.birthDate || undefined,
+                                        idCardNumber: editDependentsForm.idCardNumber || undefined,
+                                        relationship: editDependentsForm.relationship,
+                                        status: editDependentsForm.status,
+                                    });
+                                    toast.success('Đã cập nhật người phụ thuộc', 'Thông tin đã được cập nhật.');
+                                    setEditingDependentIndex(null);
+                                    
+                                    // Optimistic update: cập nhật trực tiếp từ API response
+                                    if (updatedEmployee) {
+                                        setEmployee(prev => {
+                                            if (!prev) return updatedEmployee;
+                                            const updatedDependents = [...(prev.dependents || [])];
+                                            updatedDependents[editingDependentIndex] = {
+                                                fullName: editDependentsForm.fullName,
+                                                birthDate: editDependentsForm.birthDate || undefined,
+                                                idCardNumber: editDependentsForm.idCardNumber || undefined,
+                                                relationship: editDependentsForm.relationship as DependentRelationship,
+                                                status: editDependentsForm.status,
+                                            };
+                                            return { ...prev, dependents: updatedDependents };
+                                        });
+                                    }
+                                } catch (err: unknown) {
+                                    toast.error('Không thể cập nhật', mapHrError((err as any)?.code, 'Không thể cập nhật người phụ thuộc lúc này.'));
+                                }
+                            }}
+                        >
+                            Xác nhận
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

@@ -33,7 +33,7 @@ import { SCHEMA_REGISTRY } from '../src/database/schemas/registry';
  */
 export interface TestApp {
   app: INestApplication;
-  http: () => { get: Function; post: Function; patch: Function; delete: Function };
+  http: () => { get: Function; post: Function; patch: Function; delete: Function; put: Function };
 }
 
 let testConnection: mongoose.Connection | undefined;
@@ -71,7 +71,16 @@ export async function createTestApp(): Promise<TestApp> {
 
   return {
     app,
-    http: () => request(app.getHttpServer()),
+    http: () => {
+      const supertest = request(app.getHttpServer());
+      return {
+        get: (url: string) => supertest.get(url),
+        post: (url: string) => supertest.post(url),
+        patch: (url: string) => supertest.patch(url),
+        delete: (url: string) => supertest.delete(url),
+        put: (url: string) => supertest.put(url),
+      };
+    },
   };
 }
 

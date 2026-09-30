@@ -18,6 +18,7 @@ import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/La
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
+import { TimesheetPeriodScreen } from '../screens/Departments/TimesheetPeriodsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
 import { WorkspaceShell } from '../components/WorkspaceShell';
 import type { ApiSource, HealthResponse } from '../config/api';
@@ -27,6 +28,9 @@ import { CalendarScreen } from '../screens/Scheduling/CalendarScreen';
 import { HrLeaveScreen } from '../screens/Leave/HrLeaveScreen';
 import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
+import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
+import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
+import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -108,7 +112,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
     route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay' ||
     route === '/hr/insurance-profiles' || route === '/hr/policies/insurance' ||
-    route === '/hr/calendar' || route === '/hr/leave-requests';
+    route === '/hr/calendar' || route === '/hr/leave-requests' ||
+    route === '/hr/tax-policies';
   if ((user.role !== 'HR' || !user.organizationId) && hrScoped) {
     return <EmployeeDataState status="forbidden" />;
   }
@@ -167,6 +172,11 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><ShiftTemplateScreen apiBase={apiBase} organizationId={user.organizationId} /></section></WorkspaceShell>;
   }
+  if (route === '/hr/timesheet-periods' && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER')) {
+    if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
+    if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><TimesheetPeriodScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
+  }
 
   // ── HR routes ────────────────────────────────────────────────────────
   if (route === '/app/attendance' && user.role === 'HR') {
@@ -211,6 +221,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
             <OvertimePayPolicyScreen apiBase={apiBase} />
+          ) : route === '/hr/tax-policies' && apiBase ? (
+            <TaxPolicyList apiBase={apiBase} />
           ) : route === '/hr/calendar' && apiBase ? (
             <CalendarScreen apiBase={apiBase} />
           ) : route === '/hr/leave-requests' && apiBase ? (
@@ -219,10 +231,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <EmployeeLeaveScreen apiBase={apiBase} />
           ) : route === '/app/ot' ? (
             <LeaveOvertimeScreen />
-          ) : route === '/hr/periods' || route === '/hr/payroll-runs' ? (
-            // Sprint 3+ — built in later phases; pronounced instead of landing
-            // silently on the dashboard.
+          ) : route === '/hr/periods' ? (
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
+          ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
+            <PayrollRunScreen organizationId={user.organizationId} timesheetPeriodId="" />
           ) : (
             <HrOverviewScreen user={user} />
           )}
@@ -282,6 +294,17 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/ot') {
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
+  }
+
+  // ── Payslip (EMPLOYEE) ───────────────────────────────────────────────
+  if (user.role === 'EMPLOYEE' && route === '/app/payslips' && apiBase) {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <MyPayslipsScreen />
+        </section>
+      </WorkspaceShell>
+    );
   }
 
   // ── Fallback: show dashboard ─────────────────────────────────────────

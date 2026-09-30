@@ -5,6 +5,22 @@ import { EmploymentStatus, EmploymentType, Gender, normalizeEmployeeCode } from 
 export type EmployeeProfileDocument = HydratedDocument<EmployeeProfile>;
 
 /**
+ * DependentItem — người phụ thuộc của nhân viên.
+ * Lưu trực tiếp trong EmployeeProfile, không có effective-dating riêng.
+ * KHÔNG XÓA — dùng status ACTIVE/INACTIVE để audit trail.
+ */
+export interface DependentItem {
+  fullName: string;
+  birthDate?: string;
+  idCardNumber?: string;
+  relationship: 'CON' | 'BO_ME' | 'ANH_EM';
+  /** Trạng thái: ACTIVE = đang tính giảm trừ, INACTIVE = đã hết hiệu lực (ví dụ: con đã trưởng thành).
+   * KHÔNG XÓA bản ghi — giữ lại để audit trail cho payroll history.
+   * Chỉ update qua Edit dialog, không có button vô hiệu hóa riêng. */
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+/**
  * TASK-020 / SRS §15.2A. `User` is the auth identity; `EmployeeProfile` is the
  * HR business record — separate collections linked by `userId` (§30A.2).
  */
@@ -27,6 +43,10 @@ export class EmployeeProfile {
   @Prop({ required: true, enum: Object.values(EmploymentStatus), default: EmploymentStatus.PROBATION })
   employmentStatus: EmploymentStatus;
 
+  /** List of dependents (người phụ thuộc) — stored directly in employee profile. */
+  @Prop({ type: [], default: [] })
+  dependents?: DependentItem[];
+
   @Prop({ required: false, type: Date })
   dateOfBirth?: Date;
 
@@ -42,7 +62,6 @@ export class EmployeeProfile {
   @Prop({ required: false })
   address?: string;
 
-  @Prop({ required: false })
   citizenId?: string;
 
   @Prop({ required: false })

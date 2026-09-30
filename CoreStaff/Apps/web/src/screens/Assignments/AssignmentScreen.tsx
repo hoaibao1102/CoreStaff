@@ -19,7 +19,8 @@ import { ManagerAssignmentsPanel } from './ManagerAssignmentsPanel';
 type StatusFilter = 'active' | 'inactive';
 const PAGE_SIZE = 10;
 
-function formatDate(value: string): string {
+function formatDate(value?: string | null): string {
+  if (!value) return 'Chưa cập nhật';
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.getTime())
     ? 'Chưa cập nhật'

@@ -66,5 +66,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 }
 
 function codeFromBody(msg: string, status: number): string {
-	return looksLikeCode(msg) ? msg : (STATUS_DEFAULT_CODE[status] ?? 'ERROR');
+	const prefix = msg.split(':')[0].trim();
+	return looksLikeCode(prefix) ? prefix : (STATUS_DEFAULT_CODE[status] ?? 'ERROR');
 }

@@ -291,6 +291,81 @@ export class EmployeeService {
 		return this.historyModel.find({ organizationId, employeeProfileId }).sort({ createdAt: -1 }).lean();
 	}
 
+	/** ── Dependent CRUD (embedded in EmployeeProfile) ── */
+
+	/**
+	 * Add a dependent to an employee's profile.
+	 * PATCH /hr/employees/:id/dependents
+	 * Auto-sets status = ACTIVE.
+	 */
+	async addDependent(organizationId: string, id: string, dependent: {
+		fullName: string;
+		birthDate?: string;
+		idCardNumber?: string;
+		relationship: 'CON' | 'BO_ME' | 'ANH_EM';
+	}) {
+		const doc = await this.profileModel
+			.findOneAndUpdate(
+				{ _id: id, organizationId },
+				{ $push: { dependents: { ...dependent, status: 'ACTIVE' as const } } },
+				{ new: true, runValidators: true }
+			)
+			.lean();
+		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+		return (await this.resolveNames(organizationId, [doc]))[0];
+	}
+
+	/**
+	 * Soft-disable a dependent by setting status = INACTIVE.
+	 * DELETE /hr/employees/:id/dependents/:index
+	 *
+	 * Không xóa hẳn bản ghi — giữ lại để audit trail cho payroll history.
+	 */
+	async removeDependent(organizationId: string, id: string, index: number) {
+		const profile = await this.profileModel.findById(id);
+		if (!profile || !profile.dependents) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+		if (index < 0 || index >= profile.dependents.length) {
+			throw new BadRequestException('DEPENDENT_INDEX_OUT_OF_RANGE');
+		}
+
+		// Soft-disable: set status = INACTIVE
+		const dependent = profile.dependents[index];
+		dependent.status = 'INACTIVE';
+		profile.dependents[index] = dependent;
+
+		await profile.save();
+		return (await this.resolveNames(organizationId, [profile.toObject()]))[0];
+	}
+
+	/**
+	 * Update a dependent at a specific index.
+	 * PUT /hr/employees/:id/dependents/:index
+	 * Allows updating status (ACTIVE/INACTIVE).
+	 */
+	async updateDependent(organizationId: string, id: string, index: number, dependent: {
+		fullName?: string;
+		birthDate?: string;
+		idCardNumber?: string;
+		relationship?: 'CON' | 'BO_ME' | 'ANH_EM';
+		status?: 'ACTIVE' | 'INACTIVE';
+	}) {
+		const profile = await this.profileModel.findById(id);
+		if (!profile || !profile.dependents) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+		if (index < 0 || index >= profile.dependents.length) {
+			throw new BadRequestException('DEPENDENT_INDEX_OUT_OF_RANGE');
+		}
+		
+		const dep = profile.dependents[index] as any;
+		if (dependent.fullName !== undefined) dep.fullName = dependent.fullName;
+		if (dependent.birthDate !== undefined) dep.birthDate = dependent.birthDate;
+		if (dependent.idCardNumber !== undefined) dep.idCardNumber = dependent.idCardNumber;
+		if (dependent.relationship !== undefined) dep.relationship = dependent.relationship;
+		if (dependent.status !== undefined) dep.status = dependent.status;
+		
+		await profile.save();
+		return (await this.resolveNames(organizationId, [profile.toObject()]))[0];
+	}
+
 	/** Add display names without changing reference IDs or exposing auth fields. */
 	private async resolveNames<T extends { userId: unknown; departmentId?: unknown; positionId?: unknown; directManagerId?: unknown }>(organizationId: string, rows: T[]) {
 		if (!rows.length) return [];

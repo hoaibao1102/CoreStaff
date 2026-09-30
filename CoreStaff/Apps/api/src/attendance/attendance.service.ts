@@ -29,6 +29,20 @@ import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { ShiftResolverService } from '../hr/shift-template/shift-resolver.service';
 import { OvertimeService } from '../hr/overtime/overtime.service';
+import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../database/schemas/timesheet-period.schema';
+
+/** File upload type matching Express/Multer used by NestJS controllers */
+interface UploadedFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination?: string;
+  filename?: string;
+  path?: string;
+  buffer: Buffer;
+}
 
 @Injectable()
 export class AttendanceService {
@@ -43,6 +57,7 @@ export class AttendanceService {
     @InjectModel('ManagerRequest') private managerRequestModel: Model<any>,
     @InjectModel('EmployeeProfile') private employeeProfileModel: Model<any>,
     @InjectModel('IdempotencyRecord') private idempotencyModel: Model<any>,
+    @InjectModel('TimesheetPeriod') private readonly periodModel: Model<TimesheetPeriodDocument>,
     private haversineService: HaversineService,
     private networkValidatorService: NetworkValidatorService,
     private calculatorService: AttendanceCalculatorService,
@@ -58,6 +73,21 @@ export class AttendanceService {
    */
   getTodayWorkDate(): string {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  }
+
+  /**
+   * TASK-073 — Resolve active timesheet period for a workDate.
+   * Returns periodId so attendance_days can reference which period it belongs to.
+   */
+  private async resolvePeriodId(organizationId: Types.ObjectId, workDate: string): Promise<string | null> {
+    const period = await this.periodModel.findOne({
+      organizationId,
+      status: { $in: [TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING, TimesheetPeriodStatus.READY_TO_CLOSE] },
+      startDate: { $lte: workDate },
+      endDate: { $gte: workDate },
+    }).lean();
+
+    return period ? String(period._id) : null;
   }
 
   /**
@@ -185,7 +215,7 @@ export class AttendanceService {
     };
   }
 
-  private requestHash(operation: 'CHECK_IN' | 'CHECK_OUT', dto: unknown, file?: Express.Multer.File): string {
+  private requestHash(operation: 'CHECK_IN' | 'CHECK_OUT', dto: unknown, file?: UploadedFile): string {
     return createHash('sha256')
       .update(JSON.stringify({ operation, dto, file: file ? createHash('sha256').update(file.buffer).digest('hex') : null }))
       .digest('hex');
@@ -234,7 +264,7 @@ export class AttendanceService {
     employeeId: string,
     organizationId: string,
     dto: CheckInDto,
-    file?: Express.Multer.File,
+    file?: UploadedFile,
     clientIp?: string,
     userAgent?: string,
     idempotencyKey?: string,
@@ -402,6 +432,9 @@ export class AttendanceService {
 
     const calcResult = this.calculatorService.calculate(workDate, recordedAt, undefined, shiftSnapshot);
 
+    // 4.5. Resolve active period for this workDate
+    const periodId = await this.resolvePeriodId(orgObjectId, workDate);
+
     // 5. Lưu AttendanceDay
     let day = existingDay;
     if (!day) {
@@ -409,6 +442,7 @@ export class AttendanceService {
         organizationId: orgObjectId,
         employeeId: empObjectId,
         workDate,
+        periodId: periodId ? new Types.ObjectId(periodId) : undefined,
         workMode: dto.workMode,
         attendanceStatus: AttendanceStatus.CHECKED_IN,
         overallApprovalStatus: approvalStatus,
@@ -425,6 +459,10 @@ export class AttendanceService {
       day.lateMinutes = calcResult.lateMinutes;
       day.shiftSnapshot = shiftSnapshot;
       day.workplaceSnapshot = workplaceSnapshot;
+      // Update periodId if now has an active period
+      if (periodId && !day.periodId) {
+        day.periodId = new Types.ObjectId(periodId);
+      }
       await day.save();
     }
 
@@ -497,7 +535,7 @@ export class AttendanceService {
     employeeId: string,
     organizationId: string,
     dto: CheckOutDto,
-    file?: Express.Multer.File,
+    file?: UploadedFile,
     clientIp?: string,
     userAgent?: string,
     idempotencyKey?: string,
@@ -647,6 +685,12 @@ export class AttendanceService {
     // 3. Tính toán earlyMinutes và workingMinutes
     const checkInAt = day.checkInAt || recordedAt;
     const calcResult = this.calculatorService.calculate(workDate, checkInAt, recordedAt, shift);
+
+    // 3.5. Resolve active period for this workDate (ensure periodId is set)
+    const periodId = await this.resolvePeriodId(orgObjectId, workDate);
+    if (periodId && !day.periodId) {
+      day.periodId = new Types.ObjectId(periodId);
+    }
 
     // 4. Cập nhật AttendanceDay
     day.checkOutAt = recordedAt;
@@ -955,7 +999,7 @@ export class AttendanceService {
     return { stream, mimeType: evidence.mimeType, originalFileName: evidence.originalFileName };
   }
 
-  private validateImageFile(file: Express.Multer.File) {
+  private validateImageFile(file: UploadedFile) {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedMimes.includes(file.mimetype)) {
       throw new BadRequestException('UNSUPPORTED_FILE_TYPE');

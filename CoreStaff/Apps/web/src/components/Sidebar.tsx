@@ -80,6 +80,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/hr/shift-templates', label: 'Ca làm việc', icon: Clock3 },
                         { href: '/hr/calendar', label: 'Lịch tổ chức', icon: CalendarDays },
                         { href: '/hr/leave-requests', label: 'Áp dụng nghỉ phép', icon: FileText },
+                        { href: '/hr/timesheet-periods', label: 'Kỳ công', icon: ClipboardCheck },
                     ]},
                     { label: 'Lương & đãi ngộ', icon: WalletCards, children: [
                         { href: '/hr/salary-profiles', label: 'Hồ sơ lương', icon: WalletCards },
@@ -91,6 +92,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                     { label: 'Chính sách & bảo hiểm', icon: ShieldCheck, children: [
                         { href: '/hr/policies/labor-compliance', label: 'Tuân thủ lao động', icon: ShieldAlert },
                         { href: '/hr/policies/overtime-pay', label: 'Chính sách lương tăng ca', icon: Clock3 },
+                        { href: '/hr/tax-policies', label: 'Biểu thuế TNCN', icon: FileText },
                         { href: '/hr/insurance-profiles', label: 'Hồ sơ bảo hiểm', icon: ShieldCheck },
                         { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
                     ]},
@@ -106,7 +108,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
                         { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
                     ]},
-                    { href: '/hr/periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
+                    { href: '/hr/timesheet-periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
                 ],
             },
         ];
@@ -130,6 +132,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
         { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
         { href: '/app/ot', label: 'Tăng ca & điều chỉnh công', icon: Clock3 },
+        { href: '/app/payslips', label: 'Bảng lương của tôi', icon: WalletCards },
     ];
 
     if (role === 'DEPARTMENT_MANAGER') {
@@ -149,6 +152,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         children: [
                             { href: '/manager/department', label: 'Phòng ban tổng quan', icon: Building2 },
                             { href: '/manager/leave-requests', label: 'Duyệt nghỉ phép', icon: FileText },
+                            { href: '/hr/timesheet-periods', label: 'Kỳ công', icon: ClipboardCheck },
                         ],
                     },
                 ],

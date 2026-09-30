@@ -31,6 +31,12 @@ import { CalendarExceptionSchema } from './calendar-exception.schema';
 import { LeaveRequestSchema } from './leave-request.schema';
 import { EmployeeDayOverrideSchema } from './employee-day-override.schema';
 import { LeaveActionSchema } from './leave-action.schema';
+import { TaxPolicySchema } from './tax-policy.schema';
+import { TimesheetPeriodSchema } from './timesheet-period.schema';
+import { TimesheetSummarySchema } from './timesheet-summary.schema';
+import { PayrollInputSnapshotSchema } from './payroll-input-snapshot.schema';
+import { PayrollRunSchema } from './payroll-run.schema';
+import { PayslipSchema } from './payslip.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -74,6 +80,12 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'LeaveRequest', schema: LeaveRequestSchema },
   { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
   { name: 'LeaveAction', schema: LeaveActionSchema },
+  { name: 'TaxPolicy', schema: TaxPolicySchema },
+  { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
+  { name: 'TimesheetSummary', schema: TimesheetSummarySchema },
+  { name: 'PayrollInputSnapshot', schema: PayrollInputSnapshotSchema },
+  { name: 'PayrollRun', schema: PayrollRunSchema },
+  { name: 'Payslip', schema: PayslipSchema },
 ];
 
 export { OrganizationSchema, UserSchema, UserSessionSchema, PasswordResetTokenSchema };
@@ -82,7 +94,7 @@ export { EmploymentContractSchema, EmployeeDocumentSchema };
 export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
 export { InsuranceProfileSchema };
-export { InsurancePolicySchema };
+export { PayrollInputSnapshotSchema };
 export { InsuranceProfile } from './insurance-profile.schema';
 export { InsurancePolicy } from './insurance-policy.schema';
 export { Organization } from './organization.schema';

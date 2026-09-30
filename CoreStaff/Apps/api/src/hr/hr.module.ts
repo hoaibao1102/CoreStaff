@@ -15,6 +15,9 @@ import { InsurancePolicyModule } from './insurance-policy/insurance-policy.modul
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
 import { OvertimeModule } from './overtime/overtime.module';
+import { TaxPolicyModule } from './tax-policy/tax-policy.module';
+import { TimesheetPeriodModule } from './timesheet/timesheet-period.module';
+import { PayrollModule } from './payroll/payroll.module';
 
 /**
  * HR Core: Sprint 2 catalogs + EmployeeProfile (TASK-020..023), Sprint 3
@@ -22,6 +25,9 @@ import { OvertimeModule } from './overtime/overtime.module';
  * Workplace/ShiftTemplate/Assignment (TASK-024), compensation foundations
  * (TASK-031..035), effective-dated policies (TASK-036/037), and Insurance
  * (TASK-038/039, see Docs/DOCS_DECISION_LOG.md D32 for scope notes).
+ * 
+ * NOTE: TaxProfileModule removed — dependents now stored directly in
+ * EmployeeProfile.dependents (embedded documents pattern).
  */
 @Module({
 	imports: [
@@ -41,6 +47,9 @@ import { OvertimeModule } from './overtime/overtime.module';
 		CalendarModule,
 		LeaveModule,
 		OvertimeModule,
+		TaxPolicyModule,
+		TimesheetPeriodModule,
+		PayrollModule,
 	],
 })
 export class HrModule {}

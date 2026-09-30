@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards, Delete } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -15,6 +15,7 @@ import { EmployeeService } from './employee.service';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
+import { UpdateDependentDto } from './dto/update-dependent.dto';
 
 @ApiTags('HR / Employees')
 @UseGuards(AuthGuard, RolesGuard)
@@ -165,6 +166,59 @@ export class EmployeeController {
 	async history(@Tenant() organizationId: string | null, @Param('id') id: string) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.employees.listHistory(orgId, id);
+		return { success: true, data };
+	}
+
+	/** ── Dependent CRUD (embedded in EmployeeProfile) ── */
+
+	@Roles('HR')
+	@Post(':id/dependents')
+	@ApiOperation({ summary: 'Add a dependent to an employee profile.' })
+	@ApiCreatedSuccess('Dependent added.', [])
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiErrorExamples()
+	async addDependent(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Body() dependent: { fullName: string; birthDate?: string; idCardNumber?: string; relationship: 'CON' | 'BO_ME' | 'ANH_EM' },
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.addDependent(orgId, id, dependent);
+		return { success: true, data };
+	}
+
+	@Roles('HR')
+	@Put(':id/dependents/:index')
+	@ApiOperation({ summary: 'Update a dependent at a specific index.' })
+	@ApiSuccess('Dependent updated.', [])
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiResponse({ status: 400, description: 'DEPENDENT_INDEX_OUT_OF_RANGE | VALIDATION_ERROR' })
+	@ApiErrorExamples()
+	async updateDependent(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Param('index') index: number,
+		@Body() dto: UpdateDependentDto,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.updateDependent(orgId, id, Number(index), dto);
+		return { success: true, data };
+	}
+
+	@Roles('HR')
+	@Delete(':id/dependents/:index')
+	@ApiOperation({ summary: 'Remove a dependent by array index.' })
+	@ApiSuccess('Dependent removed.', [])
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiResponse({ status: 400, description: 'DEPENDENT_INDEX_OUT_OF_RANGE' })
+	@ApiErrorExamples()
+	async removeDependent(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Param('index') index: number,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.removeDependent(orgId, id, Number(index));
 		return { success: true, data };
 	}
 }
