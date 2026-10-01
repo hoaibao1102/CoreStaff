@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/rbac.decorator';
 import { DepartmentSchema } from '../../database/schemas/department.schema';
 import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
+import { EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
 import { DepartmentController } from './department.controller';
 import { DepartmentService } from './department.service';
 
@@ -15,6 +16,7 @@ import { DepartmentService } from './department.service';
 			{ name: 'Department', schema: DepartmentSchema },
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },
+			{ name: 'EmployeeProfile', schema: EmployeeProfileSchema }, // Required for AuthGuard
 		]),
 	],
 	controllers: [DepartmentController],

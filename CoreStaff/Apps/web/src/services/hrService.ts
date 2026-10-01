@@ -11,6 +11,20 @@ import type {
 
 // ───────── API Response Types ─────────
 
+export interface DependentItem {
+    _id?: string;
+    fullName: string;
+    dateOfBirth: string;
+    idCardNumber?: string;
+    relationship: DependentRelationship;
+    isDisabled: boolean;
+    active?: boolean;
+    version?: number;
+    /** Trạng thái: ACTIVE = đang tính giảm trừ, INACTIVE = đã vô hiệu hóa (audit trail).
+     * Chỉ update qua Edit dialog, không có button vô hiệu hóa riêng. */
+    status?: 'ACTIVE' | 'INACTIVE';
+}
+
 export interface EmployeeProfile {
     _id: string;
     fullName?: string | null;
@@ -36,6 +50,7 @@ export interface EmployeeProfile {
     endDate?: string;
     createdAt?: string;
     updatedAt?: string;
+    dependents?: DependentItem[];
     // Resolved names (populated by backend or client-side resolution)
     departmentName?: string | null;
     positionName?: string | null;
@@ -241,6 +256,18 @@ export interface InsurancePolicyCreateDto {
     employerContributionRates: InsuranceEmployerContributionRate[];
 }
 
+// ── Dependent (người phụ thuộc) — stored in employee_profiles.dependents ─
+
+/** Dependent relationship codes (theo luật thuế TNCN Việt Nam). */
+export type DependentRelationship = 'CHILD' | 'SPOUSE' | 'PARENT' | 'SIBLING';
+
+/** Relationship labels in Vietnamese. */
+export const DEPENDENT_RELATIONSHIP_LABELS: Record<DependentRelationship, string> = {
+	CHILD: 'Con',
+	SPOUSE: 'Vợ/Chồng',
+	PARENT: 'Bố/Mẹ',
+	SIBLING: 'Anh/Chị/Em ruột',
+};
 // ── EnterpriseInsurancePolicy (D40) — bảo hiểm thương mại tự nguyện, khác BHXH/BHYT/BHTN ──
 
 export type EnterpriseInsuranceCostBearer = 'EMPLOYER' | 'EMPLOYEE' | 'SHARED';
@@ -503,6 +530,7 @@ async function send<T>(base: string, path: string, options: RequestInit | undefi
     const res = await fetch(apiUrl(base, path), {
         ...options,
         credentials: 'include',
+        cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
             ...(options?.headers || {}),
@@ -518,6 +546,10 @@ async function send<T>(base: string, path: string, options: RequestInit | undefi
         notifySignedOut();
     }
 
+    // HTTP 304 Not Modified: browser cache hit, no body. Return empty array
+    // so callers like listTaxPolicies don't receive null and crash.
+    if (res.status === 304) return [] as unknown as T;
+
     const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
 
     if (!res.ok || body?.success === false) {
@@ -530,11 +562,16 @@ async function send<T>(base: string, path: string, options: RequestInit | undefi
         throw error;
     }
 
-    if (!body || body.success !== true) {
-        throw new Error('Phản hồi từ máy chủ không hợp lệ.');
+    // Backend có thể trả về { success: true, data: T } hoặc trực tiếp T (array/object)
+    if (body && typeof body === 'object' && 'success' in body) {
+        // Có wrapper { success: true, data: ... }
+        if (body.success !== true) {
+            throw new Error('Phản hồi từ máy chủ không hợp lệ.');
+        }
+        return (body as ApiSuccess<T>).data as T;
     }
-
-    return body.data as T;
+    // Không có wrapper — trả về luôn body
+    return body as T;
 }
 
 // ── Employee Directory (HR-only) ───────────────────────────────────────
@@ -689,6 +726,126 @@ export async function createPosition(base: string, payload: CreatePositionPayloa
 export async function updatePosition(base: string, id: string, payload: UpdatePositionPayload): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }); }
 export async function activatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/activate`, { method: 'PATCH' }); }
 export async function deactivatePosition(base: string, id: string): Promise<Position> { return hrRequest<Position>(base, `/api/hr/positions/${encodeURIComponent(id)}/deactivate`, { method: 'PATCH' }); }
+
+// ── Timesheet Period (TASK-072) ───────────────────────────────────────
+
+export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
+
+export interface TimesheetPeriod {
+    _id: string;
+    organizationId: string;
+    period: string; // YYYY-MM
+    status: TimesheetPeriodStatus;
+    version: number;
+    startDate: string;
+    endDate: string;
+    managerSnapshotClosed?: boolean;
+    managerSnapshotClosedBy?: string;
+    managerSnapshotClosedAt?: string;
+    departmentSnapshots?: Array<{ departmentId: string; managerUserId: string; closedAt: string }>;
+    closedBy?: string;
+    closedAt?: string;
+    reopenReason?: string;
+    reopenedBy?: string;
+    reopenedAt?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface CreateTimesheetPeriodDto {
+    period: string; // YYYY-MM
+    startDate: string;
+    endDate: string;
+}
+
+export interface ReopenTimesheetPeriodDto {
+    reason: string;
+}
+
+export async function getTimesheetPeriods(
+    base: string,
+    status?: TimesheetPeriodStatus,
+): Promise<TimesheetPeriod[]> {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return hrRequest<TimesheetPeriod[]>(
+        base,
+        `/api/hr/timesheet-periods${params.size ? `?${params}` : ''}`,
+        { method: 'GET' },
+    );
+}
+
+export async function getTimesheetPeriodById(
+    base: string,
+    id: string,
+): Promise<TimesheetPeriod> {
+    return hrRequest<TimesheetPeriod>(base, `/api/hr/timesheet-periods/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export async function createTimesheetPeriod(
+    base: string,
+    dto: CreateTimesheetPeriodDto,
+): Promise<TimesheetPeriod> {
+    return hrRequest<TimesheetPeriod>(base, '/api/hr/timesheet-periods', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+export async function updateTimesheetPeriodStatus(
+    base: string,
+    id: string,
+    status: TimesheetPeriodStatus,
+): Promise<TimesheetPeriod> {
+    return hrRequest<TimesheetPeriod>(base, `/api/hr/timesheet-periods/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+    });
+}
+
+export async function reopenTimesheetPeriod(
+    base: string,
+    id: string,
+    dto: ReopenTimesheetPeriodDto,
+): Promise<TimesheetPeriod> {
+    return hrRequest<TimesheetPeriod>(base, `/api/hr/timesheet-periods/${encodeURIComponent(id)}/reopen`, {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+    });
+}
+
+export async function previewManagerSnapshot(
+    base: string,
+    id: string,
+    departmentId: string,
+): Promise<{ summaries: any[] }> {
+    return hrRequest<{ summaries: any[] }>(
+        base,
+        `/api/hr/timesheet-periods/${encodeURIComponent(id)}/snapshot-preview?departmentId=${encodeURIComponent(departmentId)}`,
+        { method: 'GET' },
+    );
+}
+
+export async function closeManagerSnapshot(
+    base: string,
+    id: string,
+    departmentId: string,
+): Promise<{ period: TimesheetPeriod; summariesCreated: number; snapshotsCreated: number }> {
+    return hrRequest<{ period: TimesheetPeriod; summariesCreated: number; snapshotsCreated: number }>(
+        base,
+        `/api/hr/timesheet-periods/${encodeURIComponent(id)}/close-snapshot`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ departmentId }),
+        },
+    );
+}
+
+export async function hrClosePeriod(base: string, id: string): Promise<{ period: TimesheetPeriod }> {
+    return hrRequest<{ period: TimesheetPeriod }>(base, `/api/hr/timesheet-periods/${encodeURIComponent(id)}/close`, {
+        method: 'POST',
+    });
+}
 
 export function paginateEmployees(data: EmployeeProfile[], query: string, requestedPage: number) {
     const term = query.trim().toLocaleLowerCase('vi');
@@ -916,6 +1073,145 @@ export async function createInsurancePolicy(base: string, dto: InsurancePolicyCr
     });
 }
 
+// ── Dependent CRUD (embedded in EmployeeProfile) ───────────────────────
+
+export async function addDependent(
+    base: string,
+    employeeId: string,
+    dependent: {
+        fullName: string;
+        dateOfBirth: string;
+        idCardNumber?: string;
+        relationship: DependentRelationship;
+        isDisabled: boolean;
+    },
+): Promise<DependentItem> {
+    return hrRequest<DependentItem>(base, `/api/hr/employees/${employeeId}/dependents`, {
+        method: 'POST',
+        body: JSON.stringify(dependent),
+    });
+}
+
+export async function updateDependent(
+    base: string,
+    dependentId: string,
+    dependent: {
+        fullName?: string;
+        dateOfBirth?: string;
+        idCardNumber?: string;
+        relationship?: DependentRelationship;
+        isDisabled?: boolean;
+        status?: 'ACTIVE' | 'INACTIVE';
+    },
+): Promise<DependentItem> {
+    return hrRequest<DependentItem>(base, `/api/hr/dependents/${encodeURIComponent(dependentId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(dependent),
+    });
+}
+
+export async function removeDependent(
+    base: string,
+    employeeId: string,
+    index: number,
+): Promise<EmployeeProfile> {
+    return hrRequest<EmployeeProfile>(base, `/api/hr/employees/${employeeId}/dependents/${index}`, {
+        method: 'DELETE',
+    });
+}
+
+// ── Tax Policy (HR-only, TASK-041) ─────────────────────────────────────
+
+export interface TaxBracket {
+    upperLimit: number | null;
+    rate: number;
+}
+
+export interface TaxPolicy {
+    _id: string;
+    organizationId: string;
+    effectiveFrom: string;
+    effectiveTo?: string;
+    personalDeduction: number;
+    standardDeduction?: number;
+    dependentDeduction: number;
+    progressiveBrackets: TaxBracket[];
+    roundingRule: string;
+    legalReference: string;
+    version: number;
+    active: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface PitCalculationParams {
+    grossEarnings: number;
+    insuranceBaseSalary: number;
+    personalDeduction: number;
+    dependentDeduction: number;
+    dependentCount: number;
+    brackets: TaxBracket[];
+    roundingRule?: string;
+    earningBreakdown?: Record<string, number>;
+}
+
+export interface PitResult {
+    taxableIncome: number;
+    insuranceDeduction: number;
+    personalDeduction: number;
+    dependentDeduction: number;
+    totalDeductions: number;
+    taxableEarnings: number;
+    pit: number;
+    roundingRule: string;
+}
+
+/** List all tax policies for the organization */
+export async function listTaxPolicies(base: string): Promise<TaxPolicy[]> {
+    return hrRequest<TaxPolicy[]>(base, '/api/hr/policies/tax', { method: 'GET' });
+}
+
+/** Create a new TaxPolicy version */
+export async function createTaxPolicy(
+    base: string,
+    dto: {
+        effectiveFrom: string;
+        effectiveTo?: string;
+        standardDeduction: number;
+        personalDeduction: number;
+        dependentDeduction: number;
+        progressiveBrackets: TaxBracket[];
+        roundingRule?: string;
+        legalReference: string;
+    },
+): Promise<TaxPolicy> {
+    return hrRequest<TaxPolicy>(base, '/api/hr/policies/tax', {
+        method: 'POST',
+        body: JSON.stringify(dto),
+    });
+}
+
+/** Update TaxPolicy (creates new version) */
+export async function updateTaxPolicy(
+    base: string,
+    id: string,
+    dto: Partial<{
+        effectiveFrom: string;
+        effectiveTo: string;
+        standardDeduction: number;
+        personalDeduction: number;
+        dependentDeduction: number;
+        progressiveBrackets: TaxBracket[];
+        roundingRule: string;
+        legalReference: string;
+    }>,
+): Promise<TaxPolicy> {
+    return hrRequest<TaxPolicy>(base, `/api/hr/policies/tax/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+    });
+}
+
 /** D42 — the only allowed mutation on an existing policy: closes an open-ended one so a next version can be created. */
 export async function closeInsurancePolicy(base: string, id: string, effectiveTo: string): Promise<InsurancePolicy> {
     return hrRequest<InsurancePolicy>(base, `/api/hr/policies/insurance/${encodeURIComponent(id)}/close`, {
@@ -939,6 +1235,23 @@ export async function createEnterpriseInsurancePolicy(base: string, dto: Enterpr
     return hrRequest<EnterpriseInsurancePolicy>(base, '/api/hr/policies/enterprise-insurance', {
         method: 'POST',
         body: JSON.stringify(dto),
+    });
+}
+
+/** Get effective TaxPolicy at a specific date */
+export async function getEffectiveTaxPolicy(base: string, date?: string): Promise<TaxPolicy | null> {
+    const params = date ? `?date=${date}` : '';
+    return hrRequest<TaxPolicy | null>(base, `/api/hr/policies/tax/effective${params}`, { method: 'GET' });
+}
+
+/** Preview PIT calculation using current effective policy */
+export async function previewPIT(
+    base: string,
+    params: Omit<PitCalculationParams, 'brackets' | 'personalDeduction' | 'dependentDeduction' | 'roundingRule'>,
+): Promise<PitResult> {
+    return hrRequest<PitResult>(base, '/api/hr/policies/tax/preview-pit', {
+        method: 'POST',
+        body: JSON.stringify(params),
     });
 }
 

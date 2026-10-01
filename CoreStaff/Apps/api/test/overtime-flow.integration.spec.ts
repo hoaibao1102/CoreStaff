@@ -174,7 +174,7 @@ describe('overtime flow (AC-OT-01..06)', () => {
   it('rejects an unknown field before touching the database', async () => {
     const response = await fileOvertime({ ...REQUEST_BODY(), eligibleMinutes: 9999 });
     expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects a second request overlapping the first (BR-OT-04)', async () => {

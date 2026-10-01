@@ -18,6 +18,7 @@ import { EmployeeProfileSchema } from '../database/schemas/employee-profile.sche
 import { UserSchema } from '../database/schemas/user.schema';
 import { UserSessionSchema } from '../database/schemas/user-session.schema';
 import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.schema';
+import { TimesheetPeriodSchema } from '../database/schemas/timesheet-period.schema';
 import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module';
 import { OvertimeModule } from '../hr/overtime/overtime.module';
 
@@ -36,6 +37,7 @@ import { OvertimeModule } from '../hr/overtime/overtime.module';
       { name: 'User', schema: UserSchema },
       { name: 'UserSession', schema: UserSessionSchema },
       { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
+      { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
     ]),
     StorageModule,
     ShiftTemplateModule,

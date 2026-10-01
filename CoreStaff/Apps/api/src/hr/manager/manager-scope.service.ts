@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ManagerAssignmentDocument } from '../../database/schemas/manager-assignment.schema';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
@@ -35,6 +35,47 @@ export class ManagerScopeService {
       .filter(row => (!row.effectiveFrom || new Date(row.effectiveFrom) <= now)
         && (!row.effectiveTo || new Date(row.effectiveTo) >= now))
       .map(row => String(row.departmentId)))];
+  }
+
+  /**
+   * Resolve all employee userIds that belong to a set of departments at a given date.
+   * Combines EmployeeProfile.departmentId with active EmployeeAssignment records.
+   */
+  async resolveEmployeeIdsForDepartments(
+    organizationId: string,
+    departmentIds: string[],
+    asOfDate: Date = new Date(),
+  ): Promise<string[]> {
+    if (!departmentIds.length) return [];
+
+    const departmentObjectIds = departmentIds.map(id => new Types.ObjectId(id));
+
+    // Active assignments to these departments, effective on asOfDate
+    const activeAssignments = await this.employeeAssignments
+      .find({
+        organizationId,
+        departmentId: { $in: departmentObjectIds },
+        active: true,
+        $and: [
+          { $or: [{ effectiveFrom: { $exists: false } }, { effectiveFrom: null }, { effectiveFrom: { $lte: asOfDate.toISOString() } }] },
+          { $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: asOfDate.toISOString() } }] },
+        ],
+      })
+      .lean();
+
+    const assignedUserIds = activeAssignments.map(a => String(a.userId));
+
+    // Profiles whose primary department is in scope
+    const profiles = await this.employees
+      .find({
+        organizationId,
+        departmentId: { $in: departmentObjectIds },
+      })
+      .lean();
+
+    const profileUserIds = profiles.map(p => String(p.userId));
+
+    return [...new Set([...assignedUserIds, ...profileUserIds])];
   }
 
   async getContext(organizationId: string, managerUserId: string, now = new Date()) {

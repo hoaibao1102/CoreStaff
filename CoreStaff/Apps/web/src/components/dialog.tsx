@@ -45,4 +45,8 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
   return <DialogPrimitive.Description className={cn('text-sm text-muted-foreground', className)} {...props} />;
 }
 
-export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription };
+function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
+  return <div className={cn('flex shrink-0 items-center justify-end gap-2 p-6 pt-0', className)} {...props} />;
+}
+
+export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter };

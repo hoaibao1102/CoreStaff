@@ -10,7 +10,6 @@
     "start:prod": "node dist/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
-    "test:watch": "jest --watch",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
     "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
     "seed": "ts-node-script src/database/seed/seed.ts",
@@ -19,11 +18,33 @@
     "migrate:shift-scope": "ts-node-script scripts/migrate-shift-scope.ts --apply",
     "seed:compensation:dry": "ts-node-script scripts/seed-compensation.ts",
     "seed:compensation": "ts-node-script scripts/seed-compensation.ts --apply",
+    "seed:payroll:aug": "ts-node-script scripts/seed-payroll-aug.ts",
+    "seed:payroll": "ts-node-script scripts/seed-payroll-data.ts",
+    "seed:clean": "ts-node-script scripts/clean-seed-data.ts",
+    "seed:full": "ts-node-script scripts/seed-full-data.ts",
+    "seed:payroll:full": "ts-node-script scripts/seed-payroll-full-flow.ts",
+    "seed:full:new": "ts-node scripts/seed-full-data-new.ts",
+    "seed:attendance": "ts-node-script scripts/seed-attendance-for-period.ts",
+    "seed:full:org": "ts-node-script scripts/seed-full-organization.ts",
     "verify:compensation": "ts-node-script scripts/verify-compensation-seed.ts",
     "migrate:insurance-mandatory:dry": "ts-node-script scripts/migrate-insurance-mandatory.ts",
     "migrate:insurance-mandatory": "ts-node-script scripts/migrate-insurance-mandatory.ts --apply",
     "seed:enterprise-insurance:dry": "ts-node-script scripts/seed-enterprise-insurance-policy.ts",
-    "seed:enterprise-insurance": "ts-node-script scripts/seed-enterprise-insurance-policy.ts --apply"
+    "seed:enterprise-insurance": "ts-node-script scripts/seed-enterprise-insurance-policy.ts --apply",
+    "seed:payroll:e2e:dry": "ts-node-script scripts/seed-payroll-e2e.ts --dry-run",
+    "seed:payroll:e2e": "ts-node-script scripts/seed-payroll-e2e.ts --apply",
+    "verify:payroll:e2e": "ts-node-script scripts/verify-payroll-e2e-seed.ts"
+    ,"seed:target:september:dry": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
+    ,"seed:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
+    ,"verify:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
+    ,"verify:target:snapshot-preview": "ts-node-script scripts/verify-target-snapshot-preview.ts"
+    ,"seed:september:compliance-calendar:dry": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
+    ,"seed:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
+    ,"verify:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
+    ,"audit:september:workforce": "ts-node-script scripts/audit-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
+    ,"seed:september:workforce:dry": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
+    ,"seed:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
+    ,"verify:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1135.0",

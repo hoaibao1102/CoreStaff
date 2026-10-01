@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/local-api\/socket\.io/, '/socket.io'),
       },
-      '/api': authProxy(env.VITE_API_URL || 'https://18-141-68-40.sslip.io'),
+      '/api': authProxy(env.VITE_API_URL || 'http://localhost:3000'),
       '/local-api': authProxy(env.VITE_API_FALLBACK_URL || 'http://localhost:3000', true),
     },
   },

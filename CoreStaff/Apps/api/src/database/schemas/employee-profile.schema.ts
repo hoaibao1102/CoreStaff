@@ -1,8 +1,53 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 import { EmploymentStatus, EmploymentType, Gender, normalizeEmployeeCode } from './enums';
 
 export type EmployeeProfileDocument = HydratedDocument<EmployeeProfile>;
+
+/**
+ * DependentItem — người phụ thuộc của nhân viên.
+ * Lưu trực tiếp trong EmployeeProfile, không có effective-dating riêng.
+ * KHÔNG XÓA — soft-delete bằng cách set `active = false` để giữ audit trail
+ * cho payroll history. `version` tăng mỗi lần update.
+ */
+@Schema({ _id: true, timestamps: false })
+export class DependentItem {
+  /** Auto-assigned Mongo _id của subdocument — dùng cho route /dependents/:id. */
+  @Prop({ type: Types.ObjectId, auto: true })
+  _id?: Types.ObjectId;
+
+  @Prop({ required: true })
+  fullName: string;
+
+  /** Ngày sinh (YYYY-MM-DD) — bắt buộc, không được ở tương lai (rule DOB_FUTURE_DATE). */
+  @Prop({ required: true })
+  dateOfBirth: string;
+
+  @Prop({ required: false })
+  idCardNumber?: string;
+
+  /** Quan hệ với nhân viên — CHILD/SPOUSE/PARENT/SIBLING, v.v. */
+  @Prop({ required: true })
+  relationship: string;
+
+  /** Người phụ thuộc khuyên tật → áp dụng mức giảm trừ cao hơn (Luật Thuế TNCN). */
+  @Prop({ required: true, default: false })
+  isDisabled: boolean;
+
+  /** ACTIVE = đang tính giảm trừ, INACTIVE = đã hết hiệu lực (deprecated). */
+  @Prop({ required: true, default: true })
+  active: boolean;
+
+  /** Audit status tương thích ngược với code cũ (status ACTIVE/INACTIVE). */
+  @Prop({ required: true, default: 'ACTIVE' })
+  status: 'ACTIVE' | 'INACTIVE';
+
+  /** Tăng mỗi lần update để hỗ trợ optimistic concurrency. */
+  @Prop({ required: true, default: 1, min: 1 })
+  version: number;
+}
+
+export const DependentItemSchema = SchemaFactory.createForClass(DependentItem);
 
 /**
  * TASK-020 / SRS §15.2A. `User` is the auth identity; `EmployeeProfile` is the
@@ -27,6 +72,10 @@ export class EmployeeProfile {
   @Prop({ required: true, enum: Object.values(EmploymentStatus), default: EmploymentStatus.PROBATION })
   employmentStatus: EmploymentStatus;
 
+  /** List of dependents (người phụ thuộc) — stored directly in employee profile. */
+  @Prop({ type: [DependentItemSchema], default: [] })
+  dependents?: DependentItem[];
+
   @Prop({ required: false, type: Date })
   dateOfBirth?: Date;
 
@@ -42,7 +91,6 @@ export class EmployeeProfile {
   @Prop({ required: false })
   address?: string;
 
-  @Prop({ required: false })
   citizenId?: string;
 
   @Prop({ required: false })

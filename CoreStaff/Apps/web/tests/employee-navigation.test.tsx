@@ -12,6 +12,7 @@ jest.mock('../src/config/api', () => ({
     health: { status: 'ok', service: 'corestaff-api', mongo: 'configured', timezone: 'Asia/Ho_Chi_Minh' },
   }),
   apiUrl: (base: string, path: string) => base + path,
+  getApiBaseSync: () => 'https://api.example.test',
 }));
 
 const user: AuthUser = {

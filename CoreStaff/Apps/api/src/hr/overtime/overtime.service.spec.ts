@@ -241,6 +241,16 @@ describe('OvertimeService', () => {
         .resolves.toBeUndefined();
     });
 
+    it('does not subtract the assigned shift when the organization calendar marks a public holiday', async () => {
+      const { service } = build({
+        calendar: [{ organizationId: ORG, date: WORK_DATE, type: 'PUBLIC_HOLIDAY', name: 'Quốc khánh' }],
+      });
+
+      const context = await service.dayContext(ORG, USER, WORK_DATE);
+
+      expect(service.scheduledIntervals(context)).toEqual([]);
+    });
+
     it('applies the same rule to the manager-approved window', async () => {
       const { service } = build();
       await expect(service.precheckApproval(ORG, request({ approvedStart: '2026-09-22T09:00:00.000Z', approvedEnd: '2026-09-22T12:00:00.000Z' })))

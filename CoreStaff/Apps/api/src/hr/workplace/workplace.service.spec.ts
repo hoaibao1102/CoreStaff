@@ -229,7 +229,7 @@ describe('POST /hr/workplaces — WorkplaceService.create', () => {
 				allowedRadiusMeters: 200,
 				maximumAccuracyMeters: 100,
 			}),
-		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_CODE_ALREADY_EXISTS') } } });
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_ERROR', message: expect.stringContaining('WORKPLACE_CODE_ALREADY_EXISTS') } } });
 	});
 
 	it('C3: rejects duplicate coordinates within the same tenant', async () => {
@@ -246,7 +246,7 @@ describe('POST /hr/workplaces — WorkplaceService.create', () => {
 				allowedRadiusMeters: 200,
 				maximumAccuracyMeters: 100,
 			}),
-		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_ERROR', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
 	});
 
 	it('C4: allows same code/coords in different tenants', async () => {
@@ -405,7 +405,7 @@ describe('PATCH /hr/workplaces/:id — WorkplaceService.update', () => {
 				latitude: 10.8,
 				longitude: 106.7,
 			}),
-		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_FAILED', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
+		).rejects.toMatchObject({ response: { error: { code: 'VALIDATION_ERROR', message: expect.stringContaining('WORKPLACE_COORDINATES_ALREADY_EXISTS') } } });
 	});
 
 	it('U3: throws NotFoundException when workplace does not exist', async () => {

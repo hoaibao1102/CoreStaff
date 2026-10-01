@@ -9,6 +9,7 @@ import { PositionSchema } from '../../database/schemas/position.schema';
 import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { EmployeeController } from './employee.controller';
+import { DependentsController } from './dependents.controller';
 import { EmployeeService } from './employee.service';
 
 @Module({
@@ -23,7 +24,7 @@ import { EmployeeService } from './employee.service';
 			{ name: 'UserSession', schema: UserSessionSchema },
 		]),
 	],
-	controllers: [EmployeeController],
+	controllers: [EmployeeController, DependentsController],
 	providers: [EmployeeService, RolesGuard],
 	exports: [EmployeeService],
 })

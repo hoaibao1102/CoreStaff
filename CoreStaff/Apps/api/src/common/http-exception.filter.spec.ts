@@ -57,11 +57,11 @@ describe('AllExceptionsFilter — SRS §16.1 envelope', () => {
 		expect((r.body.error as { code: string }).code).toBe('FORBIDDEN');
 	});
 
-	it('maps ValidationPipe array message to VALIDATION_FAILED with details', () => {
+	it('maps ValidationPipe array message to VALIDATION_ERROR with details', () => {
 		const r = run(new BadRequestException(['email must be an email', 'password too short']));
 		expect(r.status).toBe(400);
 		const err = r.body.error as { code: string; details: unknown };
-		expect(err.code).toBe('VALIDATION_FAILED');
+		expect(err.code).toBe('VALIDATION_ERROR');
 		expect(err.details).toEqual(['email must be an email', 'password too short']);
 	});
 
