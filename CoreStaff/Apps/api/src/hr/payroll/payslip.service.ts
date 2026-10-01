@@ -9,6 +9,38 @@ import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.
 import { InsuranceService } from './insurance.service';
 import { PitService } from './pit.service';
 
+type EarningItem = { type: string; label: string; amount: number; taxable: boolean };
+
+export function buildPayslipEarnings(snapshot: any): {
+  grossEarnings: number;
+  earningBreakdown: EarningItem[];
+  allowanceBreakdown: EarningItem[];
+} {
+  const allowanceBreakdown: EarningItem[] = Array.isArray(snapshot.allowanceBreakdown)
+    ? snapshot.allowanceBreakdown.map((item: any) => ({
+        type: item.type,
+        label: item.label || item.type,
+        amount: item.amount || 0,
+        taxable: item.taxable !== false,
+      }))
+    : [];
+  const totalAllowances = allowanceBreakdown.length
+    ? allowanceBreakdown.reduce((sum, item) => sum + item.amount, 0)
+    : snapshot.totalAllowances || 0;
+  const earningBreakdown: EarningItem[] = [
+    { type: 'BASE_SALARY', label: 'Lương cơ bản theo công', amount: snapshot.proratedBaseSalary || 0, taxable: true },
+    ...(totalAllowances > 0 ? [{ type: 'ALLOWANCE', label: 'Tổng phụ cấp', amount: totalAllowances, taxable: true }] : []),
+    ...(snapshot.attendanceBonus > 0 ? [{ type: 'ATTENDANCE_BONUS', label: 'Thưởng chuyên cần', amount: snapshot.attendanceBonus, taxable: true }] : []),
+    ...(snapshot.kpiBonus > 0 ? [{ type: 'KPI_BONUS', label: 'Thưởng KPI', amount: snapshot.kpiBonus, taxable: true }] : []),
+    ...(snapshot.otPay > 0 ? [{ type: 'OVERTIME', label: 'Tiền làm thêm giờ', amount: snapshot.otPay, taxable: false }] : []),
+  ];
+  return {
+    grossEarnings: earningBreakdown.reduce((sum, item) => sum + item.amount, 0),
+    earningBreakdown,
+    allowanceBreakdown,
+  };
+}
+
 /**
  * TASK-098/099 — Payslip generation, release, and self-view service.
  * 
@@ -26,6 +58,28 @@ export class PayslipService {
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
   ) {}
+
+  /**
+   * Remove only unpublished payslips before recalculating a payroll run.
+   * A released or viewed payslip is immutable and blocks recalculation.
+   */
+  async deleteGeneratedForRecalculation(payrollRunId: string): Promise<number> {
+    const runObjectId = new Types.ObjectId(payrollRunId);
+    const immutablePayslipExists = await this.payslipModel.exists({
+      payrollRunId: runObjectId,
+      status: { $ne: PayslipStatus.GENERATED },
+    });
+
+    if (immutablePayslipExists) {
+      throw new BadRequestException('CANNOT_RECALCULATE_RELEASED_PAYSLIPS');
+    }
+
+    const result = await this.payslipModel.deleteMany({
+      payrollRunId: runObjectId,
+      status: PayslipStatus.GENERATED,
+    });
+    return result.deletedCount;
+  }
 
   /**
    * Generate payslips for all employees in a payroll run.
@@ -104,11 +158,8 @@ export class PayslipService {
     // Step 2: Taxable Gross = Gross - OT_nonTaxable - NonTaxableAllowances
     // Step 3: Taxable Earnings = Taxable Gross - Insurance - Deductions
     
-    const grossEarnings =
-      snapshot.proratedBaseSalary +
-      snapshot.totalAllowances +
-      snapshot.attendanceBonus +
-      snapshot.otPay; // ✅ Tổng thu nhập ĐẦY ĐỦ (bao gồm cả otNonTaxable + otTaxable)
+    const earnings = buildPayslipEarnings(snapshot);
+    const grossEarnings = earnings.grossEarnings;
 
     const totalInsurance =
       snapshot.socialInsurance +
@@ -140,39 +191,7 @@ export class PayslipService {
       console.warn(`Reconciliation variance for ${snapshot.employeeProfileId}: ${variance} VND`);
     }
 
-    // Build earning breakdown
-    const earningBreakdown = [
-      { type: 'BASE_SALARY', label: 'Lương cơ bản', amount: snapshot.proratedBaseSalary, taxable: true },
-      ...(snapshot.totalAllowances > 0 ? [{ type: 'ALLOWANCE', label: 'Trợ cấp', amount: snapshot.totalAllowances, taxable: true }] : []),
-      ...(snapshot.attendanceBonus > 0 ? [{ type: 'ATTENDANCE_BONUS', label: 'Thưởng chấm công', amount: snapshot.attendanceBonus, taxable: true }] : []),
-      ...(snapshot.otPay > 0 ? [{ type: 'OVERTIME', label: 'Làm thêm giờ', amount: snapshot.otPay, taxable: false }] : []),
-    ];
-
-    // Build ALLOWANCE breakdown (chi tiết từng loại phụ cấp)
-    // Logic miễn thuế:
-    // - MIỄN THUẾ: Tai nạn LĐ, thai sản, dưỡng sức
-    // - MIỄN THUẾ: Trợ cấp ăn uống ≤ 1,200,000 VND/tháng
-    // - CHỊU THUẾ: Tất cả các loại phụ cấp/trợ cấp khác
-    // - CHỊU THUẾ: Trợ cấp ăn uống > 1,200,000 VND → phần dư chịu thuế
-    const MEAL_ALLOWANCE_THRESHOLD = 1_200_000;
-    
-    const allowanceBreakdown = snapshot.allowanceBreakdown && snapshot.allowanceBreakdown.length > 0
-      ? snapshot.allowanceBreakdown.map((a: any) => {
-          // Xử lý trợ cấp ăn uống: nếu > 1.2M thì chia thành 2 phần
-          if (a.type === 'meal' && a.amount > MEAL_ALLOWANCE_THRESHOLD) {
-            return [
-              { type: 'meal', label: `${a.label} (miễn thuế)`, amount: MEAL_ALLOWANCE_THRESHOLD, taxable: false },
-              { type: 'meal_excess', label: `${a.label} (phần vượt)`, amount: a.amount - MEAL_ALLOWANCE_THRESHOLD, taxable: true },
-            ];
-          }
-          return {
-            type: a.type,
-            label: a.label || a.type,
-            amount: a.amount,
-            taxable: a.taxable !== undefined ? a.taxable : true,
-          };
-        }).flat()
-      : []; // Nếu không có breakdown, sẽ hiển thị tổng ở earningBreakdown
+    const { earningBreakdown, allowanceBreakdown } = earnings;
 
     // Build OT breakdown (chi tiết làm thêm giờ theo luật thuế)
     // ✅ LOGIC ĐÚNG: 1 tháng = 192 giờ chuẩn, phút → giờ trước khi tính

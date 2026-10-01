@@ -1,4 +1,5 @@
 import { hrRequest } from './hrService';
+import { getApiBaseSync } from '../config/api';
 
 /**
  * Employee-specific API client.
@@ -9,9 +10,8 @@ export const employeeRequest = {
      * GET request for employee endpoints.
      */
     get: <T>(path: string, options?: RequestInit): Promise<T> => {
-        // Prepend /api/ because NestJS has globalPrefix 'api'
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(import.meta.env.VITE_API_BASE || 'http://localhost:3000', apiPath, options);
+        return hrRequest<T>(getApiBaseSync(), apiPath, options);
     },
 
     /**
@@ -19,7 +19,7 @@ export const employeeRequest = {
      */
     post: <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(import.meta.env.VITE_API_BASE || 'http://localhost:3000', apiPath, {
+        return hrRequest<T>(getApiBaseSync(), apiPath, {
             ...options,
             method: 'POST',
             body: body ? JSON.stringify(body) : undefined,
@@ -31,7 +31,7 @@ export const employeeRequest = {
      */
     put: <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(import.meta.env.VITE_API_BASE || 'http://localhost:3000', apiPath, {
+        return hrRequest<T>(getApiBaseSync(), apiPath, {
             ...options,
             method: 'PUT',
             body: body ? JSON.stringify(body) : undefined,
@@ -43,7 +43,7 @@ export const employeeRequest = {
      */
     delete: <T>(path: string, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(import.meta.env.VITE_API_BASE || 'http://localhost:3000', apiPath, {
+        return hrRequest<T>(getApiBaseSync(), apiPath, {
             ...options,
             method: 'DELETE',
         });

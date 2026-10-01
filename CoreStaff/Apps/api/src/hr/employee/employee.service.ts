@@ -1,20 +1,29 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { Connection, Model } from 'mongoose';
+import { Connection, Model, Types, isValidObjectId } from 'mongoose';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { PositionDocument } from '../../database/schemas/position.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
-import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
+import { DependentItem, EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { EmploymentHistoryDocument } from '../../database/schemas/employment-history.schema';
 import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
+import { CreateDependentDto } from './dto/create-dependent.dto';
+import { UpdateDependentDto } from './dto/update-dependent.dto';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../../auth/strategies/password-policy';
 import { provisionAccount, attachProfile, type AccountInput } from '../../database/seed/provision';
 
 const DUPLICATE_KEY_ERROR = 11000;
+
+/** Vietnam wall-clock "today" — avoids running this in UTC and accepting 1 day in the future. */
+function todayVN(): string {
+	const now = new Date();
+	const offsetMs = 7 * 60 * 60 * 1000;
+	return new Date(now.getTime() + offsetMs).toISOString().slice(0, 10);
+}
 
 interface RefFields {
 	departmentId?: string;
@@ -295,75 +304,171 @@ export class EmployeeService {
 
 	/**
 	 * Add a dependent to an employee's profile.
-	 * PATCH /hr/employees/:id/dependents
-	 * Auto-sets status = ACTIVE.
+	 * POST /hr/employees/:id/dependents
+	 * Returns the newly-created dependent subdocument (with its generated _id,
+	 * `active: true`, `version: 1`, etc.).
 	 */
-	async addDependent(organizationId: string, id: string, dependent: {
-		fullName: string;
-		birthDate?: string;
-		idCardNumber?: string;
-		relationship: 'CON' | 'BO_ME' | 'ANH_EM';
-	}) {
-		const doc = await this.profileModel
-			.findOneAndUpdate(
-				{ _id: id, organizationId },
-				{ $push: { dependents: { ...dependent, status: 'ACTIVE' as const } } },
-				{ new: true, runValidators: true }
-			)
+	async addDependent(
+		organizationId: string,
+		profileId: string,
+		dto: CreateDependentDto,
+	): Promise<Record<string, unknown>> {
+		const today = todayVN();
+		if (dto.dateOfBirth > today) {
+			throw new BadRequestException('DOB_FUTURE_DATE');
+		}
+		const profile = await this.profileModel.findOne({ _id: profileId, organizationId });
+		if (!profile) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+
+		const dependent: DependentItem = {
+			_id: new Types.ObjectId(),
+			fullName: dto.fullName,
+			dateOfBirth: dto.dateOfBirth,
+			relationship: dto.relationship,
+			isDisabled: dto.isDisabled,
+			idCardNumber: dto.idCardNumber,
+			active: true,
+			status: 'ACTIVE',
+			version: 1,
+		};
+		profile.dependents = profile.dependents ?? [];
+		profile.dependents.push(dependent);
+		await profile.save();
+
+		const subdoc = profile.dependents[profile.dependents.length - 1];
+		return this.serializeDependent(subdoc as DependentItem);
+	}
+
+	/** GET /hr/employees/:id/dependents — list every dependent on the profile. */
+	async listDependents(organizationId: string, profileId: string): Promise<Record<string, unknown>[]> {
+		const profile = await this.profileModel
+			.findOne({ _id: profileId, organizationId })
+			.select('dependents')
 			.lean();
-		if (!doc) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		return (await this.resolveNames(organizationId, [doc]))[0];
+		if (!profile) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+		return (profile.dependents ?? []).map((d) => this.serializeDependent(d as DependentItem));
 	}
 
 	/**
-	 * Soft-disable a dependent by setting status = INACTIVE.
-	 * DELETE /hr/employees/:id/dependents/:index
-	 *
-	 * Không xóa hẳn bản ghi — giữ lại để audit trail cho payroll history.
+	 * PUT /hr/dependents/:id — update a dependent by its subdocument _id.
+	 * Scans the tenant's profiles for the embedded dependent (cheap: profiles
+	 * are page-sized documents, not a separate collection).
 	 */
-	async removeDependent(organizationId: string, id: string, index: number) {
-		const profile = await this.profileModel.findById(id);
-		if (!profile || !profile.dependents) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-		if (index < 0 || index >= profile.dependents.length) {
-			throw new BadRequestException('DEPENDENT_INDEX_OUT_OF_RANGE');
+	async updateDependentById(
+		organizationId: string,
+		dependentId: string,
+		dto: UpdateDependentDto,
+	): Promise<Record<string, unknown>> {
+		if (!isValidObjectId(dependentId)) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+
+		if (dto.dateOfBirth !== undefined) {
+			const today = todayVN();
+			if (dto.dateOfBirth > today) {
+				throw new BadRequestException('DOB_FUTURE_DATE');
+			}
 		}
 
-		// Soft-disable: set status = INACTIVE
-		const dependent = profile.dependents[index];
-		dependent.status = 'INACTIVE';
-		profile.dependents[index] = dependent;
+		const profile = await this.profileModel.findOne({
+			organizationId,
+			'dependents._id': new Types.ObjectId(dependentId),
+		});
+		if (!profile) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+
+		const dep = profile.dependents?.find((d) => String(d._id) === dependentId);
+		if (!dep) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+
+		if (dto.fullName !== undefined) dep.fullName = dto.fullName;
+		if (dto.dateOfBirth !== undefined) dep.dateOfBirth = dto.dateOfBirth;
+		if (dto.idCardNumber !== undefined) dep.idCardNumber = dto.idCardNumber;
+		if (dto.relationship !== undefined) dep.relationship = dto.relationship;
+		if (dto.isDisabled !== undefined) dep.isDisabled = dto.isDisabled;
+		if (dto.status !== undefined) {
+			dep.status = dto.status;
+			dep.active = dto.status === 'ACTIVE';
+		}
+		dep.version = (dep.version ?? 1) + 1;
 
 		await profile.save();
-		return (await this.resolveNames(organizationId, [profile.toObject()]))[0];
+		return this.serializeDependent(dep as DependentItem);
 	}
 
 	/**
-	 * Update a dependent at a specific index.
-	 * PUT /hr/employees/:id/dependents/:index
-	 * Allows updating status (ACTIVE/INACTIVE).
+	 * GET /hr/dependents/:id — read a dependent by subdocument id (used by the
+	 * tenant-isolation check in the spec).
 	 */
-	async updateDependent(organizationId: string, id: string, index: number, dependent: {
-		fullName?: string;
-		birthDate?: string;
-		idCardNumber?: string;
-		relationship?: 'CON' | 'BO_ME' | 'ANH_EM';
-		status?: 'ACTIVE' | 'INACTIVE';
-	}) {
-		const profile = await this.profileModel.findById(id);
+	async getDependentById(organizationId: string, dependentId: string): Promise<Record<string, unknown>> {
+		if (!isValidObjectId(dependentId)) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+		const profile = await this.profileModel
+			.findOne({ organizationId, 'dependents._id': new Types.ObjectId(dependentId) })
+			.select('dependents')
+			.lean();
+		if (!profile) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+		const dep = (profile.dependents ?? []).find((d) => String(d._id) === dependentId);
+		if (!dep) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+		return this.serializeDependent(dep as DependentItem);
+	}
+
+	/**
+	 * DELETE /hr/dependents/:id — soft-delete by setting `active = false` and
+	 * `status = 'INACTIVE'`. The record stays for payroll audit.
+	 */
+	async deactivateDependentById(organizationId: string, dependentId: string): Promise<Record<string, unknown>> {
+		if (!isValidObjectId(dependentId)) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+		const profile = await this.profileModel.findOne({
+			organizationId,
+			'dependents._id': new Types.ObjectId(dependentId),
+		});
+		if (!profile) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+
+		const dep = profile.dependents?.find((d) => String(d._id) === dependentId);
+		if (!dep) throw new NotFoundException('DEPENDENT_NOT_FOUND');
+
+		dep.active = false;
+		dep.status = 'INACTIVE';
+		dep.version = (dep.version ?? 1) + 1;
+		await profile.save();
+		return this.serializeDependent(dep as DependentItem);
+	}
+
+	/**
+	 * Legacy index-based soft-delete (DELETE /hr/employees/:id/dependents/:index).
+	 * If the index is out of range, 404s — the caller asked for a slot that
+	 * doesn't exist, which is the same as "not found".
+	 */
+	async updateDependentLegacy(
+		organizationId: string,
+		profileId: string,
+		index: number,
+	): Promise<Record<string, unknown>> {
+		const profile = await this.profileModel.findOne({ _id: profileId, organizationId });
 		if (!profile || !profile.dependents) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
 		if (index < 0 || index >= profile.dependents.length) {
-			throw new BadRequestException('DEPENDENT_INDEX_OUT_OF_RANGE');
+			throw new NotFoundException('DEPENDENT_NOT_FOUND');
 		}
-		
-		const dep = profile.dependents[index] as any;
-		if (dependent.fullName !== undefined) dep.fullName = dependent.fullName;
-		if (dependent.birthDate !== undefined) dep.birthDate = dependent.birthDate;
-		if (dependent.idCardNumber !== undefined) dep.idCardNumber = dependent.idCardNumber;
-		if (dependent.relationship !== undefined) dep.relationship = dependent.relationship;
-		if (dependent.status !== undefined) dep.status = dependent.status;
-		
+		const dep = profile.dependents[index];
+		dep.active = false;
+		dep.status = 'INACTIVE';
+		dep.version = (dep.version ?? 1) + 1;
 		await profile.save();
-		return (await this.resolveNames(organizationId, [profile.toObject()]))[0];
+		return this.serializeDependent(dep as DependentItem);
+	}
+
+	/** Convert a Dependent subdoc into the API response shape. */
+	private serializeDependent(dep: DependentItem): Record<string, unknown> {
+		const obj = (dep as unknown as Record<string, unknown>).toObject
+			? (dep as unknown as { toObject(): Record<string, unknown> }).toObject()
+			: { ...dep };
+		return {
+			_id: String(obj._id),
+			fullName: obj.fullName,
+			dateOfBirth: obj.dateOfBirth,
+			idCardNumber: obj.idCardNumber,
+			relationship: obj.relationship,
+			isDisabled: obj.isDisabled,
+			active: obj.active,
+			status: obj.status,
+			version: obj.version,
+		};
 	}
 
 	/** Add display names without changing reference IDs or exposing auth fields. */

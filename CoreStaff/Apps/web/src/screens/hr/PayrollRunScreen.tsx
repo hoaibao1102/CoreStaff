@@ -12,8 +12,6 @@ import {
 import { PayslipPreviewDialog } from './PayslipPreviewDialog';
 import { hrRequest } from '@/services/hrService';
 
-const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
-
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -49,16 +47,16 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /** Typed API helpers */
-async function hrGet<T>(path: string): Promise<T> {
-  return hrRequest<T>(apiBase, path);
+async function payrollGet<T>(base: string, path: string): Promise<T> {
+  return hrRequest<T>(base, path);
 }
 
-async function hrPost<T>(path: string, body?: unknown): Promise<T> {
-  return hrRequest<T>(apiBase, path, { method: 'POST', body: JSON.stringify(body) });
+async function payrollPost<T>(base: string, path: string, body?: unknown): Promise<T> {
+  return hrRequest<T>(base, path, { method: 'POST', body: JSON.stringify(body) });
 }
 
-async function hrPut<T>(path: string, body?: unknown): Promise<T> {
-  return hrRequest<T>(apiBase, path, { method: 'PUT', body: JSON.stringify(body) });
+async function payrollPut<T>(base: string, path: string, body?: unknown): Promise<T> {
+  return hrRequest<T>(base, path, { method: 'PUT', body: JSON.stringify(body) });
 }
 
 type PayrollRun = {
@@ -93,7 +91,8 @@ type PayslipRow = {
   _id: string;
 };
 
-export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
+export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }: {
+  apiBase: string;
   organizationId: string;
   timesheetPeriodId?: string;
 }) {
@@ -114,7 +113,7 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
 
   const loadPayrollRuns = async () => {
     try {
-      const res = await hrGet<PayrollRun[]>('/api/payroll-runs');
+      const res = await payrollGet<PayrollRun[]>(apiBase, '/api/payroll-runs');
       console.log('Payroll runs loaded:', res);
       setPayrollRuns(res || []);
     } catch (error) {
@@ -126,7 +125,7 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
     try {
       // ponytail: load all periods because HR can create a payroll run from any status
       // (the backend will auto-close OPEN/REVIEWING/READY_TO_CLOSE periods).
-      const periods = await hrGet<TimesheetPeriod[]>('/api/hr/timesheet-periods');
+      const periods = await payrollGet<TimesheetPeriod[]>(apiBase, '/api/hr/timesheet-periods');
       console.log('Eligible periods loaded:', periods);
       setPeriods(periods || []);
     } catch (error) {
@@ -143,7 +142,7 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
     }
     setLoading(true);
     try {
-      await hrPost('/api/payroll-runs', {
+      await payrollPost(apiBase, '/api/payroll-runs', {
         timesheetPeriodId: selectedPeriodId,
       });
       setCreateModalOpen(false);
@@ -160,7 +159,7 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
   const handleCalculate = async (runId: string) => {
     setLoading(true);
     try {
-      await hrPut(`/api/payroll-runs/${runId}/calculate`);
+      await payrollPut(apiBase, `/api/payroll-runs/${runId}/calculate`);
       await loadPayrollRuns();
     } catch (error: any) {
       console.error('Failed to calculate payroll:', error);
@@ -177,10 +176,39 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
     }
   };
 
+  const handleRecalculate = async (run: PayrollRun) => {
+    const confirmed = window.confirm(
+      `Tính lại kỳ lương ${run.periodLabel}? Các phiếu lương chưa phát hành hiện tại sẽ được thay thế bằng kết quả mới.`,
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      await payrollPut(apiBase, `/api/payroll-runs/${run._id}/recalculate`);
+      if (selectedRun?._id === run._id) {
+        setSelectedRun(null);
+        setPayslips([]);
+        setSummary(null);
+      }
+      await loadPayrollRuns();
+    } catch (error: any) {
+      console.error('Failed to recalculate payroll:', error);
+      const msg = error?.response?.data?.message || error?.message || '';
+      if (msg.includes('CANNOT_RECALCULATE_NON_CALCULATED') || msg.includes('CANNOT_RECALCULATE_RELEASED_PAYSLIPS')) {
+        await loadPayrollRuns();
+        alert('Chỉ có thể tính lại kỳ lương đã tính nhưng chưa khóa hoặc phát hành.');
+      } else {
+        alert(msg || 'Tính lại bảng lương thất bại!');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLock = async (runId: string) => {
     setLoading(true);
     try {
-      await hrPut(`/api/payroll-runs/${runId}/lock`);
+      await payrollPut(apiBase, `/api/payroll-runs/${runId}/lock`);
       await loadPayrollRuns();
     } catch (error: any) {
       console.error('Failed to lock payroll:', error);
@@ -199,7 +227,7 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
   const handleRelease = async (runId: string) => {
     setLoading(true);
     try {
-      await hrPost(`/api/payslips/release/${runId}`);
+      await payrollPost(apiBase, `/api/payslips/release/${runId}`);
       await loadPayrollRuns();
     } catch (error: any) {
       console.error('Failed to release payroll:', error);
@@ -218,8 +246,8 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
   const handleViewPayslips = async (runId: string) => {
     try {
       const [slipsRes, summaryRes] = await Promise.all([
-        hrGet<PayslipRow[]>('/api/payslips/run/' + runId),
-        hrGet<any>('/api/payslips/run/' + runId + '/summary'),
+        payrollGet<PayslipRow[]>(apiBase, '/api/payslips/run/' + runId),
+        payrollGet<any>(apiBase, '/api/payslips/run/' + runId + '/summary'),
       ]);
       setPayslips(slipsRes || []);
       setSummary(summaryRes || {});
@@ -334,9 +362,14 @@ export function PayrollRunScreen({ organizationId, timesheetPeriodId }: {
                           </Button>
                         )}
                         {run.status === 'CALCULATED' && (
-                          <Button size="sm" variant="outline" onClick={() => handleLock(run._id)} disabled={loading}>
-                            Khóa
-                          </Button>
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => handleRecalculate(run)} disabled={loading}>
+                              {loading ? 'Đang xử lý...' : 'Tính lại'}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleLock(run._id)} disabled={loading}>
+                              Khóa
+                            </Button>
+                          </>
                         )}
                         {run.status === 'LOCKED' && (
                           <Button size="sm" variant="default" onClick={() => handleRelease(run._id)} disabled={loading}>

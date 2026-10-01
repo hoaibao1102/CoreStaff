@@ -78,7 +78,7 @@ export function TaxPolicyDetailDialog({
                   <tbody>
                     {policy.progressiveBrackets.map((b, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="px-4 py-2 tabular-nums">{formatVnd(b.upperLimit)}</td>
+                        <td className="px-4 py-2 tabular-nums">{b.upperLimit == null ? 'Không giới hạn' : formatVnd(b.upperLimit)}</td>
                         <td className="px-4 py-2 tabular-nums">{b.rate}%</td>
                       </tr>
                     ))}

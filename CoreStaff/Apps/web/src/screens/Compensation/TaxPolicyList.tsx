@@ -180,7 +180,7 @@ export function TaxPolicyList({ apiBase }: { apiBase: string | null }) {
           <TaxPolicyDialog
             apiBase={apiBase}
             open={createOpen}
-            onOpenChange={setCreateOpen}
+            onOpenChange={(open) => { setCreateOpen(open); if (!open) setEditItem(null); }}
             editItem={editItem}
             onSuccess={() => { setEditItem(null); resource.retry(); }}
           />

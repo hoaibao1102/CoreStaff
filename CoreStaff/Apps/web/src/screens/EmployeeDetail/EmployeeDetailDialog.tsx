@@ -256,17 +256,19 @@ function EmployeeDetailContent({
     /* Tab 4: Dependents */
     const [dependentsForm, setDependentsForm] = useState({
         fullName: '',
-        birthDate: '',
+        dateOfBirth: '',
         idCardNumber: '',
         relationship: '' as DependentRelationship | '',
+        isDisabled: false,
     });
     const [addingDependent, setAddingDependent] = useState(false);
     const [editingDependentIndex, setEditingDependentIndex] = useState<number | null>(null);
     const [editDependentsForm, setEditDependentsForm] = useState({
         fullName: '',
-        birthDate: '',
+        dateOfBirth: '',
         idCardNumber: '',
         relationship: '' as DependentRelationship | '',
+        isDisabled: false,
         status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE',
     });
 
@@ -1275,8 +1277,8 @@ function EmployeeDetailContent({
                                                             )}
                                                         </div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                                            {dep.birthDate && (
-                                                                <p>Ngày sinh: {new Date(dep.birthDate).toLocaleDateString('vi-VN')}</p>
+                                                            {dep.dateOfBirth && (
+                                                                <p>Ngày sinh: {new Date(dep.dateOfBirth).toLocaleDateString('vi-VN')}</p>
                                                             )}
                                                             {dep.idCardNumber && (
                                                                 <p>CCCD: {dep.idCardNumber}</p>
@@ -1291,9 +1293,10 @@ function EmployeeDetailContent({
                                                             onClick={() => {
                                                                 setEditDependentsForm({
                                                                     fullName: dep.fullName,
-                                                                    birthDate: dep.birthDate || '',
+                                                                    dateOfBirth: dep.dateOfBirth || '',
                                                                     idCardNumber: dep.idCardNumber || '',
                                                                     relationship: dep.relationship as DependentRelationship,
+                                                                    isDisabled: dep.isDisabled ?? false,
                                                                     status: dep.status || 'ACTIVE',
                                                                 });
                                                                 setEditingDependentIndex(index);
@@ -1541,7 +1544,7 @@ function EmployeeDetailContent({
             )}
 
             {/* Add Dependent Dialog */}
-            <Dialog open={addingDependent} onOpenChange={(open) => { if (!open) { setAddingDependent(false); setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' }); } }}>
+            <Dialog open={addingDependent} onOpenChange={(open) => { if (!open) { setAddingDependent(false); setDependentsForm({ fullName: '', dateOfBirth: '', idCardNumber: '', relationship: '', isDisabled: false }); } }}>
                 <DialogContent className="max-w-[520px] gap-0">
                     <DialogHeader className="border-b border-border px-5 py-5 pr-14">
                         <div className="flex items-start gap-3">
@@ -1572,13 +1575,13 @@ function EmployeeDetailContent({
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <FormLabel htmlFor="dep-birth-date">Ngày sinh</FormLabel>
+                                <FormLabel htmlFor="dep-birth-date" required>Ngày sinh</FormLabel>
                                 <Input
                                     id="dep-birth-date"
                                     type="date"
                                     className="h-11"
-                                    value={dependentsForm.birthDate}
-                                    onChange={(e) => setDependentsForm(prev => ({ ...prev, birthDate: e.target.value }))}
+                                    value={dependentsForm.dateOfBirth}
+                                    onChange={(e) => setDependentsForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -1612,31 +1615,36 @@ function EmployeeDetailContent({
                                 ))}
                             </select>
                         </div>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={dependentsForm.isDisabled} onChange={(event) => setDependentsForm(prev => ({ ...prev, isDisabled: event.target.checked }))} />
+                            Người phụ thuộc khuyết tật
+                        </label>
                     </div>
 
                     <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">
                         <Button type="button" variant="outline" onClick={() => {
                             setAddingDependent(false);
-                            setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' });
+                            setDependentsForm({ fullName: '', dateOfBirth: '', idCardNumber: '', relationship: '', isDisabled: false });
                         }}>Hủy</Button>
                         <Button
                             type="button"
                             onClick={async () => {
                                 if (!apiBase || !employeeId) return;
-                                if (!dependentsForm.fullName || !dependentsForm.relationship) {
-                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên và mối quan hệ là bắt buộc.');
+                                if (!dependentsForm.fullName || !dependentsForm.dateOfBirth || !dependentsForm.relationship) {
+                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên, ngày sinh và mối quan hệ là bắt buộc.');
                                     return;
                                 }
-                                setAddingDependent(false);
                                 try {
                                     await addDependent(apiBase, employeeId, {
                                         fullName: dependentsForm.fullName,
-                                        birthDate: dependentsForm.birthDate || undefined,
+                                        dateOfBirth: dependentsForm.dateOfBirth,
                                         idCardNumber: dependentsForm.idCardNumber || undefined,
                                         relationship: dependentsForm.relationship,
+                                        isDisabled: dependentsForm.isDisabled,
                                     });
                                     toast.success('Đã thêm người phụ thuộc', 'Thông tin đã được cập nhật.');
-                                    setDependentsForm({ fullName: '', birthDate: '', idCardNumber: '', relationship: '' });
+                                    setAddingDependent(false);
+                                    setDependentsForm({ fullName: '', dateOfBirth: '', idCardNumber: '', relationship: '', isDisabled: false });
                                     await loadEmployee();
                                 } catch (err: unknown) {
                                     toast.error('Không thể thêm', mapHrError((err as any)?.code, 'Không thể thêm người phụ thuộc lúc này.'));
@@ -1686,8 +1694,8 @@ function EmployeeDetailContent({
                                     id="edit-dep-birth-date"
                                     type="date"
                                     className="h-11"
-                                    value={editDependentsForm.birthDate}
-                                    onChange={(e) => setEditDependentsForm(prev => ({ ...prev, birthDate: e.target.value }))}
+                                    value={editDependentsForm.dateOfBirth}
+                                    onChange={(e) => setEditDependentsForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -1737,6 +1745,10 @@ function EmployeeDetailContent({
                                 <option value="INACTIVE">Đã vô hiệu hóa</option>
                             </select>
                         </div>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={editDependentsForm.isDisabled} onChange={(event) => setEditDependentsForm(prev => ({ ...prev, isDisabled: event.target.checked }))} />
+                            Người phụ thuộc khuyết tật
+                        </label>
                     </div>
 
                     <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">
@@ -1746,37 +1758,33 @@ function EmployeeDetailContent({
                         <Button
                             type="button"
                             onClick={async () => {
-                                if (!apiBase || !employeeId || editingDependentIndex === null) return;
-                                if (!editDependentsForm.fullName || !editDependentsForm.relationship) {
-                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên và mối quan hệ là bắt buộc.');
+                                if (!apiBase || editingDependentIndex === null) return;
+                                const dependentId = employee?.dependents?.[editingDependentIndex]?._id;
+                                if (!dependentId) {
+                                    toast.error('Không thể cập nhật', 'Người phụ thuộc chưa có mã định danh hợp lệ.');
+                                    return;
+                                }
+                                if (!editDependentsForm.fullName || !editDependentsForm.dateOfBirth || !editDependentsForm.relationship) {
+                                    toast.warning('Vui lòng điền đầy đủ', 'Họ tên, ngày sinh và mối quan hệ là bắt buộc.');
                                     return;
                                 }
                                 try {
-                                    const updatedEmployee = await updateDependent(apiBase, employeeId, editingDependentIndex, {
+                                    const updatedDependent = await updateDependent(apiBase, dependentId, {
                                         fullName: editDependentsForm.fullName,
-                                        birthDate: editDependentsForm.birthDate || undefined,
+                                        dateOfBirth: editDependentsForm.dateOfBirth,
                                         idCardNumber: editDependentsForm.idCardNumber || undefined,
                                         relationship: editDependentsForm.relationship,
+                                        isDisabled: editDependentsForm.isDisabled,
                                         status: editDependentsForm.status,
                                     });
                                     toast.success('Đã cập nhật người phụ thuộc', 'Thông tin đã được cập nhật.');
                                     setEditingDependentIndex(null);
-                                    
-                                    // Optimistic update: cập nhật trực tiếp từ API response
-                                    if (updatedEmployee) {
-                                        setEmployee(prev => {
-                                            if (!prev) return updatedEmployee;
-                                            const updatedDependents = [...(prev.dependents || [])];
-                                            updatedDependents[editingDependentIndex] = {
-                                                fullName: editDependentsForm.fullName,
-                                                birthDate: editDependentsForm.birthDate || undefined,
-                                                idCardNumber: editDependentsForm.idCardNumber || undefined,
-                                                relationship: editDependentsForm.relationship as DependentRelationship,
-                                                status: editDependentsForm.status,
-                                            };
-                                            return { ...prev, dependents: updatedDependents };
-                                        });
-                                    }
+                                    setEmployee(prev => {
+                                        if (!prev) return prev;
+                                        const updatedDependents = [...(prev.dependents || [])];
+                                        updatedDependents[editingDependentIndex] = updatedDependent;
+                                        return { ...prev, dependents: updatedDependents };
+                                    });
                                 } catch (err: unknown) {
                                     toast.error('Không thể cập nhật', mapHrError((err as any)?.code, 'Không thể cập nhật người phụ thuộc lúc này.'));
                                 }

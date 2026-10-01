@@ -49,6 +49,14 @@ export class PayrollRunController {
     return { success: true, data: result };
   }
 
+  @Put(':id/recalculate')
+  @Roles('HR')
+  @ApiOperation({ summary: 'Recalculate an unpublished calculated payroll run' })
+  async recalculate(@CurrentUser() user: any, @Param('id') id: string) {
+    const result = await this.payrollRunService.recalculate(id, user.id);
+    return { success: true, data: result };
+  }
+
   @Put(':id/lock')
   @Roles('HR')
   @ApiOperation({ summary: 'Lock a calculated payroll run' })

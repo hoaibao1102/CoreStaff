@@ -15,12 +15,47 @@ const MIN_PERIOD_DAYS = 28;
 const MAX_PERIOD_DAYS = 31;
 const REASON_MIN_LENGTH = 10;
 
+/**
+ * Manager-facing projection for department snapshot review.
+ * Payroll snapshots are deliberately ignored so salary, insurance, tax, and
+ * family data never cross the manager API boundary.
+ */
+export function buildManagerSnapshotReview(
+	summaries: any[],
+	_payrollSnapshots?: any[],
+): { summaries: any[] } {
+	return {
+		summaries: summaries.map((summary) => ({
+			employeeProfileId: String(summary.employeeProfileId),
+			departmentId: summary.departmentId ? String(summary.departmentId) : undefined,
+			departmentName: summary.departmentName,
+			employeeCode: summary.employeeCode,
+			fullName: summary.fullName,
+			standardWorkingDays: summary.workingDays ?? 0,
+			actualWorkingDays: summary.presentDays ?? 0,
+			absentDays: summary.absentDays ?? 0,
+			incompleteDays: summary.incompleteDays ?? 0,
+			paidLeaveDays: summary.paidLeaveDays ?? 0,
+			unpaidLeaveDays: summary.unpaidLeaveDays ?? 0,
+			totalWorkingMinutes: summary.totalWorkingMinutes ?? 0,
+			totalLateMinutes: summary.totalLateMinutes ?? 0,
+			totalEarlyMinutes: summary.totalEarlyMinutes ?? 0,
+			otWorkingDayMinutes: summary.otWorkingDayMinutes ?? 0,
+			otWeeklyOffMinutes: summary.otWeeklyOffMinutes ?? 0,
+			otPublicHolidayMinutes: summary.otPublicHolidayMinutes ?? 0,
+			totalOvertimeMinutes: summary.totalOvertimeMinutes ?? 0,
+		})),
+	};
+}
+
 @Injectable()
 export class TimesheetPeriodService {
 	constructor(
 		@InjectModel('TimesheetPeriod') private readonly periodModel: Model<TimesheetPeriodDocument>,
 		@InjectModel('Department') private readonly departmentModel: Model<DepartmentDocument>,
 		@InjectModel('EmployeeProfile') private readonly employeeProfileModel: Model<EmployeeProfileDocument>,
+		@InjectModel('PayrollInputSnapshot') private readonly snapshotModel: Model<any>,
+		@InjectModel('PayrollRun') private readonly payrollRunModel: Model<any>,
 		private readonly summaryService: TimesheetSummaryService,
 		private readonly snapshotService: PayrollSnapshotService,
 		private readonly managerScopeService: ManagerScopeService,
@@ -129,7 +164,7 @@ export class TimesheetPeriodService {
 
 		const totalEmployees = await this.employeeProfileModel?.countDocuments({
 			organizationId: new Types.ObjectId(organizationId),
-			active: true,
+			employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
 		}).catch(() => 0) ?? 0;
 
 		const summariesGenerated = summaries.length;
@@ -413,6 +448,17 @@ export class TimesheetPeriodService {
 				).lean();
 
 				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+
+				await this.snapshotModel.updateMany(
+					{ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
+					{ $set: { status: 'STALE' } },
+					{ session },
+				);
+				await this.payrollRunModel.updateMany(
+					{ organizationId: new Types.ObjectId(organizationId), timesheetPeriodId: new Types.ObjectId(id), active: true },
+					{ $set: { status: 'STALE' } },
+					{ session },
+				);
 				updated = doc;
 			});
 		} finally {
@@ -424,14 +470,15 @@ export class TimesheetPeriodService {
 
 	/**
 	 * Preview the snapshot data for a department before closing.
-	 * Returns summaries and payroll snapshots that would be generated.
+	 * Returns only work data required for manager review. Payroll inputs are
+	 * generated only during close and are never exposed to department managers.
 	 */
 	async previewManagerSnapshot(
 		organizationId: string,
 		id: string,
 		managerUserId: string,
 		departmentId: string,
-	): Promise<{ summaries: any[]; snapshots: any[] }> {
+	): Promise<{ summaries: any[] }> {
 		const period = await this.findById(organizationId, id);
 
 		if (
@@ -449,7 +496,7 @@ export class TimesheetPeriodService {
 			throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');
 		}
 
-		// Generate preview summaries and snapshots for the department on-the-fly
+		// Generate department work summaries on-the-fly.
 		const summaries = await this.summaryService.previewSummariesForDepartment(
 			id,
 			period.period,
@@ -457,14 +504,7 @@ export class TimesheetPeriodService {
 			departmentId,
 		);
 
-		const snapshots = await this.snapshotService.previewSnapshotsForDepartment(
-			id,
-			period.period,
-			organizationId,
-			summaries,
-		);
-
-		return { summaries, snapshots };
+		return buildManagerSnapshotReview(summaries);
 	}
 
 	/**

@@ -233,7 +233,7 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
                 Đóng
               </Button>
             </div>
-            <TimesheetReviewScreen organizationId={organizationId} userRole={user.role} periodId={reviewPeriodId} />
+            <TimesheetReviewScreen apiBase={apiBase} organizationId={organizationId} userRole={user.role} periodId={reviewPeriodId} />
           </div>
         </div>
       )}

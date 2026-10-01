@@ -20,7 +20,7 @@ const BRACKET_DEFAULTS = [
   { upperLimit: 30000000, rate: 10 },
   { upperLimit: 60000000, rate: 20 },
   { upperLimit: 100000000, rate: 30 },
-  { upperLimit: Infinity, rate: 35 },
+  { upperLimit: null, rate: 35 },
 ];
 
 // ───────── Create/Edit Policy Dialog ─────────
@@ -57,7 +57,7 @@ export function TaxPolicyDialog({
     if (editItem) {
       setEffectiveFrom(editItem.effectiveFrom.split('T')[0]);
       setEffectiveTo(editItem.effectiveTo?.split('T')[0] ?? '');
-      setPersonalDeduction(editItem.personalDeduction.toString());
+      setPersonalDeduction((editItem.standardDeduction ?? editItem.personalDeduction).toString());
       setDependentDeduction(editItem.dependentDeduction.toString());
       setBrackets(editItem.progressiveBrackets?.map(b => ({ ...b })) ?? BRACKET_DEFAULTS);
       setLegalReference(editItem.legalReference);
@@ -79,14 +79,15 @@ export function TaxPolicyDialog({
 
   const addBracket = () => {
     const last = brackets[brackets.length - 1];
-    setBrackets([...brackets, { upperLimit: (last?.upperLimit ?? 0) + 10000000, rate: (last?.rate ?? 5) + 5 }]);
+    const previousLimit = last?.upperLimit ?? brackets.at(-2)?.upperLimit ?? 0;
+    setBrackets([...brackets, { upperLimit: previousLimit + 10000000, rate: Math.min((last?.rate ?? 5) + 5, 100) }]);
   };
 
   const removeBracket = (index: number) => {
     setBrackets(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateBracket = (index: number, field: 'upperLimit' | 'rate', val: number) => {
+  const updateBracket = (index: number, field: 'upperLimit' | 'rate', val: number | null) => {
     setBrackets(prev => prev.map((b, i) => (i === index ? { ...b, [field]: val } : b)));
   };
 
@@ -95,10 +96,12 @@ export function TaxPolicyDialog({
       setSubmitting(true);
       setError(null);
 
+      const personalDeductionAmount = Number(personalDeduction) || 0;
       const dto = {
         effectiveFrom: new Date(effectiveFrom).toISOString(),
         effectiveTo: effectiveTo ? new Date(effectiveTo).toISOString() : undefined,
-        personalDeduction: Number(personalDeduction) || 0,
+        standardDeduction: personalDeductionAmount,
+        personalDeduction: personalDeductionAmount,
         dependentDeduction: Number(dependentDeduction) || 0,
         progressiveBrackets: brackets,
         roundingRule,
@@ -213,9 +216,10 @@ export function TaxPolicyDialog({
                         <td className="px-4 py-2">
                           <Input
                             type="number"
-                            value={b.upperLimit}
-                            onChange={e => updateBracket(i, 'upperLimit', Number(e.target.value))}
+                            value={b.upperLimit ?? ''}
+                            onChange={e => updateBracket(i, 'upperLimit', e.target.value === '' ? null : Number(e.target.value))}
                             className="h-9"
+                            placeholder={i === brackets.length - 1 ? 'Không giới hạn' : undefined}
                           />
                         </td>
                         <td className="px-4 py-2">

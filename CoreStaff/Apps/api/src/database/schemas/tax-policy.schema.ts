@@ -11,8 +11,9 @@ export type TaxPolicyDocument = HydratedDocument<TaxPolicy>;
  * — same versioning pattern as LaborCompliancePolicy / OvertimePayPolicy.
  *
  * Key fields:
- * - personalDeduction: 15,500,000 VND/month (self deduction)
- * - dependentDeduction: 6,200,000 VND/month per dependent
+ * - standardDeduction: 11,000,000 VND/month (self deduction, 2026 Vietnam rate)
+ * - personalDeduction: 15,500,000 VND/month (legacy personal deduction)
+ * - dependentDeduction: 4,400,000 VND/month per dependent
  * - progressiveBrackets: 5-tier Vietnam tax brackets
  */
 @Schema({ collection: 'tax_policies', timestamps: true })
@@ -26,11 +27,15 @@ export class TaxPolicy {
 	@Prop({ type: Date })
 	effectiveTo?: Date;
 
-	/** Personal deduction: 15,500,000 VND/month */
+	/** Standard (personal) deduction used by the modern PIT pipeline. */
 	@Prop({ required: true, min: 0 })
-	personalDeduction: number;
+	standardDeduction: number;
 
-	/** Dependent deduction: 6,200,000 VND/month per dependent */
+	/** Personal deduction: 15,500,000 VND/month (legacy alias of standardDeduction). */
+	@Prop({ required: false, min: 0 })
+	personalDeduction?: number;
+
+	/** Dependent deduction: 4,400,000 VND/month per dependent (2026 rate). */
 	@Prop({ required: true, min: 0 })
 	dependentDeduction: number;
 
@@ -43,8 +48,8 @@ export class TaxPolicy {
 	roundingRule: string;
 
 	/** Legal reference document */
-	@Prop({ required: true, trim: true })
-	legalReference: string;
+	@Prop({ required: false, trim: true })
+	legalReference?: string;
 
 	@Prop({ required: true, min: 1, default: 1 })
 	version: number;
@@ -54,7 +59,7 @@ export class TaxPolicy {
 }
 
 export interface TaxBracket {
-	upperLimit: number;   // Monthly threshold (VND)
+	upperLimit: number | null; // Monthly threshold (null = unbounded last tier)
 	rate: number;         // Tax rate (%)
 }
 

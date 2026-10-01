@@ -5,7 +5,9 @@
 .agents/
 .claude/
 .aider-desk/
-.hermes
+.hermes/
+.omo/
+.antigravity/
 
 
 skills-lock.json

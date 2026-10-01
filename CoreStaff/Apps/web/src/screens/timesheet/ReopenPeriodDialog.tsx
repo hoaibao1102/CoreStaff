@@ -12,6 +12,7 @@ import {
 } from '@/components/dialog';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { hrRequest } from '@/services/api';
+import { getApiBaseSync } from '@/config/api';
 
 interface Props {
   open: boolean;
@@ -42,7 +43,7 @@ export function ReopenPeriodDialog({ open, onClose, onReopened, period, organiza
 
     try {
       await hrRequest(
-        import.meta.env.VITE_API_BASE || 'http://localhost:3000',
+        getApiBaseSync(),
         `/api/hr/timesheet-periods/${period._id}/reopen`,
         { method: 'POST', body: JSON.stringify({ reason }) },
       );

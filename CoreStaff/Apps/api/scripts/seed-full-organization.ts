@@ -129,7 +129,7 @@ function buildEarningBreakdown(snapshot: any, grossEarnings: number): Array<{ ty
   }
 
   if (snapshot.attendanceBonus > 0) {
-    breakdown.push({ type: "ATTENDANCE_BONUS", label: "Thưởng chấm công", amount: snapshot.attendanceBonus, taxable: true });
+    breakdown.push({ type: "ATTENDANCE_BONUS", label: "Thưởng chuyên cần", amount: snapshot.attendanceBonus, taxable: true });
   }
   if (snapshot.kpiBonus > 0) {
     breakdown.push({ type: "KPI_BONUS", label: "Thưởng KPI", amount: snapshot.kpiBonus, taxable: true });

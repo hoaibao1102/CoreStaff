@@ -71,7 +71,7 @@ export class TimesheetSummaryService {
 
     // Step 1: Get all attendance days for this period
     const attendanceDays = await this.attendanceDayModel
-      .find({ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(periodId) }, { _id: 1, employeeId: 1, workDate: 1, dayResult: 1, attendanceStatus: 1, workingMinutes: 1, lateMinutes: 1, earlyMinutes: 1 })
+      .find({ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(periodId) }, { _id: 1, employeeId: 1, workDate: 1, workdayType: 1, dayResult: 1, attendanceStatus: 1, checkInAt: 1, checkOutAt: 1, workingMinutes: 1, lateMinutes: 1, earlyMinutes: 1 })
       .session(session)
       .lean();
 
@@ -161,7 +161,7 @@ export class TimesheetSummaryService {
     const totalDays = new Date(year, month, 0).getDate();
 
     const attendanceDays = await this.attendanceDayModel
-      .find({ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(periodId) }, { _id: 1, employeeId: 1, workDate: 1, dayResult: 1, attendanceStatus: 1, workingMinutes: 1, lateMinutes: 1, earlyMinutes: 1 })
+      .find({ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(periodId) }, { _id: 1, employeeId: 1, workDate: 1, workdayType: 1, dayResult: 1, attendanceStatus: 1, checkInAt: 1, checkOutAt: 1, workingMinutes: 1, lateMinutes: 1, earlyMinutes: 1 })
       .lean();
 
     if (!attendanceDays.length) {
@@ -341,20 +341,26 @@ export class TimesheetSummaryService {
       if (day.workdayType === WorkdayType.WORKING_DAY) {
         workingDays++;
       } else if (day.workdayType === WorkdayType.PAID_LEAVE) {
+        workingDays++;
         paidLeaveDays++;
       } else if (day.workdayType === WorkdayType.UNPAID_LEAVE) {
+        workingDays++;
         unpaidLeaveDays++;
       } else if (day.workdayType === WorkdayType.PUBLIC_HOLIDAY || day.workdayType === WorkdayType.WEEKLY_OFF) {
         holidayDays++;
       }
 
-      // Count by dayResult/attendanceStatus
-      if (day.dayResult === DayResult.PRESENT || day.attendanceStatus === 'CHECKED_IN') {
+      // Count actual attendance independently from the calendar obligation.
+      // A public holiday with no punches is a valid day off, not incomplete;
+      // a public holiday with completed punches is actual work (and its OT is
+      // classified separately by OvertimeResult).
+      const hasPunch = Boolean(day.checkInAt || day.checkOutAt);
+      if (day.dayResult === DayResult.INCOMPLETE || (hasPunch && (!day.checkInAt || !day.checkOutAt))) {
+        incompleteDays++;
+      } else if (day.dayResult === DayResult.PRESENT || day.attendanceStatus === 'COMPLETED') {
         presentDays++;
       } else if (day.dayResult === DayResult.ABSENT) {
         absentDays++;
-      } else if (day.dayResult === DayResult.INCOMPLETE || !day.checkInAt || !day.checkOutAt) {
-        incompleteDays++;
       }
 
       // Accumulate minutes

@@ -741,6 +741,10 @@ export class OvertimeService {
    * enforces, so the form and the rule cannot disagree.
    */
   scheduledIntervals(context: DayContext): Interval[] {
+    // Organization calendar overrides the recurring shift. On a public holiday
+    // every actually worked minute is holiday work; subtracting the ordinary
+    // weekday shift would incorrectly reduce holiday OT to zero.
+    if (context.calendarType === CalendarExceptionType.PUBLIC_HOLIDAY || context.calendarType === CalendarExceptionType.WEEKLY_OFF) return [];
     if (!context.shift) return [];
     const from = parseWindowInstant(context.shift.startTime, context.workDate);
     const to = parseWindowInstant(context.shift.endTime, context.workDate);

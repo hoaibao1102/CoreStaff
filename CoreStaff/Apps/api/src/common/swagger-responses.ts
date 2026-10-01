@@ -6,7 +6,7 @@ type JsonExample = Record<string, unknown> | unknown[] | string | number | boole
 const ERROR_EXAMPLE = {
 	success: false,
 	error: {
-		code: 'VALIDATION_FAILED',
+		code: 'VALIDATION_ERROR',
 		message: 'Bad Request',
 		details: ['property email should not exist'],
 	},
@@ -57,7 +57,7 @@ export function ApiErrorExamples(): MethodDecorator {
 						type: 'object',
 						required: ['code', 'message', 'details'],
 						properties: {
-							code: { type: 'string', example: 'VALIDATION_FAILED' },
+							code: { type: 'string', example: 'VALIDATION_ERROR' },
 							message: { type: 'string', example: 'Bad Request' },
 							details: { example: ['property email should not exist'] },
 						},

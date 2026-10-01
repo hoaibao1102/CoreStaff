@@ -15,7 +15,7 @@
  * Tax bracket definition for progressive calculation.
  */
 export interface TaxBracket {
-	upperLimit: number; // Ngưỡng trên của bậc (VND/tháng)
+	upperLimit: number | null; // Ngưỡng trên của bậc (null = vô cùng)
 	rate: number; // Thuế suất (%)
 }
 
@@ -48,17 +48,18 @@ export function calculateProgressivePIT(taxableIncome: number, brackets: TaxBrac
 	let previousLimit = 0;
 
 	for (const bracket of brackets) {
-		const tierIncome = Math.min(taxableIncome, bracket.upperLimit) - previousLimit;
+		const upperLimit = bracket.upperLimit ?? Number.POSITIVE_INFINITY;
+		const tierIncome = Math.min(taxableIncome, upperLimit) - previousLimit;
 
 		if (tierIncome > 0) {
 			totalTax += tierIncome * (bracket.rate / 100);
 		}
 
-		if (taxableIncome <= bracket.upperLimit) {
+		if (taxableIncome <= upperLimit) {
 			break;
 		}
 
-		previousLimit = bracket.upperLimit;
+		previousLimit = upperLimit;
 	}
 
 	return totalTax;

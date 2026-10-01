@@ -226,6 +226,41 @@ export class PayrollRunService {
   }
 
   /**
+   * Recalculate an unpublished run from its frozen payroll input snapshots.
+   * Locked and released runs remain immutable.
+   */
+  async recalculate(payrollRunId: string, userId: string): Promise<{
+    payrollRun: any;
+    employeesProcessed: number;
+    totalGross: number;
+    totalNet: number;
+  }> {
+    const payrollRun = await this.findOneRaw(payrollRunId);
+
+    if (!payrollRun) {
+      throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+    }
+    if (payrollRun.status !== PayrollRunStatus.CALCULATED) {
+      throw new BadRequestException('CANNOT_RECALCULATE_NON_CALCULATED');
+    }
+
+    await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
+    await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
+      $set: {
+        status: PayrollRunStatus.DRAFT,
+        totalGross: 0,
+        totalNet: 0,
+        totalEmployerCost: 0,
+        processedEmployeeCount: 0,
+        version: payrollRun.version + 1,
+      },
+      $unset: { lockedBy: 1, lockedAt: 1 },
+    });
+
+    return this.calculate(payrollRunId, userId);
+  }
+
+  /**
    * Lock a calculated payroll run (immutable).
    */
   async lock(payrollRunId: string, userId: string): Promise<any> {
@@ -311,6 +346,7 @@ export class PayrollRunService {
       snapshot.proratedBaseSalary +
       snapshot.totalAllowances +
       snapshot.attendanceBonus +
+      (snapshot.kpiBonus || 0) +
       snapshot.otPay; // Tổng OT nhận (đã bao gồm cả phần chịu thuế và không chịu thuế)
 
     // Insurance contributions (from snapshot or recalculate)
@@ -330,7 +366,8 @@ export class PayrollRunService {
     const taxableIncomeForPIT = 
       snapshot.proratedBaseSalary + 
       snapshot.totalAllowances + 
-      snapshot.attendanceBonus + 
+      snapshot.attendanceBonus +
+      (snapshot.kpiBonus || 0) +
       otTaxableEarnings;
 
     const pitResult = await this.pitService.calculateFullPIT({

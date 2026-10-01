@@ -24,7 +24,6 @@ import {
 import { hrRequest } from '@/services/api';
 import { getManagerContext, ManagerContext } from '@/services/manager.service';
 
-const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
 
 type DepartmentSnapshot = {
   departmentId: string;
@@ -59,10 +58,12 @@ type SummaryStats = {
 };
 
 export function TimesheetReviewScreen({
+  apiBase,
   organizationId,
   userRole,
   periodId,
 }: {
+  apiBase: string;
   organizationId: string;
   userRole: string;
   periodId?: string | null;
@@ -74,7 +75,7 @@ export function TimesheetReviewScreen({
   const [closing, setClosing] = useState(false);
   const [closeSuccess, setCloseSuccess] = useState(false);
   const [managerContext, setManagerContext] = useState<ManagerContext | null>(null);
-  const [previewData, setPreviewData] = useState<{ summaries: any[]; snapshots: any[] } | null>(null);
+  const [previewData, setPreviewData] = useState<{ summaries: any[] } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDepartmentId, setPreviewDepartmentId] = useState<string | null>(null);
 
@@ -142,7 +143,7 @@ export function TimesheetReviewScreen({
     setPreviewDepartmentId(departmentId);
     setPreviewLoading(true);
     try {
-      const data = await hrRequest<{ summaries: any[]; snapshots: any[] }>(
+      const data = await hrRequest<{ summaries: any[] }>(
         apiBase,
         `/api/hr/timesheet-periods/${selectedPeriod._id}/snapshot-preview?departmentId=${encodeURIComponent(departmentId)}`,
         { method: 'GET' },
@@ -513,7 +514,6 @@ export function TimesheetReviewScreen({
                           {previewDepartmentId === dept.id && previewData && (
                             <ManagerSnapshotPreview
                               summaries={previewData.summaries}
-                              snapshots={previewData.snapshots}
                               departmentId={dept.id}
                             />
                           )}
@@ -596,166 +596,136 @@ export function TimesheetReviewScreen({
   );
 }
 
-function formatMoney(value?: number) {
-  return new Intl.NumberFormat('vi-VN').format(value ?? 0);
-}
-
-function ManagerSnapshotPreview({ summaries, snapshots, departmentId }: { summaries: any[]; snapshots: any[]; departmentId?: string | null }) {
+export function ManagerSnapshotPreview({ summaries, departmentId }: { summaries: any[]; departmentId?: string | null }) {
   const filteredSummaries = departmentId
     ? summaries.filter((s) => String(s.departmentId) === String(departmentId))
     : summaries;
 
-  const merged = filteredSummaries.map((summary) => {
-    const snapshot = snapshots.find(
-      (s) => String(s.employeeProfileId) === String(summary.employeeProfileId),
-    );
-    return { summary, snapshot };
-  });
+  const totals = filteredSummaries.reduce(
+    (sum, summary) => ({
+      standardWorkingDays: sum.standardWorkingDays + (summary.standardWorkingDays ?? 0),
+      actualWorkingDays: sum.actualWorkingDays + (summary.actualWorkingDays ?? 0),
+      absentDays: sum.absentDays + (summary.absentDays ?? 0),
+      incompleteDays: sum.incompleteDays + (summary.incompleteDays ?? 0),
+      paidLeaveDays: sum.paidLeaveDays + (summary.paidLeaveDays ?? 0),
+      unpaidLeaveDays: sum.unpaidLeaveDays + (summary.unpaidLeaveDays ?? 0),
+      totalWorkingMinutes: sum.totalWorkingMinutes + (summary.totalWorkingMinutes ?? 0),
+      totalLateMinutes: sum.totalLateMinutes + (summary.totalLateMinutes ?? 0),
+      totalEarlyMinutes: sum.totalEarlyMinutes + (summary.totalEarlyMinutes ?? 0),
+      otWorkingDayMinutes: sum.otWorkingDayMinutes + (summary.otWorkingDayMinutes ?? 0),
+      otWeeklyOffMinutes: sum.otWeeklyOffMinutes + (summary.otWeeklyOffMinutes ?? 0),
+      otPublicHolidayMinutes: sum.otPublicHolidayMinutes + (summary.otPublicHolidayMinutes ?? 0),
+      totalOvertimeMinutes: sum.totalOvertimeMinutes + (summary.totalOvertimeMinutes ?? 0),
+    }),
+    {
+      standardWorkingDays: 0,
+      actualWorkingDays: 0,
+      absentDays: 0,
+      incompleteDays: 0,
+      paidLeaveDays: 0,
+      unpaidLeaveDays: 0,
+      totalWorkingMinutes: 0,
+      totalLateMinutes: 0,
+      totalEarlyMinutes: 0,
+      otWorkingDayMinutes: 0,
+      otWeeklyOffMinutes: 0,
+      otPublicHolidayMinutes: 0,
+      totalOvertimeMinutes: 0,
+    },
+  );
 
   return (
-    <div className="mt-2 rounded-md border border-blue-200 bg-white p-3 space-y-3">
-      <h4 className="text-sm font-semibold text-blue-900">Preview snapshot</h4>
-      {merged.length === 0 && <p className="text-sm text-gray-600">Chưa có dữ liệu snapshot cho phòng ban này.</p>}
+    <div className="mt-2 space-y-3 rounded-md border border-blue-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-blue-900">Preview snapshot</h4>
+        {filteredSummaries.length > 0 && (
+          <Badge variant="outline">{filteredSummaries.length} nhân viên</Badge>
+        )}
+      </div>
+      {filteredSummaries.length === 0 && <p className="text-sm text-gray-600">Chưa có dữ liệu snapshot cho phòng ban này.</p>}
 
-      {merged.length > 0 && (
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-          {merged.map(({ summary, snapshot }) => (
-            <div key={summary._id || summary.employeeProfileId} className="rounded-md border border-gray-200 p-3">
-              {/* Employee identity */}
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {summary.fullName || snapshot?.fullName || '—'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {summary.employeeCode || snapshot?.employeeCode} • {summary.departmentName || snapshot?.departmentName}
-                  </p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {summary.totalOvertimeMinutes || 0} phút OT
-                </Badge>
-              </div>
-
-              {/* Attendance */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
-                <div className="rounded bg-gray-50 p-2">
-                  <p className="text-xs text-gray-500">Ngày công</p>
-                  <p className="text-sm font-semibold">{summary.workingDays ?? 0}</p>
-                </div>
-                <div className="rounded bg-gray-50 p-2">
-                  <p className="text-xs text-gray-500">Vắng</p>
-                  <p className="text-sm font-semibold">{summary.absentDays ?? 0}</p>
-                </div>
-                <div className="rounded bg-gray-50 p-2">
-                  <p className="text-xs text-gray-500">Thiếu dữ liệu</p>
-                  <p className="text-sm font-semibold">{summary.incompleteDays ?? 0}</p>
-                </div>
-                <div className="rounded bg-gray-50 p-2">
-                  <p className="text-xs text-gray-500">Nghỉ phép có lương</p>
-                  <p className="text-sm font-semibold">{summary.paidLeaveDays ?? 0}</p>
-                </div>
-                <div className="rounded bg-gray-50 p-2">
-                  <p className="text-xs text-gray-500">Nghỉ không lương</p>
-                  <p className="text-sm font-semibold">{summary.unpaidLeaveDays ?? 0}</p>
-                </div>
-              </div>
-
-              {/* OT breakdown */}
-              <div className="mb-3">
-                <p className="text-xs font-medium text-gray-700 mb-1">Chi tiết tăng ca (phút)</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <div className="rounded bg-blue-50 p-2">
-                    <p className="text-xs text-blue-700">Ngày làm</p>
-                    <p className="text-sm font-semibold text-blue-900">{summary.otWorkingDayMinutes ?? 0}</p>
-                  </div>
-                  <div className="rounded bg-blue-50 p-2">
-                    <p className="text-xs text-blue-700">Cuối tuần</p>
-                    <p className="text-sm font-semibold text-blue-900">{summary.otWeeklyOffMinutes ?? 0}</p>
-                  </div>
-                  <div className="rounded bg-blue-50 p-2">
-                    <p className="text-xs text-blue-700">Ngày lễ</p>
-                    <p className="text-sm font-semibold text-blue-900">{summary.otPublicHolidayMinutes ?? 0}</p>
-                  </div>
-                  <div className="rounded bg-blue-50 p-2">
-                    <p className="text-xs text-blue-700">Tổng OT</p>
-                    <p className="text-sm font-semibold text-blue-900">{summary.totalOvertimeMinutes ?? 0}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payroll inputs */}
-              {snapshot && (
-                <div className="rounded bg-green-50 p-3 space-y-3">
-                  <p className="text-xs font-medium text-green-900">Thông tin lương & đóng góp</p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-500">Lương cơ bản thực nhận</p>
-                      <p className="font-semibold text-green-900">{formatMoney(snapshot.proratedBaseSalary)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Tổng phụ cấp</p>
-                      <p className="font-semibold">{formatMoney(snapshot.totalAllowances)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Tiền tăng ca</p>
-                      <p className="font-semibold">{formatMoney(snapshot.otPay)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Thu nhập chịu thuế</p>
-                      <p className="font-semibold">{formatMoney(snapshot.taxableEarnings)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Lương Gross</p>
-                      <p className="font-semibold">{formatMoney(snapshot.grossEarnings ?? snapshot.monthlyBaseSalary)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">BHXH</p>
-                      <p className="font-semibold">{formatMoney(snapshot.socialInsurance)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">BHYT</p>
-                      <p className="font-semibold">{formatMoney(snapshot.healthInsurance)} ₫</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">BHTN</p>
-                      <p className="font-semibold">{formatMoney(snapshot.unemploymentInsurance)} ₫</p>
-                    </div>
-                    {'pitAmount' in snapshot && (
-                      <div>
-                        <p className="text-xs text-gray-500">Thuế TNCN</p>
-                        <p className="font-semibold">{formatMoney(snapshot.pitAmount)} ₫</p>
-                      </div>
-                    )}
-                    {'netSalary' in snapshot && (
-                      <div>
-                        <p className="text-xs text-gray-500">Net</p>
-                        <p className="font-semibold">{formatMoney(snapshot.netSalary)} ₫</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-xs text-gray-500">Số người phụ thuộc</p>
-                      <p className="font-semibold">{snapshot.dependentCount ?? 0}</p>
-                    </div>
-                  </div>
-                  {Array.isArray(snapshot.allowanceBreakdown) && snapshot.allowanceBreakdown.length > 0 && (
-                    <div className="border-t border-green-200 pt-2">
-                      <p className="text-xs font-medium text-green-900 mb-1">Chi tiết phụ cấp</p>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {snapshot.allowanceBreakdown.map((a: any, idx: number) => (
-                          <span key={idx} className="rounded bg-white px-2 py-1 text-gray-700 border border-green-200">
-                            {a.label || a.type}: {formatMoney(a.amount)} ₫
-                            {a.taxable === false && <span className="ml-1 text-green-700">(miễn thuế)</span>}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+      {filteredSummaries.length > 0 && (
+        <div className="max-h-[60vh] overflow-auto rounded-md border border-gray-200">
+          <Table aria-label="Preview snapshot nhân viên" className="min-w-[1580px] text-xs">
+            <TableHeader className="sticky top-0 z-20 bg-white shadow-sm">
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead rowSpan={2} className="sticky left-0 z-30 min-w-52 border-r bg-gray-50 px-3">Nhân viên</TableHead>
+                <TableHead rowSpan={2} className="min-w-28 border-r bg-gray-50">Mã NV</TableHead>
+                <TableHead colSpan={4} className="border-r text-center">Ngày công</TableHead>
+                <TableHead colSpan={2} className="border-r text-center">Nghỉ</TableHead>
+                <TableHead colSpan={3} className="border-r text-center">Thời gian</TableHead>
+                <TableHead colSpan={4} className="text-center">Tăng ca</TableHead>
+              </TableRow>
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead className="text-right">Ngày công chuẩn</TableHead>
+                <TableHead className="text-right">Công thực tế</TableHead>
+                <TableHead className="text-right">Vắng</TableHead>
+                <TableHead className="border-r text-right">Thiếu dữ liệu</TableHead>
+                <TableHead className="text-right">Có lương</TableHead>
+                <TableHead className="border-r text-right">Không lương</TableHead>
+                <TableHead className="text-right">Tổng giờ làm</TableHead>
+                <TableHead className="text-right">Đi trễ</TableHead>
+                <TableHead className="border-r text-right">Về sớm</TableHead>
+                <TableHead className="text-right">OT ngày làm</TableHead>
+                <TableHead className="text-right">OT cuối tuần</TableHead>
+                <TableHead className="text-right">OT ngày lễ</TableHead>
+                <TableHead className="text-right">Tổng OT</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSummaries.map((summary) => {
+                const needsReview = (summary.absentDays ?? 0) > 0 || (summary.incompleteDays ?? 0) > 0;
+                return (
+                  <TableRow key={summary.employeeProfileId} className={needsReview ? 'bg-amber-50/60' : undefined}>
+                    <TableCell className="sticky left-0 z-10 border-r bg-white px-3 font-medium">
+                      <span className="block max-w-48 truncate" title={summary.fullName || '—'}>{summary.fullName || '—'}</span>
+                      <span className="block text-[11px] font-normal text-gray-500">{summary.departmentName || '—'}</span>
+                    </TableCell>
+                    <TableCell className="border-r font-mono text-[11px]">{summary.employeeCode || '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{summary.standardWorkingDays ?? 0}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{summary.actualWorkingDays ?? 0}</TableCell>
+                    <TableCell className={`text-right tabular-nums ${(summary.absentDays ?? 0) > 0 ? 'font-semibold text-red-700' : ''}`}>{summary.absentDays ?? 0}</TableCell>
+                    <TableCell className={`border-r text-right tabular-nums ${(summary.incompleteDays ?? 0) > 0 ? 'font-semibold text-amber-700' : ''}`}>{summary.incompleteDays ?? 0}</TableCell>
+                    <TableCell className="text-right tabular-nums">{summary.paidLeaveDays ?? 0}</TableCell>
+                    <TableCell className="border-r text-right tabular-nums">{summary.unpaidLeaveDays ?? 0}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatWorkDuration(summary.totalWorkingMinutes)}</TableCell>
+                    <TableCell className={`text-right tabular-nums ${(summary.totalLateMinutes ?? 0) > 0 ? 'font-semibold text-amber-700' : ''}`}>{formatWorkDuration(summary.totalLateMinutes)}</TableCell>
+                    <TableCell className={`border-r text-right tabular-nums ${(summary.totalEarlyMinutes ?? 0) > 0 ? 'font-semibold text-amber-700' : ''}`}>{formatWorkDuration(summary.totalEarlyMinutes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatWorkDuration(summary.otWorkingDayMinutes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatWorkDuration(summary.otWeeklyOffMinutes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatWorkDuration(summary.otPublicHolidayMinutes)}</TableCell>
+                    <TableCell className="text-right font-semibold text-blue-900 tabular-nums">{formatWorkDuration(summary.totalOvertimeMinutes)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              <TableRow className="sticky bottom-0 z-20 bg-blue-50 font-semibold hover:bg-blue-50">
+                <TableCell className="sticky left-0 z-30 border-r bg-blue-50 px-3">Tổng cộng</TableCell>
+                <TableCell className="border-r text-gray-600">{filteredSummaries.length} NV</TableCell>
+                <TableCell className="text-right tabular-nums">{totals.standardWorkingDays}</TableCell>
+                <TableCell className="text-right tabular-nums">{totals.actualWorkingDays}</TableCell>
+                <TableCell className="text-right tabular-nums">{totals.absentDays}</TableCell>
+                <TableCell className="border-r text-right tabular-nums">{totals.incompleteDays}</TableCell>
+                <TableCell className="text-right tabular-nums">{totals.paidLeaveDays}</TableCell>
+                <TableCell className="border-r text-right tabular-nums">{totals.unpaidLeaveDays}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatWorkDuration(totals.totalWorkingMinutes)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatWorkDuration(totals.totalLateMinutes)}</TableCell>
+                <TableCell className="border-r text-right tabular-nums">{formatWorkDuration(totals.totalEarlyMinutes)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatWorkDuration(totals.otWorkingDayMinutes)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatWorkDuration(totals.otWeeklyOffMinutes)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatWorkDuration(totals.otPublicHolidayMinutes)}</TableCell>
+                <TableCell className="text-right tabular-nums text-blue-900">{formatWorkDuration(totals.totalOvertimeMinutes)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
   );
+}
+
+function formatWorkDuration(value?: number): string {
+  const totalMinutes = Math.max(0, Math.round(value ?? 0));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours} giờ ${String(minutes).padStart(2, '0')} phút` : `${hours} giờ`;
 }

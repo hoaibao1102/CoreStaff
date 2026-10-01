@@ -40,7 +40,7 @@ export class BatchValidator {
             throw new BadRequestException({
                 success: false,
                 error: {
-                    code: 'VALIDATION_FAILED',
+                    code: 'VALIDATION_ERROR',
                     message: sanitized,
                 },
             });

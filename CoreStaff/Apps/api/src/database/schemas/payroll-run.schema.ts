@@ -18,6 +18,7 @@ export enum PayrollRunStatus {
   CALCULATED = 'CALCULATED',
   LOCKED = 'LOCKED',
   RELEASED = 'RELEASED',
+  STALE = 'STALE',
 }
 
 @Schema({ collection: 'payroll_runs', timestamps: true })

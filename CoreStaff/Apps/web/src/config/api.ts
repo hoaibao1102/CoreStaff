@@ -5,13 +5,24 @@ function stripSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-export const REMOTE_API_URL = stripSlash(
-  import.meta.env.VITE_API_URL || DEFAULT_REMOTE,
-);
+function viteEnv(): Record<string, string> {
+  const stub = (globalThis as { __VITE_ENV__?: Record<string, string> }).__VITE_ENV__;
+  if (stub && typeof stub === 'object') return stub;
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  const env: Record<string, string> = {};
+  if (proc?.env) {
+    for (const [k, v] of Object.entries(proc.env)) {
+      if (typeof v === 'string') env[k] = v;
+    }
+  }
+  return env;
+}
 
-export const FALLBACK_API_URL = stripSlash(
-  import.meta.env.VITE_API_FALLBACK_URL || DEFAULT_LOCAL,
-);
+const VITE_ENV = viteEnv();
+
+export const REMOTE_API_URL = stripSlash(VITE_ENV.VITE_API_URL || DEFAULT_REMOTE);
+
+export const FALLBACK_API_URL = stripSlash(VITE_ENV.VITE_API_FALLBACK_URL || DEFAULT_LOCAL);
 
 export type ApiSource = 'remote' | 'local';
 
@@ -57,7 +68,7 @@ let cachedResolveBasePromise: Promise<{ base: string; source: ApiSource; health:
 export function resolveApiBase(): Promise<{ base: string; source: ApiSource; health: HealthResponse }> {
   if (cachedResolveBasePromise) return cachedResolveBasePromise;
   cachedResolveBasePromise = (async () => {
-    if (import.meta.env.PROD) {
+    if (VITE_ENV.PROD === 'true') {
       return { base: REMOTE_API_URL, source: 'remote', health: await getHealth(REMOTE_API_URL) };
     }
     try {
@@ -74,4 +85,18 @@ export function resolveApiBase(): Promise<{ base: string; source: ApiSource; hea
 export function apiUrl(base: string, path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${stripSlash(base)}${p}`;
+}
+
+/**
+ * Synchronous helper that returns the API base URL for callers that cannot await
+ * `resolveApiBase()`. Prefers the runtime stub (set in test setups), then
+ * `process.env.VITE_API_BASE`, then the default remote URL.
+ */
+export function getApiBaseSync(): string {
+  const stub = (globalThis as { __VITE_API_BASE__?: string }).__VITE_API_BASE__;
+  if (typeof stub === 'string' && stub) return stub;
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  const v = proc?.env?.VITE_API_BASE;
+  if (typeof v === 'string' && v) return v;
+  return REMOTE_API_URL;
 }

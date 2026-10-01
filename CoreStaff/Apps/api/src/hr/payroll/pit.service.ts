@@ -147,7 +147,7 @@ export class PitService {
       if (remaining <= 0) break;
 
       const bracket = brackets[i];
-      const bracketUpper = bracket.upperLimit;
+      const bracketUpper = bracket.upperLimit ?? Number.POSITIVE_INFINITY;
       const bracketWidth = bracketUpper - previousLimit;
       const taxableInBracket = Math.min(remaining, bracketWidth);
       const taxInBracket = taxableInBracket * (bracket.rate / 100);
@@ -302,7 +302,7 @@ export class PitService {
       { upperLimit: 30_000_000, rate: 10 },
       { upperLimit: 60_000_000, rate: 20 },
       { upperLimit: 100_000_000, rate: 30 },
-      { upperLimit: Infinity, rate: 35 },
+      { upperLimit: null, rate: 35 },
     ];
   }
 }

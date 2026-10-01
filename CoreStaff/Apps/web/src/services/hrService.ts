@@ -12,10 +12,14 @@ import type {
 // ───────── API Response Types ─────────
 
 export interface DependentItem {
+    _id?: string;
     fullName: string;
-    birthDate?: string;
+    dateOfBirth: string;
     idCardNumber?: string;
-    relationship: 'CON' | 'BO_ME' | 'ANH_EM';
+    relationship: DependentRelationship;
+    isDisabled: boolean;
+    active?: boolean;
+    version?: number;
     /** Trạng thái: ACTIVE = đang tính giảm trừ, INACTIVE = đã vô hiệu hóa (audit trail).
      * Chỉ update qua Edit dialog, không có button vô hiệu hóa riêng. */
     status?: 'ACTIVE' | 'INACTIVE';
@@ -255,13 +259,14 @@ export interface InsurancePolicyCreateDto {
 // ── Dependent (người phụ thuộc) — stored in employee_profiles.dependents ─
 
 /** Dependent relationship codes (theo luật thuế TNCN Việt Nam). */
-export type DependentRelationship = 'CON' | 'BO_ME' | 'ANH_EM';
+export type DependentRelationship = 'CHILD' | 'SPOUSE' | 'PARENT' | 'SIBLING';
 
 /** Relationship labels in Vietnamese. */
 export const DEPENDENT_RELATIONSHIP_LABELS: Record<DependentRelationship, string> = {
-	CON: 'Con',
-	BO_ME: 'Bố/Mẹ',
-	ANH_EM: 'Anh/Chị/Em ruột',
+	CHILD: 'Con',
+	SPOUSE: 'Vợ/Chồng',
+	PARENT: 'Bố/Mẹ',
+	SIBLING: 'Anh/Chị/Em ruột',
 };
 // ── EnterpriseInsurancePolicy (D40) — bảo hiểm thương mại tự nguyện, khác BHXH/BHYT/BHTN ──
 
@@ -813,8 +818,8 @@ export async function previewManagerSnapshot(
     base: string,
     id: string,
     departmentId: string,
-): Promise<{ summaries: any[]; snapshots: any[] }> {
-    return hrRequest<{ summaries: any[]; snapshots: any[] }>(
+): Promise<{ summaries: any[] }> {
+    return hrRequest<{ summaries: any[] }>(
         base,
         `/api/hr/timesheet-periods/${encodeURIComponent(id)}/snapshot-preview?departmentId=${encodeURIComponent(departmentId)}`,
         { method: 'GET' },
@@ -1073,14 +1078,15 @@ export async function createInsurancePolicy(base: string, dto: InsurancePolicyCr
 export async function addDependent(
     base: string,
     employeeId: string,
-    dependent: { 
-        fullName: string; 
-        birthDate?: string; 
-        idCardNumber?: string; 
-        relationship: 'CON' | 'BO_ME' | 'ANH_EM';
+    dependent: {
+        fullName: string;
+        dateOfBirth: string;
+        idCardNumber?: string;
+        relationship: DependentRelationship;
+        isDisabled: boolean;
     },
-): Promise<EmployeeProfile> {
-    return hrRequest<EmployeeProfile>(base, `/api/hr/employees/${employeeId}/dependents`, {
+): Promise<DependentItem> {
+    return hrRequest<DependentItem>(base, `/api/hr/employees/${employeeId}/dependents`, {
         method: 'POST',
         body: JSON.stringify(dependent),
     });
@@ -1088,17 +1094,17 @@ export async function addDependent(
 
 export async function updateDependent(
     base: string,
-    employeeId: string,
-    index: number,
-    dependent: { 
-        fullName?: string; 
-        birthDate?: string; 
-        idCardNumber?: string; 
-        relationship?: 'CON' | 'BO_ME' | 'ANH_EM';
+    dependentId: string,
+    dependent: {
+        fullName?: string;
+        dateOfBirth?: string;
+        idCardNumber?: string;
+        relationship?: DependentRelationship;
+        isDisabled?: boolean;
         status?: 'ACTIVE' | 'INACTIVE';
     },
-): Promise<EmployeeProfile> {
-    return hrRequest<EmployeeProfile>(base, `/api/hr/employees/${employeeId}/dependents/${index}`, {
+): Promise<DependentItem> {
+    return hrRequest<DependentItem>(base, `/api/hr/dependents/${encodeURIComponent(dependentId)}`, {
         method: 'PUT',
         body: JSON.stringify(dependent),
     });
@@ -1117,7 +1123,7 @@ export async function removeDependent(
 // ── Tax Policy (HR-only, TASK-041) ─────────────────────────────────────
 
 export interface TaxBracket {
-    upperLimit: number;
+    upperLimit: number | null;
     rate: number;
 }
 
@@ -1127,6 +1133,7 @@ export interface TaxPolicy {
     effectiveFrom: string;
     effectiveTo?: string;
     personalDeduction: number;
+    standardDeduction?: number;
     dependentDeduction: number;
     progressiveBrackets: TaxBracket[];
     roundingRule: string;
@@ -1170,6 +1177,7 @@ export async function createTaxPolicy(
     dto: {
         effectiveFrom: string;
         effectiveTo?: string;
+        standardDeduction: number;
         personalDeduction: number;
         dependentDeduction: number;
         progressiveBrackets: TaxBracket[];
@@ -1190,6 +1198,7 @@ export async function updateTaxPolicy(
     dto: Partial<{
         effectiveFrom: string;
         effectiveTo: string;
+        standardDeduction: number;
         personalDeduction: number;
         dependentDeduction: number;
         progressiveBrackets: TaxBracket[];

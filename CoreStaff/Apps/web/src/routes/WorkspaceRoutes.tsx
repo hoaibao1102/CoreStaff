@@ -237,7 +237,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/periods' ? (
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
-            <PayrollRunScreen organizationId={user.organizationId} timesheetPeriodId="" />
+            <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId} timesheetPeriodId="" />
           ) : (
             <HrOverviewScreen user={user} />
           )}

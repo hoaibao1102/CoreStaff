@@ -150,8 +150,8 @@ export class PayrollInputSnapshot {
 
   // ───────── STATUS & INTEGRITY ─────────
 
-  /** Status: GENERATED → CALCULATED → LOCKED → RELEASED. */
-  @Prop({ required: true, enum: ['GENERATED', 'CALCULATED', 'LOCKED', 'RELEASED'], default: 'GENERATED', index: true })
+  /** Status: GENERATED → CALCULATED → LOCKED → RELEASED; reopen marks it STALE. */
+  @Prop({ required: true, enum: ['GENERATED', 'CALCULATED', 'LOCKED', 'RELEASED', 'STALE'], default: 'GENERATED', index: true })
   status: string;
 
   /** Fingerprint of source data at generation time. Mismatch = recompute needed. */

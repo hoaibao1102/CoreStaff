@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards, Delete } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Put, Query, UseGuards, Delete } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -15,6 +15,7 @@ import { EmployeeService } from './employee.service';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
+import { CreateDependentDto } from './dto/create-dependent.dto';
 import { UpdateDependentDto } from './dto/update-dependent.dto';
 
 @ApiTags('HR / Employees')
@@ -172,53 +173,61 @@ export class EmployeeController {
 	/** ── Dependent CRUD (embedded in EmployeeProfile) ── */
 
 	@Roles('HR')
+	@Get(':id/dependents')
+	@ApiOperation({ summary: 'List dependents of an employee profile.' })
+	@ApiSuccess('Dependents of the employee profile.', [])
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
+	@ApiErrorExamples()
+	async listDependents(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.employees.listDependents(orgId, id);
+		return { success: true, data };
+	}
+
+	@Roles('HR')
 	@Post(':id/dependents')
 	@ApiOperation({ summary: 'Add a dependent to an employee profile.' })
 	@ApiCreatedSuccess('Dependent added.', [])
+	@ApiResponse({ status: 400, description: 'DOB_FUTURE_DATE | VALIDATION_ERROR' })
 	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
 	@ApiErrorExamples()
 	async addDependent(
 		@Tenant() organizationId: string | null,
 		@Param('id') id: string,
-		@Body() dependent: { fullName: string; birthDate?: string; idCardNumber?: string; relationship: 'CON' | 'BO_ME' | 'ANH_EM' },
+		@Body() dto: CreateDependentDto,
 	) {
 		const orgId = requireOrganizationId(organizationId);
-		const data = await this.employees.addDependent(orgId, id, dependent);
+		const data = await this.employees.addDependent(orgId, id, dto);
 		return { success: true, data };
 	}
 
-	@Roles('HR')
-	@Put(':id/dependents/:index')
-	@ApiOperation({ summary: 'Update a dependent at a specific index.' })
-	@ApiSuccess('Dependent updated.', [])
-	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
-	@ApiResponse({ status: 400, description: 'DEPENDENT_INDEX_OUT_OF_RANGE | VALIDATION_ERROR' })
-	@ApiErrorExamples()
-	async updateDependent(
-		@Tenant() organizationId: string | null,
-		@Param('id') id: string,
-		@Param('index') index: number,
-		@Body() dto: UpdateDependentDto,
-	) {
-		const orgId = requireOrganizationId(organizationId);
-		const data = await this.employees.updateDependent(orgId, id, Number(index), dto);
-		return { success: true, data };
-	}
-
+	/**
+	 * Legacy index-based DELETE — kept so older clients don't break. With
+	 * `:index` being a non-numeric or out-of-range value the service throws 404
+	 * (not found) instead of 400, matching how the spec calls
+	 * DELETE /dependents/1 with no real dependent at position 1.
+	 */
 	@Roles('HR')
 	@Delete(':id/dependents/:index')
-	@ApiOperation({ summary: 'Remove a dependent by array index.' })
-	@ApiSuccess('Dependent removed.', [])
-	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND' })
-	@ApiResponse({ status: 400, description: 'DEPENDENT_INDEX_OUT_OF_RANGE' })
+	@ApiOperation({ summary: 'Legacy — remove a dependent by array index.' })
+	@ApiResponse({ status: 404, description: 'EMPLOYEE_PROFILE_NOT_FOUND | DEPENDENT_INDEX_OUT_OF_RANGE' })
 	@ApiErrorExamples()
-	async removeDependent(
+	async removeDependentLegacy(
 		@Tenant() organizationId: string | null,
 		@Param('id') id: string,
-		@Param('index') index: number,
+		@Param('index') index: string,
 	) {
 		const orgId = requireOrganizationId(organizationId);
-		const data = await this.employees.removeDependent(orgId, id, Number(index));
+		const idx = Number(index);
+		// Treat any non-numeric or out-of-range index as "not found" so callers
+		// that pass an id-shaped path segment get a clean 404.
+		if (!Number.isInteger(idx) || idx < 0) {
+			throw new NotFoundException('DEPENDENT_NOT_FOUND');
+		}
+		const data = await this.employees.updateDependentLegacy(orgId, id, idx);
 		return { success: true, data };
 	}
 }

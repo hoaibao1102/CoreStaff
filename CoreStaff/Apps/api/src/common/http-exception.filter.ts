@@ -8,7 +8,7 @@ import {
 
 /** Machine-readable code used when no explicit SRS §17 code is supplied. */
 const STATUS_DEFAULT_CODE: Record<number, string> = {
-	[HttpStatus.BAD_REQUEST]: 'VALIDATION_FAILED',
+	[HttpStatus.BAD_REQUEST]: 'VALIDATION_ERROR',
 	[HttpStatus.UNAUTHORIZED]: 'UNAUTHORIZED',
 	[HttpStatus.FORBIDDEN]: 'FORBIDDEN',
 	[HttpStatus.NOT_FOUND]: 'NOT_FOUND',

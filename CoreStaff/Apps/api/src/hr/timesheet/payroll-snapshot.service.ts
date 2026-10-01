@@ -8,6 +8,16 @@ import { SalaryProfile, SalaryProfileDocument } from '../../database/schemas/com
 import { InsurancePolicy, InsurancePolicyDocument } from '../../database/schemas/insurance-policy.schema';
 import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.schema';
 import { EmploymentStatus } from '../../database/schemas/enums';
+import { createHash } from 'node:crypto';
+
+export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingDays' | 'presentDays' | 'absentDays' | 'unpaidLeaveDays'>) {
+  const standardWorkingDays = Math.max(0, summary.workingDays ?? 0);
+  const nonPayableDays = Math.max(0, (summary.absentDays ?? 0) + (summary.unpaidLeaveDays ?? 0));
+  return {
+    standardWorkingDays,
+    payableWorkingDays: Math.max(0, standardWorkingDays - nonPayableDays),
+  };
+}
 
 /**
  * TASK-081/082 / SRS §30C.2 — Generate immutable PayrollInputSnapshots.
@@ -33,6 +43,12 @@ export class PayrollSnapshotService {
     private readonly employeeProfileModel: Model<EmployeeProfileDocument>,
     @InjectModel('SalaryProfile')
     private readonly salaryProfileModel: Model<SalaryProfileDocument>,
+    @InjectModel('OrganizationAllowance')
+    private readonly allowanceModel: Model<any>,
+    @InjectModel('AttendanceBonusPolicy')
+    private readonly attendanceBonusPolicyModel: Model<any>,
+    @InjectModel('KpiPayrollInput')
+    private readonly kpiPayrollInputModel: Model<any>,
     @InjectModel('InsurancePolicy')
     private readonly insurancePolicyModel: Model<InsurancePolicyDocument>,
     @InjectModel('TaxPolicy')
@@ -136,18 +152,28 @@ export class PayrollSnapshotService {
     const insurancePolicy = await this.insurancePolicyModel
       .findOne({
         organizationId: new Types.ObjectId(organizationId),
-        effectiveDate: { $lte: `${periodKey}-01` },
+        effectiveFrom: { $lte: new Date(`${periodKey}-01T00:00:00.000Z`) },
+        $or: [
+          { effectiveTo: { $exists: false } },
+          { effectiveTo: null },
+          { effectiveTo: { $gte: new Date(`${periodKey}-01T00:00:00.000Z`) } },
+        ],
       })
-      .sort({ effectiveDate: -1 })
+      .sort({ effectiveFrom: -1 })
       .session(session ?? null)
       .lean();
 
     const taxPolicy = await this.taxPolicyModel
       .findOne({
         organizationId: new Types.ObjectId(organizationId),
-        effectiveDate: { $lte: `${periodKey}-01` },
+        effectiveFrom: { $lte: new Date(`${periodKey}-01T00:00:00.000Z`) },
+        $or: [
+          { effectiveTo: { $exists: false } },
+          { effectiveTo: null },
+          { effectiveTo: { $gte: new Date(`${periodKey}-01T00:00:00.000Z`) } },
+        ],
       })
-      .sort({ effectiveDate: -1 })
+      .sort({ effectiveFrom: -1 })
       .session(session ?? null)
       .lean();
 
@@ -206,20 +232,40 @@ export class PayrollSnapshotService {
       .findOne({
         employeeProfileId: new Types.ObjectId(summary.employeeProfileId),
         organizationId: new Types.ObjectId(organizationId),
+        active: true,
+        effectiveFrom: { $lte: new Date(`${periodKey}-01T00:00:00.000Z`) },
+        $or: [
+          { effectiveTo: { $exists: false } },
+          { effectiveTo: null },
+          { effectiveTo: { $gte: new Date(`${periodKey}-01T00:00:00.000Z`) } },
+        ],
       })
+      .sort({ effectiveFrom: -1 })
       .lean();
 
-    // Calculate prorated base salary (TASK-087): salary per working day = monthly / 24
+    // The seeded/admin-configured month uses the actual standard workday count.
     const monthlyBaseSalary = salaryProfile?.baseSalary ?? 0;
-    const workingDays = summary.workingDays || 0;
-    const proratedBaseSalary = workingDays > 0 ? Math.round((monthlyBaseSalary / 24) * workingDays) : 0;
+    const { standardWorkingDays, payableWorkingDays } = resolvePayrollWorkdays(summary);
+    const proratedBaseSalary = standardWorkingDays > 0
+      ? Math.round((monthlyBaseSalary / standardWorkingDays) * payableWorkingDays)
+      : 0;
 
     // Calculate allowances from SalaryProfile (TASK-088)
-    const salaryProfileAllowances = Array.isArray(salaryProfile?.allowances) ? salaryProfile.allowances : [];
-    const allowanceBreakdown = salaryProfileAllowances.map((allowance: any) => ({
-      type: allowance.allowanceId?.toString?.() ?? allowance.allowanceId ?? 'unknown',
-      label: allowance.label ?? '',
-      amount: allowance.amount ?? 0,
+    const organizationAllowanceIds = salaryProfile?.organizationAllowanceIds ?? [];
+    const organizationAllowances = organizationAllowanceIds.length
+      ? await this.allowanceModel.find({
+          _id: { $in: organizationAllowanceIds },
+          organizationId: new Types.ObjectId(organizationId),
+          active: true,
+        }).lean()
+      : [];
+    const assignedAmounts = new Map(
+      (salaryProfile?.allowances ?? []).map((item: any) => [String(item.allowanceId), item.amount]),
+    );
+    const allowanceBreakdown = organizationAllowances.map((allowance: any) => ({
+      type: allowance.code ?? String(allowance._id),
+      label: allowance.name ?? allowance.code ?? 'Phụ cấp',
+      amount: assignedAmounts.get(String(allowance._id)) ?? allowance.amount ?? 0,
       taxable: allowance.taxable ?? true,
     }));
     const totalAllowances = allowanceBreakdown.reduce((sum: number, item: any) => sum + item.amount, 0);
@@ -227,15 +273,34 @@ export class PayrollSnapshotService {
       .filter((item: any) => !item.taxable)
       .reduce((sum: number, item: any) => sum + item.amount, 0);
 
-    // Calculate attendance bonus (simplified — full logic in TASK-088)
-    const attendanceBonus = 0; // TODO: Read from attendance bonus policy
+    const attendanceBonusPolicy: any = salaryProfile?.attendanceBonusPolicyId
+      ? await this.attendanceBonusPolicyModel.findOne({
+          _id: salaryProfile.attendanceBonusPolicyId,
+          organizationId: new Types.ObjectId(organizationId),
+          active: true,
+        }).lean()
+      : null;
+    const qualifiesForAttendanceBonus =
+      payableWorkingDays >= standardWorkingDays &&
+      (summary.totalLateMinutes ?? 0) === 0 &&
+      (summary.totalEarlyMinutes ?? 0) === 0 &&
+      (summary.absentDays ?? 0) === 0 &&
+      (summary.incompleteDays ?? 0) === 0;
+    const attendanceBonus = qualifiesForAttendanceBonus ? attendanceBonusPolicy?.bonusAmount ?? 0 : 0;
+    const kpiInput: any = await this.kpiPayrollInputModel.findOne({
+      organizationId: new Types.ObjectId(organizationId),
+      employeeProfileId: new Types.ObjectId(summary.employeeProfileId),
+      period: periodKey,
+      status: 'CONFIRMED',
+    }).lean();
+    const kpiBonus = kpiInput?.amount ?? 0;
 
     // Calculate OT pay (simplified — full logic in TASK-089)
     const otWorkingDayRate = 1.5; // 150% for working day OT
     const otWeeklyOffRate = 2.0; // 200% for weekly off OT
     const otPublicHolidayRate = 3.0; // 300% for public holiday OT
-    const hourlyRate = workingDays > 0
-      ? proratedBaseSalary / (workingDays * 8)
+    const hourlyRate = standardWorkingDays > 0
+      ? monthlyBaseSalary / (standardWorkingDays * 8)
       : monthlyBaseSalary / (24 * 8); // 8 hours/day, fallback to standard month
 
     const otPay =
@@ -252,11 +317,14 @@ export class PayrollSnapshotService {
     const otTaxableEarnings = otPay - otNonTaxableEarnings;
 
     // Calculate insurance contributions (TASK-090/091/092)
-    const socialInsuranceRate = 0.08; // 8% employee BHXH
-    const healthInsuranceRate = 0.015; // 1.5% employee BHYT
-    const unemploymentInsuranceRate = 0.01; // 1% employee BHTN
-
-    const contributionBase = Math.min(proratedBaseSalary, insurancePolicy?.maxContributionBase ?? 20 * (taxPolicy?.baseSalaryMin ?? 1490000));
+    const socialInsuranceRate = insurancePolicy?.socialInsuranceEmployeeRate ?? 0.08;
+    const healthInsuranceRate = insurancePolicy?.healthInsuranceEmployeeRate ?? 0.015;
+    const unemploymentInsuranceRate = insurancePolicy?.unemploymentInsuranceEmployeeRate ?? 0.01;
+    const configuredCaps = (insurancePolicy?.capRules ?? [])
+      .map((rule: any) => rule.capAmount)
+      .filter((value: unknown): value is number => typeof value === 'number' && value > 0);
+    const contributionCap = configuredCaps.length ? Math.min(...configuredCaps) : Number.POSITIVE_INFINITY;
+    const contributionBase = Math.min(salaryProfile?.insuranceSalary ?? monthlyBaseSalary, contributionCap);
 
     const socialInsurance = Math.round(contributionBase * socialInsuranceRate);
     const healthInsurance = Math.round(contributionBase * healthInsuranceRate);
@@ -283,6 +351,7 @@ export class PayrollSnapshotService {
       proratedBaseSalary,
       totalAllowances,
       attendanceBonus,
+      kpiBonus,
       nonTaxableAllowances,
       allowanceBreakdown,
       otMinutesByType: {
@@ -305,7 +374,7 @@ export class PayrollSnapshotService {
       unemploymentInsurance,
 
       // PIT inputs
-      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + otPay - socialInsurance - healthInsurance - unemploymentInsurance),
+      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + otPay - nonTaxableAllowances - otNonTaxableEarnings - socialInsurance - healthInsurance - unemploymentInsurance),
       totalDependentDeductions,
       dependentCount: dependents.length,
       taxPolicyVersion: taxPolicy?.version ?? 1,
@@ -346,8 +415,7 @@ export class PayrollSnapshotService {
       String(dependentCount),
     ].join('|');
 
-    const crypto = require('crypto');
-    return crypto.createHash('md5').update(hashInput).digest('hex').slice(0, 16);
+    return createHash('sha256').update(hashInput).digest('hex');
   }
 
   /**
@@ -413,18 +481,26 @@ export class PayrollSnapshotService {
 
     // Re-read current source data
     const summary = await this.summaryModel
-      .findOne({ _id: snapshot.periodId, employeeProfileId: snapshot.employeeProfileId })
+      .findOne({
+        periodId: snapshot.periodId,
+        employeeProfileId: snapshot.employeeProfileId,
+        organizationId: snapshot.organizationId,
+      })
       .lean();
 
     if (!summary) return false;
 
-    const currentHash = this.generateSourceHash(
-      summary as any,
-      null, // salaryProfile would need separate fetch
-      null, // insurancePolicy would need separate fetch
-      null, // taxPolicy would need separate fetch
-      snapshot.dependentCount,
+    const salaryProfile = await this.salaryProfileModel.findOne({
+      organizationId: snapshot.organizationId,
+      employeeProfileId: snapshot.employeeProfileId,
+    }).lean();
+    const { insurancePolicy, taxPolicy } = await this.getPolicies(
+      String(snapshot.organizationId),
+      snapshot.periodKey,
     );
+    const profile = await this.employeeProfileModel.findById(snapshot.employeeProfileId).lean();
+    const dependentCount = profile?.dependents?.filter((d) => d.status === 'ACTIVE').length ?? 0;
+    const currentHash = this.generateSourceHash(summary as any, salaryProfile, insurancePolicy, taxPolicy, dependentCount);
 
     return currentHash === snapshot.sourceHash;
   }
