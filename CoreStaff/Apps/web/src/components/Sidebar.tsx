@@ -109,7 +109,6 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
                         { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
                     ]},
-                    { href: '/hr/timesheet-periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
                 ],
             },
         ];

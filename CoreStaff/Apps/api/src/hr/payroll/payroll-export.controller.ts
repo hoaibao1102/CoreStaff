@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
-import { CurrentUser } from '../../common/tenant-context';
 import { PayrollExportService } from './payroll-export.service';
 
 @ApiTags('Payroll')
@@ -39,5 +39,16 @@ export class PayrollExportController {
         'Content-Disposition': `attachment; filename=payroll-summary-${id}.csv`,
       },
     };
+  }
+
+  @Get(':id/export/excel')
+  @Roles('HR')
+  @ApiOperation({ summary: 'Export payslips as Excel' })
+  async exportExcel(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, periodLabel } = await this.exportService.exportExcel(id);
+    const safePeriodLabel = periodLabel.replace(/[^a-zA-Z0-9\-_]/g, '_');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=payroll-${safePeriodLabel}.xlsx`);
+    res.send(buffer);
   }
 }

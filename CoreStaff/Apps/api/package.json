@@ -33,18 +33,18 @@
     "seed:enterprise-insurance": "ts-node-script scripts/seed-enterprise-insurance-policy.ts --apply",
     "seed:payroll:e2e:dry": "ts-node-script scripts/seed-payroll-e2e.ts --dry-run",
     "seed:payroll:e2e": "ts-node-script scripts/seed-payroll-e2e.ts --apply",
-    "verify:payroll:e2e": "ts-node-script scripts/verify-payroll-e2e-seed.ts"
-    ,"seed:target:september:dry": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
-    ,"seed:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
-    ,"verify:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
-    ,"verify:target:snapshot-preview": "ts-node-script scripts/verify-target-snapshot-preview.ts"
-    ,"seed:september:compliance-calendar:dry": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
-    ,"seed:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
-    ,"verify:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
-    ,"audit:september:workforce": "ts-node-script scripts/audit-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
-    ,"seed:september:workforce:dry": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09"
-    ,"seed:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply"
-    ,"verify:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
+    "verify:payroll:e2e": "ts-node-script scripts/verify-payroll-e2e-seed.ts",
+    "seed:target:september:dry": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09",
+    "seed:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply",
+    "verify:target:september": "ts-node-script scripts/seed-target-september-payroll.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify",
+    "verify:target:snapshot-preview": "ts-node-script scripts/verify-target-snapshot-preview.ts",
+    "seed:september:compliance-calendar:dry": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09",
+    "seed:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply",
+    "verify:september:compliance-calendar": "ts-node-script scripts/seed-september-compliance-calendar.ts --user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify",
+    "audit:september:workforce": "ts-node-script scripts/audit-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09",
+    "seed:september:workforce:dry": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09",
+    "seed:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --apply",
+    "verify:september:workforce": "ts-node-script scripts/seed-september-workforce.ts --anchor-user-id=6aad6aedf0643efc4ddf03eb --period=2026-09 --verify"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1135.0",
@@ -60,6 +60,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "mongodb-memory-server": "^11.3.0",
     "mongodb-memory-server-core": "^11.3.0",
     "mongoose": "^8.9.0",
@@ -72,6 +73,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
+    "@types/exceljs": "^0.5.3",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/multer": "^2.2.0",
