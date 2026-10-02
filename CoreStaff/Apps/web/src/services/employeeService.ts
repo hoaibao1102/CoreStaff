@@ -1,5 +1,5 @@
 import { hrRequest } from './hrService';
-import { getApiBaseSync } from '../config/api';
+import { resolveApiBase } from '../config/api';
 
 /**
  * Employee-specific API client.
@@ -9,17 +9,19 @@ export const employeeRequest = {
     /**
      * GET request for employee endpoints.
      */
-    get: <T>(path: string, options?: RequestInit): Promise<T> => {
+    get: async <T>(path: string, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(getApiBaseSync(), apiPath, options);
+        const { base } = await resolveApiBase();
+        return hrRequest<T>(base, apiPath, options);
     },
 
     /**
      * POST request for employee endpoints.
      */
-    post: <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
+    post: async <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(getApiBaseSync(), apiPath, {
+        const { base } = await resolveApiBase();
+        return hrRequest<T>(base, apiPath, {
             ...options,
             method: 'POST',
             body: body ? JSON.stringify(body) : undefined,
@@ -29,9 +31,10 @@ export const employeeRequest = {
     /**
      * PUT request for employee endpoints.
      */
-    put: <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
+    put: async <T>(path: string, body?: unknown, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(getApiBaseSync(), apiPath, {
+        const { base } = await resolveApiBase();
+        return hrRequest<T>(base, apiPath, {
             ...options,
             method: 'PUT',
             body: body ? JSON.stringify(body) : undefined,
@@ -41,9 +44,10 @@ export const employeeRequest = {
     /**
      * DELETE request for employee endpoints.
      */
-    delete: <T>(path: string, options?: RequestInit): Promise<T> => {
+    delete: async <T>(path: string, options?: RequestInit): Promise<T> => {
         const apiPath = path.startsWith('/api/') ? path : `/api${path}`;
-        return hrRequest<T>(getApiBaseSync(), apiPath, {
+        const { base } = await resolveApiBase();
+        return hrRequest<T>(base, apiPath, {
             ...options,
             method: 'DELETE',
         });

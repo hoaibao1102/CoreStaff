@@ -447,6 +447,9 @@ export const HR_ERROR_CODES: Record<string, string> = {
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
 
+    // Payroll export errors
+    PAYROLL_RUN_NOT_EXPORTABLE: 'Chỉ có thể xuất Excel khi bảng lương ở trạng thái Đã khóa hoặc Đã phát hành.',
+
     // System errors
     SERVER_ERROR: 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.',
     SERVICE_UNAVAILABLE: 'Dịch vụ tạm thời không khả dụng. Vui lòng thử lại.',
@@ -1237,7 +1240,7 @@ export async function createEnterpriseInsurancePolicy(base: string, dto: Enterpr
         body: JSON.stringify(dto),
     });
 }
-
+    
 /** Get effective TaxPolicy at a specific date */
 export async function getEffectiveTaxPolicy(base: string, date?: string): Promise<TaxPolicy | null> {
     const params = date ? `?date=${date}` : '';

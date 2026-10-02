@@ -7,6 +7,8 @@ import { Payslip, PayslipSchema } from '../../database/schemas/payslip.schema';
 import { PayrollInputSnapshot, PayrollInputSnapshotSchema } from '../../database/schemas/payroll-input-snapshot.schema';
 import { TimesheetPeriod, TimesheetPeriodSchema } from '../../database/schemas/timesheet-period.schema';
 import { EmployeeProfile, EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
+import { Department, DepartmentSchema } from '../../database/schemas/department.schema';
+import { Position, PositionSchema } from '../../database/schemas/position.schema';
 import { TaxPolicy, TaxPolicySchema } from '../../database/schemas/tax-policy.schema';
 import { InsurancePolicy, InsurancePolicySchema } from '../../database/schemas/insurance-policy.schema';
 import { User, UserSchema } from '../../database/schemas/user.schema';
@@ -17,6 +19,8 @@ import { InsuranceService } from './insurance.service';
 import { PitService } from './pit.service';
 import { PayslipService } from './payslip.service';
 import { PayslipController } from './payslip.controller';
+import { PayrollExportController } from './payroll-export.controller';
+import { PayrollExportService } from './payroll-export.service';
 
 @Module({
   imports: [
@@ -27,14 +31,16 @@ import { PayslipController } from './payslip.controller';
       { name: PayrollInputSnapshot.name, schema: PayrollInputSnapshotSchema },
       { name: TimesheetPeriod.name, schema: TimesheetPeriodSchema },
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
+      { name: Department.name, schema: DepartmentSchema },
+      { name: Position.name, schema: PositionSchema },
       { name: TaxPolicy.name, schema: TaxPolicySchema },
       { name: InsurancePolicy.name, schema: InsurancePolicySchema },
       { name: 'User', schema: UserSchema },
       { name: 'UserSession', schema: UserSessionSchema },
     ]),
   ],
-  controllers: [PayrollRunController, PayslipController],
-  providers: [PayrollRunService, InsuranceService, PitService, PayslipService, RolesGuard],
+  controllers: [PayrollRunController, PayslipController, PayrollExportController],
+  providers: [PayrollRunService, InsuranceService, PitService, PayslipService, PayrollExportService, RolesGuard],
   exports: [PayrollRunService, InsuranceService, PitService, PayslipService],
 })
 export class PayrollModule {}

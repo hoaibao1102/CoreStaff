@@ -9,8 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/table';
+import { toast } from '@/components/toast';
 import { PayslipPreviewDialog } from './PayslipPreviewDialog';
-import { hrRequest } from '@/services/hrService';
+import { hrErrorMessage, hrRequest } from '@/services/hrService';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -257,20 +258,34 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleExportCSV = async (runId: string) => {
+  const handleExportExcel = async (runId: string) => {
     try {
-      const response = await fetch(`${apiBase}/api/payroll-runs/${runId}/export/csv`);
+      const response = await fetch(`${apiBase}/api/payroll-runs/${runId}/export/excel`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const errorPayload = body.error || body;
+        const error = new Error(errorPayload.message || 'Export Excel thất bại.');
+        (error as any).code = errorPayload.code;
+        (error as any).status = response.status;
+        throw error;
+      }
       const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition');
+      const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] || `payroll-${runId}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `payslips-${runId}.csv`);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to export CSV:', error);
+      console.error('Failed to export Excel:', error);
+      toast.error('Không thể xuất Excel', hrErrorMessage(error));
     }
   };
 
@@ -381,8 +396,8 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                             <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>
                               Xem Chi Tiết
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleExportCSV(run._id)} disabled={loading}>
-                              Export CSV
+                            <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run._id)} disabled={loading}>
+                              Export Excel
                             </Button>
                           </>
                         )}
