@@ -6,6 +6,7 @@ import { HaversineService } from './services/haversine.service';
 import { NetworkValidatorService } from './services/network-validator.service';
 import { AttendanceCalculatorService } from './services/attendance-calculator.service';
 import { StorageModule } from '../storage/storage.module';
+import { PeriodVersionModule } from '../hr/timesheet/period-version.module';
 import { AttendanceDaySchema } from '../database/schemas/attendance-day.schema';
 import { AttendanceEventSchema } from '../database/schemas/attendance-event.schema';
 import { EvidenceSchema } from '../database/schemas/evidence.schema';
@@ -42,6 +43,7 @@ import { OvertimeModule } from '../hr/overtime/overtime.module';
     StorageModule,
     ShiftTemplateModule,
     OvertimeModule,
+    PeriodVersionModule,
   ],
   controllers: [AttendanceController],
   providers: [

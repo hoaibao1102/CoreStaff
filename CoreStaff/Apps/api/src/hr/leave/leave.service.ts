@@ -9,6 +9,7 @@ import { LeaveActionDocument } from '../../database/schemas/leave-action.schema'
 import { LeaveRequestDocument } from '../../database/schemas/leave-request.schema';
 import { LeaveRequestStatus, WorkdayType } from '../../database/schemas/enums';
 import { ManagerScopeService } from '../manager/manager-scope.service';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 import { dateOnly, enumerateDates } from '../../common/date-only';
 import { CreateLeaveRequestDto, LeaveRequestQueryDto } from './dto/leave.dto';
 
@@ -25,6 +26,7 @@ export class LeaveService {
     @InjectModel('AttendanceDay') private readonly attendanceDays: Model<AttendanceDayDocument>,
     @InjectConnection() private readonly connection: Connection,
     private readonly managerScope: ManagerScopeService,
+    private readonly periodVersion: PeriodVersionService,
   ) {}
 
   async create(org: string, employeeId: string, dto: CreateLeaveRequestDto) {
@@ -124,6 +126,8 @@ export class LeaveService {
           { $set: { workdayType: old.leaveType as WorkdayType }, $unset: { dayResult: 1 } },
           { session },
         );
+        // TASK-073 — applying leave changes in-period data: bump version + drop old confirmations.
+        await this.periodVersion.bumpForWorkDates(org, dates, session);
         const row = await this.requests.findOneAndUpdate(
           { _id: id, organizationId: org, status: LeaveRequestStatus.APPROVED },
           { $set: { status: LeaveRequestStatus.HR_APPLIED, appliedBy: hrId, appliedAt: new Date() } },

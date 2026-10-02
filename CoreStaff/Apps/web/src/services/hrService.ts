@@ -860,6 +860,100 @@ export async function hrClosePeriod(base: string, id: string): Promise<{ period:
     });
 }
 
+// ── Period blockers (TASK-074) ────────────────────────────────────────
+
+export type PeriodBlockerType =
+    | 'MISSING_CHECK_IN'
+    | 'MISSING_CHECK_OUT'
+    | 'PENDING_APPROVAL'
+    | 'PENDING_CLARIFICATION'
+    | 'REJECTED';
+
+export interface PeriodBlockerRow {
+    id: string;
+    type: PeriodBlockerType;
+    attendanceDayId: string;
+    employeeId: string;
+    employee: { code?: string; name?: string; departmentId?: string; department?: string };
+    date: string;
+    note: string;
+    dayResult?: string;
+    attendanceStatus?: string;
+    overallApprovalStatus?: string;
+    checkInAt?: string | null;
+    checkOutAt?: string | null;
+}
+
+export interface PeriodBlockerPage {
+    total: number;
+    page: number;
+    limit: number;
+    items: PeriodBlockerRow[];
+    summary: Array<{ type: PeriodBlockerType; message: string; count: number }>;
+}
+
+export async function getPeriodBlockers(
+    base: string,
+    id: string,
+    opts: { type?: PeriodBlockerType; departmentId?: string; page?: number; limit?: number } = {},
+): Promise<PeriodBlockerPage> {
+    const params = new URLSearchParams();
+    if (opts.type) params.set('type', opts.type);
+    if (opts.departmentId) params.set('departmentId', opts.departmentId);
+    if (opts.page) params.set('page', String(opts.page));
+    if (opts.limit) params.set('limit', String(opts.limit));
+    return hrRequest<PeriodBlockerPage>(
+        base,
+        `/api/hr/timesheet-periods/${encodeURIComponent(id)}/blockers${params.size ? `?${params}` : ''}`,
+        { method: 'GET' },
+    );
+}
+
+export interface AttendanceDayDetail {
+    day: {
+        _id: string;
+        workDate: string;
+        workdayType?: string;
+        dayResult?: string;
+        attendanceStatus?: string;
+        overallApprovalStatus?: string;
+        checkInAt?: string | null;
+        checkOutAt?: string | null;
+        workingMinutes?: number;
+        lateMinutes?: number;
+        earlyMinutes?: number;
+        employeeSnapshot?: { employeeCode?: string; fullName?: string; departmentName?: string };
+    };
+    events: Array<{
+        _id: string;
+        eventType: string;
+        method: string;
+        recordedAt: string;
+        approvalStatus?: string;
+        evidenceId?: string;
+        address?: string;
+    }>;
+    request: {
+        _id: string;
+        status: string;
+        reason?: string;
+        reviewComment?: string;
+        reviewedAt?: string;
+    } | null;
+}
+
+export async function getPeriodDayDetail(
+    base: string,
+    id: string,
+    dayId: string,
+): Promise<AttendanceDayDetail> {
+    return hrRequest<AttendanceDayDetail>(
+        base,
+        `/api/hr/timesheet-periods/${encodeURIComponent(id)}/days/${encodeURIComponent(dayId)}`,
+        { method: 'GET' },
+    );
+}
+
 export function paginateEmployees(data: EmployeeProfile[], query: string, requestedPage: number) {
     const term = query.trim().toLocaleLowerCase('vi');
     const filtered = data.filter(row => !term || `${row.fullName ?? ''} ${row.employeeCode}`.toLocaleLowerCase('vi').includes(term));

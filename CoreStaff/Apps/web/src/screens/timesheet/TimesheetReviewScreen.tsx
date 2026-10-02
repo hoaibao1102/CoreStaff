@@ -14,6 +14,7 @@ import { Progress } from '@/components/progress';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock,
   FileText,
   Loader2,
@@ -22,7 +23,15 @@ import {
   Download,
 } from 'lucide-react';
 import { hrRequest } from '@/services/api';
+import {
+  hrErrorMessage,
+  getPeriodBlockers,
+  PeriodBlockerRow,
+  PeriodBlockerType,
+} from '@/services/hrService';
 import { getManagerContext, ManagerContext } from '@/services/manager.service';
+import { toast } from '@/components/toast';
+import { BlockerDayDetailDialog } from './components/BlockerDayDetailDialog';
 
 
 type DepartmentSnapshot = {
@@ -54,7 +63,15 @@ type SummaryStats = {
   missingSummaries: number;
   attendanceComplete: number;
   pendingApprovals: number;
-  blockers: Array<{ type: string; message: string; count: number }>;
+  blockers: Array<{ type: PeriodBlockerType; message: string; count: number }>;
+};
+
+const BLOCKER_LABEL: Record<PeriodBlockerType, string> = {
+  MISSING_CHECK_IN: 'Thiếu check-in',
+  MISSING_CHECK_OUT: 'Thiếu check-out',
+  PENDING_APPROVAL: 'Approval còn PENDING',
+  PENDING_CLARIFICATION: 'Chờ giải trình',
+  REJECTED: 'Ngày công bị REJECTED',
 };
 
 export function TimesheetReviewScreen({
@@ -78,6 +95,12 @@ export function TimesheetReviewScreen({
   const [previewData, setPreviewData] = useState<{ summaries: any[] } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDepartmentId, setPreviewDepartmentId] = useState<string | null>(null);
+  // TASK-074 — blocker drill-down
+  const [expandedBlocker, setExpandedBlocker] = useState<PeriodBlockerType | null>(null);
+  const [blockerRows, setBlockerRows] = useState<PeriodBlockerRow[]>([]);
+  const [blockerRowsLoading, setBlockerRowsLoading] = useState(false);
+  const [blockerRowsError, setBlockerRowsError] = useState<string | null>(null);
+  const [detailBlocker, setDetailBlocker] = useState<PeriodBlockerRow | null>(null);
 
   // Load periods list
   useEffect(() => {
@@ -131,10 +154,31 @@ export function TimesheetReviewScreen({
       );
       setStats(statsData);
     } catch (err) {
-      console.error('Failed to load period detail:', err);
       setStats(null);
+      toast.error(hrErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** TASK-074 — expand a blocker type and lazily load its failing days. */
+  async function toggleBlocker(type: PeriodBlockerType) {
+    if (expandedBlocker === type) {
+      setExpandedBlocker(null);
+      return;
+    }
+    if (!selectedPeriod) return;
+    setExpandedBlocker(type);
+    setBlockerRowsLoading(true);
+    setBlockerRowsError(null);
+    try {
+      const page = await getPeriodBlockers(apiBase, selectedPeriod._id, { type, limit: 50 });
+      setBlockerRows(page.items);
+    } catch (err) {
+      setBlockerRows([]);
+      setBlockerRowsError(hrErrorMessage(err));
+    } finally {
+      setBlockerRowsLoading(false);
     }
   }
 
@@ -150,7 +194,7 @@ export function TimesheetReviewScreen({
       );
       setPreviewData(data);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Không thể tải preview snapshot. Vui lòng thử lại.');
+      toast.error(hrErrorMessage(err));
     } finally {
       setPreviewLoading(false);
     }
@@ -175,7 +219,7 @@ export function TimesheetReviewScreen({
         setCloseSuccess(false);
       }, 2000);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Không thể chốt kỳ công. Vui lòng thử lại.');
+      toast.error(hrErrorMessage(err));
     } finally {
       setClosing(false);
     }
@@ -200,15 +244,14 @@ export function TimesheetReviewScreen({
           body: JSON.stringify({ departmentId }),
         },
       );
-      alert(
-        `Đóng snapshot thành công!\n` +
-          `${result.departmentName}: ${result.employeesInSnapshot}/${result.totalDepartmentEmployees} nhân viên đã được đóng snapshot.`
+      toast.success(
+        `Đóng snapshot thành công! ${result.departmentName}: ${result.employeesInSnapshot}/${result.totalDepartmentEmployees} nhân viên.`
       );
       setPreviewData(null);
       setPreviewDepartmentId(null);
       loadPeriodDetail(selectedPeriod._id);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Không thể đóng snapshot. Vui lòng thử lại.');
+      toast.error(hrErrorMessage(err));
     } finally {
       setClosing(false);
     }
@@ -414,7 +457,7 @@ export function TimesheetReviewScreen({
                 </Card>
               </div>
 
-              {/* Blockers Warning */}
+              {/* Blockers Warning — TASK-074, expandable drill-down */}
               {stats.blockers.length > 0 && (
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="pt-6">
@@ -424,10 +467,75 @@ export function TimesheetReviewScreen({
                         <h3 className="text-sm font-semibold text-red-900">
                           Cần xử lý trước khi chốt
                         </h3>
-                        <ul className="mt-2 space-y-1">
-                          {stats.blockers.map((blocker, idx) => (
-                            <li key={idx} className="text-sm text-red-800">
-                              • {blocker.message} ({blocker.count})
+                        <ul className="mt-3 space-y-2">
+                          {stats.blockers.map((blocker) => (
+                            <li key={blocker.type}>
+                              <button
+                                type="button"
+                                onClick={() => toggleBlocker(blocker.type)}
+                                className="flex w-full items-center justify-between rounded-lg border border-red-200 bg-white px-3 py-2 text-left text-sm text-red-900 hover:bg-red-100"
+                              >
+                                <span>
+                                  {BLOCKER_LABEL[blocker.type] ?? blocker.message}{' '}
+                                  <span className="text-red-600">({blocker.count})</span>
+                                </span>
+                                <ChevronDown
+                                  className={`h-4 w-4 transition-transform ${
+                                    expandedBlocker === blocker.type ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </button>
+
+                              {expandedBlocker === blocker.type && (
+                                <div className="mt-2 overflow-hidden rounded-lg border border-red-200 bg-white">
+                                  {blockerRowsLoading && (
+                                    <div className="flex justify-center py-6">
+                                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  {!blockerRowsLoading && blockerRowsError && (
+                                    <div className="p-3 text-sm text-red-800">{blockerRowsError}</div>
+                                  )}
+                                  {!blockerRowsLoading && !blockerRowsError && blockerRows.length === 0 && (
+                                    <div className="p-3 text-sm text-muted-foreground">
+                                      Không có ngày nào.
+                                    </div>
+                                  )}
+                                  {!blockerRowsLoading && !blockerRowsError && blockerRows.length > 0 && (
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Nhân viên</TableHead>
+                                          <TableHead>Phòng ban</TableHead>
+                                          <TableHead>Ngày</TableHead>
+                                          <TableHead>Ghi chú</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {blockerRows.map((row) => (
+                                          <TableRow
+                                            key={row.id}
+                                            className="cursor-pointer"
+                                            onClick={() => setDetailBlocker(row)}
+                                          >
+                                            <TableCell className="font-medium">
+                                              {row.employee.name ?? row.employeeId}
+                                              {row.employee.code && (
+                                                <span className="ml-1 text-xs text-muted-foreground">
+                                                  ({row.employee.code})
+                                                </span>
+                                              )}
+                                            </TableCell>
+                                            <TableCell>{row.employee.department ?? '—'}</TableCell>
+                                            <TableCell>{row.date}</TableCell>
+                                            <TableCell>{row.note}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  )}
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -544,11 +652,13 @@ export function TimesheetReviewScreen({
                   {selectedPeriod.managerSnapshotClosed ? (
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-green-800">
-                        Xác nhận chốt kỳ công {selectedPeriod.period}?
+                        {stats && stats.blockers.length > 0
+                          ? `Còn ${stats.blockers.reduce((sum, b) => sum + b.count, 0)} blocker cần xử lý trước khi chốt.`
+                          : `Xác nhận chốt kỳ công ${selectedPeriod.period}?`}
                       </p>
                       <Button
                         onClick={handleClosePeriod}
-                        disabled={closing}
+                        disabled={closing || (stats?.blockers.length ?? 0) > 0}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         {closing ? (
@@ -591,6 +701,17 @@ export function TimesheetReviewScreen({
             </Card>
           )}
         </div>
+      )}
+
+      {/* TASK-074 — blocked-day drill-down */}
+      {selectedPeriod && (
+        <BlockerDayDetailDialog
+          open={detailBlocker !== null}
+          onOpenChange={(open) => { if (!open) setDetailBlocker(null); }}
+          apiBase={apiBase}
+          periodId={selectedPeriod._id}
+          blocker={detailBlocker}
+        />
       )}
     </div>
   );

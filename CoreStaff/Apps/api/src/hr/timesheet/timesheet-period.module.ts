@@ -12,6 +12,9 @@ import { PayrollSnapshotModule } from './payroll-snapshot.module';
 import { ManagerModule } from '../manager/manager.module';
 import { PayrollInputSnapshotSchema } from '../../database/schemas/payroll-input-snapshot.schema';
 import { PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
+import { AttendanceDay, AttendanceDaySchema } from '../../database/schemas/attendance-day.schema';
+import { AttendanceEvent, AttendanceEventSchema } from '../../database/schemas/attendance-event.schema';
+import { ManagerRequest, ManagerRequestSchema } from '../../database/schemas/manager-request.schema';
 
 @Module({
 	imports: [
@@ -21,6 +24,10 @@ import { PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
 			{ name: EmployeeProfile.name, schema: EmployeeProfileSchema },
 			{ name: 'PayrollInputSnapshot', schema: PayrollInputSnapshotSchema },
 			{ name: 'PayrollRun', schema: PayrollRunSchema },
+			// TASK-074 — blocker calculation sources
+			{ name: AttendanceDay.name, schema: AttendanceDaySchema },
+			{ name: AttendanceEvent.name, schema: AttendanceEventSchema },
+			{ name: ManagerRequest.name, schema: ManagerRequestSchema },
 			// Required for AuthGuard dependency injection
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },
