@@ -19,9 +19,10 @@ import { ManagerAssignmentService } from './manager-assignment.service';
 import { ManagerRequestService } from './manager-request.service';
 import { OvertimeModule } from '../overtime/overtime.module';
 import { HrOvertimeController, ManagerOvertimeController, OvertimeController } from '../overtime/overtime.controller';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 @Module({
-  imports: [AuthModule, OvertimeModule, MongooseModule.forFeature([
+  imports: [AuthModule, OvertimeModule, PeriodVersionModule, MongooseModule.forFeature([
     { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
     { name: 'ManagerRequest', schema: ManagerRequestSchema },
     { name: 'Assignment', schema: EmployeeAssignmentSchema },

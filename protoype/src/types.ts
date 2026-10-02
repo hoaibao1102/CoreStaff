@@ -280,7 +280,8 @@ export type PeriodBlockerType =
   | 'MISSING_CHECK_IN'
   | 'MISSING_CHECK_OUT'
   | 'PENDING_APPROVAL'
-  | 'PENDING_CLARIFICATION';
+  | 'PENDING_CLARIFICATION'
+  | 'REJECTED';
 
 export interface PeriodBlocker {
   id: string;

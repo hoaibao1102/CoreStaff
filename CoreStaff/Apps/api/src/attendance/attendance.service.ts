@@ -30,6 +30,7 @@ import { CheckOutDto } from './dto/check-out.dto';
 import { ShiftResolverService } from '../hr/shift-template/shift-resolver.service';
 import { OvertimeService } from '../hr/overtime/overtime.service';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../database/schemas/timesheet-period.schema';
+import { PeriodVersionService } from '../hr/timesheet/period-version.service';
 
 /** File upload type matching Express/Multer used by NestJS controllers */
 interface UploadedFile {
@@ -66,6 +67,8 @@ export class AttendanceService {
     @Optional() private readonly eventsGateway?: EventsGateway,
     // TASK-069 — last so positional construction in existing specs is unaffected.
     @Optional() private readonly overtime?: OvertimeService,
+    // TASK-073 — appended last for the same reason; optional so specs keep compiling.
+    @Optional() private readonly periodVersion?: PeriodVersionService,
   ) {}
 
   /**
@@ -466,6 +469,13 @@ export class AttendanceService {
       await day.save();
     }
 
+    // TASK-073 — a check-in mutates in-period attendance: bump the period version.
+    try {
+      await this.periodVersion?.bump(organizationId, periodId ?? day.periodId);
+    } catch (verErr) {
+      console.warn('[AttendanceService] Period version bump failed on check-in:', verErr);
+    }
+
     // 6. Lưu AttendanceEvent
     const event = await this.attendanceEventModel.create({
       organizationId: orgObjectId,
@@ -703,6 +713,13 @@ export class AttendanceService {
     }
 
     await day.save();
+
+    // TASK-073 — a check-out mutates in-period attendance: bump the period version.
+    try {
+      await this.periodVersion?.bump(organizationId, periodId ?? day.periodId);
+    } catch (verErr) {
+      console.warn('[AttendanceService] Period version bump failed on check-out:', verErr);
+    }
 
     // 5. Tạo AttendanceEvent cho CHECK_OUT
     const outEvent = await this.attendanceEventModel.create({

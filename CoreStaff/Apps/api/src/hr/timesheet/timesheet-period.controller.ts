@@ -77,6 +77,7 @@ export class TimesheetPeriodController {
 		return { success: true, data };
 	}
 
+	@Roles('HR', 'DEPARTMENT_MANAGER')
 	@Get(':id/review-stats')
 	@ApiOperation({ summary: 'Get review statistics for a timesheet period.' })
 	@ApiSuccess('Review statistics.', {
@@ -89,9 +90,78 @@ export class TimesheetPeriodController {
 	})
 	@ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
 	@ApiErrorExamples()
-	async getReviewStats(@Tenant() organizationId: string | null, @Param('id') id: string) {
+	async getReviewStats(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@CurrentUser() user: any,
+	) {
 		const orgId = requireOrganizationId(organizationId);
-		const data = await this.service.getReviewStats(orgId, id);
+		const data = await this.service.getReviewStats(orgId, id, {
+			userId: String(user._id ?? user.id),
+			role: user.role,
+		});
+		return { success: true, data };
+	}
+
+	@Roles('HR', 'DEPARTMENT_MANAGER')
+	@Get(':id/blockers')
+	@ApiOperation({ summary: 'List blockers for a timesheet period (TASK-074 drill-down).' })
+	@ApiSuccess('Blocker page.', {
+		total: 2,
+		page: 1,
+		limit: 50,
+		items: [
+			{
+				id: '64f1a2b3c4d5e6f7a8b9c0d9:MISSING_CHECK_IN',
+				type: 'MISSING_CHECK_IN',
+				attendanceDayId: '64f1a2b3c4d5e6f7a8b9c0d9',
+				employeeId: '64f1a2b3c4d5e6f7a8b9c0d2',
+				employee: { code: 'EMP001', name: 'Nguyễn Văn An', department: 'Kỹ thuật' },
+				date: '2026-10-06',
+				note: 'Thiếu check-in',
+			},
+		],
+		summary: [{ type: 'MISSING_CHECK_IN', message: 'Thiếu check-in', count: 1 }],
+	})
+	@ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
+	@ApiErrorExamples()
+	async getBlockers(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Query('type') type: any,
+		@Query('departmentId') departmentId: string | undefined,
+		@Query('page') page: string | undefined,
+		@Query('limit') limit: string | undefined,
+		@CurrentUser() user: any,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.service.getBlockers(orgId, id, {
+			userId: String(user._id ?? user.id),
+			role: user.role,
+			type,
+			departmentId,
+			page: page ? Number(page) : undefined,
+			limit: limit ? Number(limit) : undefined,
+		});
+		return { success: true, data };
+	}
+
+	@Roles('HR', 'DEPARTMENT_MANAGER')
+	@Get(':id/days/:dayId')
+	@ApiOperation({ summary: 'Drill-down detail for one attendance day in the period (TASK-074).' })
+	@ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND | ATTENDANCE_DAY_NOT_FOUND' })
+	@ApiErrorExamples()
+	async getDayDetail(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Param('dayId') dayId: string,
+		@CurrentUser() user: any,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.service.getDayDetail(orgId, id, dayId, {
+			userId: String(user._id ?? user.id),
+			role: user.role,
+		});
 		return { success: true, data };
 	}
 

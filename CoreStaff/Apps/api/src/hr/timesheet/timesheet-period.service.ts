@@ -9,6 +9,10 @@ import { PayrollSnapshotService } from './payroll-snapshot.service';
 import { ManagerScopeService } from '../manager/manager-scope.service';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
+import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
+import { AttendanceEventDocument } from '../../database/schemas/attendance-event.schema';
+import { ManagerRequestDocument } from '../../database/schemas/manager-request.schema';
+import { classifyDayBlockers, summarizeBlockers, PeriodBlockerRow, PeriodBlockerType } from './period-blockers';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -59,6 +63,9 @@ export class TimesheetPeriodService {
 		private readonly summaryService: TimesheetSummaryService,
 		private readonly snapshotService: PayrollSnapshotService,
 		private readonly managerScopeService: ManagerScopeService,
+		@InjectModel('AttendanceDay') private readonly attendanceDayModel: Model<AttendanceDayDocument>,
+		@InjectModel('AttendanceEvent') private readonly attendanceEventModel: Model<AttendanceEventDocument>,
+		@InjectModel('ManagerRequest') private readonly managerRequestModel: Model<ManagerRequestDocument>,
 	) {}
 
 	/**
@@ -155,8 +162,14 @@ export class TimesheetPeriodService {
 
 	/**
 	 * Get review statistics for a timesheet period.
+	 * TASK-074 — blockers are computed for real; `blockers` keeps the
+	 * `{type,message,count}` shape the review screen already renders.
 	 */
-	async getReviewStats(organizationId: string, id: string): Promise<any> {
+	async getReviewStats(
+		organizationId: string,
+		id: string,
+		opts: { userId?: string; role?: string } = {},
+	): Promise<any> {
 		const period = await this.findById(organizationId, id);
 
 		const summaries = await this.summaryService.findByPeriod(id);
@@ -173,18 +186,150 @@ export class TimesheetPeriodService {
 			? Math.round((snapshotsCreated / totalEmployees) * 100)
 			: 0;
 
+		// Managers only see blockers for departments they manage.
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
+
 		return {
 			periodId: id,
 			period: period.period,
 			status: period.status,
+			version: period.version,
 			totalEmployees,
 			summariesGenerated,
 			snapshotsCreated,
 			attendanceComplete,
-			pendingApprovals: 0,
+			pendingApprovals: blockers.filter(
+				(b) => b.type === 'PENDING_APPROVAL' || b.type === 'PENDING_CLARIFICATION',
+			).length,
 			missingSummaries: Math.max(0, totalEmployees - summariesGenerated),
-			blockers: [],
+			blockers: summarizeBlockers(blockers),
 		};
+	}
+
+	/**
+	 * TASK-074 — paged blocker list for the drill-down.
+	 */
+	async getBlockers(
+		organizationId: string,
+		id: string,
+		opts: {
+			userId?: string;
+			role?: string;
+			type?: PeriodBlockerType;
+			departmentId?: string;
+			page?: number;
+			limit?: number;
+		} = {},
+	): Promise<{ total: number; page: number; limit: number; items: PeriodBlockerRow[]; summary: ReturnType<typeof summarizeBlockers> }> {
+		const period = await this.findById(organizationId, id);
+
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		let rows = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
+
+		if (opts.type) rows = rows.filter((row) => row.type === opts.type);
+		if (opts.departmentId) rows = rows.filter((row) => row.employee.departmentId === opts.departmentId);
+
+		rows.sort((a, b) => (a.date === b.date ? a.employee.code?.localeCompare(b.employee.code ?? '') ?? 0 : a.date.localeCompare(b.date)));
+
+		const page = Math.max(1, opts.page ?? 1);
+		const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
+		const start = (page - 1) * limit;
+
+		return {
+			total: rows.length,
+			page,
+			limit,
+			items: rows.slice(start, start + limit),
+			summary: summarizeBlockers(rows),
+		};
+	}
+
+	/**
+	 * TASK-074 — drill-down detail for one attendance day inside the period.
+	 * Returns the day, its punch events, and the linked approval request so the
+	 * reviewer can see why the day is blocked.
+	 */
+	async getDayDetail(
+		organizationId: string,
+		id: string,
+		dayId: string,
+		opts: { userId?: string; role?: string } = {},
+	): Promise<{ day: any; events: any[]; request: any | null }> {
+		const period = await this.findById(organizationId, id);
+
+		if (!Types.ObjectId.isValid(dayId)) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		const day = await this.attendanceDayModel
+			.findOne({ _id: dayId, organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) })
+			.lean();
+		if (!day) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		// Managers may only open days of employees inside their scope. 404 rather
+		// than 403 so the endpoint does not leak whether the day exists.
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
+			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		}
+
+		const [events, request] = await Promise.all([
+			this.attendanceEventModel
+				.find({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId) })
+				.sort({ recordedAt: 1 })
+				.lean(),
+			this.managerRequestModel
+				.findOne({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId) })
+				.sort({ createdAt: -1 })
+				.lean(),
+		]);
+
+		return { day, events, request };
+	}
+
+	/**
+	 * TASK-074 — load and classify every attendance day in the period.
+	 * `employeeIds` narrows the result for department-scoped callers.
+	 */
+	private async collectBlockers(
+		organizationId: string,
+		periodId: string,
+		employeeIds?: Set<string>,
+	): Promise<PeriodBlockerRow[]> {
+		const days = await this.attendanceDayModel
+			.find({
+				organizationId: new Types.ObjectId(organizationId),
+				periodId: new Types.ObjectId(periodId),
+			})
+			.lean();
+
+		const rows: PeriodBlockerRow[] = [];
+		for (const day of days) {
+			if (employeeIds && !employeeIds.has(String(day.employeeId))) continue;
+			rows.push(...classifyDayBlockers(day as any));
+		}
+		return rows;
+	}
+
+	/**
+	 * Resolve the employee ids a caller may see. HR sees the whole organization
+	 * (returns undefined); a DEPARTMENT_MANAGER is narrowed to managed departments.
+	 */
+	private async resolveScopeEmployeeIds(
+		organizationId: string,
+		period: any,
+		opts: { userId?: string; role?: string },
+	): Promise<Set<string> | undefined> {
+		if (opts.role !== 'DEPARTMENT_MANAGER' || !opts.userId) return undefined;
+
+		const departmentIds = await this.managerScopeService.getManagedDepartmentIds(organizationId, opts.userId);
+		if (!departmentIds.length) return new Set();
+
+		const employeeIds = await this.managerScopeService.resolveEmployeeIdsForDepartments(
+			organizationId,
+			departmentIds,
+			new Date(period.endDate),
+		);
+		return new Set(employeeIds);
 	}
 
 	/**
@@ -291,6 +436,15 @@ export class TimesheetPeriodService {
 
 		try {
 			await session.withTransaction(async () => {
+				// TASK-074 / FR-HR-04 — a department cannot close its snapshot while
+				// its own days still have blockers.
+				const blockers = await this.collectBlockers(
+					organizationId,
+					id,
+					new Set(departmentEmployeeIds),
+				);
+				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
+
 				// Generate summaries and snapshots for this department only
 				summariesCreated = await this.summaryService.generateSummariesForDepartment(
 					id,
@@ -384,19 +538,32 @@ export class TimesheetPeriodService {
 
 		// ponytail: manager-snapshot flow is intentionally optional; HR can close the period directly.
 
-		const doc = await this.periodModel.findByIdAndUpdate(
-			id,
-			{
-				$set: {
-					status: TimesheetPeriodStatus.CLOSED,
-					closedBy: userId,
-					closedAt: new Date(),
-				},
-			},
-			{ new: true, runValidators: true },
-		).lean();
+		// TASK-074 / FR-HR-04 — re-verify blockers inside the transaction; never
+		// trust a frontend check.
+		const session = await this.periodModel.db.startSession();
+		let doc: any;
+		try {
+			await session.withTransaction(async () => {
+				const blockers = await this.collectBlockers(organizationId, id);
+				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
 
-		if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+				doc = await this.periodModel.findByIdAndUpdate(
+					id,
+					{
+						$set: {
+							status: TimesheetPeriodStatus.CLOSED,
+							closedBy: userId,
+							closedAt: new Date(),
+						},
+					},
+					{ new: true, runValidators: true, session },
+				).lean();
+
+				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+			});
+		} finally {
+			await session.endSession();
+		}
 
 		return { period: this.toResponse(doc) };
 	}
