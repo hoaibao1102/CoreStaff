@@ -163,6 +163,19 @@ describe('TASK-074 — blocker drill-down', () => {
     expect(res.body.data.items[0].type).toBe('REJECTED');
   });
 
+  it('resolves the department name when the day snapshot only carries a departmentId', async () => {
+    const periodId = await createCurrentPeriod();
+    await seedBlockedDay(periodId, {
+      employeeSnapshot: { employeeCode: 'NV-IT-3', fullName: 'Lê Văn C', departmentId: fixture.departmentId },
+    });
+
+    const res = await http.get(`${API_PREFIX}/${periodId}/blockers`).set('Cookie', hrCookie);
+
+    expect(res.body.data.total).toBe(1);
+    expect(res.body.data.items[0].employee.departmentId).toBe(String(fixture.departmentId));
+    expect(res.body.data.items[0].employee.department).toBeTruthy();
+  });
+
   it('opens the day detail for HR', async () => {
     const periodId = await createCurrentPeriod();
     const day = await seedBlockedDay(periodId);
