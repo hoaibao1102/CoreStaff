@@ -87,12 +87,20 @@ export interface Position {
     name: string;
     active: boolean;
     organizationId: string;
+    /** Owning department — a position lives inside exactly one department. */
+    departmentId: string;
     createdAt?: string;
     updatedAt?: string;
 }
 
-export type CreatePositionPayload = Pick<Position, 'code' | 'name'>;
-export type UpdatePositionPayload = Partial<CreatePositionPayload>;
+export type CreatePositionPayload = Pick<Position, 'code' | 'name' | 'departmentId'>;
+export type UpdatePositionPayload = Partial<Pick<Position, 'code' | 'name'>>;
+
+/** Department detail — the department plus its positions and active managers. */
+export interface DepartmentDetail extends Department {
+    positions: Position[];
+    managers: Array<{ id: string; fullName: string }>;
+}
 
 export interface EligibleEmployeeAccount {
     _id: string;
@@ -349,7 +357,8 @@ export const HR_ERROR_CODES: Record<string, string> = {
     DEPARTMENT_NOT_FOUND: 'Phòng ban đã chọn không còn tồn tại. Vui lòng chọn lại.',
     DEPARTMENT_CODE_TAKEN: 'Mã phòng ban này đã tồn tại trong tổ chức. Vui lòng chọn mã khác.',
     POSITION_NOT_FOUND: 'Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.',
-    POSITION_CODE_TAKEN: 'Mã chức danh này đã tồn tại. Vui lòng chọn mã khác.',
+    POSITION_CODE_TAKEN: 'Mã chức danh này đã tồn tại trong phòng ban. Vui lòng chọn mã khác.',
+    POSITION_DEPARTMENT_MISMATCH: 'Chức danh không thuộc phòng ban đã chọn.',
     MANAGER_NOT_FOUND: 'Không tìm thấy quản lý trực tiếp này trong tổ chức.',
     WORKPLACE_NOT_FOUND: 'Nơi làm việc đã chọn không còn tồn tại.',
 
@@ -685,8 +694,8 @@ export async function getDepartments(base: string, activeOnly?: boolean): Promis
     );
 }
 
-export async function getDepartmentById(base: string, id: string): Promise<Department> {
-    return hrRequest<Department>(base, `/api/hr/departments/${encodeURIComponent(id)}`, { method: 'GET' });
+export async function getDepartmentById(base: string, id: string): Promise<DepartmentDetail> {
+    return hrRequest<DepartmentDetail>(base, `/api/hr/departments/${encodeURIComponent(id)}`, { method: 'GET' });
 }
 
 export async function getWorkplaces(base: string): Promise<Workplace[]> {
@@ -711,12 +720,13 @@ export async function setDepartmentActive(base: string, id: string, active: bool
 
 // ── Positions (public within tenant) ──────────────────────────────────
 
-export async function getPositions(base: string, activeOnly?: boolean): Promise<Position[]> {
+export async function getPositions(base: string, opts: { departmentId?: string; activeOnly?: boolean } = {}): Promise<Position[]> {
     const params = new URLSearchParams();
-    if (activeOnly !== undefined) params.set('active', String(activeOnly));
+    if (opts.activeOnly !== undefined) params.set('active', String(opts.activeOnly));
+    if (opts.departmentId) params.set('departmentId', opts.departmentId);
     return hrRequest<Position[]>(
         base,
-        `/api/hr/positions?${params.toString()}`,
+        `/api/hr/positions${params.size ? `?${params}` : ''}`,
         { method: 'GET' },
     );
 }

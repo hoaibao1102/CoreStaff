@@ -54,36 +54,57 @@ function buildModel(rows: Row[]) {
 	};
 }
 
+/** findOne() enrichment fakes: no positions, no manager assignments. */
+const emptyPositions = { find: () => ({ sort: () => ({ lean: async () => [] }) }) };
+const emptyAssignments = { find: () => ({ lean: async () => [] }) };
+const emptyUsers = { find: () => ({ select: () => ({ lean: async () => [] }) }) };
+
+function buildService(rows: Row[]) {
+	return new DepartmentService(buildModel(rows) as never, emptyPositions as never, emptyAssignments as never, emptyUsers as never);
+}
+
 describe('DepartmentService (TASK-021)', () => {
 	it('creates a department scoped to the tenant', async () => {
 		const rows: Row[] = [];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 		const dept = await svc.create('org1', { code: 'ENG', name: 'Engineering' });
 		expect(dept).toMatchObject({ organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true });
 	});
 
 	it('rejects a duplicate code within the same tenant (FR-HRCFG-01)', async () => {
 		const rows: Row[] = [{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true }];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 		await expect(svc.create('org1', { code: 'ENG', name: 'Eng 2' })).rejects.toBeInstanceOf(ConflictException);
 	});
 
 	it('allows the same code to be reused across different tenants', async () => {
 		const rows: Row[] = [{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true }];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 		const dept = await svc.create('org2', { code: 'ENG', name: 'Engineering' });
 		expect(dept.organizationId).toBe('org2');
 	});
 
 	it('404s when reading an id outside the tenant', async () => {
 		const rows: Row[] = [{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true }];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 		await expect(svc.findOne('org2', '1')).rejects.toBeInstanceOf(NotFoundException);
+	});
+
+	it('enriches the detail with positions and active managers', async () => {
+		const rows: Row[] = [{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true }];
+		const positions = { find: () => ({ sort: () => ({ lean: async () => [{ _id: 'p1', code: 'DEV', name: 'Developer' }] }) }) };
+		const assignments = { find: () => ({ lean: async () => [{ managerUserId: 'u1' }] }) };
+		const users = { find: () => ({ select: () => ({ lean: async () => [{ _id: 'u1', fullName: 'Nguyễn Văn An' }] }) }) };
+		const svc = new DepartmentService(buildModel(rows) as never, positions as never, assignments as never, users as never);
+
+		const detail = await svc.findOne('org1', '1') as unknown as { positions: unknown[]; managers: Array<{ id: string; fullName: string }> };
+		expect(detail.positions).toHaveLength(1);
+		expect(detail.managers).toEqual([{ id: 'u1', fullName: 'Nguyễn Văn An' }]);
 	});
 
 	it('deactivate/activate toggles the soft-CRUD flag without deleting the row', async () => {
 		const rows: Row[] = [{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true }];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 
 		const deactivated = await svc.setActive('org1', '1', false);
 		expect(deactivated.active).toBe(false);
@@ -98,7 +119,7 @@ describe('DepartmentService (TASK-021)', () => {
 			{ _id: '1', organizationId: 'org1', code: 'ENG', name: 'Engineering', active: true },
 			{ _id: '2', organizationId: 'org1', code: 'HR', name: 'Human Resources', active: true },
 		];
-		const svc = new DepartmentService(buildModel(rows) as never);
+		const svc = buildService(rows);
 		await expect(svc.update('org1', '2', { code: 'ENG' })).rejects.toBeInstanceOf(ConflictException);
 	});
 });

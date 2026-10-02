@@ -21,7 +21,7 @@ export function SelfProvisionDialog({
     const loader = useCallback(async () => {
         const [departments, positions, managers] = await Promise.all([
             getDepartments(apiBase, true),
-            getPositions(apiBase, true),
+            getPositions(apiBase, { activeOnly: true }),
             listEmployees(apiBase, '', ''),
         ]);
         return {

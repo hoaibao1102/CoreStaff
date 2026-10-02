@@ -5,7 +5,6 @@ import { EmployeeProfileScreen } from '../screens/EmployeeProfile/EmployeeProfil
 import { AttendanceScreen } from '../screens/Attendance/AttendanceScreen';
 import { AttendanceHistoryScreen, LeaveOvertimeScreen } from '../screens/Employee/EmployeeWorkScreens';
 import { DepartmentScreen } from '../screens/Departments/DepartmentScreen';
-import { PositionScreen } from '../screens/Positions/PositionScreen';
 import { AssignmentScreen } from '../screens/Assignments/AssignmentScreen';
 import { WorkplaceScreen } from '../screens/Workplaces/WorkplaceScreen';
 import { ShiftTemplateScreen } from '../screens/ShiftTemplates/ShiftTemplateScreen';
@@ -140,7 +139,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   // ── Employee Profile ─────────────────────────────────────────────────
+  // HR accounts are tenant admin identities without an EmployeeProfile; the
+  // personal profile route is closed to them.
   if (route === '/app/profile') {
+    if (user.role === 'HR') return <EmployeeDataState status="forbidden" />;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -160,9 +162,6 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
       </WorkspaceShell>
     );
   }
-  if (route === '/hr/positions') {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><PositionScreen user={user} apiBase={apiBase} /></section></WorkspaceShell>;
-  }
   if (route === '/hr/workplaces' && user.role === 'HR') {
     if (!user.organizationId) return <EmployeeDataState status="forbidden" />;
     if (!apiBase) return <EmployeeDataState status="error" message="Chưa kết nối được API." />;
@@ -180,15 +179,11 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   // ── HR routes ────────────────────────────────────────────────────────
-  if (route === '/app/attendance' && user.role === 'HR') {
-    return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
-        <AttendanceScreen user={user} />
-      </WorkspaceShell>
-    );
-  }
-
   if (user.role === 'HR') {
+    // HR accounts carry no personal workspace: the employee self-service routes
+    // are closed here even on a direct URL (backend returns 403 for the same).
+    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips'];
+    if (hrPersonalRoutes.includes(route)) return <EmployeeDataState status="forbidden" />;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -230,10 +225,6 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <CalendarScreen apiBase={apiBase} />
           ) : route === '/hr/leave-requests' && apiBase ? (
             <HrLeaveScreen apiBase={apiBase} />
-          ) : route === '/app/leave' && apiBase ? (
-            <EmployeeLeaveScreen apiBase={apiBase} />
-          ) : route === '/app/ot' ? (
-            <LeaveOvertimeScreen />
           ) : route === '/hr/periods' ? (
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (

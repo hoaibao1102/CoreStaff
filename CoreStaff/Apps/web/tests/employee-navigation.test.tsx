@@ -118,12 +118,13 @@ async function signIn() {
   await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 }
 
-test('HR login opens directory and own profile without reloading authentication', async () => {
+test('HR login opens directory without a personal profile link', async () => {
   await open('/');
   await signIn();
 
   expect(container.querySelector('#workspace a[href="/hr/employees"]')).not.toBeNull();
-  expect(container.querySelector('#workspace a[href="/app/profile"]')).not.toBeNull();
+  // HR accounts are tenant admin identities — no personal profile workspace.
+  expect(container.querySelector('#workspace a[href="/app/profile"]')).toBeNull();
 
   const authRequests = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/auth/')).length;
   const requests = authRequests();

@@ -1,6 +1,5 @@
 import {
     Building2,
-    BriefcaseBusiness,
     CalendarDays,
     ChevronDown,
     ChevronLeft,
@@ -68,7 +67,6 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                     ...common,
                     { label: 'Cơ cấu tổ chức', icon: Building2, children: [
                         { href: '/hr/departments', label: 'Phòng ban', icon: Building2 },
-                        { href: '/hr/positions', label: 'Chức danh', icon: BriefcaseBusiness },
                         { href: '/hr/workplaces', label: 'Nơi làm việc', icon: Building2 },
                     ]},
                     { label: 'Nhân sự', icon: Users, children: [
@@ -97,19 +95,6 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
                         { href: '/hr/policies/enterprise-insurance', label: 'Bảo hiểm doanh nghiệp', icon: ShieldCheck },
                     ]},
-                ],
-            },
-            {
-                // Attendance for HR is gated on work assignments that don't exist
-                // yet (TASK-024, Sprint 4) — kept out until then so the sidebar
-                // matches the routes (§16.2 / AC-HR-SELF-01).
-                title: 'Nhân sự',
-                items: [
-                    { label: 'Cá nhân của tôi', icon: UserRound, children: [
-                        { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
-                        { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
-                    ]},
-                    { href: '/hr/timesheet-periods', label: 'Chốt kỳ công', icon: ClipboardCheck },
                 ],
             },
         ];
@@ -329,9 +314,12 @@ export function Sidebar({ id, user, currentPath, collapsed, onToggle, onLogout, 
                                 <span className="block truncate">{roleLabel(user.role)}</span>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem render={<AppLink href="/app/profile" onClick={onNavigate} />} className="min-h-11 px-3">
-                                <UserRound aria-hidden="true" /> Hồ sơ của tôi
-                            </DropdownMenuItem>
+                            {/* HR accounts are tenant admin identities, not employees — no personal profile. */}
+                            {user.role !== 'HR' && (
+                                <DropdownMenuItem render={<AppLink href="/app/profile" onClick={onNavigate} />} className="min-h-11 px-3">
+                                    <UserRound aria-hidden="true" /> Hồ sơ của tôi
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem variant="destructive" onClick={() => { onNavigate?.(); onLogout(); }} className="min-h-11 px-3">
                                 <LogOut aria-hidden="true" /> Đăng xuất
                             </DropdownMenuItem>

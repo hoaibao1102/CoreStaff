@@ -136,7 +136,7 @@ function buildRefModel(ids: Record<string, string[]>, docs: Array<Record<string,
 				docs.find(
 					(d) => String(d._id) === String(filter._id) && String(d.organizationId ?? '') === String(filter.organizationId ?? ''),
 				) ?? null;
-			return { lean: () => ({ exec: run }), exec: run };
+			return { lean: () => ({ exec: run }), select: () => ({ lean: run }), exec: run };
 		},
 	};
 }
@@ -255,13 +255,15 @@ function buildService(
 		positions?: Record<string, string[]>;
 		users?: Record<string, string[]>;
 		userDocs?: Array<Record<string, unknown>>;
+		/** Position docs (with departmentId) for the position↔department mismatch check. */
+		positionDocs?: Array<Record<string, unknown>>;
 	} = {},
 ) {
 	return new EmployeeService(
 		buildProfileModel(profiles) as never,
 		buildHistoryModel(histories) as never,
 		buildRefModel(refs.departments ?? {}) as never,
-		buildRefModel(refs.positions ?? {}) as never,
+		buildRefModel(refs.positions ?? {}, refs.positionDocs ?? []) as never,
 		buildRefModel(refs.users ?? { org1: ['user1', 'user2'] }, refs.userDocs ?? []) as never,
 		fakeConnection() as never,
 	);
@@ -324,6 +326,39 @@ describe('EmployeeService.create (TASK-020)', () => {
 				departmentId: 'missing',
 			} as never),
 		).rejects.toBeInstanceOf(NotFoundException);
+	});
+
+	it('rejects a position that belongs to a different department', async () => {
+		const svc = buildService([], [], {
+			departments: { org1: ['dep1'] },
+			positions: { org1: ['pos1'] },
+			positionDocs: [{ _id: 'pos1', organizationId: 'org1', departmentId: 'dep2' }],
+		});
+		await expect(
+			svc.create('org1', {
+				userId: 'user1',
+				employeeCode: 'TVS-0001',
+				joinDate: '2026-09-16',
+				departmentId: 'dep1',
+				positionId: 'pos1',
+			} as never),
+		).rejects.toThrow('POSITION_DEPARTMENT_MISMATCH');
+	});
+
+	it('accepts a position inside the employee department', async () => {
+		const svc = buildService([], [], {
+			departments: { org1: ['dep1'] },
+			positions: { org1: ['pos1'] },
+			positionDocs: [{ _id: 'pos1', organizationId: 'org1', departmentId: 'dep1' }],
+		});
+		const profile = await svc.create('org1', {
+			userId: 'user1',
+			employeeCode: 'TVS-0001',
+			joinDate: '2026-09-16',
+			departmentId: 'dep1',
+			positionId: 'pos1',
+		} as never);
+		expect(profile).toMatchObject({ departmentId: 'dep1', positionId: 'pos1' });
 	});
 });
 

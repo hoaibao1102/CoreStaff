@@ -505,8 +505,16 @@ export class EmployeeService {
 			if (!exists) throw new NotFoundException('DEPARTMENT_NOT_FOUND');
 		}
 		if (dto.positionId) {
-			const exists = await this.positionModel.exists({ _id: dto.positionId, organizationId });
-			if (!exists) throw new NotFoundException('POSITION_NOT_FOUND');
+			// A position belongs to exactly one department; the employee's position
+			// must sit inside the employee's department.
+			const position = await this.positionModel
+				.findOne({ _id: dto.positionId, organizationId })
+				.select('departmentId')
+				.lean();
+			if (!position) throw new NotFoundException('POSITION_NOT_FOUND');
+			if (dto.departmentId && String(position.departmentId) !== String(dto.departmentId)) {
+				throw new BadRequestException('POSITION_DEPARTMENT_MISMATCH');
+			}
 		}
 		if (dto.directManagerId) {
 			const exists = await this.userModel.exists({ _id: dto.directManagerId, organizationId });

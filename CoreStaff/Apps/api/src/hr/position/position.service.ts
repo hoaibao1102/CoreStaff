@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { PositionDocument } from '../../database/schemas/position.schema';
 import { normalizeCode } from '../../database/schemas/enums';
 import { CreatePositionDto } from './dto/create-position.dto';
@@ -8,11 +9,22 @@ import { UpdatePositionDto } from './dto/update-position.dto';
 
 const DUPLICATE_KEY_ERROR = 11000;
 
+export interface FindAllPositionsOptions {
+	departmentId?: string;
+	active?: boolean;
+}
+
 @Injectable()
 export class PositionService {
-	constructor(@InjectModel('Position') private readonly positionModel: Model<PositionDocument>) {}
+	constructor(
+		@InjectModel('Position') private readonly positionModel: Model<PositionDocument>,
+		@InjectModel('Department') private readonly departmentModel: Model<DepartmentDocument>,
+	) {}
 
 	async create(organizationId: string, dto: CreatePositionDto) {
+		// A position must live inside a department of the same tenant.
+		const departmentExists = await this.departmentModel.exists({ _id: dto.departmentId, organizationId });
+		if (!departmentExists) throw new NotFoundException('DEPARTMENT_NOT_FOUND');
 		try {
 			const doc = await this.positionModel.create({ ...dto, organizationId });
 			return doc.toObject();
@@ -21,9 +33,10 @@ export class PositionService {
 		}
 	}
 
-	async findAll(organizationId: string, active?: boolean) {
+	async findAll(organizationId: string, options: FindAllPositionsOptions = {}) {
 		const filter: Record<string, unknown> = { organizationId };
-		if (active !== undefined) filter.active = active;
+		if (options.departmentId) filter.departmentId = options.departmentId;
+		if (options.active !== undefined) filter.active = options.active;
 		return this.positionModel.find(filter).sort({ name: 1 }).lean();
 	}
 

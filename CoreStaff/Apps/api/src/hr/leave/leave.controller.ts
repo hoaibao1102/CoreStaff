@@ -10,11 +10,11 @@ import { LeaveService } from './leave.service';
 @Controller('leave-requests')
 export class EmployeeLeaveController {
   constructor(private readonly leave: LeaveService) {}
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Post()
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post()
   async create(@Tenant() org: string | null, @Req() req: any, @Body() dto: CreateLeaveRequestDto) { return { success: true, data: await this.leave.create(requireOrganizationId(org), String(req.user._id), dto) }; }
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Get('mine')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine')
   async mine(@Tenant() org: string | null, @Req() req: any) { return { success: true, data: await this.leave.mine(requireOrganizationId(org), String(req.user._id)) }; }
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Get('mine/:id')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine/:id')
   async one(@Tenant() org: string | null, @Req() req: any, @Param('id') id: string) { return { success: true, data: await this.leave.getMine(requireOrganizationId(org), String(req.user._id), id) }; }
 }
 

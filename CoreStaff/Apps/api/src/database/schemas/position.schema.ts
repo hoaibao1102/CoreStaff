@@ -6,13 +6,18 @@ export type PositionDocument = HydratedDocument<Position>;
 
 /**
  * TASK-022: HR-managed, soft-CRUD, tenant-scoped job-title catalog.
- * Mirrors the Department pattern (SRS §15.3) — the SRS names `Position` as an
- * EmployeeProfile reference (§15.2A, §2670) without a dedicated ERD block.
+ * A position belongs to exactly one Department (SRS §15.3) — HR configures the
+ * positions of a department from inside that department, and a position's code
+ * is unique within its department only.
  */
 @Schema({ collection: 'positions', timestamps: true })
 export class Position {
   @Prop({ type: 'ObjectId', ref: 'Organization', required: true, index: true })
   organizationId: string;
+
+  /** Owning department. Positions never move between departments (see UpdatePositionDto). */
+  @Prop({ type: 'ObjectId', ref: 'Department', required: true, index: true })
+  departmentId: string;
 
   @Prop({ required: true })
   code: string;
@@ -33,8 +38,8 @@ export class Position {
 
 export const PositionSchema = SchemaFactory.createForClass(Position);
 
-// Tenant-scoped uniqueness: position code is unique within an Organization.
-PositionSchema.index({ organizationId: 1, code: 1 }, { unique: true });
+// Department-scoped uniqueness: a position code is unique within its department.
+PositionSchema.index({ organizationId: 1, departmentId: 1, code: 1 }, { unique: true });
 
 PositionSchema.pre('validate', function (next) {
   if (this.code) {

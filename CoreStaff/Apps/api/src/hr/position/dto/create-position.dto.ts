@@ -1,8 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsMongoId, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export class CreatePositionDto {
-	@ApiProperty({ example: 'SWE2', description: 'Unique within the organization.' })
+	@ApiProperty({ example: '66f1b2c3d4e5f60718293b01', description: 'Owning department (must exist in the tenant).' })
+	@IsMongoId()
+	departmentId: string;
+
+	@ApiProperty({ example: 'SWE2', description: 'Unique within the department.' })
 	@IsString()
 	@IsNotEmpty()
 	@MaxLength(32)

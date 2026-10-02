@@ -38,8 +38,8 @@ describe('mongodb index contracts (TASK-015)', () => {
     expect(hasCompoundIndex(DepartmentSchema, ['organizationId', 'code'], true)).toBe(true);
   });
 
-  it('Position: tenant-scoped unique code (TASK-022)', () => {
-    expect(hasCompoundIndex(PositionSchema, ['organizationId', 'code'], true)).toBe(true);
+  it('Position: department-scoped unique code (TASK-022)', () => {
+    expect(hasCompoundIndex(PositionSchema, ['organizationId', 'departmentId', 'code'], true)).toBe(true);
   });
 
   it('EmployeeProfile: sole owner of tenant-scoped unique employeeCode (TASK-120)', () => {

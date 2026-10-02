@@ -20,9 +20,8 @@ export interface HrSeed {
 	employeeCode: string;
 	/** Which OrgSeed.code this HR belongs to. */
 	orgCode: string;
-	/** joinDate for the HR's own EmployeeProfile (HR staff are employees too). */
+	/** Kept for the User record only — an HR account has no EmployeeProfile. */
 	joinDate: string;
-	/** PROBATION→ACTIVE date for the HR's profile. */
 	activeDate: string;
 }
 
@@ -31,6 +30,8 @@ export interface CatalogSeed {
 	orgCode: string;
 	code: string;
 	name: string;
+	/** Positions only: key into DEPARTMENTS within the same orgCode (owning department). */
+	departmentCode?: string;
 }
 
 export interface EmployeeSeed {
@@ -73,14 +74,14 @@ export const DEPARTMENTS: CatalogSeed[] = [
 ];
 
 export const POSITIONS: CatalogSeed[] = [
-	{ orgCode: 'TVS', code: 'DLEAD', name: 'Engineering Lead' },
-	{ orgCode: 'TVS', code: 'DEV', name: 'Software Developer' },
-	{ orgCode: 'TVS', code: 'QA', name: 'QA Engineer' },
-	{ orgCode: 'TVS', code: 'ACC', name: 'Accountant' },
-	{ orgCode: 'TVS', code: 'OPS', name: 'Operations Staff' },
-	{ orgCode: 'ABC', code: 'SLM', name: 'Sales Manager' },
-	{ orgCode: 'ABC', code: 'SLS', name: 'Sales Staff' },
-	{ orgCode: 'ABC', code: 'ACC', name: 'Accountant' },
+	{ orgCode: 'TVS', code: 'DLEAD', name: 'Engineering Lead', departmentCode: 'ENG' },
+	{ orgCode: 'TVS', code: 'DEV', name: 'Software Developer', departmentCode: 'ENG' },
+	{ orgCode: 'TVS', code: 'QA', name: 'QA Engineer', departmentCode: 'ENG' },
+	{ orgCode: 'TVS', code: 'ACC', name: 'Accountant', departmentCode: 'FIN' },
+	{ orgCode: 'TVS', code: 'OPS', name: 'Operations Staff', departmentCode: 'OPS' },
+	{ orgCode: 'ABC', code: 'SLM', name: 'Sales Manager', departmentCode: 'SAL' },
+	{ orgCode: 'ABC', code: 'SLS', name: 'Sales Staff', departmentCode: 'SAL' },
+	{ orgCode: 'ABC', code: 'ACC', name: 'Accountant', departmentCode: 'FIN' },
 ];
 
 export const EMPLOYEES: EmployeeSeed[] = [
@@ -124,6 +125,15 @@ export const EMPLOYEES: EmployeeSeed[] = [
 		orgCode: 'TVS', role: Role.EMPLOYEE,
 		departmentCode: 'OPS', positionCode: 'OPS',
 		joinDate: '2026-09-01', dateOfBirth: '2000-10-12', gender: Gender.FEMALE, phone: '0901000006',
+	},
+	// HR staff check in with their own EMPLOYEE account — the HR login (HR-A/HR-B
+	// above) is a tenant admin identity with no EmployeeProfile.
+	{
+		email: 'hr.staff@tvs.local', fullName: 'Đỗ Thị Hạnh', employeeCode: 'TVS-HR01',
+		orgCode: 'TVS', role: Role.EMPLOYEE,
+		departmentCode: 'FIN', positionCode: 'ACC',
+		joinDate: '2025-02-10', activeDate: '2025-05-10', dateOfBirth: '1994-07-21',
+		gender: Gender.FEMALE, phone: '0901000007',
 	},
 	// --- ABC ---
 	{

@@ -81,11 +81,14 @@ function departmentOptions(departments: EmployeeCreateDialogProps['departments']
     }));
 }
 
-function positionOptions(positions: EmployeeCreateDialogProps['positions']) {
-    return positions.map((pos) => ({
-        value: pos._id,
-        label: `${pos.code ? `${pos.code} — ` : ''}${pos.name}`,
-    }));
+function positionOptions(positions: EmployeeCreateDialogProps['positions'], departmentId: string) {
+    // A position belongs to a department: only offer the positions of the chosen one.
+    return positions
+        .filter((pos) => pos.departmentId === departmentId)
+        .map((pos) => ({
+            value: pos._id,
+            label: `${pos.code ? `${pos.code} — ` : ''}${pos.name}`,
+        }));
 }
 
 function accountOptions(accounts: EmployeeCreateDialogProps['accounts']) {
@@ -546,7 +549,7 @@ export function EmployeeCreateDialog({
                                     id="create-departmentId"
                                     label="Phòng ban"
                                     value={form.departmentId}
-                                    onChange={(e) => updateField('departmentId', e.target.value)}
+                                    onChange={(e) => { updateField('departmentId', e.target.value); updateField('positionId', ''); }}
                                     onBlur={() => blurField('departmentId')}
                                     options={departmentOptions(departments)}
                                     disabled={submitting.current}
@@ -558,8 +561,8 @@ export function EmployeeCreateDialog({
                                     value={form.positionId}
                                     onChange={(e) => updateField('positionId', e.target.value)}
                                     onBlur={() => blurField('positionId')}
-                                    options={positionOptions(positions)}
-                                    disabled={submitting.current}
+                                    options={positionOptions(positions, form.departmentId)}
+                                    disabled={submitting.current || !form.departmentId}
                                     error={errors.positionId}
                                 />
                             </div>

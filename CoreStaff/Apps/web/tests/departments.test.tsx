@@ -1,4 +1,4 @@
-import { createDepartment, getDepartmentById, getDepartments, setDepartmentActive, updateDepartment } from '../src/services/hrService';
+import { createDepartment, getDepartmentById, getDepartments, getPositions, setDepartmentActive, updateDepartment } from '../src/services/hrService';
 
 jest.mock('../src/config/api', () => ({ apiUrl: (base: string, path: string) => base + path }));
 const base = 'https://api.test';
@@ -32,6 +32,23 @@ test('detail encodes the id; activation and deactivation send no body', async ()
     expect(options.credentials).toBe('include');
     expect(options.body).toBeUndefined();
   }
+});
+
+test('department detail carries its positions and active managers', async () => {
+  fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ success: true, data: {
+    ...department,
+    positions: [{ _id: 'p1', code: 'DEV', name: 'Developer', departmentId: 'd1', active: true }],
+    managers: [{ id: 'u1', fullName: 'Nguyễn Văn An' }],
+  } }) });
+  const detail = await getDepartmentById(base, 'd1');
+  expect(detail.positions).toHaveLength(1);
+  expect(detail.managers).toEqual([{ id: 'u1', fullName: 'Nguyễn Văn An' }]);
+});
+
+test('position list scopes to a department', async () => {
+  fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ success: true, data: [] }) });
+  await getPositions(base, { departmentId: 'd1', activeOnly: true });
+  expect(fetchMock).toHaveBeenCalledWith(`${base}/api/hr/positions?active=true&departmentId=d1`, expect.objectContaining({ method: 'GET' }));
 });
 
 test.each([[409, 'DEPARTMENT_CODE_TAKEN'], [404, 'DEPARTMENT_NOT_FOUND'], [403, 'FORBIDDEN']])('preserves HTTP %s and error code for UI feedback', async (status, code) => {

@@ -16,7 +16,7 @@ import { OvertimeService } from './overtime.service';
 export class OvertimeController {
   constructor(private readonly overtime: OvertimeService, private readonly requests: ManagerRequestService) {}
 
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Post()
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post()
   async create(
     @Tenant() orgId: string | null,
     @Req() req: any,
@@ -63,7 +63,7 @@ export class OvertimeController {
     }
   }
 
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Get('mine')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine')
   async mine(@Tenant() orgId: string | null, @Req() req: any, @Query('month') month?: string) {
     const org = requireOrganizationId(orgId);
     const rows = await this.requests.listMine(org, String(req.user._id));
@@ -83,7 +83,7 @@ export class OvertimeController {
    * the shift withdrawn, unscheduled) — which is also the signal for the form to
    * stop constraining the window at all.
    */
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Get('schedule')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('schedule')
   async schedule(@Tenant() orgId: string | null, @Req() req: any, @Query('date') date?: string) {
     const org = requireOrganizationId(orgId);
     const workDate = dateOnly(date ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));

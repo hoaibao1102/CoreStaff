@@ -10,6 +10,8 @@ import { createPosition } from '@/services/hrService';
 
 interface PositionCreateDialogProps {
   apiBase: string;
+  /** Owning department — a position is always created inside a department. */
+  departmentId: string;
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
@@ -17,7 +19,7 @@ interface PositionCreateDialogProps {
 
 const INVALID_MESSAGE = 'Thông tin chức vụ chưa hợp lệ. Vui lòng kiểm tra lại.';
 
-export function PositionCreateDialog({ apiBase, open, onClose, onCreated }: PositionCreateDialogProps) {
+export function PositionCreateDialog({ apiBase, departmentId, open, onClose, onCreated }: PositionCreateDialogProps) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [errors, setErrors] = useState<{ code?: string; name?: string }>({});
@@ -36,7 +38,7 @@ export function PositionCreateDialog({ apiBase, open, onClose, onCreated }: Posi
     event.preventDefault();
     if (submittingRef.current) return;
 
-    const payload = { code: code.trim(), name: name.trim() };
+    const payload = { code: code.trim(), name: name.trim(), departmentId };
     const nextErrors = {
       code: payload.code ? undefined : 'Vui lòng nhập mã chức vụ.',
       name: payload.name ? undefined : 'Vui lòng nhập tên chức vụ.',

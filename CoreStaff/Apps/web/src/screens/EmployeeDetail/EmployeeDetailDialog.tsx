@@ -315,7 +315,7 @@ function EmployeeDetailContent({
             const [data, deptList, posList, workplaceList, empList] = await Promise.all([
                 getEmployeeById(apiBase, employeeId),
                 getDepartments(apiBase, true).catch(() => []),
-                getPositions(apiBase, true).catch(() => []),
+                getPositions(apiBase, { activeOnly: true }).catch(() => []),
                 getWorkplaces(apiBase).catch(() => []),
                 getEmployees(apiBase).catch(() => ({ employees: [] })),
             ]);
@@ -953,7 +953,7 @@ function EmployeeDetailContent({
                                                     id="edit-departmentId"
                                                     className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                     value={employmentForm.departmentId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value }))}
+                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value, positionId: '' }))}
                                                 >
                                                     <option value="">Chưa chọn phòng ban</option>
                                                     {departments.map((d) => (
@@ -962,17 +962,18 @@ function EmployeeDetailContent({
                                                 </select>
                                             </div>
 
-                                            {/* Chức danh */}
+                                            {/* Chức danh — chỉ hiện chức danh thuộc phòng ban đã chọn */}
                                             <div className="space-y-1.5">
                                                 <FormLabel htmlFor="edit-positionId">Chức danh</FormLabel>
                                                 <select
                                                     id="edit-positionId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                                                     value={employmentForm.positionId}
+                                                    disabled={!employmentForm.departmentId}
                                                     onChange={(e) => setEmploymentForm(prev => ({ ...prev, positionId: e.target.value }))}
                                                 >
                                                     <option value="">Chưa chọn chức danh</option>
-                                                    {positions.map((p) => (
+                                                    {positions.filter((p) => p.departmentId === employmentForm.departmentId).map((p) => (
                                                         <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
                                                     ))}
                                                 </select>
