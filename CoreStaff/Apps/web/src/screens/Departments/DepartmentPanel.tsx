@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { LoaderCircle, Pencil, Power, X } from 'lucide-react';
+import { Badge } from '@/components/badge';
+import { BriefcaseBusiness, LoaderCircle, Pencil, Power, Plus, UserCog, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/alert';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/sheet';
 import { Skeleton } from '@/components/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { FormLabel } from '@/components/form/FormLabel';
 import { FormError } from '@/components/form/FormError';
-import { createDepartment, getDepartmentById, hrErrorMessage, setDepartmentActive, updateDepartment, type Department } from '@/services/hrService';
+import { createDepartment, getDepartmentById, hrErrorMessage, setDepartmentActive, updateDepartment, type Department, type DepartmentDetail } from '@/services/hrService';
+import { PositionCreateDialog } from './positions/PositionCreateDialog';
+import { PositionEditDialog } from './positions/PositionEditDialog';
+import { PositionActivateDialog } from './positions/PositionActivateDialog';
+import { PositionDeactivateDialog } from './positions/PositionDeactivateDialog';
 import { toast } from '@/components/toast';
 
 interface DepartmentPanelProps {
@@ -26,7 +32,7 @@ function formatDate(value?: string) {
 }
 
 export function DepartmentPanel({ apiBase, organizationId, canManage, departmentId, onClose, onSaved }: DepartmentPanelProps) {
-  const [department, setDepartment] = useState<Department | null>(null);
+  const [department, setDepartment] = useState<DepartmentDetail | null>(null);
   const [loading, setLoading] = useState(!!departmentId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +44,8 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
   const [name, setName] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ code?: string; name?: string }>({});
   const [revision, setRevision] = useState(0);
+  // Position editor state — all four dialogs are owned by the panel, scoped to this department.
+  const [positionPanel, setPositionPanel] = useState<{ mode: 'create' | 'edit' | 'activate' | 'deactivate'; positionId?: string } | null>(null);
   const returnFocus = useRef(document.activeElement as HTMLElement | null);
 
   useEffect(() => {
@@ -51,7 +59,8 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
         setLoadError('Bạn không có quyền xem phòng ban này.');
         return;
       }
-      setDepartment(data); setCode(data.code); setName(data.name);
+      // Defensive: an older API response may omit the enriched lists.
+      setDepartment({ ...data, positions: data.positions ?? [], managers: data.managers ?? [] }); setCode(data.code); setName(data.name);
     }).catch(err => { if (!cancelled) setLoadError(hrErrorMessage(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -156,6 +165,32 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
                     ['Ngày tạo', formatDate(department.createdAt)], ['Cập nhật gần nhất', formatDate(department.updatedAt)],
                   ].map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}
                 </dl>
+                <div className="rounded-xl border border-border p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold"><UserCog className="size-4 text-muted-foreground" aria-hidden="true" />Quản lý phòng ban</h3>
+                  {department.managers.length
+                    ? <ul className="mt-3 space-y-2">{department.managers.map(manager => <li key={manager.id} className="text-sm font-medium">{manager.fullName}</li>)}</ul>
+                    : <p className="mt-2 text-sm text-muted-foreground">Chưa phân công quản lý cho phòng ban này.</p>}
+                </div>
+                <div className="rounded-xl border border-border">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold"><BriefcaseBusiness className="size-4 text-muted-foreground" aria-hidden="true" />Chức vụ trong phòng ban</h3>
+                    {canManage && <Button className="min-h-11" onClick={() => setPositionPanel({ mode: 'create' })}><Plus aria-hidden="true" />Thêm chức vụ</Button>}
+                  </div>
+                  {department.positions.length === 0
+                    ? <p className="p-4 text-sm text-muted-foreground">Phòng ban chưa có chức vụ nào.</p>
+                    : <Table aria-label="Chức vụ trong phòng ban">
+                      <TableHeader><TableRow><TableHead className="pl-4">Mã</TableHead><TableHead>Tên chức vụ</TableHead><TableHead>Trạng thái</TableHead><TableHead className="pr-4 text-right">Thao tác</TableHead></TableRow></TableHeader>
+                      <TableBody>{department.positions.map(position => <TableRow key={position._id}>
+                        <TableCell className="pl-4 font-medium">{position.code}</TableCell>
+                        <TableCell className="min-w-40 max-w-xs whitespace-normal break-words">{position.name}</TableCell>
+                        <TableCell><Badge variant="secondary" className={position.active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'text-muted-foreground'}>{position.active ? 'Đang hoạt động' : 'Ngưng hoạt động'}</Badge></TableCell>
+                        <TableCell className="pr-4 text-right">{canManage && <div className="flex justify-end gap-2">
+                          <Button variant="ghost" className="min-h-11 text-primary" onClick={() => setPositionPanel({ mode: 'edit', positionId: position._id })}>Sửa</Button>
+                          <Button variant="ghost" className="min-h-11 text-primary" onClick={() => setPositionPanel({ mode: position.active ? 'deactivate' : 'activate', positionId: position._id })}>{position.active ? 'Ngưng' : 'Kích hoạt'}</Button>
+                        </div>}</TableCell>
+                      </TableRow>)}</TableBody>
+                    </Table>}
+                </div>
                 {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
                 {canManage && (confirming ? <Alert>
                   <AlertTitle>{department.active ? 'Vô hiệu hóa phòng ban này?' : 'Kích hoạt lại phòng ban này?'}</AlertTitle>
@@ -171,5 +206,9 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
               </div>}
       </div>
     </Content>
+    {department && positionPanel && <PositionCreateDialog apiBase={apiBase} departmentId={department._id} open={positionPanel.mode === 'create'} onClose={() => setPositionPanel(null)} onCreated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+    {department && positionPanel?.mode === 'edit' && positionPanel.positionId && <PositionEditDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onUpdated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+    {department && positionPanel?.mode === 'activate' && positionPanel.positionId && <PositionActivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onActivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+    {department && positionPanel?.mode === 'deactivate' && positionPanel.positionId && <PositionDeactivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onDeactivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
   </Container>;
 }

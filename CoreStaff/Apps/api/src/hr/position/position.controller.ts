@@ -27,13 +27,17 @@ export class PositionController {
 	}
 
 	@Get()
-	@ApiOperation({ summary: 'List positions in the current tenant.' })
+	@ApiOperation({ summary: 'List positions in the current tenant, optionally scoped to a department.' })
 	@ApiSuccess('Positions in the current tenant.', [positionExample])
 	@ApiErrorExamples()
-	async findAll(@Tenant() organizationId: string | null, @Query('active') active?: string) {
+	async findAll(
+		@Tenant() organizationId: string | null,
+		@Query('active') active?: string,
+		@Query('departmentId') departmentId?: string,
+	) {
 		const orgId = requireOrganizationId(organizationId);
 		const filter = active === undefined ? undefined : active === 'true';
-		const data = await this.positions.findAll(orgId, filter);
+		const data = await this.positions.findAll(orgId, { departmentId, active: filter });
 		return { success: true, data };
 	}
 

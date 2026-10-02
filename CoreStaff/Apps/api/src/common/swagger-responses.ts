@@ -129,6 +129,7 @@ export const departmentExample = {
 export const positionExample = {
 	_id: '66f1b2c3d4e5f60718293c01',
 	organizationId: '66f1b2c3d4e5f60718293a40',
+	departmentId: '66f1b2c3d4e5f60718293b01',
 	code: 'SWE',
 	name: 'Software Engineer',
 	active: true,

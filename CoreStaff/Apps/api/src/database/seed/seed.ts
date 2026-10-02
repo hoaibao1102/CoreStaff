@@ -204,20 +204,32 @@ async function main(): Promise<void> {
     }
     const positionIds = new Map<string, mongoose.Types.ObjectId>();
     for (const pos of POSITIONS) {
-      positionIds.set(`${pos.orgCode}/${pos.code}`, await upsertCatalog(Position, orgIds, pos, 'position'));
+      // A position belongs to a department; the department catalog is created above.
+      const departmentId = pos.departmentCode
+        ? catalogId(deptIds, pos.orgCode, pos.departmentCode, 'department')
+        : undefined;
+      positionIds.set(
+        `${pos.orgCode}/${pos.code}`,
+        await upsertCatalog(Position, orgIds, pos, 'position', departmentId),
+      );
     }
 
-    // Pass 2 — the HR business record, which owns the employeeCode (TASK-120).
+    // Pass 2 — the business record, which owns the employeeCode (TASK-120).
+    // HR accounts are tenant admin identities, not employees: they get a User
+    // (login) but no EmployeeProfile. HR staff who need to check in use their
+    // own EMPLOYEE account (see EMPLOYEES in seed-data).
     const ids: ResolvedIds = { deptIds, positionIds, userIds };
     for (const account of accounts) {
+      if (account.role === Role.HR) continue;
       await upsertProfile(Profile, orgIds, ids, account);
     }
 
     // History mirrors what the app would have written: PROBATION at creation has
     // no row (see EmploymentHistory.previousStatus); promotions get exactly one.
     // Written directly rather than through EmployeeService.changeStatus, so the
-    // self-approval guard there does not apply to an HR's own seeded promotion.
+    // self-approval guard there does not apply to a seeded promotion.
     for (const account of accounts) {
+      if (account.role === Role.HR) continue;
       if (!account.activeDate) continue;
       const userId = userIds.get(account.employeeCode);
       const organizationId = orgIds.get(account.orgCode);
@@ -392,14 +404,19 @@ async function upsertCatalog(
   orgIds: Map<string, mongoose.Types.ObjectId>,
   row: { orgCode: string; code: string; name: string },
   label: string,
+  departmentId?: mongoose.Types.ObjectId,
 ): Promise<mongoose.Types.ObjectId> {
   const organizationId = requireOrg(orgIds, row.orgCode);
-  const existing = await Model.findOne({ organizationId, code: row.code }).exec();
+  // Positions are department-scoped, so their uniqueness key includes the department.
+  const key: Record<string, unknown> = departmentId
+    ? { organizationId, departmentId, code: row.code }
+    : { organizationId, code: row.code };
+  const existing = await Model.findOne(key).exec();
   if (existing) {
     console.log(`[seed] SKIPPED ${label} ${row.orgCode}/${row.code}`);
     return existing._id;
   }
-  const created = await Model.create({ organizationId, code: row.code, name: row.name, active: true });
+  const created = await Model.create({ organizationId, code: row.code, name: row.name, active: true, ...(departmentId ? { departmentId } : {}) });
   console.log(`[seed] CREATED ${label} ${row.orgCode}/${row.code}`);
   return created._id;
 }

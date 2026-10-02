@@ -15,13 +15,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { Roles, RolesGuard } from '../common/rbac.decorator';
 import { AttendanceService } from './attendance.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { NetworkValidatorService } from './services/network-validator.service';
 
 @Controller('attendance')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
@@ -32,6 +33,7 @@ export class AttendanceController {
     return req.user?._id?.toString() || req.user?.userId || req.user?.id || req.user?.sub;
   }
 
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @Get('today')
   async getToday(@Req() req: any) {
     const userId = this.getUserId(req);
@@ -40,6 +42,7 @@ export class AttendanceController {
     return { success: true, data };
   }
 
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @Post('check-in')
   @UseInterceptors(FileInterceptor('selfie'))
   async checkIn(
@@ -70,6 +73,7 @@ export class AttendanceController {
     return { success: true, data };
   }
 
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @Post('check-out')
   @UseInterceptors(FileInterceptor('selfie'))
   async checkOut(
@@ -99,6 +103,7 @@ export class AttendanceController {
     return { success: true, data };
   }
 
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @Get('history')
   async getHistory(@Req() req: any, @Query('month') month?: string) {
     const userId = this.getUserId(req);

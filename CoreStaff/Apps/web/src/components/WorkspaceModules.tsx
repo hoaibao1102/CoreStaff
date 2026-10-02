@@ -61,7 +61,7 @@ const modules: WorkspaceModule[] = [
     route: '/app/profile',
     status: 'ready',
     icon: Users,
-    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR', 'SYSTEM_ADMIN'],
+    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN'],
   },
   {
     id: 'attendance-today',
@@ -70,7 +70,7 @@ const modules: WorkspaceModule[] = [
     route: '/app/attendance',
     status: 'ui',
     icon: Clock3,
-    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
+    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER'],
   },
   {
     id: 'attendance-history',
@@ -79,7 +79,7 @@ const modules: WorkspaceModule[] = [
     route: '/app/attendance/history',
     status: 'planned',
     icon: CalendarDays,
-    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
+    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER'],
   },
   {
     id: 'leave-ot',
@@ -88,7 +88,7 @@ const modules: WorkspaceModule[] = [
     route: '/app/leave',
     status: 'planned',
     icon: FileText,
-    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR'],
+    roles: ['EMPLOYEE', 'DEPARTMENT_MANAGER'],
   },
   {
     id: 'approvals',

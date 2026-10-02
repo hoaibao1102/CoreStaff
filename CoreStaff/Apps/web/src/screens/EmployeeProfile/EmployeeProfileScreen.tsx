@@ -439,9 +439,10 @@ export function EmployeeProfileScreen({
   const detail = resource.error as { status?: number; code?: string } | undefined;
   const missingProfile = detail?.status === 404 && detail.code === 'EMPLOYEE_PROFILE_NOT_FOUND';
   const error = missingProfile ? null : resource.error ? hrErrorMessage(resource.error) : null;
-  // FR-SYS-02 gap: HR and Department Manager have no producing flow — they create
-  // their own profile. A plain employee has no rights and is told to contact HR.
-  const canSelfProvision = missingProfile && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER');
+  // FR-SYS-02 gap: Department Manager has no producing flow — they create their
+  // own profile. HR accounts have no personal profile at all (tenant admin
+  // identity) and are routed away before this screen renders.
+  const canSelfProvision = missingProfile && user.role === 'DEPARTMENT_MANAGER';
 
   /* ── Field definitions ── */
 

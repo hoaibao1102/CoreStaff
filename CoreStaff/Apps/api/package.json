@@ -12,6 +12,7 @@
     "test": "jest --runInBand",
     "test:integration": "jest --runInBand -c test/jest-integration.config.js",
     "ensure-indexes": "ts-node-script src/database/ensure-indexes.ts",
+    "backfill:position-dept": "ts-node-script scripts/backfill-position-department.ts",
     "seed": "ts-node-script src/database/seed/seed.ts",
     "seed:scheduling:an": "ts-node-script scripts/seed-nguyen-van-an-scheduling.ts",
     "migrate:shift-scope:dry": "ts-node-script scripts/migrate-shift-scope.ts",

@@ -205,7 +205,7 @@ export function EmployeeDirectoryScreen({
     const [employees, departments, positions] = await Promise.all([
       import('../../services/hrService').then(m => m.listEmployees(apiBase!, status, departmentId)),
       import('../../services/hrService').then(m => m.getDepartments(apiBase!, true)),
-      import('../../services/hrService').then(m => m.getPositions(apiBase!, true)),
+      import('../../services/hrService').then(m => m.getPositions(apiBase!, { activeOnly: true })),
     ]);
     // Eligible accounts is non-critical — don't let a 500 break the whole page
     const [accountResult, managers] = await Promise.all([

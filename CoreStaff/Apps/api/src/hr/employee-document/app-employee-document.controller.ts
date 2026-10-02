@@ -1,23 +1,25 @@
 import { Controller, Get, NotFoundException, Param, StreamableFile, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
+import { Roles, RolesGuard } from '../../common/rbac.decorator';
 import { CurrentUser, SessionUser, Tenant, requireOrganizationId } from '../../common/tenant-context';
 import { ApiErrorExamples, ApiSuccess, employeeDocumentExample } from '../../common/swagger-responses';
 import { EmployeeDocumentService } from './employee-document.service';
 
 /**
- * TASK-029 — self-service "my documents". Deliberately no `@Roles`: mirrors the
- * `GET /hr/employees/me` precedent (any authenticated tenant member with a
- * profile). Every read is scoped to the caller's OWN `employeeProfileId`
- * (resolved from the session) — a document they do not own 404s exactly like a
- * missing one (AC-CONTRACT-01). No profile → empty list.
+ * TASK-029 — self-service "my documents". Role-gated like `GET /hr/employees/me`:
+ * HR accounts have no EmployeeProfile and are excluded. Every read is scoped to
+ * the caller's OWN `employeeProfileId` (resolved from the session) — a document
+ * they do not own 404s exactly like a missing one (AC-CONTRACT-01). No profile →
+ * empty list.
  */
 @ApiTags('App / My Documents')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
 @Controller('app/documents')
 export class AppEmployeeDocumentController {
 	constructor(private readonly documents: EmployeeDocumentService) {}
 
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
 	@Get()
 	@ApiOperation({ summary: 'List my own private documents.' })
 	@ApiSuccess('My documents.', [employeeDocumentExample])
@@ -30,6 +32,7 @@ export class AppEmployeeDocumentController {
 		return { success: true, data };
 	}
 
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
 	@Get(':id/download')
 	@ApiOperation({ summary: 'Download one of my own documents.' })
 	@ApiResponse({ status: 200, description: 'The document bytes.' })

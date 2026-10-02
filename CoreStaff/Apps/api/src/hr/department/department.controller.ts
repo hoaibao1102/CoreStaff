@@ -42,7 +42,7 @@ export class DepartmentController {
 	@ApiSuccess('Department detail.', departmentExample)
 	@ApiResponse({ status: 404, description: 'DEPARTMENT_NOT_FOUND' })
 	@ApiErrorExamples()
-	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string) {
+	async findOne(@Tenant() organizationId: string | null, @Param('id') id: string): Promise<{ success: true; data: Record<string, unknown> }> {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.departments.findOne(orgId, id);
 		return { success: true, data };

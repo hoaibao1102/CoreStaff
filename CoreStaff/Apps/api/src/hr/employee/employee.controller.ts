@@ -71,13 +71,15 @@ export class EmployeeController {
 	}
 
 	/**
-	 * Deliberately no `@Roles`: HR and Department Manager have the same gap —
-	 * nobody else is allowed to create their profile (FR-HRCFG-02 names only
-	 * Employee and Department Manager as HR's to create). An EMPLOYEE calling it
-	 * is harmless rather than privileged: they get their own record, which they
-	 * could otherwise not have at all. A SYSTEM_ADMIN cannot, because there is no
-	 * tenant to attach it to.
+	 * HR accounts are tenant admin identities, not employees: they have no
+	 * EmployeeProfile and cannot self-provision one — HR staff use their own
+	 * EMPLOYEE account to check in. Department Manager keeps the self-provision
+	 * path (FR-HRCFG-02 names only Employee and Department Manager as HR's to
+	 * create). An EMPLOYEE calling it is harmless rather than privileged: they
+	 * get their own record, which they could otherwise not have at all. A
+	 * SYSTEM_ADMIN cannot, because there is no tenant to attach it to.
 	 */
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
 	@Post('me')
 	@ApiOperation({
 		summary: 'Create my own EmployeeProfile (Phase C — HR / Department Manager self-provisioning).',
@@ -98,6 +100,7 @@ export class EmployeeController {
 		return { success: true, data };
 	}
 
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
 	@Get('me')
 	@ApiOperation({ summary: "Current user's own EmployeeProfile." })
 	@ApiSuccess("Current user's employee profile.", employeeReadExample)

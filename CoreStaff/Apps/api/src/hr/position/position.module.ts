@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../../auth/auth.module';
 import { RolesGuard } from '../../common/rbac.decorator';
+import { DepartmentSchema } from '../../database/schemas/department.schema';
 import { PositionSchema } from '../../database/schemas/position.schema';
 import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
@@ -13,6 +14,7 @@ import { PositionService } from './position.service';
 		AuthModule,
 		MongooseModule.forFeature([
 			{ name: 'Position', schema: PositionSchema },
+			{ name: 'Department', schema: DepartmentSchema },
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },
 		]),

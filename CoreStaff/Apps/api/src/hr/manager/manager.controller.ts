@@ -27,12 +27,12 @@ export class ManagerController {
     return { success: true, data: await this.scope.listEmployees(this.org(org), this.uid(user), departmentId) };
   }
 
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Post('requests')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('requests')
   async createMine(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Body() dto: CreateManagerRequestDto) {
     return { success: true, data: await this.requests.createMine(this.org(org), this.uid(user), dto) };
   }
 
-  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR') @Get('requests/mine')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('requests/mine')
   async mine(@Tenant() org: string | null, @CurrentUser() user: SessionUser) {
     return { success: true, data: await this.requests.listMine(this.org(org), this.uid(user)) };
   }

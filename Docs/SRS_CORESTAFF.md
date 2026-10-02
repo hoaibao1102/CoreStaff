@@ -157,10 +157,11 @@ MVP được xem là thành công khi có thể demo end-to-end:
 - Xem evidence/audit đúng tenant và managed department scope; không xem dữ liệu lương/định danh nhạy cảm của phòng.
 - Xác nhận bảng công phòng ban khi không còn blocker.
 
-#### HR với tư cách nhân viên
+#### HR với tư cách tài khoản quản trị
 
-- HR được dùng các chức năng “Công của tôi” nếu có `EmployeeAssignment` hợp lệ.
-- HR không có assignment thì chỉ dùng chức năng quản trị nhân sự/chốt công và không hiện nút check-in/out.
+- Tài khoản role `HR` là tài khoản quản trị nhân sự của doanh nghiệp (admin cấp cho tenant), **không phải** tài khoản cá nhân của nhân viên phòng HR. Tài khoản HR **không có** `EmployeeProfile` và **không dùng** bất kỳ chức năng cá nhân nào (chấm công, nghỉ phép của tôi, tăng ca của tôi, bảng lương của tôi, hồ sơ của tôi).
+- Nhân sự phòng HR dùng **tài khoản `EMPLOYEE` riêng** để chấm công và các chức năng cá nhân.
+- Tài khoản HR chỉ dùng chức năng quản trị nhân sự/chốt công; các endpoint self-service (`/attendance/*`, `/leave-requests/mine`, `/overtime/mine`, `/requests/mine`, `/payslips/me`, `/hr/employees/me`, `/app/documents`) trả `403 FORBIDDEN` cho role HR.
 - HR không được tự duyệt hoặc tự áp dụng ApprovalRequest/AdjustmentRequest của chính mình.
 - `SYSTEM_ADMIN` không có EmployeeAssignment trong tenant và không có chức năng chấm công.
 
@@ -2141,7 +2142,7 @@ Mọi trạng thái lỗi phải có hành động phù hợp: thử lại, cấ
 - AC-MGR-13: Manager tạo/sửa KPI `DRAFT` đúng scope; manager gọi confirm bị từ chối; HR confirm thành công.
 - AC-MGR-14: Normal Network/GPS attendance hợp lệ không vào approval queue; Selfie/exception/adjustment/clarification vào queue theo policy.
 - AC-MGR-15: Expo không bắt đầu trước khi desktop web và mobile web pass acceptance test và được nghiệm thu.
-- AC-HR-SELF-01: HR có assignment được chấm công; HR không có assignment không thấy action check-in/out.
+- AC-HR-SELF-01: Tài khoản HR không có `EmployeeProfile` và không truy cập được bất kỳ chức năng cá nhân nào; gọi endpoint self-service trả `403 FORBIDDEN`. Nhân sự phòng HR chấm công bằng tài khoản `EMPLOYEE` riêng.
 - AC-SELF-APPROVAL-01: Department Manager/HR xử lý request của chính mình nhận `403 SELF_APPROVAL_FORBIDDEN`; request được giao cho actor khác đủ quyền.
 - AC-SYS-ATTENDANCE-01: System Admin không truy cập được chức năng check-in/out.
 

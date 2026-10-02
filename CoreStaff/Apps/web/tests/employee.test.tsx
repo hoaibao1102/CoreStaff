@@ -29,7 +29,7 @@ beforeEach(() => {
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
     const path = new URL(url);
     if (path.pathname.endsWith('/departments')) return response([{ _id: 'd1', name: 'Engineering' }, { _id: 'd2', name: 'Sales' }]);
-    if (path.pathname.endsWith('/positions')) return response([{ _id: 'pos1', name: 'Developer' }]);
+    if (path.pathname.endsWith('/positions')) return response([{ _id: 'pos1', name: 'Developer', departmentId: 'd1' }]);
     if (path.pathname.endsWith('/eligible-users')) return response([{ _id: 'u2', fullName: 'New Employee', email: 'employee@corp.com' }]);
     if (path.pathname.endsWith('/me')) return response(own, status, code);
     if (path.pathname.endsWith('/history')) return response([], status, code);
@@ -271,7 +271,7 @@ test.each([401, 403, 500])('directory handles HTTP %s and retries', async http =
   status = http; await render(directory()); expect(container.querySelector('[role="alert"]')).not.toBeNull();
   status = 200; await clickText('Thử lại'); expect(container.textContent).toContain('Test Employee');
 });
-test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'HR', 'SYSTEM_ADMIN'] as const)('self uses me for authenticated %s and is read-only', async role => {
+test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN'] as const)('self uses me for authenticated %s and is read-only', async role => {
   await render(self({ ...user, role }));
   expect(fetchMock).toHaveBeenCalledWith('https://api.test/api/hr/employees/me', expect.objectContaining({ method: 'GET', credentials: 'include' }));
   expect(container.textContent).toContain('Session Name'); expect(container.textContent).toContain('E001');
@@ -287,7 +287,7 @@ test('self 404 keeps account data and displays dedicated empty state', async () 
   status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self());
   expect(container.textContent).toContain('chưa có hồ sơ nhân sự'); expect(container.textContent).toContain('session@example.test');
 });
-test.each(['HR', 'DEPARTMENT_MANAGER'] as const)('self 404 offers self-provisioning to %s', async role => {
+test.each(['DEPARTMENT_MANAGER'] as const)('self 404 offers self-provisioning to %s', async role => {
   status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user, role }));
   expect(container.textContent).toContain('Tạo hồ sơ của tôi');
 });
@@ -295,8 +295,8 @@ test('self 404 keeps the contact-HR message for EMPLOYEE', async () => {
   status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user, role: 'EMPLOYEE' }));
   expect(container.textContent).toContain('liên hệ HR'); expect(container.textContent).not.toContain('Tạo hồ sơ của tôi');
 });
-test('HR self-provision posts /me with business fields only and locks identity', async () => {
-  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user }));
+test('Department Manager self-provision posts /me with business fields only and locks identity', async () => {
+  status = 404; code = 'EMPLOYEE_PROFILE_NOT_FOUND'; await render(self({ ...user, role: 'DEPARTMENT_MANAGER' }));
   await clickText('Tạo hồ sơ của tôi');
   // meMode: name locked from the session, no account picker, no mode toggle
   const name = document.getElementById('create-fullName') as HTMLInputElement;
