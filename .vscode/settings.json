@@ -1,0 +1,8 @@
+{
+  // VS Code's Source Control "Sync" was running `git pull --rebase`.
+  // That detached HEAD, replayed the local revert as a patch and left the
+  // index half-applied, which looked like a broken merge. Force merge instead.
+  "git.rebaseWhenSync": false,
+  "git.pullBeforeCheckout": false,
+  "git.autofetch": true
+}

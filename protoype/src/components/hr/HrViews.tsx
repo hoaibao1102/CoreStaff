@@ -57,6 +57,7 @@ const BLOCKER_LABEL: Record<PeriodBlockerType, string> = {
   MISSING_CHECK_OUT: 'Thiếu check-out',
   PENDING_APPROVAL: 'Approval còn PENDING',
   PENDING_CLARIFICATION: 'Chờ giải trình',
+  REJECTED: 'Ngày công bị REJECTED',
 };
 
 /* ------------------------------------------------------------------ */

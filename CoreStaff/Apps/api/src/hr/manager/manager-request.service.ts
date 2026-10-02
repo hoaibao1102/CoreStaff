@@ -7,6 +7,7 @@ import {EventsGateway} from '../../events/events.gateway';
 import {dateOnly} from '../../common/date-only';
 import {parseWindowInstant} from '../../common/vietnam-time';
 import {OvertimeService} from '../overtime/overtime.service';
+import {PeriodVersionService} from '../timesheet/period-version.service';
 @Injectable()
 export class ManagerRequestService {
   constructor(
@@ -18,6 +19,8 @@ export class ManagerRequestService {
     @Optional() private readonly eventsGateway?: EventsGateway,
     // TASK-068/070 — last so the existing spec's five positional args keep working.
     @Optional() private readonly ot?: OvertimeService,
+    // TASK-073 — appended last for the same reason; optional so specs keep compiling.
+    @Optional() private readonly periodVersion?: PeriodVersionService,
   ) {}
 
   async createMine(org: string, userId: string, dto: CreateManagerRequestDto) {
@@ -213,6 +216,12 @@ export class ManagerRequestService {
         );
       } catch (syncErr) {
         console.warn('[ManagerRequestService] Syncing attendance approval status failed:', syncErr);
+      }
+      // TASK-073 — an approval decision changes in-period attendance: bump the period version.
+      try {
+        await this.periodVersion?.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
+      } catch (verErr) {
+        console.warn('[ManagerRequestService] Period version bump failed:', verErr);
       }
     }
 

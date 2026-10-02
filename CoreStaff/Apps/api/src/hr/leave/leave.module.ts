@@ -9,6 +9,7 @@ import { LeaveActionSchema } from '../../database/schemas/leave-action.schema';
 import { LeaveRequestSchema } from '../../database/schemas/leave-request.schema';
 import { ShiftTemplateModule } from '../shift-template/shift-template.module';
 import { ManagerModule } from '../manager/manager.module';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 import { DayClassificationService } from './day-classification.service';
 import { EmployeeLeaveController, HrLeaveController, ManagerLeaveController } from './leave.controller';
 import { LeaveService } from './leave.service';
@@ -33,6 +34,7 @@ import { UserSessionSchema } from '../../database/schemas/user-session.schema';
     ]),
     ManagerModule,
     ShiftTemplateModule,
+    PeriodVersionModule,
   ],
   controllers: [EmployeeLeaveController, ManagerLeaveController, HrLeaveController],
   providers: [LeaveService, DayClassificationService, RolesGuard],
