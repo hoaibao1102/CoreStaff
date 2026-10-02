@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
+import { Badge } from '@/components/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
 import {
   Table,
   TableBody,
@@ -12,6 +14,7 @@ import {
 import { toast } from '@/components/toast';
 import { PayslipPreviewDialog } from './PayslipPreviewDialog';
 import { hrErrorMessage, hrRequest } from '@/services/hrService';
+import { Calculator, Download, Eye, LockKeyhole, Plus, Send } from 'lucide-react';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -20,12 +23,12 @@ const formatCurrency = (value: number) => {
 
 /** Status badge colors for payroll/payslip statuses */
 const STATUS_STYLES: Record<string, string> = {
-  DRAFT: 'bg-gray-100 text-gray-700',
-  CALCULATED: 'bg-blue-100 text-blue-700',
-  LOCKED: 'bg-yellow-100 text-yellow-700',
-  RELEASED: 'bg-green-100 text-green-700',
-  GENERATED: 'bg-purple-100 text-purple-700',
-  VIEWED: 'bg-teal-100 text-teal-700',
+  DRAFT: 'bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300',
+  CALCULATED: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  LOCKED: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  RELEASED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  GENERATED: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+  VIEWED: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -40,11 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] || 'bg-gray-100 text-gray-700';
   const label = STATUS_LABELS[status] || status;
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${style}`}>
-      {label}
-    </span>
-  );
+  return <Badge variant="secondary" className={style}>{label}</Badge>;
 }
 
 /** Typed API helpers */
@@ -291,26 +290,32 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quản lý Bảng Lương</h1>
-        <Button onClick={() => setCreateModalOpen(true)} disabled={loading}>
-          Tạo Bảng Lương
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Quản lý bảng lương</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Tạo kỳ lương, tính toán, khóa và phát hành phiếu lương cho nhân viên.</p>
+        </div>
+        <Button className="min-h-11" onClick={() => setCreateModalOpen(true)} disabled={loading}>
+          <Plus aria-hidden="true" />Tạo bảng lương
         </Button>
       </div>
 
       {/* Create Modal */}
-      {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-xl font-bold">Tạo Bảng Lương Mới</h2>
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium">Chọn Kỳ Công</label>
+      <Dialog open={createModalOpen} onOpenChange={(open) => !loading && setCreateModalOpen(open)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader className="border-b border-border pr-16">
+            <DialogTitle>Tạo bảng lương mới</DialogTitle>
+            <DialogDescription>Chọn kỳ công dùng làm nguồn dữ liệu để bắt đầu tính lương.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-6">
+              <label htmlFor="payroll-period" className="block text-sm font-medium">Kỳ công <span className="text-destructive">*</span></label>
               <select
-                className="w-full rounded border p-2"
+                id="payroll-period"
+                className="min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
                 value={selectedPeriodId}
                 onChange={(e) => setSelectedPeriodId(e.target.value)}
               >
-                <option value="">-- Chọn kỳ công --</option>
+                <option value="">Chọn kỳ công</option>
                 {periods.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.period} ({new Date(p.startDate).toLocaleDateString('vi-VN')} → {new Date(p.endDate).toLocaleDateString('vi-VN')}) - {p.status === 'CLOSED' ? 'Đã chốt' : 'Sẵn sàng'}
@@ -318,62 +323,61 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                 ))}
               </select>
               {periods.length === 0 && (
-                <p className="mt-2 text-xs text-muted-foreground">Chưa có kỳ công nào ở trạng thái sẵn sàng hoặc đã chốt. Hãy chốt kỳ công trước tại menu "Kỳ công".</p>
+                <p className="text-xs text-muted-foreground">Chưa có kỳ công phù hợp. Hãy kiểm tra và chốt dữ liệu tại màn Kỳ công.</p>
               )}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+          </div>
+            <div className="mx-6 mb-6 mt-4 flex justify-end gap-3 border-t border-border pt-5">
+              <Button className="min-h-11" variant="outline" disabled={loading} onClick={() => setCreateModalOpen(false)}>
                 Hủy
               </Button>
-              <Button onClick={handleCreate} disabled={!selectedPeriodId || loading}>
-                Tạo
+              <Button className="min-h-11" onClick={handleCreate} disabled={!selectedPeriodId || loading}>
+                {loading ? 'Đang tạo…' : 'Tạo bảng lương'}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Payroll Runs List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh Sách Bảng Lương</CardTitle>
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="border-b border-border">
+          <CardTitle>Danh sách bảng lương</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Kỳ Lương</TableHead>
-                <TableHead>Trạng Thái</TableHead>
-                <TableHead>Tổng Gross</TableHead>
-                <TableHead>Tổng Net</TableHead>
-                <TableHead>NV Đã Xử Lý</TableHead>
-                <TableHead>Ngày Tạo</TableHead>
-                <TableHead>Hành Động</TableHead>
+                <TableHead className="pl-6">Kỳ lương</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead className="text-right">Tổng gross</TableHead>
+                <TableHead className="text-right">Tổng net</TableHead>
+                <TableHead className="text-center">Đã xử lý</TableHead>
+                <TableHead>Ngày tạo</TableHead>
+                <TableHead className="pr-6 text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payrollRuns.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-40 text-center text-muted-foreground">
                     Chưa có bảng lương nào. Nhấn "Tạo Bảng Lương" để bắt đầu.
                   </TableCell>
                 </TableRow>
               ) : (
                 payrollRuns.map((run) => (
                   <TableRow key={run._id}>
-                    <TableCell>{run.periodLabel}</TableCell>
+                    <TableCell className="pl-6 font-medium">{run.periodLabel}</TableCell>
                     <TableCell>
                       <StatusBadge status={run.status} />
                     </TableCell>
-                    <TableCell>{new Intl.NumberFormat('vi-VN').format(run.totalGross || 0)} ₫</TableCell>
-                    <TableCell>{new Intl.NumberFormat('vi-VN').format(run.totalNet || 0)} ₫</TableCell>
-                    <TableCell>{run.processedEmployeeCount}/{run.totalEmployeeCount}</TableCell>
+                    <TableCell className="text-right font-mono">{formatCurrency(run.totalGross || 0)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatCurrency(run.totalNet || 0)}</TableCell>
+                    <TableCell className="text-center">{run.processedEmployeeCount}/{run.totalEmployeeCount}</TableCell>
                     <TableCell>{new Date(run.runDate).toLocaleDateString('vi-VN')}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+                    <TableCell className="pr-6">
+                      <div className="flex flex-wrap justify-end gap-2">
                         {run.status === 'DRAFT' && (
                           <Button size="sm" onClick={() => handleCalculate(run._id)} disabled={loading}>
-                            {loading ? 'Đang tính...' : 'Tính Toán'}
+                            <Calculator aria-hidden="true" />{loading ? 'Đang tính…' : 'Tính toán'}
                           </Button>
                         )}
                         {run.status === 'CALCULATED' && (
@@ -382,22 +386,22 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                               {loading ? 'Đang xử lý...' : 'Tính lại'}
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => handleLock(run._id)} disabled={loading}>
-                              Khóa
+                              <LockKeyhole aria-hidden="true" />Khóa
                             </Button>
                           </>
                         )}
                         {run.status === 'LOCKED' && (
                           <Button size="sm" variant="default" onClick={() => handleRelease(run._id)} disabled={loading}>
-                            Phát Hành
+                            <Send aria-hidden="true" />Phát hành
                           </Button>
                         )}
                         {(run.status === 'CALCULATED' || run.status === 'LOCKED' || run.status === 'RELEASED') && (
                           <>
                             <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>
-                              Xem Chi Tiết
+                              <Eye aria-hidden="true" />Xem chi tiết
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run._id)} disabled={loading}>
-                              Export Excel
+                              <Download aria-hidden="true" />Xuất Excel
                             </Button>
                           </>
                         )}
@@ -413,49 +417,51 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
 
       {/* Payslips Detail */}
       {selectedRun && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Bảng Chi Tiết - {selectedRun.periodLabel}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Dialog open onOpenChange={(open) => !open && setSelectedRun(null)}>
+          <DialogContent className="max-w-6xl">
+            <DialogHeader className="border-b border-border pr-16">
+              <DialogTitle>Chi tiết bảng lương · {selectedRun.periodLabel}</DialogTitle>
+              <DialogDescription>Tổng quan kỳ lương và danh sách phiếu lương của nhân viên.</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
             {/* Summary Cards */}
             {summary && (
-              <div className="grid grid-cols-4 gap-4 mb-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Tổng Nhân Viên</p>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <Card className="shadow-none">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Tổng nhân viên</p>
                     <p className="text-2xl font-bold">{summary.total || 0}</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Đã Tạo</p>
-                    <p className="text-2xl font-bold text-blue-600">{summary.generated || 0}</p>
+                <Card className="shadow-none">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Đã tạo</p>
+                    <p className="text-2xl font-bold">{summary.generated || 0}</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Đã Phát Hành</p>
-                    <p className="text-2xl font-bold text-green-600">{summary.released || 0}</p>
+                <Card className="shadow-none">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Đã phát hành</p>
+                    <p className="text-2xl font-bold">{summary.released || 0}</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Nhân Viên Đã Xem</p>
-                    <p className="text-2xl font-bold text-purple-600">{summary.viewed || 0}</p>
+                <Card className="shadow-none">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground">Nhân viên đã xem</p>
+                    <p className="text-2xl font-bold">{summary.viewed || 0}</p>
                   </CardContent>
                 </Card>
               </div>
             )}
 
             {/* Payslips Table */}
-            <Table>
+            <div className="overflow-hidden rounded-xl border border-border"><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nhân Viên</TableHead>
-                  <TableHead>Gross</TableHead>
-                  <TableHead>PIT</TableHead>
-                  <TableHead>Net</TableHead>
+                  <TableHead className="text-right">Gross</TableHead>
+                  <TableHead className="text-right">PIT</TableHead>
+                  <TableHead className="text-right">Net</TableHead>
                   <TableHead>Trạng Thái</TableHead>
                   <TableHead>Xem Chi Tiết</TableHead>
                 </TableRow>
@@ -471,34 +477,33 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                   payslips.map((slip) => (
                     <TableRow key={slip._id}>
                       <TableCell>{slip.employeeName}</TableCell>
-                      <TableCell>{new Intl.NumberFormat('vi-VN').format(slip.grossEarnings)} ₫</TableCell>
-                      <TableCell>{new Intl.NumberFormat('vi-VN').format(slip.pitAmount)} ₫</TableCell>
-                      <TableCell className="font-semibold">{new Intl.NumberFormat('vi-VN').format(slip.netSalary)} ₫</TableCell>
+                      <TableCell className="text-right font-mono">{formatCurrency(slip.grossEarnings)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatCurrency(slip.pitAmount)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold">{formatCurrency(slip.netSalary)}</TableCell>
                       <TableCell>
                         <StatusBadge status={slip.status} />
                       </TableCell>
                       <TableCell>
                         <Button size="sm" variant="ghost" onClick={() => setPreviewSlip(slip)}>
-                          Xem
+                          <Eye aria-hidden="true" />Xem
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Payslip Preview Dialog */}
-      {previewSlip && (
-        <PayslipPreviewDialog
-          open={!!previewSlip}
-          onClose={() => setPreviewSlip(null)}
-          payslip={previewSlip}
-          periodLabel={selectedRun?.periodLabel || ''}
-        />
+            </Table></div>
+            </div>
+            {previewSlip && (
+              <PayslipPreviewDialog
+                open
+                onClose={() => setPreviewSlip(null)}
+                payslip={previewSlip}
+                periodLabel={selectedRun.periodLabel}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

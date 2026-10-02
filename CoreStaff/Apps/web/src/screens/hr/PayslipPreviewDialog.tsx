@@ -4,9 +4,10 @@ import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
 import { Separator } from '@/components/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/tabs';
 import { ChevronDown, ChevronRight, Calendar, User, Building2, Wallet } from 'lucide-react';
 
-type PayslipRow = {
+export type PayslipRow = {
   _id: string;
   employeeName: string;
   employeeCode?: string;
@@ -233,6 +234,7 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
     (payslip.socialInsurance || 0) + (payslip.healthInsurance || 0) + (payslip.unemploymentInsurance || 0);
   const effectivePIT = payslip.pitAmount || 0;
   const totalDeductions = totalInsurance + effectivePIT;
+  const totalTaxReductions = totalInsurance + (payslip.personalDeduction || 0) + (payslip.dependentDeduction || 0);
   const netSalary = payslip.netSalary || 0;
 
   return (
@@ -348,27 +350,25 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground">Thuế TNCN (PIT)</span>
-                      {effectivePIT > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => setShowPitDetail(!showPitDetail)}
-                        >
-                          {showPitDetail ? (
-                            <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
-                          ) : (
-                            <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                          )}
-                          Chi tiết
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setShowPitDetail(!showPitDetail)}
+                      >
+                        {showPitDetail ? (
+                          <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
+                        )}
+                        Chi tiết
+                      </Button>
                     </div>
                     <span className="font-mono text-sm font-medium text-destructive">
                       -{formatCurrency(effectivePIT)}
                     </span>
                   </div>
-                  {showPitDetail && effectivePIT > 0 && (
+                  {showPitDetail && (
                     <div className="mt-3 border-t pt-3">
                       <PitTaxDetails payslip={payslip} />
                     </div>
