@@ -307,7 +307,62 @@ export class TimesheetPeriodService {
 			if (employeeIds && !employeeIds.has(String(day.employeeId))) continue;
 			rows.push(...classifyDayBlockers(day as any));
 		}
+
+		await this.fillMissingIdentity(organizationId, days, rows);
 		return rows;
+	}
+
+	/**
+	 * `employeeSnapshot` is written by the seeder, not by the app — older rows
+	 * carry no snapshot at all and most carry only `departmentId`. Resolve the
+	 * display values once per request so the drill-down never renders '—' for
+	 * a department that does exist.
+	 */
+	private async fillMissingIdentity(
+		organizationId: string,
+		days: any[],
+		rows: PeriodBlockerRow[],
+	): Promise<void> {
+		const orgObjectId = new Types.ObjectId(organizationId);
+
+		const departmentIds = new Set<string>();
+		const employeeIds = new Set<string>();
+		for (const row of rows) {
+			if (!row.employee.department && row.employee.departmentId) departmentIds.add(row.employee.departmentId);
+			if (!row.employee.name || !row.employee.code) employeeIds.add(row.employeeId);
+		}
+		if (!departmentIds.size && !employeeIds.size) return;
+
+		const [departments, profiles] = await Promise.all([
+			departmentIds.size
+				? this.departmentModel
+						.find({ organizationId: orgObjectId, _id: { $in: [...departmentIds].map((d) => new Types.ObjectId(d)) } })
+						.select('_id name')
+						.lean()
+				: Promise.resolve([] as any[]),
+			employeeIds.size
+				? this.employeeProfileModel
+						.find({ organizationId: orgObjectId, userId: { $in: [...employeeIds].map((e) => new Types.ObjectId(e)) } })
+						.select('userId employeeCode fullName')
+						.lean()
+				: Promise.resolve([] as any[]),
+		]);
+
+		const departmentNames = new Map(departments.map((d: any) => [String(d._id), d.name]));
+		const profileByUser = new Map(profiles.map((p: any) => [String(p.userId), p]));
+
+		for (const row of rows) {
+			if (!row.employee.department && row.employee.departmentId) {
+				row.employee.department = departmentNames.get(row.employee.departmentId);
+			}
+			if (!row.employee.name || !row.employee.code) {
+				const profile = profileByUser.get(row.employeeId);
+				if (profile) {
+					row.employee.name = row.employee.name ?? profile.fullName;
+					row.employee.code = row.employee.code ?? profile.employeeCode;
+				}
+			}
+		}
 	}
 
 	/**
