@@ -8,6 +8,8 @@ import {dateOnly} from '../../common/date-only';
 import {parseWindowInstant} from '../../common/vietnam-time';
 import {OvertimeService} from '../overtime/overtime.service';
 import {PeriodVersionService} from '../timesheet/period-version.service';
+import {EmployeeAssignmentDocument} from '../../database/schemas/assignment.schema';
+import {AttendanceApprovalStatus,AttendanceEventType,AttendanceMethod,AttendanceStatus,DayResult} from '../../database/schemas/enums';
 @Injectable()
 export class ManagerRequestService {
   constructor(
@@ -21,11 +23,40 @@ export class ManagerRequestService {
     @Optional() private readonly ot?: OvertimeService,
     // TASK-073 — appended last for the same reason; optional so specs keep compiling.
     @Optional() private readonly periodVersion?: PeriodVersionService,
+    // Optional and last so older unit-test constructors remain compatible.
+    @Optional() @InjectModel('Assignment') private readonly employeeAssignments?: Model<EmployeeAssignmentDocument>,
   ) {}
 
   async createMine(org: string, userId: string, dto: CreateManagerRequestDto) {
     const emp = await this.employees.findOne({ organizationId: org, userId }).lean();
-    if (!emp || !emp.departmentId) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
+    if (!emp) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
+    const workDate = dateOnly(dto.workDate);
+    const effectiveAssignment = this.employeeAssignments
+      ? await this.employeeAssignments.findOne({
+          organizationId: org,
+          userId,
+          active: true,
+          $and: [
+            { $or: [{ effectiveFrom: { $exists: false } }, { effectiveFrom: null }, { effectiveFrom: { $lte: workDate } }] },
+            { $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: workDate } }] },
+          ],
+        }).sort({ effectiveFrom: -1 }).lean()
+      : null;
+    const departmentId = effectiveAssignment?.departmentId ?? emp.departmentId;
+    if (!departmentId) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
+    if (dto.type === 'ATTENDANCE') {
+      if (!dto.adjustmentType || !dto.requestedStart) throw new ConflictException('ATTENDANCE_ADJUSTMENT_DETAILS_REQUIRED');
+      const requestedAt = new Date(dto.requestedStart);
+      const requestedWorkDate = requestedAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+      if (Number.isNaN(requestedAt.getTime()) || requestedWorkDate !== workDate) {
+        throw new ConflictException('ATTENDANCE_ADJUSTMENT_TIME_INVALID');
+      }
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+      if (workDate >= today) throw new ConflictException('ATTENDANCE_ADJUSTMENT_PAST_DATE_REQUIRED');
+      const day: any = await this.attendanceDays.findOne({ organizationId: org, employeeId: userId, workDate }).lean();
+      if (dto.adjustmentType === 'CHECK_IN' && day?.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
+      if (dto.adjustmentType === 'CHECK_OUT' && day?.checkOutAt) throw new ConflictException('CHECK_OUT_ALREADY_EXISTS');
+    }
     if (
       dto.type === 'OVERTIME' &&
       (!dto.requestedStart || !dto.requestedEnd || new Date(dto.requestedStart) >= new Date(dto.requestedEnd))
@@ -33,23 +64,25 @@ export class ManagerRequestService {
       throw new ConflictException('OVERTIME_WINDOW_INVALID');
     }
     const retro = dto.type === 'OVERTIME' ? await this.otGuards(org, userId, dto) : {};
+    const { adjustmentType, ...requestData } = dto;
     const row = await this.requests.create({
       organizationId: org,
       employeeId: emp._id,
       employeeUserId: userId,
-      departmentId: emp.departmentId,
-      ...dto,
+      departmentId,
+      ...requestData,
       ...retro,
+      metadata: adjustmentType ? { actionType: adjustmentType, adjustmentSource: 'MANUAL_ADJUSTMENT' } : undefined,
       workDate: new Date(dto.workDate),
       requestedStart: dto.requestedStart ? new Date(dto.requestedStart) : undefined,
       requestedEnd: dto.requestedEnd ? new Date(dto.requestedEnd) : undefined,
     });
 
     try {
-      this.eventsGateway?.notifyNewRequest(String(emp.departmentId), {
+      this.eventsGateway?.notifyNewRequest(String(departmentId), {
         requestId: String(row._id),
         type: row.type,
-        departmentId: String(emp.departmentId),
+        departmentId: String(departmentId),
         employeeUserId: userId,
         employeeName: (emp as any)?.fullName || (emp as any)?.employeeCode || 'Nhân viên',
         employeeCode: (emp as any)?.employeeCode || '',
@@ -95,7 +128,16 @@ export class ManagerRequestService {
     if (filter.departmentId) await this.scope.requireDepartment(org, managerId, filter.departmentId);
     const departments = filter.departmentId ? [filter.departmentId] : ids;
     if (!departments.length) return [];
-    const query: any = { organizationId: org, departmentId: { $in: departments } };
+    const employeeUserIds = await this.scope.resolveEmployeeIdsForDepartments(org, departments);
+    // The employee scope branch recovers pending legacy requests that were
+    // stamped with a stale profile department before assignment-aware routing.
+    const query: any = {
+      organizationId: org,
+      $or: [
+        { departmentId: { $in: departments } },
+        { employeeUserId: { $in: employeeUserIds } },
+      ],
+    };
     if (filter.type && filter.type !== 'ALL') query.type = filter.type;
     if (filter.status && filter.status !== 'ALL') query.status = filter.status;
     return this.requests.find(query)
@@ -113,7 +155,13 @@ export class ManagerRequestService {
       .populate('employeeUserId', 'fullName email avatarUrl')
       .lean();
     if (!row) throw new NotFoundException('REQUEST_NOT_FOUND');
-    await this.scope.requireDepartment(org, managerId, String(row.departmentId));
+    try {
+      await this.scope.requireDepartment(org, managerId, String(row.departmentId));
+    } catch (error) {
+      const populatedEmployeeUser: any = row.employeeUserId;
+      const employeeUserId = String(populatedEmployeeUser?._id ?? populatedEmployeeUser);
+      if (!await this.scope.isEmployeeInManagedScope(org, managerId, employeeUserId)) throw error;
+    }
     return row;
   }
 
@@ -149,6 +197,9 @@ export class ManagerRequestService {
     // approval must leave status and version untouched so the manager's queue
     // does not show a decision that never happened.
     const precheck = asOt ? await this.ot!.precheckApproval(org, asOt) : undefined;
+    if (current.type === 'ATTENDANCE' && current.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
+      await this.assertAttendanceAdjustmentCanApply(org, current);
+    }
     const row: any = await this.requests
       .findOneAndUpdate(
         { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
@@ -225,6 +276,15 @@ export class ManagerRequestService {
       }
     }
 
+    if (current.type === 'ATTENDANCE' && current.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
+      await this.applyAttendanceAdjustment(org, current);
+      try {
+        await this.periodVersion?.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
+      } catch (verErr) {
+        console.warn('[ManagerRequestService] Period version bump failed for attendance adjustment:', verErr);
+      }
+    }
+
     // Bắn sự kiện realtime qua Socket.io tới Nhân viên và Quản lý phòng ban
     try {
       const empUserId = String(
@@ -241,6 +301,7 @@ export class ManagerRequestService {
         requestId: id,
         type: current.type,
         status,
+        organizationId: org,
         reviewedBy: managerId,
         reviewComment: reason,
         departmentId: deptId,
@@ -252,5 +313,71 @@ export class ManagerRequestService {
     }
 
     return row;
+  }
+
+  private async applyAttendanceAdjustment(org: string, request: any) {
+    const action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT';
+    const recordedAt = new Date(request.requestedStart);
+    const workDate = dateOnly(new Date(request.workDate).toISOString());
+    const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
+    let day: any = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate });
+    if (!day) {
+      day = await this.attendanceDays.create({
+        organizationId: org,
+        employeeId: employeeUserId,
+        workDate,
+        attendanceStatus: AttendanceStatus.NOT_CHECKED_IN,
+        overallApprovalStatus: AttendanceApprovalStatus.APPROVED,
+      });
+    }
+    if (action === 'CHECK_IN') {
+      if (day.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
+      if (day.checkOutAt && recordedAt >= new Date(day.checkOutAt)) throw new ConflictException('CHECK_IN_MUST_BE_BEFORE_CHECK_OUT');
+      day.checkInAt = recordedAt;
+    } else {
+      if (day.checkOutAt) throw new ConflictException('CHECK_OUT_ALREADY_EXISTS');
+      if (day.checkInAt && recordedAt <= new Date(day.checkInAt)) throw new ConflictException('CHECK_OUT_MUST_BE_AFTER_CHECK_IN');
+      day.checkOutAt = recordedAt;
+    }
+    if (day.checkInAt && day.checkOutAt) {
+      const breakMinutes = Number(day.shiftSnapshot?.breakMinutes ?? 0);
+      day.workingMinutes = Math.max(0, Math.floor((new Date(day.checkOutAt).getTime() - new Date(day.checkInAt).getTime()) / 60000) - breakMinutes);
+      day.attendanceStatus = AttendanceStatus.COMPLETED;
+      // A manual punch completes the business result as well as the UI status.
+      // Leaving the old INCOMPLETE result in place makes the live summary keep
+      // counting this day as missing even though both punches now exist.
+      day.dayResult = DayResult.PRESENT;
+    } else {
+      day.attendanceStatus = day.checkInAt ? AttendanceStatus.CHECKED_IN : AttendanceStatus.NOT_CHECKED_IN;
+      day.dayResult = DayResult.INCOMPLETE;
+    }
+    day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
+    await day.save();
+    await this.attendanceEvents.create({
+      organizationId: org,
+      attendanceDayId: day._id,
+      employeeId: employeeUserId,
+      eventType: action === 'CHECK_IN' ? AttendanceEventType.CHECK_IN : AttendanceEventType.CHECK_OUT,
+      method: AttendanceMethod.MANUAL,
+      recordedAt,
+      approvalStatus: AttendanceApprovalStatus.APPROVED,
+      validationStatus: 'VALID',
+      note: request.reason,
+    });
+  }
+
+  private async assertAttendanceAdjustmentCanApply(org: string, request: any) {
+    const action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT';
+    const recordedAt = new Date(request.requestedStart);
+    const workDate = dateOnly(new Date(request.workDate).toISOString());
+    const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
+    const day: any = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate }).lean();
+    if (action === 'CHECK_IN') {
+      if (day?.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
+      if (day?.checkOutAt && recordedAt >= new Date(day.checkOutAt)) throw new ConflictException('CHECK_IN_MUST_BE_BEFORE_CHECK_OUT');
+    } else {
+      if (day?.checkOutAt) throw new ConflictException('CHECK_OUT_ALREADY_EXISTS');
+      if (day?.checkInAt && recordedAt <= new Date(day.checkInAt)) throw new ConflictException('CHECK_OUT_MUST_BE_AFTER_CHECK_IN');
+    }
   }
 }

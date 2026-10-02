@@ -11,7 +11,7 @@ function queryResult(rows: Row[]) {
   };
 }
 
-function buildService(assignments: Row[], departments: Row[] = [], employees: Row[] = []) {
+function buildService(assignments: Row[], departments: Row[] = [], employees: Row[] = [], managerProfile?: Row) {
   const assignmentModel = {
     find: jest.fn((filter: Row) => queryResult(assignments.filter(row =>
       String(row.organizationId) === String(filter.organizationId)
@@ -27,6 +27,7 @@ function buildService(assignments: Row[], departments: Row[] = [], employees: Ro
     ))),
   };
   const employeeModel = {
+    findOne: jest.fn(() => ({ select: () => ({ lean: async () => managerProfile ?? null }) })),
     find: jest.fn((filter: Row) => queryResult(employees.filter(row => {
       if (String(row.organizationId) !== String(filter.organizationId)) return false;
       if (filter.departmentId?.$in) {
@@ -94,6 +95,16 @@ describe('ManagerScopeService', () => {
       ],
       defaultDepartmentId: 'd1',
       capabilities: ['manager:employees:read', 'manager:approvals:write', 'manager:kpi:draft'],
+    });
+  });
+
+  it('uses the manager profile department for legacy seeded managers without an assignment', async () => {
+    const service = buildService([], [
+      { _id: 'd1', organizationId: 'org-1', code: 'ENG', name: 'Engineering', active: true },
+    ], [], { userId: 'manager-1', departmentId: 'd1' });
+    await expect(service.getContext('org-1', 'manager-1', now)).resolves.toMatchObject({
+      defaultDepartmentId: 'd1',
+      managedDepartments: [{ id: 'd1', code: 'ENG', name: 'Engineering' }],
     });
   });
 

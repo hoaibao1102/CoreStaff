@@ -247,6 +247,16 @@ describe('TASK-074 — close re-verifies blockers', () => {
 
     await collection('AttendanceDay').deleteOne({ _id: day._id });
 
+    await collection('DepartmentTimesheetConfirmation').create({
+      organizationId: fixture.organizationId,
+      periodId,
+      departmentId: fixture.departmentId,
+      managerId: fixture.managerId,
+      periodVersion: 1,
+      confirmedAt: new Date(),
+      summarySnapshot: { employeeCount: 1, blockerCount: 0 },
+    });
+
     const closed = await http.post(`${API_PREFIX}/${periodId}/close`).set('Cookie', hrCookie);
     expect(closed.status).toBe(201);
     expect(closed.body.data.period.status).toBe('CLOSED');

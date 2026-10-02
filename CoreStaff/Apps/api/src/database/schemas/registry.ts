@@ -34,6 +34,7 @@ import { EmployeeDayOverrideSchema } from './employee-day-override.schema';
 import { LeaveActionSchema } from './leave-action.schema';
 import { TaxPolicySchema } from './tax-policy.schema';
 import { TimesheetPeriodSchema } from './timesheet-period.schema';
+import { DepartmentTimesheetConfirmationSchema } from './department-timesheet-confirmation.schema';
 import { TimesheetSummarySchema } from './timesheet-summary.schema';
 import { PayrollInputSnapshotSchema } from './payroll-input-snapshot.schema';
 import { PayrollRunSchema } from './payroll-run.schema';
@@ -84,6 +85,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'LeaveAction', schema: LeaveActionSchema },
   { name: 'TaxPolicy', schema: TaxPolicySchema },
   { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
+  { name: 'DepartmentTimesheetConfirmation', schema: DepartmentTimesheetConfirmationSchema },
   { name: 'TimesheetSummary', schema: TimesheetSummarySchema },
   { name: 'PayrollInputSnapshot', schema: PayrollInputSnapshotSchema },
   { name: 'PayrollRun', schema: PayrollRunSchema },

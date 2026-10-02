@@ -52,6 +52,23 @@ describe('TimesheetSummaryService work count aggregation', () => {
     expect(aggregate.incompleteDays).toBe(1);
   });
 
+  it('treats both punches as present even when a legacy adjustment left dayResult incomplete', () => {
+    const service = new TimesheetSummaryService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const aggregate = (service as any).aggregateWorkCounts([
+      {
+        workdayType: WorkdayType.WORKING_DAY,
+        dayResult: DayResult.INCOMPLETE,
+        attendanceStatus: AttendanceStatus.COMPLETED,
+        checkInAt: new Date('2026-09-15T01:00:00.000Z'),
+        checkOutAt: new Date('2026-09-15T10:00:00.000Z'),
+        workingMinutes: 480,
+      },
+    ]);
+
+    expect(aggregate.presentDays).toBe(1);
+    expect(aggregate.incompleteDays).toBe(0);
+  });
+
   it('keeps paid and unpaid leave days in the organization standard-day count', () => {
     const service = new TimesheetSummaryService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
     const aggregate = (service as any).aggregateWorkCounts([

@@ -29,6 +29,9 @@ function authProxy(target: string, local = false): ProxyOptions {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, 'VITE_');
+  // Explicit IPv4 avoids Node's dual IPv6/IPv4 localhost connection race on Windows.
+  const localApiTarget = env.VITE_API_FALLBACK_URL || 'http://127.0.0.1:3000';
+  const apiTarget = env.VITE_API_URL || localApiTarget;
   return {
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -40,18 +43,18 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     proxy: {
       '/socket.io': {
-        target: env.VITE_API_FALLBACK_URL || 'http://localhost:3000',
+        target: localApiTarget,
         ws: true,
         changeOrigin: true,
       },
       '/local-api/socket.io': {
-        target: env.VITE_API_FALLBACK_URL || 'http://localhost:3000',
+        target: localApiTarget,
         ws: true,
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/local-api\/socket\.io/, '/socket.io'),
       },
-      '/api': authProxy(env.VITE_API_URL || 'http://localhost:3000'),
-      '/local-api': authProxy(env.VITE_API_FALLBACK_URL || 'http://localhost:3000', true),
+      '/api': authProxy(apiTarget),
+      '/local-api': authProxy(localApiTarget, true),
     },
   },
   };

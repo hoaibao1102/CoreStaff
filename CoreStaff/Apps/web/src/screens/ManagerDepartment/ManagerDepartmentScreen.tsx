@@ -78,7 +78,9 @@ export function ManagerDepartmentScreen({
     getManagerContext(apiBase)
       .then((x) => {
         setCtx(x);
-        setDept(x.defaultDepartmentId ?? '');
+        // Open the complete inbox; otherwise requests from every department
+        // except the first managed department are silently hidden.
+        setDept('');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Không thể tải phạm vi quản lý.'))
       .finally(() => setLoading(false));
@@ -86,8 +88,8 @@ export function ManagerDepartmentScreen({
 
   // Lấy số lượng đơn PENDING để hiển thị badge đỏ
   useEffect(() => {
-    if (!apiBase || !dept) return;
-    getManagerRequests(apiBase, { departmentId: dept, status: 'PENDING' })
+    if (!apiBase) return;
+    getManagerRequests(apiBase, { departmentId: dept || undefined, status: 'PENDING' })
       .then((rows) => setPendingCount(rows.length))
       .catch(() => {});
   }, [apiBase, dept, socketRev]);
@@ -190,6 +192,7 @@ export function ManagerDepartmentScreen({
               value={dept}
               onChange={(e) => setDept(e.target.value)}
             >
+              <option value="">Tất cả phòng ban</option>
               {ctx.managedDepartments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.code} — {d.name}
@@ -273,8 +276,8 @@ function ApprovalTab({
     setBusy(true);
     setError('');
     Promise.all([
-      getManagerRequests(apiBase, { departmentId, type, status }),
-      getManagerEmployees(apiBase, departmentId),
+      getManagerRequests(apiBase, { departmentId: departmentId || undefined, type, status }),
+      getManagerEmployees(apiBase, departmentId || undefined),
     ])
       .then(([r, e]) => {
         if (!c) {
@@ -587,7 +590,7 @@ function DecisionDialog({
     (rawAddress && !rawAddress.startsWith('📍') && !rawAddress.includes('Tọa độ:') ? rawAddress : null);
 
   const isOt = request.type === 'OVERTIME';
-  const isSelfie = request.type === 'ATTENDANCE' && (Boolean(request.evidenceId) || Boolean(request.metadata?.actionType));
+  const isSelfie = request.type === 'ATTENDANCE' && request.metadata?.adjustmentSource !== 'MANUAL_ADJUSTMENT' && (Boolean(request.evidenceId) || Boolean(request.metadata?.actionType));
   const isAdjustment = request.type === 'ATTENDANCE' && !isSelfie;
 
   return (
@@ -709,8 +712,10 @@ function DecisionDialog({
                   Phân loại yêu cầu
                 </span>
                 <p className="text-sm font-medium text-blue-950">
-                  Điều chỉnh / giải trình công nhân viên gửi trực tiếp (không yêu cầu ảnh selfie hay tọa độ).
+                  {request.metadata?.actionType === 'CHECK_IN' ? 'Bổ sung check-in' : request.metadata?.actionType === 'CHECK_OUT' ? 'Bổ sung check-out' : 'Điều chỉnh / giải trình công'}
+                  {request.requestedStart ? ` lúc ${new Date(request.requestedStart).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}.
                 </p>
+                <p className="text-xs text-blue-800">Duyệt yêu cầu sẽ ghi mốc giờ này vào bảng công của nhân viên.</p>
               </div>
             )}
 

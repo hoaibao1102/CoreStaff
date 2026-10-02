@@ -75,10 +75,6 @@ export class TimesheetSummaryService {
       .session(session)
       .lean();
 
-    if (!attendanceDays.length) {
-      return 0;
-    }
-
     // Step 2: Group by employee
     const employeeDaysMap = new Map<string, AttendanceDay[]>();
     for (const day of attendanceDays) {
@@ -114,30 +110,38 @@ export class TimesheetSummaryService {
       });
     }
 
-    // Step 4: Build department filter map once if needed
-    let allowedEmployeeIds: Set<string> | undefined;
+    // Step 4: Resolve the complete employee population. Summaries are payroll
+    // inputs, so an active employee must not disappear merely because no
+    // AttendanceDay was generated (or an older day missed periodId).
+    let allowedEmployeeIds: Set<string>;
     if (departmentId) {
       const profileUserIds = await this.resolveDepartmentEmployeeIds(
         organizationId,
         departmentId,
       );
       allowedEmployeeIds = new Set(profileUserIds);
+    } else {
+      const activeProfiles = await this.employeeProfileModel
+        .find({
+          organizationId: new Types.ObjectId(organizationId),
+          employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
+        }, { userId: 1 })
+        .session(session)
+        .lean();
+      allowedEmployeeIds = new Set(activeProfiles.map((profile) => String(profile.userId)));
     }
 
-    // Step 5: Generate summary for each employee
+    // Step 5: Generate one summary for every eligible employee. Empty
+    // attendance is represented by a zero-valued summary, not by omission.
     let count = 0;
-    for (const [employeeId, days] of employeeDaysMap.entries()) {
-      if (allowedEmployeeIds && !allowedEmployeeIds.has(employeeId)) {
-        continue;
-      }
-
+    for (const employeeId of allowedEmployeeIds) {
       await this.createSummaryForEmployee(
         periodId,
         periodKey,
         organizationId,
         employeeId,
         totalDays,
-        days,
+        employeeDaysMap.get(employeeId) ?? [],
         employeeOtMap.get(employeeId) ?? [],
         session,
       );
@@ -154,7 +158,7 @@ export class TimesheetSummaryService {
     periodId: string,
     periodKey: string,
     organizationId: string,
-    departmentId: string,
+    departmentId?: string,
   ): Promise<any[]> {
     const year = parseInt(periodKey.slice(0, 4));
     const month = parseInt(periodKey.slice(5, 7));
@@ -163,10 +167,6 @@ export class TimesheetSummaryService {
     const attendanceDays = await this.attendanceDayModel
       .find({ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(periodId) }, { _id: 1, employeeId: 1, workDate: 1, workdayType: 1, dayResult: 1, attendanceStatus: 1, checkInAt: 1, checkOutAt: 1, workingMinutes: 1, lateMinutes: 1, earlyMinutes: 1 })
       .lean();
-
-    if (!attendanceDays.length) {
-      return [];
-    }
 
     const employeeDaysMap = new Map<string, AttendanceDay[]>();
     for (const day of attendanceDays) {
@@ -199,21 +199,28 @@ export class TimesheetSummaryService {
       });
     }
 
-    const allowedEmployeeIds = new Set(await this.resolveDepartmentEmployeeIds(organizationId, departmentId));
+    let allowedEmployeeIds: Set<string>;
+    if (departmentId) {
+      allowedEmployeeIds = new Set(await this.resolveDepartmentEmployeeIds(organizationId, departmentId));
+    } else {
+      const activeProfiles = await this.employeeProfileModel
+        .find({
+          organizationId: new Types.ObjectId(organizationId),
+          employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
+        }, { userId: 1 })
+        .lean();
+      allowedEmployeeIds = new Set(activeProfiles.map((profile) => String(profile.userId)));
+    }
 
     const results: any[] = [];
-    for (const [employeeId, days] of employeeDaysMap.entries()) {
-      if (!allowedEmployeeIds.has(employeeId)) {
-        continue;
-      }
-
+    for (const employeeId of allowedEmployeeIds) {
       const summary = await this.buildSummaryForEmployee(
         periodId,
         periodKey,
         organizationId,
         employeeId,
         totalDays,
-        days,
+        employeeDaysMap.get(employeeId) ?? [],
         employeeOtMap.get(employeeId) ?? [],
       );
       results.push(summary);
@@ -354,8 +361,13 @@ export class TimesheetSummaryService {
       // A public holiday with no punches is a valid day off, not incomplete;
       // a public holiday with completed punches is actual work (and its OT is
       // classified separately by OvertimeResult).
-      const hasPunch = Boolean(day.checkInAt || day.checkOutAt);
-      if (day.dayResult === DayResult.INCOMPLETE || (hasPunch && (!day.checkInAt || !day.checkOutAt))) {
+      const hasCheckIn = Boolean(day.checkInAt);
+      const hasCheckOut = Boolean(day.checkOutAt);
+      // Punches are the source of truth. Older approved adjustments may still
+      // carry a stale INCOMPLETE dayResult even though both timestamps exist.
+      if (hasCheckIn && hasCheckOut) {
+        presentDays++;
+      } else if (hasCheckIn || hasCheckOut || day.dayResult === DayResult.INCOMPLETE) {
         incompleteDays++;
       } else if (day.dayResult === DayResult.PRESENT || day.attendanceStatus === 'COMPLETED') {
         presentDays++;

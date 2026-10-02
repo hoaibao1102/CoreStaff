@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
 import { Badge } from '@/components/badge';
 import { Alert, AlertDescription } from '@/components/alert';
 import { Skeleton } from '@/components/skeleton';
-import { Separator } from '@/components/separator';
 import {
   Table,
   TableBody,
@@ -14,58 +13,16 @@ import {
   TableRow,
 } from '@/components/table';
 import { employeeRequest } from '@/services/employeeService';
-import { FileText, RefreshCw, Wallet, Eye, EyeOff } from 'lucide-react';
+import { PayslipPreviewDialog, type PayslipRow } from '@/screens/hr/PayslipPreviewDialog';
+import { FileText, RefreshCw, Eye } from 'lucide-react';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 };
 
-/** Format minutes to hours:minutes */
-const formatMinutes = (totalMinutes: number) => {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}h ${minutes}p`;
-};
-
-type Payslip = {
-  _id: string;
+type Payslip = PayslipRow & {
   periodLabel: string;
-  grossEarnings: number;
-  netSalary: number;
-  pitAmount: number;
-  taxableEarnings?: number;
-  status: string;
-  personalDeduction?: number;
-  dependentDeduction?: number;
-  contributionBase?: number;
-  socialInsuranceRate?: number;
-  healthInsuranceRate?: number;
-  unemploymentInsuranceRate?: number;
-  socialInsurance?: number;
-  healthInsurance?: number;
-  unemploymentInsurance?: number;
-  earningBreakdown?: Array<{ type: string; label: string; amount: number; taxable?: boolean }>;
-  allowanceBreakdown?: Array<{ type: string; label: string; amount: number; taxable?: boolean }>;
-  otBreakdown?: {
-    totalMinutes: number;
-    hourlyRate: number;
-    otNonTaxable: number;
-    otTaxable: number;
-    otPay: number;
-    breakdown: Array<{
-      type: string;
-      label: string;
-      minutes: number;
-      coefficient: number;
-      amount: number;
-      nonTaxable: number;
-      taxable: number;
-    }>;
-  };
-  deductionBreakdown?: Array<{ type: string; label: string; amount: number }>;
-  pitBreakdown?: Array<{ bracket: number; income: number; rate: number; tax: number }>;
-  dependents?: Array<{ fullName: string; relationship: string; birthDate?: string }>;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -171,10 +128,6 @@ export function MyPayslipsScreen() {
     }
   };
 
-  const toggleDetail = (slipId: string) => {
-    setExpandedSlipId(expandedSlipId === slipId ? null : slipId);
-  };
-
   useEffect(() => {
     if (!hasLoaded) {
       loadMyPayslips();
@@ -182,6 +135,7 @@ export function MyPayslipsScreen() {
   }, []);
 
   const totalNet = payslips.reduce((sum, s) => sum + s.netSalary, 0);
+  const selectedPayslip = payslips.find((slip) => slip._id === expandedSlipId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -298,25 +252,17 @@ export function MyPayslipsScreen() {
                         <TableCell className="text-center">
                           <Button
                             size="sm"
-                            variant={expandedSlipId === slip._id ? 'default' : 'outline'}
+                            variant="ghost"
+                            className="min-h-10 text-primary"
                             onClick={() => {
-                              toggleDetail(slip._id);
+                              setExpandedSlipId(slip._id);
                               if (slip.status === 'RELEASED') {
                                 handleViewed(slip._id, true);
                               }
                             }}
                           >
-                            {expandedSlipId === slip._id ? (
-                              <>
-                                <EyeOff className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                                Đóng
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                                Chi tiết
-                              </>
-                            )}
+                            <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                            Xem chi tiết
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -327,245 +273,15 @@ export function MyPayslipsScreen() {
             </CardContent>
           </Card>
 
-          {/* Expandable Detail Section */}
-          {expandedSlipId && <PayslipDetailCard payslip={payslips.find((s) => s._id === expandedSlipId)} onClose={() => setExpandedSlipId(null)} />}
+          {/* Reuse the HR payslip preview so both roles always share the same layout. */}
+          <PayslipPreviewDialog
+            open={expandedSlipId !== null}
+            onClose={() => setExpandedSlipId(null)}
+            payslip={selectedPayslip}
+            periodLabel={selectedPayslip?.periodLabel ?? ''}
+          />
         </>
       )}
     </div>
-  );
-}
-
-function PayslipDetailCard({
-  payslip,
-  onClose,
-}: {
-  payslip: Payslip | undefined;
-  onClose: () => void;
-}) {
-  if (!payslip) return null;
-
-  const totalInsurance =
-    (payslip.socialInsurance || 0) +
-    (payslip.healthInsurance || 0) +
-    (payslip.unemploymentInsurance || 0);
-  const totalNonTaxable =
-    (payslip.otBreakdown?.otNonTaxable || 0) +
-    (payslip.allowanceBreakdown?.filter((a) => !a.taxable).reduce((sum, a) => sum + a.amount, 0) || 0);
-  const taxableGross = payslip.grossEarnings - totalNonTaxable;
-
-  return (
-    <Card className="border-primary/20">
-      <CardHeader className="border-b bg-muted/30">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Chi Tiết Bảng Lương - {payslip.periodLabel}</CardTitle>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Đóng
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6 pt-6">
-        {/* Earnings */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground">Thu Nhập</h3>
-          <div className="rounded-xl border border-border p-4">
-            <div className="space-y-2">
-              {payslip.earningBreakdown
-                ?.filter((e) => e.type === 'BASE_SALARY' || e.type === 'ATTENDANCE_BONUS')
-                .map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-foreground">{item.label}</span>
-                    <span className="font-mono">{formatCurrency(item.amount)}</span>
-                  </div>
-                ))}
-              {payslip.allowanceBreakdown && payslip.allowanceBreakdown.length > 0 && (
-                <>
-                  <Separator />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Phụ Cấp</p>
-                  {payslip.allowanceBreakdown.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-foreground">{item.label}</span>
-                        {!item.taxable ? (
-                          <Badge variant="outline" className="h-5 text-xs">Miễn thuế</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="h-5 text-xs">Chịu thuế</Badge>
-                        )}
-                      </div>
-                      <span className="font-mono">{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-              {payslip.otBreakdown && payslip.otBreakdown.totalMinutes > 0 && (
-                <>
-                  <Separator />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Làm Thêm Giờ</p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-foreground">Tổng giờ OT</span>
-                    <span className="font-mono">{formatMinutes(payslip.otBreakdown.totalMinutes)}</span>
-                  </div>
-                  {payslip.otBreakdown.breakdown.map((ot, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-foreground">{ot.label}</span>
-                      <span className="font-mono">{formatCurrency(ot.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-sm font-medium">
-                    <span className="text-foreground">Tổng OT</span>
-                    <span className="font-mono">{formatCurrency(payslip.otBreakdown.otPay)}</span>
-                  </div>
-                </>
-              )}
-              <Separator />
-              <div className="flex justify-between font-semibold text-foreground">
-                <span>Tổng thu nhập (Gross)</span>
-                <span className="font-mono text-base">{formatCurrency(payslip.grossEarnings)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Insurance & Deductions */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground">Khấu Trừ Bảo Hiểm & Giảm Trừ</h3>
-          <div className="rounded-xl border border-border p-4">
-            <div className="space-y-2">
-              {payslip.contributionBase && payslip.contributionBase > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground">Lương đóng BHXH</span>
-                  <span className="font-mono">{formatCurrency(payslip.contributionBase)}</span>
-                </div>
-              )}
-              {payslip.socialInsurance && payslip.socialInsurance > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground">BHXH ({(payslip.socialInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(payslip.socialInsurance)}</span>
-                </div>
-              )}
-              {payslip.healthInsurance && payslip.healthInsurance > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground">BHYT ({(payslip.healthInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(payslip.healthInsurance)}</span>
-                </div>
-              )}
-              {payslip.unemploymentInsurance && payslip.unemploymentInsurance > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground">BHTN ({(payslip.unemploymentInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(payslip.unemploymentInsurance)}</span>
-                </div>
-              )}
-              <Separator />
-              <div className="flex justify-between text-sm font-semibold text-foreground">
-                <span>Tổng bảo hiểm</span>
-                <span className="font-mono text-destructive">-{formatCurrency(totalInsurance)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-foreground">Giảm trừ bản thân</span>
-                <span className="font-mono text-destructive">-{formatCurrency(payslip.personalDeduction || 15_500_000)}</span>
-              </div>
-              {payslip.dependents && payslip.dependents.length > 0 && (
-                <>
-                  <Separator />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Người Phụ Thuộc ({payslip.dependents.length} người)
-                  </p>
-                  {payslip.dependents.map((dep, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-foreground">
-                        {dep.fullName} ({dep.relationship === 'CON' ? 'Con' : dep.relationship === 'BO_ME' ? 'Bố/Mẹ' : 'Khác'})
-                      </span>
-                      <span className="font-mono text-destructive">-{formatCurrency(6_200_000)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-sm font-semibold text-foreground">
-                    <span>Tổng giảm trừ NPT</span>
-                    <span className="font-mono text-destructive">-{formatCurrency(payslip.dependentDeduction || 0)}</span>
-                  </div>
-                </>
-              )}
-              <Separator />
-              <div className="flex justify-between font-semibold text-foreground">
-                <span>Tổng khấu trừ</span>
-                <span className="font-mono text-destructive text-base">
-                  -{formatCurrency(totalInsurance + (payslip.personalDeduction || 15_500_000) + (payslip.dependentDeduction || 0))}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* PIT */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground">Thuế TNCN</h3>
-          <div className="rounded-xl border border-border p-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-foreground">Tổng thu nhập (Gross)</span>
-                <span className="font-mono font-medium">{formatCurrency(payslip.grossEarnings)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-foreground">Các khoản không chịu thuế</span>
-                <span className="font-mono text-destructive">-{formatCurrency(totalNonTaxable)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-medium text-foreground">
-                <span>Taxable Gross</span>
-                <span className="font-mono">{formatCurrency(taxableGross)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-sm">
-                <span className="text-foreground">Bảo hiểm xã hội</span>
-                <span className="font-mono text-destructive">-{formatCurrency(totalInsurance)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-foreground">Giảm trừ bản thân</span>
-                <span className="font-mono text-destructive">-{formatCurrency(payslip.personalDeduction || 15_500_000)}</span>
-              </div>
-              {payslip.dependentDeduction && payslip.dependentDeduction > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-foreground">Giảm trừ người phụ thuộc</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(payslip.dependentDeduction)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm font-semibold text-foreground">
-                <span>Thu nhập chịu thuế</span>
-                <span className="font-mono">{formatCurrency(payslip.taxableEarnings || 0)}</span>
-              </div>
-              {payslip.pitBreakdown && payslip.pitBreakdown.length > 0 && (
-                <>
-                  <Separator />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Biểu Thuế Lũy Tiến</p>
-                  {payslip.pitBreakdown.map((bracket, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-foreground">Bậc {bracket.bracket} ({bracket.rate}%)</span>
-                      <span className="font-mono">{formatCurrency(bracket.tax)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-              <div className="flex justify-between font-semibold text-foreground">
-                <span>PIT phải nộp</span>
-                <span className="font-mono text-destructive text-base">-{formatCurrency(payslip.pitAmount)}</span>
-              </div>
-              {(!payslip.pitBreakdown || payslip.pitBreakdown.length === 0) && payslip.pitAmount === 0 && (
-                <p className="text-sm text-muted-foreground">Không phải nộp thuế TNCN.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Net Salary Summary */}
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
-              <span className="font-semibold text-foreground">Lương net thực nhận</span>
-            </div>
-            <span className="font-mono text-2xl font-bold text-primary">
-              {formatCurrency(payslip.netSalary)}
-            </span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

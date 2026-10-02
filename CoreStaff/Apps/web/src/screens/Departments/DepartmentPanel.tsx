@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/badge';
-import { BriefcaseBusiness, LoaderCircle, Pencil, Power, Plus, UserCog, X } from 'lucide-react';
+import { BriefcaseBusiness, LoaderCircle, Pencil, Power, PowerOff, Plus, UserCog, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/alert';
 import { Button } from '@/components/button';
 import { Input } from '@/components/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/sheet';
 import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { FormLabel } from '@/components/form/FormLabel';
@@ -119,44 +118,40 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
     finally { submitting.current = false; setSaving(false); }
   }
 
-  const title = !departmentId ? 'Tạo phòng ban' : editing ? 'Chỉnh sửa phòng ban' : 'Chi tiết phòng ban';
-  const Container = departmentId ? Sheet : Dialog;
-  const Content = departmentId ? SheetContent : DialogContent;
-  const Header = departmentId ? SheetHeader : DialogHeader;
-  const Title = departmentId ? SheetTitle : DialogTitle;
-  const Description = departmentId ? SheetDescription : DialogDescription;
+  const title = !departmentId ? 'Tạo phòng ban' : 'Chi tiết phòng ban';
+  const departmentForm = <form onSubmit={save} noValidate className="space-y-5" aria-label={department ? 'Chỉnh sửa phòng ban' : 'Tạo phòng ban'} aria-busy={saving}>
+    <div className="space-y-2">
+      <FormLabel htmlFor="department-code" required>Mã phòng ban</FormLabel>
+      <Input id="department-code" value={code} required maxLength={32} disabled={saving} className="min-h-11" placeholder="Ví dụ: HR" aria-invalid={!!fieldErrors.code} aria-describedby="department-code-hint department-code-error" onChange={event => { setCode(event.target.value); setFieldErrors(previous => ({ ...previous, code: undefined })); }} />
+      <p id="department-code-hint" className="text-xs text-muted-foreground">Tối đa 32 ký tự, không trùng trong tổ chức.</p>
+      <FormError message={fieldErrors.code} />
+    </div>
+    <div className="space-y-2">
+      <FormLabel htmlFor="department-name" required>Tên phòng ban</FormLabel>
+      <Input id="department-name" value={name} required maxLength={128} disabled={saving} className="min-h-11" placeholder="Ví dụ: Phòng Nhân sự" aria-invalid={!!fieldErrors.name} aria-describedby="department-name-error" onChange={event => { setName(event.target.value); setFieldErrors(previous => ({ ...previous, name: undefined })); }} />
+      <FormError message={fieldErrors.name} />
+    </div>
+    {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+    <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-5">
+      <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => {
+        if (!department) onClose();
+        else { setEditing(false); setCode(department.code); setName(department.name); setFieldErrors({}); setError(null); }
+      }}>Hủy</Button>
+      <Button type="submit" className="min-h-11" disabled={saving}>{saving && <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}{saving ? 'Đang lưu…' : department ? 'Lưu thay đổi' : 'Tạo phòng ban'}</Button>
+    </div>
+  </form>;
 
-  return <Container open onOpenChange={open => { if (!open && !submitting.current) onClose(); }}>
-    <Content showCloseButton={false} finalFocus={returnFocus} initialFocus={departmentId ? undefined : () => document.getElementById('department-code')} className={departmentId ? 'data-[side=right]:w-full data-[side=right]:sm:max-w-lg' : undefined}>
-      <Header className="relative border-b border-border p-6 pr-16">
-        <Title className="text-xl font-semibold">{title}</Title>
-        <Description className="mt-2">{editing ? 'Nhập mã và tên phòng ban. Các trường có dấu * là bắt buộc.' : 'Thông tin và trạng thái phòng ban trong tổ chức.'}</Description>
+  return <Dialog open onOpenChange={open => { if (!open && !submitting.current) onClose(); }}>
+    <DialogContent showCloseButton={false} finalFocus={returnFocus} initialFocus={departmentId ? undefined : () => document.getElementById('department-code')} className={departmentId ? 'max-w-4xl' : 'max-w-xl'}>
+      <DialogHeader className="relative border-b border-border p-6 pr-16">
+        <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
+        <DialogDescription className="mt-2">{departmentId ? 'Thông tin, quản lý và chức vụ thuộc phòng ban.' : 'Nhập mã và tên phòng ban. Các trường có dấu * là bắt buộc.'}</DialogDescription>
         <Button variant="ghost" className="absolute right-3 top-3 min-h-11 min-w-11" aria-label="Đóng bảng phòng ban" disabled={saving} onClick={onClose}><X aria-hidden="true" /></Button>
-      </Header>
+      </DialogHeader>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {loading ? <div className="space-y-4" role="status" aria-label="Đang tải chi tiết phòng ban"><Skeleton className="h-16" /><Skeleton className="h-32" /></div>
           : loadError ? <Alert variant="destructive"><AlertDescription>{loadError}</AlertDescription><Button variant="outline" className="mt-4 min-h-11" onClick={() => setRevision(value => value + 1)}>Thử lại</Button></Alert>
-            : editing && canManage ? <form onSubmit={save} noValidate className="space-y-6" aria-label={title} aria-busy={saving}>
-              <div className="space-y-2">
-                <FormLabel htmlFor="department-code" required>Mã phòng ban</FormLabel>
-                <Input id="department-code" value={code} required maxLength={32} disabled={saving} className="min-h-11" placeholder="Ví dụ: HR" aria-invalid={!!fieldErrors.code} aria-describedby="department-code-hint department-code-error" onChange={event => { setCode(event.target.value); setFieldErrors(previous => ({ ...previous, code: undefined })); }} />
-                <p id="department-code-hint" className="text-xs text-muted-foreground">Tối đa 32 ký tự, không trùng trong tổ chức.</p>
-                <FormError message={fieldErrors.code} />
-              </div>
-              <div className="space-y-2">
-                <FormLabel htmlFor="department-name" required>Tên phòng ban</FormLabel>
-                <Input id="department-name" value={name} required maxLength={128} disabled={saving} className="min-h-11" placeholder="Ví dụ: Phòng Nhân sự" aria-invalid={!!fieldErrors.name} aria-describedby="department-name-error" onChange={event => { setName(event.target.value); setFieldErrors(previous => ({ ...previous, name: undefined })); }} />
-                <FormError message={fieldErrors.name} />
-              </div>
-              {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-              <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-6">
-                <Button type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => {
-                  if (!department) onClose();
-                  else { setEditing(false); setCode(department.code); setName(department.name); setFieldErrors({}); setError(null); }
-                }}>Hủy</Button>
-                <Button type="submit" className="min-h-11" disabled={saving}>{saving && <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}{saving ? 'Đang lưu…' : department ? 'Lưu thay đổi' : 'Tạo phòng ban'}</Button>
-              </div>
-            </form>
+            : editing && canManage && !department ? departmentForm
               : department && <div className="space-y-6">
                 <div><h2 className="break-words text-xl font-semibold">{department.name}</h2><p className="mt-2 text-sm text-muted-foreground">{department.active ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</p></div>
                 <dl className="space-y-4 rounded-xl border border-border p-4">
@@ -184,9 +179,13 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
                         <TableCell className="pl-4 font-medium">{position.code}</TableCell>
                         <TableCell className="min-w-40 max-w-xs whitespace-normal break-words">{position.name}</TableCell>
                         <TableCell><Badge variant="secondary" className={position.active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'text-muted-foreground'}>{position.active ? 'Đang hoạt động' : 'Ngưng hoạt động'}</Badge></TableCell>
-                        <TableCell className="pr-4 text-right">{canManage && <div className="flex justify-end gap-2">
-                          <Button variant="ghost" className="min-h-11 text-primary" onClick={() => setPositionPanel({ mode: 'edit', positionId: position._id })}>Sửa</Button>
-                          <Button variant="ghost" className="min-h-11 text-primary" onClick={() => setPositionPanel({ mode: position.active ? 'deactivate' : 'activate', positionId: position._id })}>{position.active ? 'Ngưng' : 'Kích hoạt'}</Button>
+                        <TableCell className="pr-4 text-right">{canManage && <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="size-10 text-primary" aria-label={`Chỉnh sửa chức vụ ${position.name}`} title="Chỉnh sửa" onClick={() => setPositionPanel({ mode: 'edit', positionId: position._id })}>
+                            <Pencil className="size-4" aria-hidden="true" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className={position.active ? 'size-10 text-destructive hover:text-destructive' : 'size-10 text-primary'} aria-label={`${position.active ? 'Ngưng' : 'Kích hoạt'} chức vụ ${position.name}`} title={position.active ? 'Ngưng hoạt động' : 'Kích hoạt lại'} onClick={() => setPositionPanel({ mode: position.active ? 'deactivate' : 'activate', positionId: position._id })}>
+                            {position.active ? <PowerOff className="size-4" aria-hidden="true" /> : <Power className="size-4" aria-hidden="true" />}
+                          </Button>
                         </div>}</TableCell>
                       </TableRow>)}</TableBody>
                     </Table>}
@@ -205,10 +204,20 @@ export function DepartmentPanel({ apiBase, organizationId, canManage, department
                 </div>)}
               </div>}
       </div>
-    </Content>
-    {department && positionPanel && <PositionCreateDialog apiBase={apiBase} departmentId={department._id} open={positionPanel.mode === 'create'} onClose={() => setPositionPanel(null)} onCreated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
-    {department && positionPanel?.mode === 'edit' && positionPanel.positionId && <PositionEditDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onUpdated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
-    {department && positionPanel?.mode === 'activate' && positionPanel.positionId && <PositionActivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onActivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
-    {department && positionPanel?.mode === 'deactivate' && positionPanel.positionId && <PositionDeactivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onDeactivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
-  </Container>;
+      {/* Keep child dialogs inside DialogContent so they inherit the next modal layer. */}
+      {department && editing && canManage && <Dialog open onOpenChange={open => { if (!open && !saving) setEditing(false); }}>
+        <DialogContent initialFocus={() => document.getElementById('department-code')} className="max-w-xl">
+          <DialogHeader className="border-b border-border pr-16">
+            <DialogTitle>Chỉnh sửa phòng ban</DialogTitle>
+            <DialogDescription>Nhập mã và tên phòng ban. Các trường có dấu * là bắt buộc.</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6">{departmentForm}</div>
+        </DialogContent>
+      </Dialog>}
+      {department && positionPanel?.mode === 'create' && <PositionCreateDialog apiBase={apiBase} departmentId={department._id} open onClose={() => setPositionPanel(null)} onCreated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+      {department && positionPanel?.mode === 'edit' && positionPanel.positionId && <PositionEditDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onUpdated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+      {department && positionPanel?.mode === 'activate' && positionPanel.positionId && <PositionActivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onActivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+      {department && positionPanel?.mode === 'deactivate' && positionPanel.positionId && <PositionDeactivateDialog apiBase={apiBase} positionId={positionPanel.positionId} onClose={() => setPositionPanel(null)} onDeactivated={() => { setPositionPanel(null); setRevision(value => value + 1); }} />}
+    </DialogContent>
+  </Dialog>;
 }

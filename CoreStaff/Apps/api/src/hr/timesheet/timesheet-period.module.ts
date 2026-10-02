@@ -15,6 +15,7 @@ import { PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
 import { AttendanceDay, AttendanceDaySchema } from '../../database/schemas/attendance-day.schema';
 import { AttendanceEvent, AttendanceEventSchema } from '../../database/schemas/attendance-event.schema';
 import { ManagerRequest, ManagerRequestSchema } from '../../database/schemas/manager-request.schema';
+import { DepartmentTimesheetConfirmation, DepartmentTimesheetConfirmationSchema } from '../../database/schemas/department-timesheet-confirmation.schema';
 
 @Module({
 	imports: [
@@ -28,6 +29,7 @@ import { ManagerRequest, ManagerRequestSchema } from '../../database/schemas/man
 			{ name: AttendanceDay.name, schema: AttendanceDaySchema },
 			{ name: AttendanceEvent.name, schema: AttendanceEventSchema },
 			{ name: ManagerRequest.name, schema: ManagerRequestSchema },
+			{ name: DepartmentTimesheetConfirmation.name, schema: DepartmentTimesheetConfirmationSchema },
 			// Required for AuthGuard dependency injection
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },

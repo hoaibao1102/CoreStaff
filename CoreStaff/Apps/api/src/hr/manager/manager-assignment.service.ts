@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { ManagerAssignmentDocument } from '../../database/schemas/manager-assignment.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
+import { EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { CreateManagerAssignmentDto, UpdateManagerAssignmentDto } from './dto/manager-assignment.dto';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class ManagerAssignmentService {
     @InjectModel('ManagerAssignment') private readonly assignments: Model<ManagerAssignmentDocument>,
     @InjectModel('User') private readonly users: Model<UserDocument>,
     @InjectModel('Department') private readonly departments: Model<DepartmentDocument>,
+    @InjectModel('EmployeeProfile') private readonly employeeProfiles: Model<EmployeeProfileDocument>,
   ) {}
 
   async list(organizationId: string) {
@@ -19,7 +21,17 @@ export class ManagerAssignmentService {
   }
 
   async listCandidates(organizationId: string) {
-    const rows = await this.users.find({ organizationId, role: 'DEPARTMENT_MANAGER' }).select('_id fullName').sort({ fullName: 1 }).lean();
+    const profiles = await this.employeeProfiles.find({
+      organizationId,
+      employmentStatus: { $in: ['PROBATION', 'ACTIVE', 'ON_LEAVE'] },
+    }).select('userId').lean();
+    const userIds = profiles.map(row => row.userId);
+    const rows = await this.users.find({
+      organizationId,
+      _id: { $in: userIds },
+      role: { $in: ['EMPLOYEE', 'DEPARTMENT_MANAGER'] },
+      status: 'ACTIVE',
+    }).select('_id fullName').sort({ fullName: 1 }).lean();
     return rows.map(row => ({ id: String(row._id), fullName: row.fullName }));
   }
 
@@ -31,6 +43,10 @@ export class ManagerAssignmentService {
       throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
     }
     const row = await this.assignments.create({ ...dto, organizationId, createdBy, effectiveFrom: from, effectiveTo: to });
+    await this.users.updateOne(
+      { _id: dto.managerUserId, organizationId, role: 'EMPLOYEE' },
+      { $set: { role: 'DEPARTMENT_MANAGER' } },
+    );
     return row.toObject();
   }
 
@@ -49,6 +65,10 @@ export class ManagerAssignmentService {
     const patch: Record<string, unknown> = { ...dto, effectiveFrom: from, effectiveTo: to };
     const row = await this.assignments.findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true }).lean();
     if (!row) throw new NotFoundException('MANAGER_ASSIGNMENT_NOT_FOUND');
+    await this.users.updateOne(
+      { _id: managerUserId, organizationId, role: 'EMPLOYEE' },
+      { $set: { role: 'DEPARTMENT_MANAGER' } },
+    );
     return row;
   }
 
@@ -59,11 +79,21 @@ export class ManagerAssignmentService {
   }
 
   private async validateRefs(organizationId: string, managerUserId: string, departmentId: string) {
-    const [manager, department] = await Promise.all([
-      this.users.findOne({ _id: managerUserId, organizationId, role: 'DEPARTMENT_MANAGER' }).lean(),
+    const [manager, profile, department] = await Promise.all([
+      this.users.findOne({
+        _id: managerUserId,
+        organizationId,
+        role: { $in: ['EMPLOYEE', 'DEPARTMENT_MANAGER'] },
+        status: 'ACTIVE',
+      }).lean(),
+      this.employeeProfiles.findOne({
+        organizationId,
+        userId: managerUserId,
+        employmentStatus: { $in: ['PROBATION', 'ACTIVE', 'ON_LEAVE'] },
+      }).lean(),
       this.departments.findOne({ _id: departmentId, organizationId }).lean(),
     ]);
-    if (!manager) throw new NotFoundException('DEPARTMENT_MANAGER_NOT_FOUND');
+    if (!manager || !profile) throw new NotFoundException('DEPARTMENT_MANAGER_NOT_FOUND');
     if (!department) throw new NotFoundException('DEPARTMENT_NOT_FOUND');
   }
 

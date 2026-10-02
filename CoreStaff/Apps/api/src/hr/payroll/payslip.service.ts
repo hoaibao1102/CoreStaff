@@ -487,7 +487,7 @@ export class PayslipService {
   /**
    * Lookup EmployeeProfile by userId — used by employee self-service endpoints.
    * FIX: Use employmentStatus (not status which doesn't exist in schema).
-   * Returns null if no active profile found.
+   * Active and probation employees both participate in payroll.
    */
   async findEmployeeProfileByUserId(userId: any): Promise<any> {
     try {
@@ -497,7 +497,7 @@ export class PayslipService {
       // FIX: Use employmentStatus instead of non-existent status field
       const profile = await this.employeeProfileModel.findOne({
         userId: userIdObj,
-        employmentStatus: 'ACTIVE',
+        employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
       }).lean();
       
       return profile;

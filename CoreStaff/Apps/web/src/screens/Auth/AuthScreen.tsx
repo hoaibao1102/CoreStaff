@@ -105,7 +105,6 @@ export function AuthScreen({
   };
 
   const handleChangePassword = async (
-    currentPassword: string,
     newPassword: string,
     confirmPassword: string,
   ) => {
@@ -117,7 +116,7 @@ export function AuthScreen({
     setSubmitting(true);
     setError(null);
     try {
-      await changePassword(apiBase, currentPassword, newPassword, confirmPassword);
+      await changePassword(apiBase, newPassword, confirmPassword);
       onSession(await me(apiBase), false);
     } catch (err: unknown) {
       if (err instanceof AuthApiError && err.status === 401) {

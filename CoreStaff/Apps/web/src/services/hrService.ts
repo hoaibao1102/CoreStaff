@@ -452,6 +452,9 @@ export const HR_ERROR_CODES: Record<string, string> = {
     SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt yêu cầu của chính mình.',
     REVIEW_REASON_REQUIRED: 'Vui lòng nhập lý do (tối thiểu 10 ký tự) khi từ chối hoặc yêu cầu giải trình.',
     REQUEST_STATE_CHANGED: 'Yêu cầu đã được xử lý bởi người khác. Vui lòng tải lại danh sách.',
+    PERIOD_VERSION_CONFLICT: 'Bảng công đã thay đổi sau lần rà soát. Dữ liệu sẽ được tải lại; vui lòng kiểm tra và xác nhận lại.',
+    DEPARTMENT_NOT_READY: 'Phòng ban còn lỗi chặn. Vui lòng xử lý trước khi xác nhận bảng công.',
+    PERIOD_NOT_READY: 'Kỳ công chưa đủ điều kiện hoặc còn thiếu xác nhận phòng ban.',
 
     // Validation errors
     VALIDATION_FAILED: 'Thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại các trường có đánh dấu lỗi.',
@@ -744,6 +747,28 @@ export async function deactivatePosition(base: string, id: string): Promise<Posi
 
 export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
 
+export interface DepartmentTimesheetConfirmation {
+    _id: string;
+    periodId: string;
+    departmentId: string;
+    managerId: string;
+    periodVersion: number;
+    confirmedAt: string;
+    summarySnapshot: { employeeCount: number; blockerCount: number };
+}
+
+export async function confirmDepartmentTimesheet(
+    base: string,
+    id: string,
+    departmentId: string,
+    expectedPeriodVersion: number,
+): Promise<{ confirmation: DepartmentTimesheetConfirmation; period: TimesheetPeriod }> {
+    return hrRequest(base, `/api/hr/timesheet-periods/${encodeURIComponent(id)}/department-confirmations`, {
+        method: 'POST',
+        body: JSON.stringify({ departmentId, expectedPeriodVersion }),
+    });
+}
+
 export interface TimesheetPeriod {
     _id: string;
     organizationId: string;
@@ -752,6 +777,12 @@ export interface TimesheetPeriod {
     version: number;
     startDate: string;
     endDate: string;
+    departmentConfirmations?: DepartmentTimesheetConfirmation[];
+    requiredDepartmentConfirmations?: Array<{
+        departmentId: string;
+        departmentName: string;
+        confirmed: boolean;
+    }>;
     managerSnapshotClosed?: boolean;
     managerSnapshotClosedBy?: string;
     managerSnapshotClosedAt?: string;

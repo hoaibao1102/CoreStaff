@@ -510,6 +510,23 @@ describe('AuthService.getMe / changePassword (TASK-016)', () => {
 		});
 	});
 
+	it('changePassword: normal account still requires current password', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		await expect(service.changePassword('u1', { newPassword: 'NewPass1!', confirmPassword: 'NewPass1!' } as ChangePasswordDto))
+			.rejects.toMatchObject({ response: { message: 'AUTH_CURRENT_PASSWORD_INVALID' } });
+	});
+
+	it('changePassword: first-login account can set a new password without entering the temporary password again', async () => {
+		const user = await activeUser();
+		user.mustChangePassword = true;
+		const { service } = build(user);
+		await expect(service.changePassword('u1', { newPassword: 'NewPass1!', confirmPassword: 'NewPass1!' } as ChangePasswordDto))
+			.resolves.toEqual({ success: true });
+		expect(user.mustChangePassword).toBe(false);
+		expect(await (await import('./strategies/bcrypt.strategy')).comparePassword('NewPass1!', user.passwordHash)).toBe(true);
+	});
+
 	it('changePassword: reuse current as new → AUTH_PASSWORD_POLICY_FAILED', async () => {
 		const user = await activeUser();
 		const { service } = build(user);

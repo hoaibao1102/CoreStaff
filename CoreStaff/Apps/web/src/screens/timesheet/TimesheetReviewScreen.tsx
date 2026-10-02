@@ -18,7 +18,6 @@ import {
   Clock,
   FileText,
   Loader2,
-  XCircle,
   ChevronRight,
   Download,
 } from 'lucide-react';
@@ -28,34 +27,16 @@ import {
   getPeriodBlockers,
   PeriodBlockerRow,
   PeriodBlockerType,
+  TimesheetPeriod,
+  confirmDepartmentTimesheet,
 } from '@/services/hrService';
 import { getManagerContext, ManagerContext } from '@/services/manager.service';
 import { toast } from '@/components/toast';
+import { getSocket } from '@/services/socket';
 import { BlockerDayDetailDialog } from './components/BlockerDayDetailDialog';
 
 
-type DepartmentSnapshot = {
-  departmentId: string;
-  managerUserId: string;
-  closedAt: string;
-};
-
-type Period = {
-  _id: string;
-  organizationId: string;
-  period: string; // "2026-09"
-  status: 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
-  version: number;
-  startDate: string;
-  endDate: string;
-  managerSnapshotClosed?: boolean;
-  managerSnapshotClosedBy?: string;
-  managerSnapshotClosedAt?: string;
-  departmentSnapshots?: DepartmentSnapshot[];
-  closedBy?: string;
-  closedAt?: string;
-  reopenReason?: string;
-};
+type Period = TimesheetPeriod;
 
 type SummaryStats = {
   totalEmployees: number;
@@ -63,6 +44,13 @@ type SummaryStats = {
   missingSummaries: number;
   attendanceComplete: number;
   pendingApprovals: number;
+  confirmedDepartments: number;
+  requiredDepartments: number;
+  departmentConfirmationProgress: Array<{
+    departmentId: string;
+    departmentName: string;
+    confirmed: boolean;
+  }>;
   blockers: Array<{ type: PeriodBlockerType; message: string; count: number }>;
 };
 
@@ -79,17 +67,21 @@ export function TimesheetReviewScreen({
   organizationId,
   userRole,
   periodId,
+  embedded = false,
 }: {
   apiBase: string;
   organizationId: string;
   userRole: string;
   periodId?: string | null;
+  embedded?: boolean;
 }) {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [confirmingDepartmentId, setConfirmingDepartmentId] = useState<string | null>(null);
+  const [departmentBlockers, setDepartmentBlockers] = useState<Record<string, { total: number; items: PeriodBlockerRow[] }>>({});
   const [closeSuccess, setCloseSuccess] = useState(false);
   const [managerContext, setManagerContext] = useState<ManagerContext | null>(null);
   const [previewData, setPreviewData] = useState<{ summaries: any[] } | null>(null);
@@ -129,6 +121,27 @@ export function TimesheetReviewScreen({
     }
   }, [periodId, periods]);
 
+  // An approved attendance correction changes blockers and the live draft
+  // summary. Refresh the open review automatically for HR/managers instead of
+  // requiring them to close the dialog or press the reload button.
+  useEffect(() => {
+    if (!selectedPeriod) return;
+    const socket = getSocket(apiBase);
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const onRequestDecided = (payload: { type?: string }) => {
+      if (payload?.type !== 'ATTENDANCE') return;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void loadPeriodDetail(selectedPeriod._id);
+      }, 250);
+    };
+    socket.on('request:decided', onRequestDecided);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      socket.off('request:decided', onRequestDecided);
+    };
+  }, [apiBase, selectedPeriod?._id]);
+
   async function loadPeriods() {
     setLoading(true);
     try {
@@ -143,6 +156,8 @@ export function TimesheetReviewScreen({
 
   async function loadPeriodDetail(periodId: string) {
     setLoading(true);
+    setPreviewData(null);
+    setPreviewDepartmentId(null);
     try {
       const period = await hrRequest<Period>(apiBase, `/api/hr/timesheet-periods/${periodId}`);
       setSelectedPeriod(period);
@@ -226,34 +241,31 @@ export function TimesheetReviewScreen({
   }
 
   async function handleManagerCloseSnapshot(departmentId: string) {
-    if (!selectedPeriod) return;
+    if (!selectedPeriod || confirmingDepartmentId) return;
 
-    setClosing(true);
+    setConfirmingDepartmentId(departmentId);
     try {
-      const result = await hrRequest<{
-        departmentName: string;
-        employeesInSnapshot: number;
-        totalDepartmentEmployees: number;
-        summariesCreated: number;
-        snapshotsCreated: number;
-      }>(
-        apiBase,
-        `/api/hr/timesheet-periods/${selectedPeriod._id}/close-snapshot`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ departmentId }),
-        },
+      const blockers = await getPeriodBlockers(apiBase, selectedPeriod._id, { departmentId, limit: 50 });
+      setDepartmentBlockers(current => ({ ...current, [departmentId]: blockers }));
+      if (blockers.total > 0) return;
+      const result = await confirmDepartmentTimesheet(
+        apiBase, selectedPeriod._id, departmentId, selectedPeriod.version,
       );
       toast.success(
-        `Đóng snapshot thành công! ${result.departmentName}: ${result.employeesInSnapshot}/${result.totalDepartmentEmployees} nhân viên.`
+        `Đã xác nhận bảng công phiên bản ${result.confirmation.periodVersion}.`
       );
       setPreviewData(null);
       setPreviewDepartmentId(null);
-      loadPeriodDetail(selectedPeriod._id);
+      await loadPeriodDetail(selectedPeriod._id);
     } catch (err: any) {
       toast.error(hrErrorMessage(err));
+      if (err?.code === 'PERIOD_VERSION_CONFLICT' || err?.code === 'DEPARTMENT_NOT_READY') {
+        await loadPeriodDetail(selectedPeriod._id);
+        const blockers = await getPeriodBlockers(apiBase, selectedPeriod._id, { departmentId, limit: 50 }).catch(() => null);
+        if (blockers) setDepartmentBlockers(current => ({ ...current, [departmentId]: blockers }));
+      }
     } finally {
-      setClosing(false);
+      setConfirmingDepartmentId(null);
     }
   }
 
@@ -276,6 +288,19 @@ export function TimesheetReviewScreen({
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   }
+
+  const confirmationsReady = Boolean(
+    selectedPeriod && (
+      selectedPeriod.status === 'READY_TO_CLOSE'
+      || ((stats?.requiredDepartments ?? 0) > 0
+        && stats?.confirmedDepartments === stats?.requiredDepartments)
+      || ((selectedPeriod.requiredDepartmentConfirmations?.length ?? 0) > 0
+        && selectedPeriod.requiredDepartmentConfirmations?.every((department) => department.confirmed))
+    ),
+  );
+  const effectivePeriodStatus = selectedPeriod?.status !== 'CLOSED' && confirmationsReady
+    ? 'READY_TO_CLOSE'
+    : selectedPeriod?.status;
 
   // ───────── RENDER ─────────
 
@@ -301,7 +326,7 @@ export function TimesheetReviewScreen({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      {!embedded && <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý Kỳ Công</h1>
           <p className="text-gray-600 mt-1">
@@ -312,7 +337,7 @@ export function TimesheetReviewScreen({
           <Download className="h-4 w-4 mr-2" />
           Xuất báo cáo
         </Button>
-      </div>
+      </div>}
 
       {/* Loading State */}
       {loading && !selectedPeriod && (
@@ -322,7 +347,7 @@ export function TimesheetReviewScreen({
       )}
 
       {/* Period List View */}
-      {!selectedPeriod && !loading && (
+      {!embedded && !selectedPeriod && !loading && (
         <Card>
           <CardHeader>
             <CardTitle>Danh sách Kỳ Công</CardTitle>
@@ -393,9 +418,14 @@ export function TimesheetReviewScreen({
       {selectedPeriod && !loading && (
         <div className="space-y-6">
           {/* Back button */}
-          <Button variant="ghost" onClick={() => setSelectedPeriod(null)}>
-            ← Quay lại danh sách
-          </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {!embedded && <Button variant="ghost" onClick={() => setSelectedPeriod(null)}>
+              ← Quay lại danh sách
+            </Button>}
+            <Button variant="outline" disabled={closing} onClick={() => loadPeriodDetail(selectedPeriod._id)}>
+              Tải lại bảng công
+            </Button>
+          </div>
 
           {/* Period Info Card */}
           <Card>
@@ -409,8 +439,8 @@ export function TimesheetReviewScreen({
                     {new Date(selectedPeriod.endDate).toLocaleDateString('vi-VN')}
                   </p>
                 </div>
-                <Badge className={getStatusColor(selectedPeriod.status)}>
-                  {getStatusLabel(selectedPeriod.status)}
+                <Badge className={getStatusColor(effectivePeriodStatus ?? selectedPeriod.status)}>
+                  {getStatusLabel(effectivePeriodStatus ?? selectedPeriod.status)}
                 </Badge>
               </div>
             </CardHeader>
@@ -422,20 +452,27 @@ export function TimesheetReviewScreen({
               {/* Progress Overview */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Tổng hợp công</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {selectedPeriod.status === 'CLOSED' ? 'Tổng hợp công' : 'Tổng hợp tạm tính'}
+                      </span>
                       <FileText className="h-4 w-4 text-blue-600" />
                     </div>
                     <div className="text-2xl font-bold">
-                      {stats.summariesGenerated}/{stats.totalEmployees}
+                      {selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : stats.totalEmployees}/{stats.totalEmployees}
                     </div>
-                    <Progress value={(stats.summariesGenerated / stats.totalEmployees) * 100} className="mt-2" />
+                    <Progress
+                      value={stats.totalEmployees > 0
+                        ? ((selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : stats.totalEmployees) / stats.totalEmployees) * 100
+                        : 0}
+                      className="mt-2"
+                    />
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-700">Chấm công hoàn tất</span>
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -446,7 +483,7 @@ export function TimesheetReviewScreen({
                 </Card>
 
                 <Card>
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-700">Chờ phê duyệt</span>
                       <Clock className="h-4 w-4 text-yellow-600" />
@@ -460,7 +497,7 @@ export function TimesheetReviewScreen({
               {/* Blockers Warning — TASK-074, expandable drill-down */}
               {stats.blockers.length > 0 && (
                 <Card className="border-red-200 bg-red-50">
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <div className="flex items-start space-x-3">
                       <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
                       <div className="flex-1">
@@ -545,52 +582,36 @@ export function TimesheetReviewScreen({
                 </Card>
               )}
 
-              {/* Missing Summaries Warning */}
-              {stats.missingSummaries > 0 && (
-                <Card className="border-yellow-200 bg-yellow-50">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start space-x-3">
-                      <XCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                      <div>
-                        <h3 className="text-sm font-semibold text-yellow-900">
-                          Thiếu tổng hợp công
-                        </h3>
-                        <p className="text-sm text-yellow-800 mt-1">
-                          {stats.missingSummaries} nhân viên chưa có tổng hợp công. 
-                          Hệ thống sẽ tự động tạo khi chốt kỳ.
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
 
           {/* Manager Snapshot Action */}
           {(selectedPeriod.status === 'OPEN' || selectedPeriod.status === 'REVIEWING' || selectedPeriod.status === 'READY_TO_CLOSE') && userRole === 'DEPARTMENT_MANAGER' && managerContext && (
             <Card className="border-blue-200 bg-blue-50">
-              <CardContent className="pt-6">
+              <CardContent>
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-lg font-semibold text-blue-900">
-                      Đóng snapshot cho phòng ban
+                      Xác nhận bảng công phòng ban
                     </h3>
                     <p className="text-sm text-blue-800 mt-1">
-                      Chọn phòng ban bạn quản lý để xem preview và đóng snapshot.
+                      Rà soát bảng công và xác nhận phòng ban ở phiên bản hiện tại. Khi dữ liệu thay đổi, phòng ban cần xác nhận lại.
                     </p>
                   </div>
                   <div className="space-y-2">
                     {managerContext.managedDepartments.map((dept) => {
-                      const closed = selectedPeriod.departmentSnapshots?.some(
-                        (ds) => String(ds.departmentId) === dept.id,
+                      const confirmation = selectedPeriod.departmentConfirmations?.find(
+                        (item) => String(item.departmentId) === dept.id && item.periodVersion === selectedPeriod.version,
                       );
                       return (
-                        <div key={dept.id} className="flex flex-col gap-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span>{dept.name}</span>
-                            {closed ? (
-                              <span className="text-green-700 font-medium">Đã đóng snapshot</span>
+                        <div key={dept.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="font-semibold text-foreground">{dept.name}</span>
+                            {confirmation ? (
+                              <div className="text-sm sm:text-right">
+                                <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Đã xác nhận · v{confirmation.periodVersion}</Badge>
+                                <p className="mt-1 text-xs text-muted-foreground">{new Date(confirmation.confirmedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
+                              </div>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <Button
@@ -608,17 +629,31 @@ export function TimesheetReviewScreen({
                                 <Button
                                   size="sm"
                                   onClick={() => handleManagerCloseSnapshot(dept.id)}
-                                  disabled={closing}
+                                  disabled={!!confirmingDepartmentId || loading || selectedPeriod.status === 'READY_TO_CLOSE'}
                                 >
-                                  {closing ? (
+                                  {confirmingDepartmentId === dept.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    'Đóng snapshot'
+                                    `Xác nhận ${dept.name}`
                                   )}
                                 </Button>
                               </div>
                             )}
                           </div>
+                          {!confirmation && departmentBlockers[dept.id]?.total > 0 && (
+                            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3" role="alert">
+                              <p className="font-medium text-destructive">{dept.name} còn {departmentBlockers[dept.id].total} lỗi cần xử lý trước khi xác nhận.</p>
+                              <div className="mt-2 space-y-2">
+                                {departmentBlockers[dept.id].items.map(row => (
+                                  <button key={row.id} type="button" onClick={() => setDetailBlocker(row)} className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left hover:bg-muted">
+                                    <span>{row.employee.name ?? row.employee.code ?? row.employeeId} · {row.date}</span>
+                                    <span className="text-destructive">{BLOCKER_LABEL[row.type]}</span>
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">Bấm vào bản ghi để xem chi tiết. Xử lý lỗi rồi xác nhận lại riêng phòng ban này.</p>
+                            </div>
+                          )}
                           {previewDepartmentId === dept.id && previewData && (
                             <ManagerSnapshotPreview
                               summaries={previewData.summaries}
@@ -634,48 +669,73 @@ export function TimesheetReviewScreen({
             </Card>
           )}
 
-          {/* HR Close Action */}
-          {selectedPeriod.status === 'READY_TO_CLOSE' && userRole === 'HR' && (
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="pt-6">
+          {/* HR Close Action: keep the action visible while reviewing so HR can
+              see why it is not available yet. The API still enforces READY_TO_CLOSE. */}
+          {selectedPeriod.status !== 'CLOSED' && userRole === 'HR' && (
+            <Card className={confirmationsReady
+              ? 'border-green-200 bg-green-50'
+              : 'border-yellow-200 bg-yellow-50'}>
+              <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-green-900">
-                      Trạng thái đóng snapshot
+                    <h3 className={confirmationsReady
+                      ? 'text-lg font-semibold text-green-900'
+                      : 'text-lg font-semibold text-yellow-900'}>
+                      Chốt kỳ công
                     </h3>
-                    <p className="text-sm text-green-800 mt-1">
-                      {selectedPeriod.managerSnapshotClosed
-                        ? 'Tất cả phòng ban đã đóng snapshot.'
-                        : 'Còn phòng ban chưa đóng snapshot. HR không thể chốt kỳ công.'}
+                    <p className={confirmationsReady
+                      ? 'text-sm text-green-800 mt-1'
+                      : 'text-sm text-yellow-800 mt-1'}>
+                      {confirmationsReady
+                        ? 'Tất cả phòng ban đã xác nhận phiên bản kỳ công hiện tại.'
+                        : 'Nút chốt sẽ được mở sau khi tất cả phòng ban xác nhận và không còn lỗi chặn.'}
                     </p>
                   </div>
-                  {selectedPeriod.managerSnapshotClosed ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-green-800">
-                        {stats && stats.blockers.length > 0
-                          ? `Còn ${stats.blockers.reduce((sum, b) => sum + b.count, 0)} blocker cần xử lý trước khi chốt.`
-                          : `Xác nhận chốt kỳ công ${selectedPeriod.period}?`}
+                  {stats && !confirmationsReady && (
+                    <div className="space-y-2 rounded-lg border border-yellow-200 bg-white/70 p-3">
+                      <p className="text-sm font-medium text-yellow-900">
+                        Xác nhận phòng ban: {stats.confirmedDepartments}/{stats.requiredDepartments}
                       </p>
-                      <Button
-                        onClick={handleClosePeriod}
-                        disabled={closing || (stats?.blockers.length ?? 0) > 0}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        {closing ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Đang chốt...
-                          </>
-                        ) : (
-                          'Chốt kỳ công'
-                        )}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-yellow-700">
-                      Chưa đủ điều kiện chốt kỳ công.
+                      {stats.departmentConfirmationProgress.map((department) => (
+                        <div key={department.departmentId} className="flex items-center justify-between gap-3 text-sm">
+                          <span>{department.departmentName}</span>
+                          <Badge
+                            variant="outline"
+                            className={department.confirmed
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-yellow-300 bg-yellow-50 text-yellow-800'}
+                          >
+                            {department.confirmed ? 'Đã xác nhận' : 'Chưa xác nhận'}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
                   )}
+                  <div className="flex items-center justify-between gap-4">
+                    <p className={confirmationsReady
+                      ? 'text-sm text-green-800'
+                      : 'text-sm text-yellow-800'}>
+                      {!confirmationsReady
+                        ? `Còn ${Math.max(0, (stats?.requiredDepartments ?? 0) - (stats?.confirmedDepartments ?? 0))} phòng ban phải xác nhận phiên bản ${selectedPeriod.version}.`
+                        : stats && stats.blockers.length > 0
+                          ? `Còn ${stats.blockers.reduce((sum, b) => sum + b.count, 0)} lỗi chặn cần xử lý trước khi chốt.`
+                          : `Xác nhận chốt kỳ công ${selectedPeriod.period}?`}
+                    </p>
+                    <Button
+                      onClick={handleClosePeriod}
+                      disabled={closing || !stats || !confirmationsReady || (stats?.blockers.length ?? 0) > 0}
+                      className="shrink-0 bg-green-600 hover:bg-green-700"
+                    >
+                      {closing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Đang chốt...
+                        </>
+                      ) : (
+                        'Chốt kỳ công'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -684,7 +744,7 @@ export function TimesheetReviewScreen({
           {/* Closed Period Info */}
           {selectedPeriod.status === 'CLOSED' && (
             <Card className="border-gray-200">
-              <CardContent className="pt-6">
+              <CardContent>
                 <div className="flex items-center space-x-3">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <div>

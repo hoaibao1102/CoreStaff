@@ -229,7 +229,9 @@ export class AuthService {
 
 		const user = await this.userModel.findById(userId).orFail();
 
-		if (!(await comparePassword(dto.currentPassword, user.passwordHash))) {
+		// The authenticated temporary-password session is enough during forced
+		// first-login setup. Voluntary changes still verify the current password.
+		if (!user.mustChangePassword && (!dto.currentPassword || !(await comparePassword(dto.currentPassword, user.passwordHash)))) {
 			throw new BadRequestException('AUTH_CURRENT_PASSWORD_INVALID');
 		}
 

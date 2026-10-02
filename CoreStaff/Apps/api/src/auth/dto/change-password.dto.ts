@@ -1,12 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MinLength, Matches, IsNotEmpty } from 'class-validator';
+import { IsString, MinLength, Matches, IsNotEmpty, IsOptional } from 'class-validator';
 import { PASSWORD_MIN_LENGTH, PASSWORD_POLICY_PATTERN, PASSWORD_POLICY_MESSAGE } from '../strategies/password-policy';
 
 export class ChangePasswordDto {
-	@ApiProperty({ example: 'CurrentP4ss!' })
+	@ApiProperty({ example: 'CurrentP4ss!', required: false, description: 'Required unless this is the forced first-login password change.' })
+	@IsOptional()
 	@IsString()
-	@IsNotEmpty()
-	currentPassword: string;
+	currentPassword?: string;
 
 	@ApiProperty({
 		example: 'N3wSecurePass!',

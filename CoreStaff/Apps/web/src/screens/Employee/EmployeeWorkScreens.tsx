@@ -55,6 +55,8 @@ export function LeaveOvertimeScreen() {
   const [showForm, setShowForm] = useState(false);
   const [type, setType] = useState<RequestType>('ATTENDANCE');
   const [workDate, setWorkDate] = useState(new Date().toISOString().slice(0, 10));
+  const [adjustmentType, setAdjustmentType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
+  const [adjustmentTime, setAdjustmentTime] = useState('08:00');
   const [reason, setReason] = useState('');
   const [start, setStart] = useState('18:00');
   const [end, setEnd] = useState('20:00');
@@ -177,7 +179,14 @@ export function LeaveOvertimeScreen() {
         // §30B.2 at filing is projection-only: a warning is shown, never a block.
         setCompliance(created.compliance ?? null);
       } else {
-        await createMyRequest(apiBase, { type, workDate, reason: reason.trim() });
+        if (workDate >= vnToday()) return setError('Điều chỉnh công chỉ áp dụng cho ngày trong quá khứ.');
+        await createMyRequest(apiBase, {
+          type,
+          workDate,
+          reason: reason.trim(),
+          adjustmentType,
+          requestedStart: `${workDate}T${adjustmentTime}:00+07:00`,
+        });
       }
       toast.success(
         'Gửi yêu cầu thành công',
@@ -274,8 +283,27 @@ export function LeaveOvertimeScreen() {
 
               <label className="grid gap-2 text-sm font-medium">
                 Ngày
-                <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+                <Input type="date" max={type === 'ATTENDANCE' ? shiftDay(vnToday(), -1) : undefined} value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
               </label>
+
+              {type === 'ATTENDANCE' && (
+                <>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Mốc công cần bổ sung
+                    <select className="min-h-11 rounded-lg border bg-background px-3" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as 'CHECK_IN' | 'CHECK_OUT')}>
+                      <option value="CHECK_IN">Thiếu check-in</option>
+                      <option value="CHECK_OUT">Thiếu check-out</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Giờ đề nghị
+                    <Input type="time" value={adjustmentTime} onChange={(e) => setAdjustmentTime(e.target.value)} required />
+                  </label>
+                  <p className="text-xs text-muted-foreground sm:col-span-2">
+                    Quản lý sẽ kiểm tra và mốc giờ này chỉ được ghi vào bảng công sau khi duyệt.
+                  </p>
+                </>
+              )}
 
               {type === 'OVERTIME' && (
                 <>

@@ -19,7 +19,7 @@ export class PayslipController {
    * Employee view own payslips list
    */
   @Get('me')
-  @Roles('EMPLOYEE')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @AllowTempPassword()
   @ApiOperation({ summary: 'Employee view own payslips' })
   async getMyPayslips(
@@ -49,7 +49,7 @@ export class PayslipController {
    * Employee view own single payslip detail
    */
   @Get('me/:id')
-  @Roles('EMPLOYEE')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @AllowTempPassword()
   @ApiOperation({ summary: 'Employee view own payslip detail' })
   async getMyPayslipDetail(@CurrentUser() user: any, @Param('id') id: string) {
@@ -68,7 +68,7 @@ export class PayslipController {
    * Mark payslip as viewed by employee
    */
   @Post('me/:id/viewed')
-  @Roles('EMPLOYEE')
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
   @AllowTempPassword()
   @ApiOperation({ summary: 'Mark payslip as viewed by employee' })
   async markViewed(@CurrentUser() user: any, @Param('id') id: string) {

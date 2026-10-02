@@ -139,13 +139,13 @@ export function me(base: string): Promise<AuthUser> {
 
 export function changePassword(
   base: string,
-  currentPassword: string,
   newPassword: string,
   confirmPassword: string,
+  currentPassword?: string,
 ): Promise<void> {
   return request<void>(base, '/api/auth/change-password', {
     method: 'POST',
-    body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    body: JSON.stringify({ ...(currentPassword ? { currentPassword } : {}), newPassword, confirmPassword }),
   });
 }
 
