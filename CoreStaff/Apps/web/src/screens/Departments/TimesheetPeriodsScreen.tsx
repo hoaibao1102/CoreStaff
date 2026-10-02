@@ -12,6 +12,7 @@ import { TimesheetReviewScreen } from '../timesheet/TimesheetReviewScreen';
 import { CreatePeriodDialog } from './CreatePeriodDialog';
 import { ReopenPeriodDialog } from './ReopenPeriodDialog';
 import { toast } from '@/components/toast';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/dialog';
 
 const STATUS_FILTERS: { value: TimesheetPeriodStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Tất cả trạng thái' },
@@ -158,12 +159,12 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
                   <TableCell>
                     {(row.status === 'OPEN' || row.status === 'REVIEWING') && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER') && (
                       <Button variant="outline" size="sm" onClick={() => setReviewPeriodId(row._id)}>
-                        {user.role === 'DEPARTMENT_MANAGER' ? 'Đóng snapshot' : 'Rà soát'}
+                        {user.role === 'DEPARTMENT_MANAGER' ? 'Xác nhận bảng công' : 'Rà soát'}
                       </Button>
                     )}
                     {row.status === 'READY_TO_CLOSE' && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER') && (
                       <Button variant="outline" size="sm" onClick={() => setReviewPeriodId(row._id)}>
-                        {user.role === 'DEPARTMENT_MANAGER' ? 'Xem snapshot' : 'Rà soát'}
+                        {user.role === 'DEPARTMENT_MANAGER' ? 'Xem xác nhận' : 'Chốt kỳ công'}
                       </Button>
                     )}
                     {row.status === 'CLOSED' && user.role === 'HR' && (
@@ -225,17 +226,20 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
       )}
 
       {reviewPeriodId && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-background/80 p-4">
-          <div className="mx-auto max-w-5xl rounded-xl border bg-card p-4 shadow-lg">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Rà soát kỳ công</h2>
-              <Button variant="outline" size="sm" onClick={() => { setReviewPeriodId(null); setRevision(r => r + 1); }}>
-                Đóng
-              </Button>
+        <Dialog open onOpenChange={open => { if (!open) { setReviewPeriodId(null); setRevision(r => r + 1); } }}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader className="border-b border-border pr-16">
+              <DialogTitle>Rà soát kỳ công</DialogTitle>
+              <DialogDescription>Kiểm tra ngày công, xử lý lỗi chặn và xác nhận trước khi chốt kỳ.</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <TimesheetReviewScreen embedded apiBase={apiBase} organizationId={organizationId} userRole={user.role} periodId={reviewPeriodId} />
             </div>
-            <TimesheetReviewScreen apiBase={apiBase} organizationId={organizationId} userRole={user.role} periodId={reviewPeriodId} />
-          </div>
-        </div>
+            <DialogFooter className="border-t border-border p-4 sm:px-6">
+              <Button variant="outline" className="min-h-11" onClick={() => { setReviewPeriodId(null); setRevision(r => r + 1); }}>Đóng</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

@@ -123,7 +123,11 @@ describe('TASK-073 — version bumps on mutation', () => {
 
     // No blockers exist, so the period can go straight to CLOSED.
     await http.patch(`${API_PREFIX}/${periodId}/status`).set('Cookie', hrCookie).send({ status: 'REVIEWING' });
-    await http.patch(`${API_PREFIX}/${periodId}/status`).set('Cookie', hrCookie).send({ status: 'READY_TO_CLOSE' });
+    const confirmed = await http
+      .post(`${API_PREFIX}/${periodId}/department-confirmations`)
+      .set('Cookie', managerCookie)
+      .send({ departmentId: fixture.departmentId, expectedPeriodVersion: 1 });
+    expect(confirmed.status).toBe(201);
     const closed = await http.post(`${API_PREFIX}/${periodId}/close`).set('Cookie', hrCookie);
     expect(closed.status).toBe(201);
     const closedVersion = await periodVersion(periodId);

@@ -21,10 +21,14 @@ import { PayslipService } from './payslip.service';
 import { PayslipController } from './payslip.controller';
 import { PayrollExportController } from './payroll-export.controller';
 import { PayrollExportService } from './payroll-export.service';
+import { TimesheetSummaryModule } from '../timesheet/timesheet-summary.module';
+import { PayrollSnapshotModule } from '../timesheet/payroll-snapshot.module';
 
 @Module({
   imports: [
     AuthModule,
+    TimesheetSummaryModule,
+    PayrollSnapshotModule,
     MongooseModule.forFeature([
       { name: PayrollRun.name, schema: PayrollRunSchema },
       { name: Payslip.name, schema: PayslipSchema },

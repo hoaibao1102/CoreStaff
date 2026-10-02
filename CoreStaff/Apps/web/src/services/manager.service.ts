@@ -33,6 +33,7 @@ export interface ManagerRequest {
     workMode?: string;
     selfieUrl?: string;
     actionType?: string;
+    adjustmentSource?: string;
     [key: string]: any;
   };
   /** §30B.2 — attached to an approval response whose minutes trip a limit. */
@@ -69,7 +70,7 @@ export const getManagerContext=(base:string)=>hrRequest<ManagerContext>(base,'/a
 export const getManagerEmployees=(base:string,departmentId?:string)=>hrRequest<ManagerEmployee[]>(base,`/api/manager/employees${departmentId?`?departmentId=${encodeURIComponent(departmentId)}`:''}`,{method:'GET'});
 export async function getManagerRequests(base:string,params:{departmentId?:string;type?:string;status?:string}){const q=new URLSearchParams();Object.entries(params).forEach(([k,v])=>{if(v)q.set(k,v)});return hrRequest<ManagerRequest[]>(base,`/api/manager/approvals${q.size?`?${q}`:''}`,{method:'GET'});}
 export const getMyRequests=(base:string)=>hrRequest<ManagerRequest[]>(base,'/api/requests/mine',{method:'GET'});
-export const createMyRequest=(base:string,payload:{type:RequestType;workDate:string;reason:string;requestedStart?:string;requestedEnd?:string})=>hrRequest<ManagerRequest>(base,'/api/requests',{method:'POST',body:JSON.stringify(payload)});
+export const createMyRequest=(base:string,payload:{type:RequestType;workDate:string;reason:string;requestedStart?:string;requestedEnd?:string;adjustmentType?:'CHECK_IN'|'CHECK_OUT'})=>hrRequest<ManagerRequest>(base,'/api/requests',{method:'POST',body:JSON.stringify(payload)});
 
 /** §30B.2 projection the server attaches to a filing: warnings, never a block. */
 export interface LaborViolation{key:string;code:string;severity:'BLOCK'|'WARNING';message:string;usedMinutes:number;limitMinutes:number}

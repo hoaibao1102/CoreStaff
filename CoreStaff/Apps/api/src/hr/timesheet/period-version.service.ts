@@ -31,7 +31,6 @@ export class PeriodVersionService {
     if (!periodId) return false;
     if (!Types.ObjectId.isValid(String(periodId))) return false;
 
-    // TASK-076: invalidate every DepartmentConfirmation of the previous version here.
     const res = await this.periods.updateOne(
       {
         _id: new Types.ObjectId(String(periodId)),
@@ -39,7 +38,18 @@ export class PeriodVersionService {
         active: true,
         status: { $ne: TimesheetPeriodStatus.CLOSED },
       },
-      { $inc: { version: 1 } },
+      {
+        $inc: { version: 1 },
+        $set: {
+          status: TimesheetPeriodStatus.REVIEWING,
+          managerSnapshotClosed: false,
+          departmentSnapshots: [],
+        },
+        $unset: {
+          managerSnapshotClosedBy: 1,
+          managerSnapshotClosedAt: 1,
+        },
+      },
       { session },
     );
     return res.modifiedCount > 0;

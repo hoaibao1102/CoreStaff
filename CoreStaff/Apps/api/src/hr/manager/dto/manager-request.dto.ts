@@ -6,6 +6,7 @@ export class CreateManagerRequestDto{
  @ApiProperty() @IsString() @Length(10,1000) reason:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedStart?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedEnd?:string;
+ @ApiProperty({required:false,enum:['CHECK_IN','CHECK_OUT']}) @IsOptional() @IsIn(['CHECK_IN','CHECK_OUT']) adjustmentType?:'CHECK_IN'|'CHECK_OUT';
  /** TASK-068 — OT report only. Never trusted as data; `assertNoClientType` rejects `overtimeType`. */
  @ApiProperty({required:false}) @IsOptional() @IsString() @Length(3,1000) workDescription?:string;
  @ApiProperty({required:false}) @IsOptional() @IsString() @Length(10,1000) retroactiveReason?:string;

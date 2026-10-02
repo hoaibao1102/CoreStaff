@@ -290,8 +290,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
-  // ── Payslip (EMPLOYEE) ───────────────────────────────────────────────
-  if (user.role === 'EMPLOYEE' && route === '/app/payslips' && apiBase) {
+  // Personal payslips are shared by employees and department managers.
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/payslips' && apiBase) {
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

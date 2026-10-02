@@ -7,10 +7,22 @@ export function getSocket(apiBase?: string | null): Socket {
   let targetOrigin = window.location.origin;
   let socketPath = '/socket.io';
 
+  // In development, connect Socket.IO straight to Nest instead of tunnelling
+  // the long-lived WebSocket through Vite. Nest watch restarts legitimately
+  // reset open sockets; bypassing the proxy prevents noisy `ws proxy error:
+  // ECONNRESET` logs while Socket.IO performs its normal reconnection. Keep the
+  // browser hostname (localhost vs 127.0.0.1) so the first-party sid cookie is
+  // still sent, and only replace the dev-server port with the API port.
+  if (import.meta.env.DEV) {
+    targetOrigin = `${window.location.protocol}//${window.location.hostname}:3000`;
+  }
+
   if (apiBase) {
     try {
       const url = new URL(apiBase, window.location.origin);
-      if (url.origin !== window.location.origin) {
+      if (import.meta.env.DEV && url.origin === window.location.origin) {
+        socketPath = '/socket.io';
+      } else if (url.origin !== window.location.origin) {
         // Direct remote backend URL (e.g. production)
         targetOrigin = url.origin;
         socketPath = '/socket.io';

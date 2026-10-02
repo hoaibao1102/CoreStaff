@@ -31,10 +31,27 @@ export class ManagerScopeService {
 
   async getManagedDepartmentIds(organizationId: string, managerUserId: string, now = new Date()): Promise<string[]> {
     const rows = await this.assignments.find({ organizationId, managerUserId, active: true }).sort({ effectiveFrom: 1 }).lean();
-    return [...new Set(rows
+    const assignedIds = rows
       .filter(row => (!row.effectiveFrom || new Date(row.effectiveFrom) <= now)
         && (!row.effectiveTo || new Date(row.effectiveTo) >= now))
-      .map(row => String(row.departmentId)))];
+      .map(row => String(row.departmentId));
+    // Compatibility for seeded/legacy department managers that predate the
+    // manager_assignments collection. A manager's own profile department is a
+    // safe tenant-scoped fallback; explicit assignments remain authoritative
+    // and can add further departments.
+    const managerProfile = typeof (this.employees as any).findOne === 'function'
+      ? await (this.employees as any).findOne({ organizationId, userId: managerUserId }).select('departmentId').lean()
+      : null;
+    const profileDepartmentId = managerProfile?.departmentId ? String(managerProfile.departmentId) : null;
+    return [...new Set([...assignedIds, ...(profileDepartmentId ? [profileDepartmentId] : [])])];
+  }
+
+  async isEmployeeInManagedScope(organizationId: string, managerUserId: string, employeeUserId: string, departmentId?: string): Promise<boolean> {
+    const managed = await this.getManagedDepartmentIds(organizationId, managerUserId);
+    const scope = departmentId ? managed.filter(id => id === String(departmentId)) : managed;
+    if (!scope.length) return false;
+    const employeeIds = await this.resolveEmployeeIdsForDepartments(organizationId, scope);
+    return employeeIds.includes(String(employeeUserId));
   }
 
   /**

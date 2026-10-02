@@ -8,7 +8,7 @@ interface ChangePasswordScreenProps {
   error?: string | null;
   user: AuthUser;
   onLogout: () => void;
-  onSubmit: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
+  onSubmit: (newPassword: string, confirmPassword: string) => Promise<void>;
 }
 
 const inputClass =
@@ -53,17 +53,15 @@ function PasswordField({ label, value, visible, autoComplete, onChange, onToggle
 }
 
 export function ChangePasswordScreen({ disabled = false, error, user, onLogout, onSubmit }: ChangePasswordScreenProps) {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [localError, setLocalError] = useState('');
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       setLocalError('Vui lòng nhập đầy đủ thông tin.');
       return;
     }
@@ -75,13 +73,8 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
       setLocalError('Mật khẩu xác nhận không khớp.');
       return;
     }
-    if (newPassword === currentPassword) {
-      setLocalError('Mật khẩu mới không được trùng mật khẩu hiện tại.');
-      return;
-    }
-
     setLocalError('');
-    await onSubmit(currentPassword, newPassword, confirmPassword);
+    await onSubmit(newPassword, confirmPassword);
   };
 
   return (
@@ -90,15 +83,6 @@ export function ChangePasswordScreen({ disabled = false, error, user, onLogout, 
       subtitle={`Xin chào ${user.fullName}. Bạn cần đổi mật khẩu trước khi tiếp tục sử dụng CoreStaff.`}
     >
       <form className="grid gap-4" onSubmit={submit}>
-        <PasswordField
-          label="Mật khẩu hiện tại"
-          value={currentPassword}
-          visible={showCurrentPassword}
-          autoComplete="current-password"
-          onChange={setCurrentPassword}
-          onToggle={() => setShowCurrentPassword((value) => !value)}
-        />
-
         <PasswordField
           label="Mật khẩu mới"
           value={newPassword}

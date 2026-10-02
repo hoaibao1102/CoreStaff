@@ -35,7 +35,11 @@ describe('TASK-073 — PeriodVersionService.bump', () => {
     await expect(service.bump(ORG, PERIOD)).resolves.toBe(true);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].update).toEqual({ $inc: { version: 1 } });
+    expect(calls[0].update).toEqual({
+      $inc: { version: 1 },
+      $set: { status: 'REVIEWING', managerSnapshotClosed: false, departmentSnapshots: [] },
+      $unset: { managerSnapshotClosedBy: 1, managerSnapshotClosedAt: 1 },
+    });
     expect(calls[0].filter).toMatchObject({
       _id: expect.anything(),
       organizationId: expect.anything(),

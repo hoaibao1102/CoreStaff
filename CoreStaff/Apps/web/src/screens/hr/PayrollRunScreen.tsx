@@ -133,11 +133,17 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const selectedPeriod = periods.find(p => p._id === selectedPeriodId);
+  const existingPeriodIds = new Set(payrollRuns.map(run => String(run.timesheetPeriodId)));
+  const availablePeriods = periods.filter(
+    period => period.status === 'CLOSED' && !existingPeriodIds.has(String(period._id)),
+  );
+  const closedPeriodsWithPayroll = periods.filter(
+    period => period.status === 'CLOSED' && existingPeriodIds.has(String(period._id)),
+  );
 
   const handleCreate = async () => {
     if (!selectedPeriodId) {
-      alert('Vui lòng chọn kỳ công để tạo bảng lương!');
+      toast.warning('Chưa chọn kỳ công', 'Vui lòng chọn một kỳ công đã chốt và chưa có bảng lương.');
       return;
     }
     setLoading(true);
@@ -148,9 +154,18 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
       setCreateModalOpen(false);
       setSelectedPeriodId('');
       await loadPayrollRuns();
+      toast.success('Tạo bảng lương thành công');
     } catch (error: any) {
       console.error('Failed to create payroll run:', error);
-      alert(error?.response?.data?.message || error?.message || 'Tạo bảng lương thất bại!');
+      const errorCode = error?.code || error?.message;
+      if (String(errorCode).includes('PAYROLL_RUN_ALREADY_EXISTS')) {
+        await loadPayrollRuns();
+        setCreateModalOpen(false);
+        setSelectedPeriodId('');
+        toast.info('Bảng lương đã tồn tại', 'Hãy dùng nút Tính toán hoặc Xem chi tiết trên dòng bảng lương hiện có.');
+      } else {
+        toast.error('Không thể tạo bảng lương', hrErrorMessage(error));
+      }
     } finally {
       setLoading(false);
     }
@@ -244,6 +259,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
   };
 
   const handleViewPayslips = async (runId: string) => {
+    setLoading(true);
     try {
       const [slipsRes, summaryRes] = await Promise.all([
         payrollGet<PayslipRow[]>(apiBase, '/api/payslips/run/' + runId),
@@ -254,6 +270,9 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
       setSelectedRun(payrollRuns.find(r => r._id === runId) || null);
     } catch (error) {
       console.error('Failed to load payslips:', error);
+      toast.error('Không thể xem chi tiết bảng lương', hrErrorMessage(error));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -295,7 +314,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Quản lý bảng lương</h1>
           <p className="mt-2 text-sm text-muted-foreground">Tạo kỳ lương, tính toán, khóa và phát hành phiếu lương cho nhân viên.</p>
         </div>
-        <Button className="min-h-11" onClick={() => setCreateModalOpen(true)} disabled={loading}>
+        <Button className="min-h-11" onClick={() => { setSelectedPeriodId(''); setCreateModalOpen(true); }} disabled={loading}>
           <Plus aria-hidden="true" />Tạo bảng lương
         </Button>
       </div>
@@ -316,14 +335,18 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                 onChange={(e) => setSelectedPeriodId(e.target.value)}
               >
                 <option value="">Chọn kỳ công</option>
-                {periods.map((p) => (
+                {availablePeriods.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.period} ({new Date(p.startDate).toLocaleDateString('vi-VN')} → {new Date(p.endDate).toLocaleDateString('vi-VN')}) - {p.status === 'CLOSED' ? 'Đã chốt' : 'Sẵn sàng'}
+                    {p.period} ({new Date(p.startDate).toLocaleDateString('vi-VN')} → {new Date(p.endDate).toLocaleDateString('vi-VN')}) - Đã chốt
                   </option>
                 ))}
               </select>
-              {periods.length === 0 && (
-                <p className="text-xs text-muted-foreground">Chưa có kỳ công phù hợp. Hãy kiểm tra và chốt dữ liệu tại màn Kỳ công.</p>
+              {availablePeriods.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {closedPeriodsWithPayroll.length > 0
+                    ? 'Tất cả kỳ công đã chốt đều đã có bảng lương. Hãy đóng cửa sổ và thao tác trên bảng lương hiện có.'
+                    : 'Chưa có kỳ công đã chốt. Hãy hoàn tất chốt kỳ công trước.'}
+                </p>
               )}
           </div>
             <div className="mx-6 mb-6 mt-4 flex justify-end gap-3 border-t border-border pt-5">
@@ -343,7 +366,8 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
           <CardTitle>Danh sách bảng lương</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[1080px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="pl-6">Kỳ lương</TableHead>
@@ -352,7 +376,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                 <TableHead className="text-right">Tổng net</TableHead>
                 <TableHead className="text-center">Đã xử lý</TableHead>
                 <TableHead>Ngày tạo</TableHead>
-                <TableHead className="pr-6 text-right">Thao tác</TableHead>
+                <TableHead className="sticky right-0 z-10 min-w-52 bg-card pr-6 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -373,8 +397,11 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(run.totalNet || 0)}</TableCell>
                     <TableCell className="text-center">{run.processedEmployeeCount}/{run.totalEmployeeCount}</TableCell>
                     <TableCell>{new Date(run.runDate).toLocaleDateString('vi-VN')}</TableCell>
-                    <TableCell className="pr-6">
+                    <TableCell className="sticky right-0 z-10 bg-card pr-6 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">
                       <div className="flex flex-wrap justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>
+                          <Eye aria-hidden="true" />Xem chi tiết
+                        </Button>
                         {run.status === 'DRAFT' && (
                           <Button size="sm" onClick={() => handleCalculate(run._id)} disabled={loading}>
                             <Calculator aria-hidden="true" />{loading ? 'Đang tính…' : 'Tính toán'}
@@ -396,14 +423,9 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                           </Button>
                         )}
                         {(run.status === 'CALCULATED' || run.status === 'LOCKED' || run.status === 'RELEASED') && (
-                          <>
-                            <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>
-                              <Eye aria-hidden="true" />Xem chi tiết
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run._id)} disabled={loading}>
-                              <Download aria-hidden="true" />Xuất Excel
-                            </Button>
-                          </>
+                          <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run._id)} disabled={loading}>
+                            <Download aria-hidden="true" />Xuất Excel
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -412,6 +434,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

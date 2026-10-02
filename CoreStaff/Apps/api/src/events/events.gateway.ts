@@ -120,15 +120,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!this.server) return;
     const rawUid = employeeUserId?._id ?? employeeUserId;
     const uid = String(rawUid);
-    const userRoom = `user:${uid}`;
-    this.server.to(userRoom).emit('request:decided', payload);
+    const rooms = [`user:${uid}`];
 
-    // Đồng thời cập nhật trạng thái trong phòng ban của Quản lý để bảng realtime
+    // Keep employee, department managers and HR on the same live attendance
+    // state. Passing all rooms in one emit also de-duplicates a manager who is
+    // present in both the department and organization rooms.
     if (payload?.departmentId) {
       const rawDeptId = payload.departmentId?._id ?? payload.departmentId;
       const deptId = String(rawDeptId);
-      this.server.to(`dept:${deptId}`).emit('request:decided', payload);
+      rooms.push(`dept:${deptId}`);
     }
+    if (payload?.organizationId) rooms.push(`org:${String(payload.organizationId)}:managers`);
+    this.server.to(rooms).emit('request:decided', payload);
   }
 
   /**

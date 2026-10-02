@@ -13,6 +13,8 @@ import { AttendanceDayDocument } from '../../database/schemas/attendance-day.sch
 import { AttendanceEventDocument } from '../../database/schemas/attendance-event.schema';
 import { ManagerRequestDocument } from '../../database/schemas/manager-request.schema';
 import { classifyDayBlockers, summarizeBlockers, PeriodBlockerRow, PeriodBlockerType } from './period-blockers';
+import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
+import { DepartmentTimesheetConfirmationDocument, DepartmentTimesheetSummarySnapshot } from '../../database/schemas/department-timesheet-confirmation.schema';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -66,6 +68,7 @@ export class TimesheetPeriodService {
 		@InjectModel('AttendanceDay') private readonly attendanceDayModel: Model<AttendanceDayDocument>,
 		@InjectModel('AttendanceEvent') private readonly attendanceEventModel: Model<AttendanceEventDocument>,
 		@InjectModel('ManagerRequest') private readonly managerRequestModel: Model<ManagerRequestDocument>,
+		@InjectModel('DepartmentTimesheetConfirmation') private readonly confirmationModel: Model<DepartmentTimesheetConfirmationDocument>,
 	) {}
 
 	/**
@@ -155,9 +158,129 @@ export class TimesheetPeriodService {
 	 * Get a single period by id with full details.
 	 */
 	async findOne(organizationId: string, id: string): Promise<any> {
-		const doc = await this.periodModel.findOne({ _id: id, organizationId, active: true }).lean();
+		let doc: any = await this.periodModel.findOne({ _id: id, organizationId, active: true }).lean();
 		if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
-		return this.toResponse(doc);
+		// Recover a period left in REVIEWING when confirmations were committed by
+		// near-concurrent transactions. Each transaction may have seen only its
+		// own confirmation; a post-commit read can safely derive the final state.
+		if (doc.status === TimesheetPeriodStatus.OPEN || doc.status === TimesheetPeriodStatus.REVIEWING) {
+			doc = await this.reconcileDepartmentConfirmationStatus(organizationId, doc) ?? doc;
+		}
+		return this.withCurrentConfirmations(organizationId, doc);
+	}
+
+	/** TASK-075 — confirm a manager's department for exactly one period version. */
+	async confirmDepartment(
+		organizationId: string,
+		id: string,
+		managerUserId: string,
+		dto: ConfirmDepartmentTimesheetDto,
+	): Promise<{ confirmation: any; period: any }> {
+		const period = await this.findById(organizationId, id);
+		if (period.status === TimesheetPeriodStatus.READY_TO_CLOSE && period.version === dto.expectedPeriodVersion) {
+			const existing = await this.confirmationModel.findOne({
+				organizationId: new Types.ObjectId(organizationId),
+				periodId: new Types.ObjectId(id),
+				departmentId: new Types.ObjectId(dto.departmentId),
+				periodVersion: period.version,
+			}).lean();
+			if (existing) {
+				await this.managerScopeService.requireDepartment(
+					organizationId,
+					managerUserId,
+					dto.departmentId,
+					new Date(period.endDate),
+				);
+				return { confirmation: this.toConfirmationResponse(existing), period };
+			}
+		}
+		if (period.status !== TimesheetPeriodStatus.OPEN && period.status !== TimesheetPeriodStatus.REVIEWING) {
+			throw new ConflictException('PERIOD_NOT_READY');
+		}
+		if (period.version !== dto.expectedPeriodVersion) {
+			throw new ConflictException('PERIOD_VERSION_CONFLICT');
+		}
+
+		await this.managerScopeService.requireDepartment(
+			organizationId,
+			managerUserId,
+			dto.departmentId,
+			new Date(period.endDate),
+		);
+		const employeeIds = await this.managerScopeService.resolveEmployeeIdsForDepartments(
+			organizationId,
+			[dto.departmentId],
+			new Date(period.endDate),
+		);
+
+		const session = await this.periodModel.db.startSession();
+		let confirmation: any;
+		let updatedPeriod: any;
+		try {
+			await session.withTransaction(async () => {
+				const current: any = await this.periodModel.findOne({
+					_id: id,
+					organizationId,
+					active: true,
+					status: { $in: [TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING] },
+				}).session(session).lean();
+				if (!current) throw new ConflictException('PERIOD_NOT_READY');
+				if (current.version !== dto.expectedPeriodVersion) {
+					throw new ConflictException('PERIOD_VERSION_CONFLICT');
+				}
+
+				const blockers = await this.collectBlockers(organizationId, id, new Set(employeeIds));
+				if (blockers.length) throw new ConflictException('DEPARTMENT_NOT_READY');
+
+				const summaries = await this.summaryService.previewSummariesForDepartment(
+					id,
+					current.period,
+					organizationId,
+					dto.departmentId,
+				);
+				const summarySnapshot = this.buildDepartmentSummarySnapshot(summaries, employeeIds.length);
+
+				confirmation = await this.confirmationModel.findOneAndUpdate(
+					{
+						organizationId: new Types.ObjectId(organizationId),
+						periodId: new Types.ObjectId(id),
+						departmentId: new Types.ObjectId(dto.departmentId),
+						periodVersion: current.version,
+					},
+					{
+						$setOnInsert: {
+							managerId: new Types.ObjectId(managerUserId),
+							confirmedAt: new Date(),
+							summarySnapshot,
+						},
+					},
+					{ upsert: true, new: true, session, setDefaultsOnInsert: true },
+				).lean();
+
+				const requiredDepartmentIds = await this.getRequiredDepartmentIds(organizationId);
+				const confirmedDepartmentIds = await this.confirmationModel.distinct('departmentId', {
+					organizationId: new Types.ObjectId(organizationId),
+					periodId: new Types.ObjectId(id),
+					periodVersion: current.version,
+				}).session(session);
+				const confirmed = new Set(confirmedDepartmentIds.map(String));
+				const allConfirmed = requiredDepartmentIds.every((departmentId) => confirmed.has(departmentId));
+
+				updatedPeriod = await this.periodModel.findOneAndUpdate(
+					{ _id: id, organizationId, version: current.version },
+					allConfirmed
+						? { $set: { status: TimesheetPeriodStatus.READY_TO_CLOSE, managerSnapshotClosed: true, managerSnapshotClosedBy: managerUserId, managerSnapshotClosedAt: new Date() } }
+						: { $set: { status: TimesheetPeriodStatus.REVIEWING } },
+					{ new: true, session },
+				).lean();
+				if (!updatedPeriod) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+			});
+		} finally {
+			await session.endSession();
+		}
+
+		updatedPeriod = await this.reconcileDepartmentConfirmationStatus(organizationId, updatedPeriod) ?? updatedPeriod;
+		return { confirmation: this.toConfirmationResponse(confirmation), period: this.toResponse(updatedPeriod) };
 	}
 
 	/**
@@ -172,7 +295,16 @@ export class TimesheetPeriodService {
 	): Promise<any> {
 		const period = await this.findById(organizationId, id);
 
-		const summaries = await this.summaryService.findByPeriod(id);
+		// While the period is editable, show a live draft aggregation instead of
+		// stale close-time artifacts. HR closing the period still persists the
+		// immutable summaries used by payroll.
+		const summaries = period.status === TimesheetPeriodStatus.CLOSED
+			? await this.summaryService.findByPeriod(id)
+			: await this.summaryService.previewSummariesForDepartment(
+				id,
+				period.period,
+				organizationId,
+			);
 		const snapshots = await this.snapshotService.findByPeriod(id);
 
 		const totalEmployees = await this.employeeProfileModel?.countDocuments({
@@ -182,13 +314,39 @@ export class TimesheetPeriodService {
 
 		const summariesGenerated = summaries.length;
 		const snapshotsCreated = snapshots.length;
-		const attendanceComplete = totalEmployees > 0
-			? Math.round((snapshotsCreated / totalEmployees) * 100)
-			: 0;
 
 		// Managers only see blockers for departments they manage.
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
 		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
+		const employeesMissingPunches = new Set(
+			blockers
+				.filter((row) => row.type === 'MISSING_CHECK_IN' || row.type === 'MISSING_CHECK_OUT')
+				.map((row) => row.employeeId),
+		);
+		const attendanceComplete = totalEmployees > 0
+			? Math.round((Math.max(0, totalEmployees - employeesMissingPunches.size) / totalEmployees) * 100)
+			: 0;
+		const requiredDepartmentIds = await this.getRequiredDepartmentIds(organizationId);
+		const [requiredDepartments, currentConfirmations] = await Promise.all([
+			this.departmentModel.find({
+				organizationId: new Types.ObjectId(organizationId),
+				_id: { $in: requiredDepartmentIds.map((departmentId) => new Types.ObjectId(departmentId)) },
+				active: true,
+			}).select('_id name').lean(),
+			this.confirmationModel.find({
+				organizationId: new Types.ObjectId(organizationId),
+				periodId: new Types.ObjectId(id),
+				periodVersion: period.version,
+			}).select('departmentId confirmedAt').lean(),
+		]);
+		const confirmedDepartmentIds = new Set(
+			currentConfirmations.map((confirmation) => String(confirmation.departmentId)),
+		);
+		const departmentConfirmationProgress = requiredDepartments.map((department: any) => ({
+			departmentId: String(department._id),
+			departmentName: department.name,
+			confirmed: confirmedDepartmentIds.has(String(department._id)),
+		}));
 
 		return {
 			periodId: id,
@@ -203,6 +361,9 @@ export class TimesheetPeriodService {
 				(b) => b.type === 'PENDING_APPROVAL' || b.type === 'PENDING_CLARIFICATION',
 			).length,
 			missingSummaries: Math.max(0, totalEmployees - summariesGenerated),
+			confirmedDepartments: departmentConfirmationProgress.filter((department) => department.confirmed).length,
+			requiredDepartments: departmentConfirmationProgress.length,
+			departmentConfirmationProgress,
 			blockers: summarizeBlockers(blockers),
 		};
 	}
@@ -435,12 +596,7 @@ export class TimesheetPeriodService {
 		return this.toResponse(doc);
 	}
 
-	/**
-	 * Manager closes snapshot for a specific department.
-	 * Generates TimesheetSummary + PayrollInputSnapshot for employees in that department.
-	 * Allowed when period is OPEN or REVIEWING. When all departments have closed,
-	 * the period automatically transitions to READY_TO_CLOSE.
-	 */
+	/** Legacy compatibility wrapper; TASK-075 no longer lets managers generate payroll snapshots. */
 	async managerCloseSnapshot(
 		organizationId: string,
 		id: string,
@@ -456,122 +612,20 @@ export class TimesheetPeriodService {
 		snapshotsCreated: number;
 	}> {
 		const period = await this.findById(organizationId, id);
-
-		if (
-			period.status !== TimesheetPeriodStatus.OPEN &&
-			period.status !== TimesheetPeriodStatus.REVIEWING
-		) {
-			throw new BadRequestException(
-				`CANNOT_CLOSE_SNAPSHOT: Period must be in OPEN or REVIEWING status (current: ${period.status})`,
-			);
-		}
-
-		// Verify manager has scope over this department
-		const managedDepartments = await this.managerScopeService.getManagedDepartmentIds(organizationId, managerUserId);
-		if (!managedDepartments.includes(departmentId)) {
-			throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');
-		}
-
-		// Check if department already closed snapshot
-		const existing = period.departmentSnapshots?.find((d: any) => String(d.departmentId) === departmentId);
-		if (existing) {
-			throw new BadRequestException('DEPARTMENT_SNAPSHOT_ALREADY_CLOSED');
-		}
-
-		// Resolve the employees that belong to this department for reporting
-		const departmentEmployeeIds = await this.managerScopeService.resolveEmployeeIdsForDepartments(
-			organizationId,
-			[departmentId],
-			new Date(period.endDate),
-		);
-
-		const session = await this.periodModel.db.startSession();
-		let summariesCreated = 0;
-		let snapshotsCreated = 0;
-
-		try {
-			await session.withTransaction(async () => {
-				// TASK-074 / FR-HR-04 — a department cannot close its snapshot while
-				// its own days still have blockers.
-				const blockers = await this.collectBlockers(
-					organizationId,
-					id,
-					new Set(departmentEmployeeIds),
-				);
-				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
-
-				// Generate summaries and snapshots for this department only
-				summariesCreated = await this.summaryService.generateSummariesForDepartment(
-					id,
-					period.period,
-					organizationId,
-					departmentId,
-					session,
-				);
-
-				snapshotsCreated = await this.snapshotService.generateSnapshotsForDepartment(
-					id,
-					period.period,
-					organizationId,
-					departmentId,
-					session,
-				);
-
-				// Add department to closed snapshots
-				await this.periodModel.findByIdAndUpdate(
-					id,
-					{
-						$push: {
-							departmentSnapshots: {
-								departmentId,
-								managerUserId,
-								closedAt: new Date(),
-							},
-						},
-					},
-					{ session },
-				);
-
-				// Check if all departments are now closed
-				const allDepartments = await this.getAllDepartmentIds(organizationId);
-				const updatedPeriod = await this.periodModel.findById(id).session(session).lean();
-				const closedDepartmentIds = new Set((updatedPeriod?.departmentSnapshots || []).map((d: any) => String(d.departmentId)));
-				const allClosed = allDepartments.every(deptId => closedDepartmentIds.has(deptId));
-
-				if (allClosed) {
-					await this.periodModel.findByIdAndUpdate(
-						id,
-						{
-							$set: {
-								status: TimesheetPeriodStatus.READY_TO_CLOSE,
-								managerSnapshotClosed: true,
-								managerSnapshotClosedBy: managerUserId,
-								managerSnapshotClosedAt: new Date(),
-							},
-						},
-						{ session },
-					);
-				}
-			});
-		} catch (error) {
-			// Re-throw so the controller can return a meaningful error instead of swallowing it
-			console.error('[managerCloseSnapshot] Transaction failed:', error);
-			throw error;
-		} finally {
-			await session.endSession();
-		}
-
-		const finalPeriod = await this.periodModel.findOne({ _id: id, organizationId }).lean();
+		const result = await this.confirmDepartment(organizationId, id, managerUserId, {
+			departmentId,
+			expectedPeriodVersion: period.version,
+		});
 		const department = await this.departmentModel.findById(departmentId).lean();
 
 		return {
-			period: this.toResponse(finalPeriod),
+			period: result.period,
 			departmentId,
 			departmentName: department?.name ?? null,
-			employeesInSnapshot: summariesCreated,
-			totalDepartmentEmployees: departmentEmployeeIds.length,
-			summariesCreated,
-			snapshotsCreated,
+			employeesInSnapshot: result.confirmation.summarySnapshot.employeeCount,
+			totalDepartmentEmployees: result.confirmation.summarySnapshot.employeeCount,
+			summariesCreated: 0,
+			snapshotsCreated: 0,
 		};
 	}
 
@@ -582,8 +636,11 @@ export class TimesheetPeriodService {
 		organizationId: string,
 		id: string,
 		userId: string,
-	): Promise<{ period: any }> {
-		const period = await this.findById(organizationId, id);
+	): Promise<{ period: any; summariesCreated: number; snapshotsCreated: number }> {
+		let period = await this.findById(organizationId, id);
+		if (period.status === TimesheetPeriodStatus.OPEN || period.status === TimesheetPeriodStatus.REVIEWING) {
+			period = await this.reconcileDepartmentConfirmationStatus(organizationId, period) ?? period;
+		}
 
 		if (period.status !== TimesheetPeriodStatus.READY_TO_CLOSE) {
 			throw new BadRequestException(
@@ -597,10 +654,48 @@ export class TimesheetPeriodService {
 		// trust a frontend check.
 		const session = await this.periodModel.db.startSession();
 		let doc: any;
+		let summariesCreated = 0;
+		let snapshotsCreated = 0;
 		try {
 			await session.withTransaction(async () => {
+				const current: any = await this.periodModel.findOne({
+					_id: id,
+					organizationId,
+					active: true,
+					status: TimesheetPeriodStatus.READY_TO_CLOSE,
+					version: period.version,
+				}).session(session).lean();
+				if (!current) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+
 				const blockers = await this.collectBlockers(organizationId, id);
 				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
+
+				const requiredDepartmentIds = await this.getRequiredDepartmentIds(organizationId);
+				const confirmedDepartmentIds = await this.confirmationModel.distinct('departmentId', {
+					organizationId: new Types.ObjectId(organizationId),
+					periodId: new Types.ObjectId(id),
+					periodVersion: current.version,
+				}).session(session);
+				const confirmed = new Set(confirmedDepartmentIds.map(String));
+				if (!requiredDepartmentIds.every((departmentId) => confirmed.has(departmentId))) {
+					throw new ConflictException('PERIOD_NOT_READY');
+				}
+
+				// TASK-077/078 — summaries are close-time artifacts. Keep their
+				// generation in the same transaction as the period lock so the UI's
+				// “will be created when closing” promise is actually true.
+				summariesCreated = await this.summaryService.generateSummaries(
+					id,
+					current.period,
+					organizationId,
+					session,
+				);
+				snapshotsCreated = await this.snapshotService.generateSnapshots(
+					id,
+					current.period,
+					organizationId,
+					session,
+				);
 
 				doc = await this.periodModel.findByIdAndUpdate(
 					id,
@@ -620,7 +715,7 @@ export class TimesheetPeriodService {
 			await session.endSession();
 		}
 
-		return { period: this.toResponse(doc) };
+		return { period: this.toResponse(doc), summariesCreated, snapshotsCreated };
 	}
 
 	/**
@@ -729,15 +824,123 @@ export class TimesheetPeriodService {
 		return buildManagerSnapshotReview(summaries);
 	}
 
-	/**
-	 * Helper: get all active department ids for an organization.
-	 */
-	private async getAllDepartmentIds(organizationId: string): Promise<string[]> {
+	/** Departments with active/probation employees are required to confirm. */
+	private async getRequiredDepartmentIds(organizationId: string): Promise<string[]> {
+		const departmentIds = await this.employeeProfileModel.distinct('departmentId', {
+			organizationId: new Types.ObjectId(organizationId),
+			employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
+			departmentId: { $ne: null },
+		});
+		if (!departmentIds.length) return [];
 		const departments = await this.departmentModel
-			.find({ organizationId, active: true })
+			.find({
+				organizationId: new Types.ObjectId(organizationId),
+				_id: { $in: departmentIds },
+				active: true,
+			})
 			.select('_id')
 			.lean();
-		return departments.map(d => String(d._id));
+		return departments.map((department) => String(department._id));
+	}
+
+	/**
+	 * Re-derive READY_TO_CLOSE from committed current-version confirmations.
+	 * This makes the transition resilient to two departments confirming at
+	 * nearly the same time and also repairs legacy periods stuck in REVIEWING.
+	 */
+	private async reconcileDepartmentConfirmationStatus(organizationId: string, period: any): Promise<any | null> {
+		if (
+			period.status !== TimesheetPeriodStatus.OPEN
+			&& period.status !== TimesheetPeriodStatus.REVIEWING
+		) return null;
+
+		const requiredDepartmentIds = await this.getRequiredDepartmentIds(organizationId);
+		const confirmations: any[] = await this.confirmationModel.find({
+			organizationId: new Types.ObjectId(organizationId),
+			periodId: new Types.ObjectId(String(period._id)),
+			periodVersion: period.version,
+		}).sort({ confirmedAt: -1 }).lean();
+		const confirmedDepartmentIds = new Set(confirmations.map((confirmation) => String(confirmation.departmentId)));
+		if (!requiredDepartmentIds.every((departmentId) => confirmedDepartmentIds.has(departmentId))) return null;
+
+		const latestConfirmation = confirmations[0];
+		return this.periodModel.findOneAndUpdate(
+			{
+				_id: period._id,
+				organizationId: new Types.ObjectId(organizationId),
+				version: period.version,
+				status: { $in: [TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING] },
+			},
+			{
+				$set: {
+					status: TimesheetPeriodStatus.READY_TO_CLOSE,
+					managerSnapshotClosed: true,
+					...(latestConfirmation?.managerId ? { managerSnapshotClosedBy: latestConfirmation.managerId } : {}),
+					managerSnapshotClosedAt: latestConfirmation?.confirmedAt ?? new Date(),
+				},
+			},
+			{ new: true },
+		).lean();
+	}
+
+	private buildDepartmentSummarySnapshot(summaries: any[], employeeCount: number): DepartmentTimesheetSummarySnapshot {
+		const sum = (field: string) => summaries.reduce((total, row) => total + Number(row?.[field] ?? 0), 0);
+		const workingDay = sum('otWorkingDayMinutes');
+		const weeklyOff = sum('otWeeklyOffMinutes');
+		const publicHoliday = sum('otPublicHolidayMinutes');
+		return {
+			employeeCount,
+			scheduledWorkDays: sum('workingDays'),
+			actualWorkingDays: sum('presentDays'),
+			workingMinutes: sum('totalWorkingMinutes'),
+			lateMinutes: sum('totalLateMinutes'),
+			earlyMinutes: sum('totalEarlyMinutes'),
+			paidLeaveDays: sum('paidLeaveDays'),
+			unpaidLeaveDays: sum('unpaidLeaveDays'),
+			incompleteDays: sum('incompleteDays'),
+			overtimeMinutes: {
+				workingDay,
+				weeklyOff,
+				publicHoliday,
+				total: workingDay + weeklyOff + publicHoliday,
+			},
+			blockerCount: 0,
+		};
+	}
+
+	private async withCurrentConfirmations(organizationId: string, doc: any): Promise<any> {
+		const confirmations = await this.confirmationModel.find({
+			organizationId: new Types.ObjectId(organizationId),
+			periodId: doc._id,
+			periodVersion: doc.version,
+		}).sort({ confirmedAt: 1 }).lean();
+		const requiredIds = await this.getRequiredDepartmentIds(organizationId);
+		const departments = await this.departmentModel.find({
+			organizationId: new Types.ObjectId(organizationId),
+			_id: { $in: requiredIds },
+		}).select('_id name').lean();
+		const confirmedIds = new Set(confirmations.map((confirmation) => String(confirmation.departmentId)));
+		return {
+			...this.toResponse(doc),
+			departmentConfirmations: confirmations.map((confirmation) => this.toConfirmationResponse(confirmation)),
+			requiredDepartmentConfirmations: departments.map((department) => ({
+				departmentId: String(department._id),
+				departmentName: department.name,
+				confirmed: confirmedIds.has(String(department._id)),
+			})),
+		};
+	}
+
+	private toConfirmationResponse(doc: any): any {
+		return {
+			_id: doc._id,
+			periodId: doc.periodId,
+			departmentId: doc.departmentId,
+			managerId: doc.managerId,
+			periodVersion: doc.periodVersion,
+			confirmedAt: doc.confirmedAt,
+			summarySnapshot: doc.summarySnapshot,
+		};
 	}
 
 	/**

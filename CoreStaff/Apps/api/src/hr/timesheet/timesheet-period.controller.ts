@@ -8,6 +8,7 @@ import { TimesheetPeriodService } from './timesheet-period.service';
 import { CreateTimesheetPeriodDto } from './dto/create-timesheet-period.dto';
 import { ReopenTimesheetPeriodDto } from './dto/reopen-timesheet-period.dto';
 import { TimesheetPeriodStatus } from '../../database/schemas/timesheet-period.schema';
+import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
 
 @ApiTags('HR / Timesheet Periods')
 @UseGuards(AuthGuard, RolesGuard)
@@ -210,6 +211,28 @@ export class TimesheetPeriodController {
 	) {
 		const orgId = requireOrganizationId(organizationId);
 		const data = await this.service.reopen(orgId, id, dto, String(user._id ?? user.id));
+		return { success: true, data };
+	}
+
+	@Roles('DEPARTMENT_MANAGER')
+	@Post(':id/department-confirmations')
+	@ApiOperation({ summary: 'Confirm one department for the current period version (TASK-075).' })
+	@ApiResponse({ status: 409, description: 'DEPARTMENT_NOT_READY | PERIOD_VERSION_CONFLICT' })
+	@ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
+	@ApiErrorExamples()
+	async confirmDepartment(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Body() dto: ConfirmDepartmentTimesheetDto,
+		@CurrentUser() user: any,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.service.confirmDepartment(
+			orgId,
+			id,
+			String(user._id ?? user.id),
+			dto,
+		);
 		return { success: true, data };
 	}
 

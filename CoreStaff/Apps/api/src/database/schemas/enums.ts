@@ -151,6 +151,7 @@ export const AttendanceMethod = {
   NETWORK: 'NETWORK',
   GPS: 'GPS',
   SELFIE: 'SELFIE',
+  MANUAL: 'MANUAL',
 } as const;
 export type AttendanceMethod = (typeof AttendanceMethod)[keyof typeof AttendanceMethod];
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { PayrollRun, PayrollRunDocument, PayrollRunStatus } from '../../database/schemas/payroll-run.schema';
@@ -8,6 +8,8 @@ import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas
 import { InsuranceService } from './insurance.service';
 import { PitService } from './pit.service';
 import { PayslipService } from './payslip.service';
+import { TimesheetSummaryService } from '../timesheet/timesheet-summary.service';
+import { PayrollSnapshotService } from '../timesheet/payroll-snapshot.service';
 
 /**
  * TASK-085/086/087/088/089 — PayrollRun service.
@@ -25,6 +27,8 @@ export class PayrollRunService {
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
     private readonly payslipService: PayslipService,
+    @Optional() private readonly timesheetSummaryService?: TimesheetSummaryService,
+    @Optional() private readonly payrollSnapshotService?: PayrollSnapshotService,
   ) {}
 
   /**
@@ -65,6 +69,8 @@ export class PayrollRunService {
     } else if (period.status !== TimesheetPeriodStatus.CLOSED) {
       throw new BadRequestException('Kỳ công chưa sẵn sàng — cần ở trạng thái READY_TO_CLOSE hoặc CLOSED.');
     }
+
+    await this.refreshPayrollInputs(organizationId, timesheetPeriodId, period.period);
 
     // Defensive: ensure snapshots exist for the period
     const snapshotCount = await this.snapshotModel.countDocuments({
@@ -158,6 +164,18 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_CALCULATE_NON_DRAFT');
     }
 
+    // A draft may have been created before missing employees were repaired.
+    // Refresh its inputs on the first calculation as well as on recalculation.
+    if (this.timesheetSummaryService && this.payrollSnapshotService) {
+      const period = await this.periodModel.findById(payrollRun.timesheetPeriodId).lean();
+      if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
+      await this.refreshPayrollInputs(
+        String(payrollRun.organizationId),
+        String(payrollRun.timesheetPeriodId),
+        period.period,
+      );
+    }
+
     // Get snapshots for this payroll run's period
     const snapshots = await this.snapshotModel
       .find({
@@ -244,6 +262,21 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_RECALCULATE_NON_CALCULATED');
     }
 
+    let refreshedEmployeeCount: number | undefined;
+    if (this.timesheetSummaryService && this.payrollSnapshotService) {
+      const period = await this.periodModel.findById(payrollRun.timesheetPeriodId).lean();
+      if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
+      await this.refreshPayrollInputs(
+        String(payrollRun.organizationId),
+        String(payrollRun.timesheetPeriodId),
+        period.period,
+      );
+      refreshedEmployeeCount = await this.snapshotModel.countDocuments({
+        organizationId: payrollRun.organizationId,
+        periodId: payrollRun.timesheetPeriodId,
+      });
+    }
+
     await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
     await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
       $set: {
@@ -252,12 +285,27 @@ export class PayrollRunService {
         totalNet: 0,
         totalEmployerCost: 0,
         processedEmployeeCount: 0,
+        ...(refreshedEmployeeCount !== undefined ? { totalEmployeeCount: refreshedEmployeeCount } : {}),
         version: payrollRun.version + 1,
       },
       $unset: { lockedBy: 1, lockedAt: 1 },
     });
 
     return this.calculate(payrollRunId, userId);
+  }
+
+  /** Rebuild close-time artifacts so legacy/incomplete snapshots cannot omit employees. */
+  private async refreshPayrollInputs(organizationId: string, periodId: string, periodKey: string): Promise<void> {
+    if (!this.timesheetSummaryService || !this.payrollSnapshotService) return;
+    const session = await this.payrollRunModel.db.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.timesheetSummaryService!.generateSummaries(periodId, periodKey, organizationId, session);
+        await this.payrollSnapshotService!.generateSnapshots(periodId, periodKey, organizationId, session);
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
