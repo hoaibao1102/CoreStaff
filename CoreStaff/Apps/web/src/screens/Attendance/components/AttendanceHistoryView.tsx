@@ -8,6 +8,7 @@ import type { DayAttendance, AttendanceMethod, NetworkVerification } from '../ty
 import { DayDetailModal } from './DayDetailModal';
 import { resolveApiBase, apiUrl } from '../../../config/api';
 import { getAttendanceHistory } from '../../../services/attendance.service';
+import { getAttendanceHistoryStatus } from '../historyStatus';
 
 const DEFAULT_NETWORK_CONTEXT: NetworkVerification = {
   method: 'NETWORK',
@@ -73,7 +74,12 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         shiftHours: item.shiftHours || '08:00 – 17:30',
         workplace: item.workplaceName || item.workplace || 'Văn phòng CoreStaff',
         workplaceAddress: item.workplaceAddress || '',
-        status: item.attendanceStatus || (item.workingMinutes ? 'COMPLETED' : 'DAY_OFF'),
+        status: item.attendanceStatus || (item.workingMinutes ? 'COMPLETED' : 'NOT_CHECKED_IN'),
+        workdayType: item.workdayType,
+        dayResult: item.dayResult,
+        checkInAt: item.checkInAt,
+        checkOutAt: item.checkOutAt,
+        resolution: item.resolution,
         availableAction: 'NONE',
         attendanceMethod: (item.checkIn?.method || 'NETWORK') as AttendanceMethod,
         verificationContext: DEFAULT_NETWORK_CONTEXT,
@@ -293,19 +299,43 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
             const day = daysMap.get(dateStr);
             const dayNum = Number(dateStr.slice(-2));
 
-            const isDayOff = day?.status === 'DAY_OFF';
-            const hasRecord = Boolean(day);
+            const historyStatus = day ? getAttendanceHistoryStatus(day) : 'NONE';
+            const statusLabel = {
+              FORGOTTEN: 'Quên chấm công',
+              FORFEITED: 'Mất ngày công',
+              DAY_OFF: 'Nghỉ phép / Lễ',
+              LATE: `Đi trễ${(day?.lateMinutes ?? 0) > 0 ? ` · ${day?.lateMinutes} phút` : ''}`,
+              ATTENDED: 'Đã chấm công',
+              NONE: 'Chưa chấm công',
+            }[historyStatus];
+            const statusDotClass = {
+              FORGOTTEN: 'bg-amber-400 shadow-[0_0_6px_#fbbf24]',
+              FORFEITED: 'bg-red-400 shadow-[0_0_6px_#f87171]',
+              DAY_OFF: 'bg-slate-400',
+              LATE: 'bg-orange-400 shadow-[0_0_6px_#fb923c]',
+              ATTENDED: 'bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]',
+              NONE: '',
+            }[historyStatus];
+            const cellColorClass = historyStatus === 'FORGOTTEN'
+              ? 'bg-[#45351f] hover:bg-[#564225] ring-1 ring-inset ring-amber-400/60'
+              : historyStatus === 'FORFEITED'
+                ? 'bg-[#48252e] hover:bg-[#5a2b36] ring-1 ring-inset ring-red-400/60'
+                : historyStatus === 'LATE'
+                  ? 'bg-[#483020] hover:bg-[#5b3b26] ring-1 ring-inset ring-orange-400/60'
+                  : 'bg-[#1c223a] hover:bg-[#252c4a]';
             const hasOvertime = Boolean(day?.overtime);
 
             return (
               <button
                 key={dateStr}
                 type="button"
+                title={`${dayNum}/${Number(selectedMonth.slice(5))}: ${statusLabel}`}
+                aria-label={`${dateStr}: ${statusLabel}`}
                 onClick={() => {
                   if (day) setActiveDetailDay(day);
                 }}
                 disabled={!day}
-                className="relative w-full h-full min-h-0 bg-[#1c223a] hover:bg-[#252c4a] text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-30"
+                className={`relative w-full h-full min-h-0 ${cellColorClass} text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-30`}
               >
                 <span className="text-xs sm:text-sm md:text-base font-bold text-white leading-none">
                   {dayNum}
@@ -313,16 +343,12 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
 
                 {/* Status indicator dots */}
                 <div className="flex items-center gap-1">
-                  {hasRecord ? (
-                    isDayOff ? (
-                      <span className="size-1.5 sm:size-2 rounded-full bg-slate-400" title="Nghỉ" />
-                    ) : (
-                      <span
-                        className="size-1.5 sm:size-2 rounded-full bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]"
-                        title="Đã chấm công"
-                      />
-                    )
-                  ) : null}
+                  {historyStatus !== 'NONE' && (
+                    <span
+                      className={`size-1.5 sm:size-2 rounded-full ${statusDotClass}`}
+                      title={statusLabel}
+                    />
+                  )}
 
                   {/* Overtime indicator dot */}
                   {hasOvertime && (
@@ -343,6 +369,18 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         <span className="flex items-center gap-1.5 bg-[#1c223a] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs">
           <span className="size-1.5 sm:size-2 rounded-full bg-[#3ae39f]" />
           Đã chấm công
+        </span>
+        <span className="flex items-center gap-1.5 bg-[#483020] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-orange-400/60">
+          <span className="size-1.5 sm:size-2 rounded-full bg-orange-400" />
+          Đi trễ
+        </span>
+        <span className="flex items-center gap-1.5 bg-[#45351f] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-amber-400/60">
+          <span className="size-1.5 sm:size-2 rounded-full bg-amber-400" />
+          Quên chấm công
+        </span>
+        <span className="flex items-center gap-1.5 bg-[#48252e] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-red-400/60">
+          <span className="size-1.5 sm:size-2 rounded-full bg-red-400" />
+          Mất ngày công
         </span>
         <span className="flex items-center gap-1.5 bg-[#1c223a] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs">
           <span className="size-1.5 sm:size-2 rounded-full bg-indigo-400" />

@@ -40,6 +40,8 @@ type Period = TimesheetPeriod;
 
 type SummaryStats = {
   totalEmployees: number;
+  /** Employees with no remaining blocker. Optional while an older API is still running. */
+  resolvedEmployees?: number;
   summariesGenerated: number;
   missingSummaries: number;
   attendanceComplete: number;
@@ -53,6 +55,18 @@ type SummaryStats = {
   }>;
   blockers: Array<{ type: PeriodBlockerType; message: string; count: number }>;
 };
+
+function getResolvedEmployeeCount(stats: SummaryStats): number {
+  if (Number.isFinite(stats.resolvedEmployees)) {
+    return Math.max(0, Math.min(stats.totalEmployees, stats.resolvedEmployees!));
+  }
+  // Backward-compatible fallback during rolling deploys. attendanceComplete is
+  // already based on unique employees, so 67% of 3 correctly restores 2/3.
+  return Math.max(0, Math.min(
+    stats.totalEmployees,
+    Math.round((stats.attendanceComplete / 100) * stats.totalEmployees),
+  ));
+}
 
 const BLOCKER_LABEL: Record<PeriodBlockerType, string> = {
   MISSING_CHECK_IN: 'Thiếu check-in',
@@ -460,11 +474,11 @@ export function TimesheetReviewScreen({
                       <FileText className="h-4 w-4 text-blue-600" />
                     </div>
                     <div className="text-2xl font-bold">
-                      {selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : stats.totalEmployees}/{stats.totalEmployees}
+                      {selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : getResolvedEmployeeCount(stats)}/{stats.totalEmployees}
                     </div>
                     <Progress
                       value={stats.totalEmployees > 0
-                        ? ((selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : stats.totalEmployees) / stats.totalEmployees) * 100
+                        ? ((selectedPeriod.status === 'CLOSED' ? stats.summariesGenerated : getResolvedEmployeeCount(stats)) / stats.totalEmployees) * 100
                         : 0}
                       className="mt-2"
                     />
@@ -771,6 +785,13 @@ export function TimesheetReviewScreen({
           apiBase={apiBase}
           periodId={selectedPeriod._id}
           blocker={detailBlocker}
+          onResolved={async () => {
+            setDetailBlocker(null);
+            setExpandedBlocker(null);
+            setBlockerRows([]);
+            setDepartmentBlockers({});
+            await loadPeriodDetail(selectedPeriod._id);
+          }}
         />
       )}
     </div>

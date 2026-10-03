@@ -94,6 +94,13 @@ export class PayrollSnapshotService {
       .session(session)
       .lean();
 
+    const eligibleProfileIds = summaries.map((summary) => summary.employeeProfileId);
+    await this.snapshotModel.deleteMany({
+      periodId: new Types.ObjectId(periodId),
+      organizationId: new Types.ObjectId(organizationId),
+      employeeProfileId: { $nin: eligibleProfileIds },
+    }).session(session);
+
     if (!summaries.length) {
       return 0;
     }

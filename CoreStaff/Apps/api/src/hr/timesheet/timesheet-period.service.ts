@@ -15,6 +15,7 @@ import { ManagerRequestDocument } from '../../database/schemas/manager-request.s
 import { classifyDayBlockers, summarizeBlockers, PeriodBlockerRow, PeriodBlockerType } from './period-blockers';
 import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
 import { DepartmentTimesheetConfirmationDocument, DepartmentTimesheetSummarySnapshot } from '../../database/schemas/department-timesheet-confirmation.schema';
+import { PeriodVersionService } from './period-version.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -69,6 +70,7 @@ export class TimesheetPeriodService {
 		@InjectModel('AttendanceEvent') private readonly attendanceEventModel: Model<AttendanceEventDocument>,
 		@InjectModel('ManagerRequest') private readonly managerRequestModel: Model<ManagerRequestDocument>,
 		@InjectModel('DepartmentTimesheetConfirmation') private readonly confirmationModel: Model<DepartmentTimesheetConfirmationDocument>,
+		private readonly periodVersionService: PeriodVersionService,
 	) {}
 
 	/**
@@ -307,22 +309,28 @@ export class TimesheetPeriodService {
 			);
 		const snapshots = await this.snapshotService.findByPeriod(id);
 
-		const totalEmployees = await this.employeeProfileModel?.countDocuments({
-			organizationId: new Types.ObjectId(organizationId),
-			employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
-		}).catch(() => 0) ?? 0;
-
 		const summariesGenerated = summaries.length;
+		// The summary service owns the attendance-eligible population and excludes
+		// HR-only accounts, which do not clock in/out.
+		const totalEmployees = summariesGenerated;
 		const snapshotsCreated = snapshots.length;
 
 		// Managers only see blockers for departments they manage.
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
 		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
+		const eligibleEmployeeIds = new Set(summaries.map((summary: any) => String(summary.userId)));
 		const employeesMissingPunches = new Set(
 			blockers
 				.filter((row) => row.type === 'MISSING_CHECK_IN' || row.type === 'MISSING_CHECK_OUT')
+				.filter((row) => eligibleEmployeeIds.has(row.employeeId))
 				.map((row) => row.employeeId),
 		);
+		// A person can have multiple blocker rows (for example, on different days),
+		// but the draft completion counter must subtract that employee only once.
+		const employeesWithBlockers = new Set(
+			blockers.filter((row) => eligibleEmployeeIds.has(row.employeeId)).map((row) => row.employeeId),
+		);
+		const resolvedEmployees = Math.max(0, totalEmployees - employeesWithBlockers.size);
 		const attendanceComplete = totalEmployees > 0
 			? Math.round((Math.max(0, totalEmployees - employeesMissingPunches.size) / totalEmployees) * 100)
 			: 0;
@@ -354,6 +362,7 @@ export class TimesheetPeriodService {
 			status: period.status,
 			version: period.version,
 			totalEmployees,
+			resolvedEmployees,
 			summariesGenerated,
 			snapshotsCreated,
 			attendanceComplete,
@@ -445,6 +454,73 @@ export class TimesheetPeriodService {
 		]);
 
 		return { day, events, request };
+	}
+
+	/** Accept a missing punch as an unpaid lost workday instead of fabricating a punch. */
+	async resolveMissingPunchAsAbsent(
+		organizationId: string,
+		id: string,
+		dayId: string,
+		actor: { userId: string; role?: string },
+		reason: string,
+	): Promise<any> {
+		const period = await this.findById(organizationId, id);
+		if (![TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING].includes(period.status)) {
+			throw new ConflictException('PERIOD_NOT_EDITABLE');
+		}
+		if (!Types.ObjectId.isValid(dayId)) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		const normalizedReason = reason?.trim();
+		if (!normalizedReason || normalizedReason.length < REASON_MIN_LENGTH || normalizedReason.length > 1000) {
+			throw new BadRequestException('RESOLUTION_REASON_LENGTH_INVALID');
+		}
+
+		const day: any = await this.attendanceDayModel.findOne({
+			_id: new Types.ObjectId(dayId),
+			organizationId: new Types.ObjectId(organizationId),
+			periodId: new Types.ObjectId(id),
+		}).lean();
+		if (!day) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		if (String(day.employeeId) === actor.userId) throw new ForbiddenException('SELF_ATTENDANCE_RESOLUTION_FORBIDDEN');
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, actor);
+		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
+			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		}
+		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') return day;
+		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
+
+		const session = await this.attendanceDayModel.db.startSession();
+		try {
+			let updated: any;
+			await session.withTransaction(async () => {
+				updated = await this.attendanceDayModel.findOneAndUpdate(
+					{ _id: day._id, organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
+					{
+						$set: {
+							dayResult: 'ABSENT',
+							attendanceStatus: 'LOCKED',
+							overallApprovalStatus: 'NOT_REQUIRED',
+							workingMinutes: 0,
+							lateMinutes: 0,
+							earlyMinutes: 0,
+							resolution: {
+								type: 'FORFEITED_MISSING_PUNCH',
+								reason: normalizedReason,
+								resolvedBy: new Types.ObjectId(actor.userId),
+								resolvedAt: new Date(),
+							},
+						},
+						// A partial punch must not make the resolved day INCOMPLETE (and
+						// therefore payable). Raw AttendanceEvent rows remain as audit evidence.
+						$unset: { checkInAt: 1, checkOutAt: 1 },
+					},
+					{ new: true, session },
+				).lean();
+				await this.periodVersionService.bump(organizationId, id, session);
+			});
+			return updated;
+		} finally {
+			await session.endSession();
+		}
 	}
 
 	/**

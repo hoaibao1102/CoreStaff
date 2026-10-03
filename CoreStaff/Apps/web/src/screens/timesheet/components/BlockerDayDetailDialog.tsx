@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
+import { Textarea } from '@/components/textarea';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/dialog';
-import { hrErrorMessage, getPeriodDayDetail, AttendanceDayDetail, PeriodBlockerRow } from '@/services/hrService';
+import {
+  hrErrorMessage,
+  getPeriodDayDetail,
+  resolveMissingPunchAsAbsent,
+  AttendanceDayDetail,
+  PeriodBlockerRow,
+} from '@/services/hrService';
+import { toast } from '@/components/toast';
 
 const DAY_RESULT_LABEL: Record<string, string> = {
   PRESENT: 'Có mặt',
@@ -52,16 +60,21 @@ export function BlockerDayDetailDialog({
   apiBase,
   periodId,
   blocker,
+  onResolved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   apiBase: string;
   periodId: string;
   blocker: PeriodBlockerRow | null;
+  onResolved?: () => void | Promise<void>;
 }) {
   const [detail, setDetail] = useState<AttendanceDayDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAbsenceResolution, setShowAbsenceResolution] = useState(false);
+  const [resolutionReason, setResolutionReason] = useState('');
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     if (!open || !blocker) return;
@@ -69,6 +82,8 @@ export function BlockerDayDetailDialog({
     setLoading(true);
     setError(null);
     setDetail(null);
+    setShowAbsenceResolution(false);
+    setResolutionReason('');
     void getPeriodDayDetail(apiBase, periodId, blocker.attendanceDayId)
       .then((data) => { if (!cancelled) setDetail(data); })
       .catch((err) => { if (!cancelled) setError(hrErrorMessage(err)); })
@@ -77,6 +92,28 @@ export function BlockerDayDetailDialog({
   }, [open, blocker, apiBase, periodId]);
 
   const day = detail?.day;
+  const canResolveAsAbsent = blocker?.type === 'MISSING_CHECK_IN' || blocker?.type === 'MISSING_CHECK_OUT';
+
+  async function handleResolveAsAbsent() {
+    if (!blocker) return;
+    const reason = resolutionReason.trim();
+    if (reason.length < 10) {
+      setError('Lý do phải có ít nhất 10 ký tự.');
+      return;
+    }
+    setResolving(true);
+    setError(null);
+    try {
+      await resolveMissingPunchAsAbsent(apiBase, periodId, blocker.attendanceDayId, reason);
+      toast.success('Đã ghi nhận nhân viên vắng và không tính công ngày này.');
+      onOpenChange(false);
+      await onResolved?.();
+    } catch (err) {
+      setError(hrErrorMessage(err));
+    } finally {
+      setResolving(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,6 +222,64 @@ export function BlockerDayDetailDialog({
                   </div>
                   {detail!.request.reviewComment && (
                     <div className="mt-1">Lý do: {detail!.request.reviewComment}</div>
+                  )}
+                </div>
+              )}
+
+              {canResolveAsAbsent && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+                  <div className="font-semibold text-amber-900">Xử lý trường hợp quên chấm công</div>
+                  <p className="mt-1 text-amber-800">
+                    Nếu không bổ sung check-in/check-out, quản lý có thể xác nhận nhân viên vắng.
+                    Ngày này sẽ không được tính công và quyết định được lưu lại để đối soát.
+                  </p>
+                  {!showAbsenceResolution ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="mt-3"
+                      onClick={() => setShowAbsenceResolution(true)}
+                    >
+                      Xác nhận mất ngày công
+                    </Button>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label htmlFor="absence-resolution-reason" className="font-medium text-amber-950">
+                          Lý do xử lý <span className="text-destructive">*</span>
+                        </label>
+                        <Textarea
+                          id="absence-resolution-reason"
+                          className="mt-1 bg-white"
+                          value={resolutionReason}
+                          onChange={(event) => setResolutionReason(event.target.value)}
+                          minLength={10}
+                          maxLength={1000}
+                          placeholder="Ví dụ: Nhân viên quên chấm công và quản lý xác nhận vắng ngày này."
+                          disabled={resolving}
+                        />
+                        <div className="mt-1 text-xs text-amber-700">Tối thiểu 10 ký tự.</div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={resolving}
+                          onClick={() => setShowAbsenceResolution(false)}
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={resolving || resolutionReason.trim().length < 10}
+                          onClick={handleResolveAsAbsent}
+                        >
+                          {resolving && <Loader2 className="mr-2 size-4 animate-spin" />}
+                          Xác nhận vắng, không tính công
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

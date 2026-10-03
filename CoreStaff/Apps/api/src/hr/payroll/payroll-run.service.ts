@@ -124,10 +124,11 @@ export class PayrollRunService {
    * List payroll runs for an organization.
    */
   async findAll(organizationId: string): Promise<any[]> {
-    return this.payrollRunModel
+    const runs = await this.payrollRunModel
       .find({ organizationId: new Types.ObjectId(organizationId), active: true })
       .sort({ runDate: -1 })
       .lean();
+    return Promise.all(runs.map((run) => this.withEligibleEmployeeCount(run)));
   }
 
   /**
@@ -141,7 +142,28 @@ export class PayrollRunService {
     }).lean();
 
     if (!doc) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
-    return this.toResponse(doc);
+    return this.toResponse(await this.withEligibleEmployeeCount(doc));
+  }
+
+  /** Keep legacy payroll runs from displaying HR-only accounts in their headcount. */
+  private async withEligibleEmployeeCount(run: any): Promise<any> {
+    const userModel = this.employeeProfileModel.db.model('User');
+    const hrUsers = await userModel.find({
+      organizationId: run.organizationId,
+      role: 'HR',
+    }).select('_id').lean();
+    const hrProfiles = hrUsers.length
+      ? await this.employeeProfileModel.find({
+          organizationId: run.organizationId,
+          userId: { $in: hrUsers.map((user: any) => user._id) },
+        }).select('_id').lean()
+      : [];
+    const totalEmployeeCount = await this.snapshotModel.countDocuments({
+      organizationId: run.organizationId,
+      periodId: run.timesheetPeriodId,
+      employeeProfileId: { $nin: hrProfiles.map((profile: any) => profile._id) },
+    });
+    return { ...run, totalEmployeeCount };
   }
 
   /**

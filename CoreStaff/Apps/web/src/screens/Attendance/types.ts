@@ -119,6 +119,16 @@ export interface DayAttendance {
   workplace: string;
   workplaceAddress: string;
   status: AttendanceStatus;
+  workdayType?: string;
+  dayResult?: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  resolution?: {
+    type: 'FORFEITED_MISSING_PUNCH';
+    reason: string;
+    resolvedBy: string;
+    resolvedAt: string;
+  };
   availableAction: AvailableAction;
   attendanceMethod: AttendanceMethod;
   verificationContext: VerificationContext;

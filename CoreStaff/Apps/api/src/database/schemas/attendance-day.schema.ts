@@ -10,6 +10,23 @@ import {
 
 export type AttendanceDayDocument = AttendanceDay & Document;
 
+@Schema({ _id: false })
+export class AttendanceDayResolution {
+  @Prop({ type: String, enum: ['FORFEITED_MISSING_PUNCH'], required: true })
+  type: 'FORFEITED_MISSING_PUNCH';
+
+  @Prop({ type: String, required: true })
+  reason: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  resolvedBy: Types.ObjectId;
+
+  @Prop({ type: Date, required: true })
+  resolvedAt: Date;
+}
+
+export const AttendanceDayResolutionSchema = SchemaFactory.createForClass(AttendanceDayResolution);
+
 @Schema({ timestamps: true, collection: 'attendance_days' })
 export class AttendanceDay {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Organization', required: true, index: true })
@@ -64,6 +81,10 @@ export class AttendanceDay {
 
   @Prop({ type: Number, default: 0 })
   earlyMinutes: number;
+
+  /** Manual resolution for a missing-punch day; preserves who accepted the lost workday. */
+  @Prop({ type: AttendanceDayResolutionSchema, required: false })
+  resolution?: AttendanceDayResolution;
 
   /** Snapshot ca làm việc tại thời điểm chấm công */
   @Prop({ type: Object, required: false })

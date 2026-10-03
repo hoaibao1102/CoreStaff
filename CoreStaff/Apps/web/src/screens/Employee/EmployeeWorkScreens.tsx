@@ -50,13 +50,24 @@ const formatMinutes = (minutes: number) => {
 };
 
 export function LeaveOvertimeScreen() {
+  const [initialAdjustment] = useState<{ workDate: string; adjustmentType: 'CHECK_IN' | 'CHECK_OUT' } | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const date = params.get('workDate');
+    const adjustment = params.get('adjustmentType');
+    if (params.get('type') !== 'ATTENDANCE' || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+      || (adjustment !== 'CHECK_IN' && adjustment !== 'CHECK_OUT')) return null;
+    const parsedDate = new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date
+      || date >= vnToday()) return null;
+    return { workDate: date, adjustmentType: adjustment };
+  });
   const [apiBase, setApiBase] = useState<string | null>(null);
   const [rows, setRows] = useState<ManagerRequest[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(Boolean(initialAdjustment));
   const [type, setType] = useState<RequestType>('ATTENDANCE');
-  const [workDate, setWorkDate] = useState(new Date().toISOString().slice(0, 10));
-  const [adjustmentType, setAdjustmentType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
-  const [adjustmentTime, setAdjustmentTime] = useState('08:00');
+  const [workDate, setWorkDate] = useState(initialAdjustment?.workDate ?? new Date().toISOString().slice(0, 10));
+  const [adjustmentType, setAdjustmentType] = useState<'CHECK_IN' | 'CHECK_OUT'>(initialAdjustment?.adjustmentType ?? 'CHECK_IN');
+  const [adjustmentTime, setAdjustmentTime] = useState(initialAdjustment ? '' : '08:00');
   const [reason, setReason] = useState('');
   const [start, setStart] = useState('18:00');
   const [end, setEnd] = useState('20:00');

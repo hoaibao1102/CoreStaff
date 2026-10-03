@@ -9,6 +9,7 @@ import { CreateTimesheetPeriodDto } from './dto/create-timesheet-period.dto';
 import { ReopenTimesheetPeriodDto } from './dto/reopen-timesheet-period.dto';
 import { TimesheetPeriodStatus } from '../../database/schemas/timesheet-period.schema';
 import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
+import { ResolveMissingPunchDto } from './dto/resolve-missing-punch.dto';
 
 @ApiTags('HR / Timesheet Periods')
 @UseGuards(AuthGuard, RolesGuard)
@@ -83,6 +84,7 @@ export class TimesheetPeriodController {
 	@ApiOperation({ summary: 'Get review statistics for a timesheet period.' })
 	@ApiSuccess('Review statistics.', {
 		totalEmployees: 50,
+		resolvedEmployees: 45,
 		summariesGenerated: 45,
 		attendanceComplete: 90,
 		pendingApprovals: 5,
@@ -163,6 +165,24 @@ export class TimesheetPeriodController {
 			userId: String(user._id ?? user.id),
 			role: user.role,
 		});
+		return { success: true, data };
+	}
+
+	@Roles('HR', 'DEPARTMENT_MANAGER')
+	@Patch(':id/days/:dayId/resolve-absence')
+	@ApiOperation({ summary: 'Resolve a missing punch by marking the employee absent for the workday.' })
+	@ApiErrorExamples()
+	async resolveMissingPunchAsAbsent(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Param('dayId') dayId: string,
+		@CurrentUser() user: any,
+		@Body() dto: ResolveMissingPunchDto,
+	) {
+		const data = await this.service.resolveMissingPunchAsAbsent(
+			requireOrganizationId(organizationId), id, dayId,
+			{ userId: String(user._id ?? user.id), role: user.role }, dto.reason,
+		);
 		return { success: true, data };
 	}
 
