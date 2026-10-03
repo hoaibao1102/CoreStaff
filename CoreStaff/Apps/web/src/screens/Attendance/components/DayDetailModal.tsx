@@ -2,6 +2,8 @@ import { X, Clock, Calendar, Briefcase, CheckCircle2 } from 'lucide-react';
 import type { DayAttendance } from '../types';
 import { EvidenceCard } from './EvidenceCard';
 import { Badge } from '../../../components/badge';
+import { AppLink } from '../../../components/AppLink';
+import { getAttendanceHistoryStatus } from '../historyStatus';
 
 export interface DayDetailModalProps {
   isOpen: boolean;
@@ -18,7 +20,7 @@ function getStatusBadge(status: string) {
     case 'PENDING_APPROVAL':
       return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Chờ duyệt</Badge>;
     case 'LATE':
-      return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Đi muộn</Badge>;
+      return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Đi trễ</Badge>;
     case 'DAY_OFF':
       return <Badge variant="outline">Nghỉ phép</Badge>;
     default:
@@ -28,6 +30,13 @@ function getStatusBadge(status: string) {
 
 export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
   if (!isOpen || !day) return null;
+  const historyStatus = getAttendanceHistoryStatus(day);
+  const adjustmentType = day.checkInAt || day.checkIn?.recordedAt ? 'CHECK_OUT' : 'CHECK_IN';
+  const adjustmentHref = `/app/ot?${new URLSearchParams({
+    type: 'ATTENDANCE',
+    workDate: day.workDate,
+    adjustmentType,
+  })}`;
 
   const checkInTime = day.checkIn?.recordedAt
     ? new Date(day.checkIn.recordedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
@@ -39,7 +48,9 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
 
   let workingHours = 'Chưa chốt';
   const mins = day.totalWorkingMinutes ?? day.workingMinutes;
-  if (day.status === 'COMPLETED' || (day.checkIn && day.checkOut)) {
+  if (historyStatus === 'FORFEITED') {
+    workingHours = '0 phút';
+  } else if (day.status === 'COMPLETED' || (day.checkIn && day.checkOut)) {
     if (typeof mins === 'number' && mins > 0) {
       const h = Math.floor(mins / 60);
       const m = mins % 60;
@@ -101,13 +112,30 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-xl border border-border bg-muted/30">
             <span className="text-[11px] text-muted-foreground block">Trạng thái</span>
-            <div className="mt-1">{getStatusBadge(day.status)}</div>
+            <div className="mt-1">
+              {historyStatus === 'FORFEITED'
+                ? <Badge variant="secondary" className="bg-red-100 text-red-800">Mất ngày công</Badge>
+                : historyStatus === 'FORGOTTEN'
+                  ? <Badge variant="secondary" className="bg-amber-100 text-amber-800">Quên chấm công</Badge>
+                  : historyStatus === 'LATE'
+                    ? <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        Đi trễ{(day.lateMinutes ?? 0) > 0 ? ` · ${day.lateMinutes} phút` : ''}
+                      </Badge>
+                    : getStatusBadge(day.status)}
+            </div>
           </div>
           <div className="p-3 rounded-xl border border-border bg-muted/30">
             <span className="text-[11px] text-muted-foreground block">Tổng thời gian</span>
             <span className="text-sm font-bold text-foreground mt-1 block font-mono">{workingHours}</span>
           </div>
         </div>
+
+        {historyStatus === 'FORFEITED' && day.resolution && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+            <p className="font-semibold">Ngày này đã được xác nhận vắng và không tính công.</p>
+            <p className="mt-1">Lý do: {day.resolution.reason}</p>
+          </div>
+        )}
 
         {/* Timeline Events & Evidence */}
         <div className="space-y-3">
@@ -182,11 +210,26 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
           </div>
         )}
 
+        {historyStatus === 'FORGOTTEN' && (
+          <AppLink
+            href={adjustmentHref}
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+          >
+            <Calendar className="size-4" aria-hidden="true" />
+            Gửi yêu cầu điều chỉnh công
+          </AppLink>
+        )}
+
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          className="w-full rounded-xl bg-primary py-3 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+          className={`w-full rounded-xl py-3 text-xs font-bold transition-colors ${
+            historyStatus === 'FORGOTTEN'
+              ? 'border border-border text-foreground hover:bg-muted'
+              : 'bg-primary text-primary-foreground shadow hover:bg-primary/90'
+          }`}
         >
           Đóng chi tiết
         </button>

@@ -35,6 +35,7 @@ export interface AttendanceDayLike {
   overallApprovalStatus?: string;
   checkInAt?: Date | string | null;
   checkOutAt?: Date | string | null;
+  resolution?: { type?: string };
   employeeSnapshot?: {
     employeeCode?: string;
     fullName?: string;
@@ -70,6 +71,9 @@ export interface PeriodBlockerRow {
 export function classifyDayBlockers(day: AttendanceDayLike): PeriodBlockerRow[] {
   const workdayType = day.workdayType ?? WorkdayType.WORKING_DAY;
   if (workdayType !== WorkdayType.WORKING_DAY) return [];
+  // A manager may explicitly accept a missing punch as a lost workday. It
+  // remains ABSENT for payroll, but is no longer an unresolved period blocker.
+  if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH' && day.dayResult === DayResult.ABSENT) return [];
 
   const types: PeriodBlockerType[] = [];
 

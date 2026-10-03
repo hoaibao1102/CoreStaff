@@ -1,7 +1,28 @@
+import { Types } from 'mongoose';
 import { AttendanceStatus, DayResult, WorkdayType } from '../../database/schemas/enums';
 import { TimesheetSummaryService } from './timesheet-summary.service';
 
 describe('TimesheetSummaryService work count aggregation', () => {
+  it('excludes HR accounts from the attendance and payroll population', async () => {
+    const employeeId = new Types.ObjectId();
+    const hrId = new Types.ObjectId();
+    const userModel = {
+      find: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([{ _id: employeeId }]),
+      }),
+    };
+    const service = new TimesheetSummaryService(
+      {} as any, {} as any, {} as any, {} as any, userModel as any, {} as any,
+    );
+
+    await expect((service as any).excludeHrUsers([String(employeeId), String(hrId)]))
+      .resolves.toEqual([String(employeeId)]);
+    expect(userModel.find).toHaveBeenCalledWith(
+      { _id: { $in: [employeeId, hrId] }, role: { $ne: 'HR' } },
+      { _id: 1 },
+    );
+  });
+
   it('keeps public holidays out of standard days while counting worked holidays as actual work', () => {
     const service = new TimesheetSummaryService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
     const aggregate = (service as any).aggregateWorkCounts([
@@ -80,6 +101,22 @@ describe('TimesheetSummaryService work count aggregation', () => {
     expect(aggregate.workingDays).toBe(3);
     expect(aggregate.paidLeaveDays).toBe(1);
     expect(aggregate.unpaidLeaveDays).toBe(1);
+    expect(aggregate.incompleteDays).toBe(0);
+  });
+
+  it('counts a manager-forfeited missing-punch day as absent and non-payable', () => {
+    const service = new TimesheetSummaryService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const aggregate = (service as any).aggregateWorkCounts([{
+      workdayType: WorkdayType.WORKING_DAY,
+      dayResult: DayResult.ABSENT,
+      attendanceStatus: AttendanceStatus.LOCKED,
+      workingMinutes: 0,
+      resolution: { type: 'FORFEITED_MISSING_PUNCH' },
+    }]);
+
+    expect(aggregate.workingDays).toBe(1);
+    expect(aggregate.absentDays).toBe(1);
+    expect(aggregate.presentDays).toBe(0);
     expect(aggregate.incompleteDays).toBe(0);
   });
 });

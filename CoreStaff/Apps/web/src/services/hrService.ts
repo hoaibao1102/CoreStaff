@@ -985,6 +985,19 @@ export async function getPeriodDayDetail(
     );
 }
 
+export async function resolveMissingPunchAsAbsent(
+    base: string,
+    id: string,
+    dayId: string,
+    reason: string,
+): Promise<AttendanceDayDetail['day']> {
+    return hrRequest<AttendanceDayDetail['day']>(
+        base,
+        `/api/hr/timesheet-periods/${encodeURIComponent(id)}/days/${encodeURIComponent(dayId)}/resolve-absence`,
+        { method: 'PATCH', body: JSON.stringify({ reason }) },
+    );
+}
+
 export function paginateEmployees(data: EmployeeProfile[], query: string, requestedPage: number) {
     const term = query.trim().toLocaleLowerCase('vi');
     const filtered = data.filter(row => !term || `${row.fullName ?? ''} ${row.employeeCode}`.toLocaleLowerCase('vi').includes(term));

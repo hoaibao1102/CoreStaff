@@ -16,6 +16,7 @@ import { AttendanceDay, AttendanceDaySchema } from '../../database/schemas/atten
 import { AttendanceEvent, AttendanceEventSchema } from '../../database/schemas/attendance-event.schema';
 import { ManagerRequest, ManagerRequestSchema } from '../../database/schemas/manager-request.schema';
 import { DepartmentTimesheetConfirmation, DepartmentTimesheetConfirmationSchema } from '../../database/schemas/department-timesheet-confirmation.schema';
+import { PeriodVersionModule } from './period-version.module';
 
 @Module({
 	imports: [
@@ -36,6 +37,7 @@ import { DepartmentTimesheetConfirmation, DepartmentTimesheetConfirmationSchema 
 		]),
 		TimesheetSummaryModule,
 		PayrollSnapshotModule,
+		PeriodVersionModule,
 		ManagerModule,
 	],
 	controllers: [TimesheetPeriodController],

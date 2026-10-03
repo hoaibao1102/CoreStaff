@@ -7,7 +7,7 @@ import { OvertimeResult } from '../../database/schemas/overtime-result.schema';
 import { EmployeeProfile } from '../../database/schemas/employee-profile.schema';
 import { EmployeeAssignment, EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
 import { User } from '../../database/schemas/user.schema';
-import { DayResult, WorkdayType } from '../../database/schemas/enums';
+import { DayResult, Role, WorkdayType } from '../../database/schemas/enums';
 import { OvertimeType } from '../policies/policies-domain';
 
 /**
@@ -128,8 +128,19 @@ export class TimesheetSummaryService {
         }, { userId: 1 })
         .session(session)
         .lean();
-      allowedEmployeeIds = new Set(activeProfiles.map((profile) => String(profile.userId)));
+      allowedEmployeeIds = new Set(await this.excludeHrUsers(
+        activeProfiles.map((profile) => String(profile.userId)),
+        session,
+      ));
     }
+
+    // Re-generation also repairs legacy periods that were created before HR
+    // accounts were excluded from the attendance/payroll population.
+    await this.summaryModel.deleteMany({
+      periodId: new Types.ObjectId(periodId),
+      organizationId: new Types.ObjectId(organizationId),
+      userId: { $nin: [...allowedEmployeeIds].map((id) => new Types.ObjectId(id)) },
+    }).session(session);
 
     // Step 5: Generate one summary for every eligible employee. Empty
     // attendance is represented by a zero-valued summary, not by omission.
@@ -209,7 +220,9 @@ export class TimesheetSummaryService {
           employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
         }, { userId: 1 })
         .lean();
-      allowedEmployeeIds = new Set(activeProfiles.map((profile) => String(profile.userId)));
+      allowedEmployeeIds = new Set(await this.excludeHrUsers(
+        activeProfiles.map((profile) => String(profile.userId)),
+      ));
     }
 
     const results: any[] = [];
@@ -579,7 +592,17 @@ export class TimesheetSummaryService {
     const assignedUserIds = (activeAssignments as any[]).map(a => String(a.userId));
     const profileUserIds = profiles.map(p => String(p.userId));
 
-    return [...new Set([...assignedUserIds, ...profileUserIds])];
+    return this.excludeHrUsers([...new Set([...assignedUserIds, ...profileUserIds])]);
+  }
+
+  private async excludeHrUsers(userIds: string[], session?: ClientSession): Promise<string[]> {
+    if (!userIds.length) return [];
+    const query = this.userModel.find({
+      _id: { $in: userIds.map((id) => new Types.ObjectId(id)) },
+      role: { $ne: Role.HR },
+    }, { _id: 1 });
+    const users = session ? await query.session(session).lean() : await query.lean();
+    return users.map((user) => String(user._id));
   }
 
   /**
@@ -607,10 +630,12 @@ export class TimesheetSummaryService {
    * List all summaries for a period.
    */
   async findByPeriod(periodId: string): Promise<any[]> {
-    return this.summaryModel
+    const summaries = await this.summaryModel
       .find({ periodId: new Types.ObjectId(periodId) })
       .sort({ 'employeeSnapshot.fullName': 1 })
       .lean();
+    const eligibleUserIds = new Set(await this.excludeHrUsers(summaries.map((row: any) => String(row.userId))));
+    return summaries.filter((row: any) => eligibleUserIds.has(String(row.userId)));
   }
 
   /**

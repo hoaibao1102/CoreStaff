@@ -29,6 +29,15 @@ describe('TASK-074 — classifyDayBlockers', () => {
     expect(rows).toEqual([]);
   });
 
+  it('does not flag a missing punch that a manager resolved as a lost workday', () => {
+    const rows = classifyDayBlockers(day({
+      dayResult: 'ABSENT',
+      attendanceStatus: 'LOCKED',
+      resolution: { type: 'FORFEITED_MISSING_PUNCH' },
+    }) as any);
+    expect(rows).toEqual([]);
+  });
+
   it.each([
     ['PUBLIC_HOLIDAY'],
     ['WEEKLY_OFF'],
