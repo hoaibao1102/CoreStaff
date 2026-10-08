@@ -45,6 +45,7 @@ async function main() {
       db.model('AttendanceBonusPolicy') as any,
       db.model('KpiPayrollInput') as any,
       db.model('InsurancePolicy') as any,
+      db.model('InsuranceProfile') as any,
       db.model('TaxPolicy') as any,
     );
 

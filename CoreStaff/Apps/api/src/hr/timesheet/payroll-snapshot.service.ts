@@ -6,9 +6,25 @@ import { TimesheetSummary, TimesheetSummaryDocument } from '../../database/schem
 import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { SalaryProfile, SalaryProfileDocument } from '../../database/schemas/compensation.schema';
 import { InsurancePolicy, InsurancePolicyDocument } from '../../database/schemas/insurance-policy.schema';
+import { InsuranceProfile, InsuranceProfileDocument } from '../../database/schemas/insurance-profile.schema';
 import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.schema';
-import { EmploymentStatus } from '../../database/schemas/enums';
+import { EmploymentStatus, InsuranceContributionType } from '../../database/schemas/enums';
+import { calculateInsuranceContributions } from '../insurance-policy/insurance-calculation';
+import { PitService } from '../payroll/pit.service';
 import { createHash } from 'node:crypto';
+
+/**
+ * Hệ số tiền làm thêm giờ (SRS §30D.2). Một chỗ khai duy nhất — payslip import lại
+ * để không lệch giữa số đã lưu (`otPay`) và số hiện trên chi tiết OT.
+ *
+ * ponytail: vẫn hard-code, chưa nối `OvertimePayPolicy`. Nâng cấp: đọc qua
+ * `resolveOvertimeRates` khi nối chính sách vào luồng tính lương.
+ */
+export const OVERTIME_RATES = {
+  workingDay: 1.5,
+  weeklyOff: 2.0,
+  publicHoliday: 3.0,
+} as const;
 
 export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingDays' | 'presentDays' | 'absentDays' | 'unpaidLeaveDays'>) {
   const standardWorkingDays = Math.max(0, summary.workingDays ?? 0);
@@ -17,6 +33,31 @@ export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingD
     standardWorkingDays,
     payableWorkingDays: Math.max(0, standardWorkingDays - nonPayableDays),
   };
+}
+
+/**
+ * Lương đóng bảo hiểm = lương cơ bản hợp đồng − tổng phụ cấp gán cho nhân viên
+ * (không âm). Một chỗ khai duy nhất — hồ sơ lương, snapshot và FE đều dùng cùng
+ * công thức để số hiện trên màn khớp số chốt kỳ.
+ */
+export function deriveInsuranceSalary(monthlyBaseSalary: number, totalAllowances: number): number {
+  return Math.max(0, monthlyBaseSalary - totalAllowances);
+}
+
+/**
+ * Tiền công 1 giờ dùng cho OT = lương tháng / (ngày công chuẩn × 8).
+ * Một chỗ khai duy nhất — snapshot lưu lại, payslip đọc lại (B1).
+ */
+export function hourlyRateFor(monthlyBaseSalary: number, standardWorkingDays: number): number {
+  return standardWorkingDays > 0 ? monthlyBaseSalary / (standardWorkingDays * 8) : 0;
+}
+
+/**
+ * Tiền OT = số phút / 60 × tiền công 1 giờ × hệ số. Cùng một biểu thức cho cả
+ * snapshot lẫn payslip, để `Σ breakdown[].amount` luôn bằng `otPay` (B1).
+ */
+export function computeOvertimePay(minutes: number, hourlyRate: number, coefficient: number): number {
+  return Math.round((minutes * coefficient * hourlyRate) / 60);
 }
 
 /**
@@ -51,6 +92,8 @@ export class PayrollSnapshotService {
     private readonly kpiPayrollInputModel: Model<any>,
     @InjectModel('InsurancePolicy')
     private readonly insurancePolicyModel: Model<InsurancePolicyDocument>,
+    @InjectModel('InsuranceProfile')
+    private readonly insuranceProfileModel: Model<InsuranceProfileDocument>,
     @InjectModel('TaxPolicy')
     private readonly taxPolicyModel: Model<TaxPolicyDocument>,
   ) {}
@@ -273,12 +316,12 @@ export class PayrollSnapshotService {
       type: allowance.code ?? String(allowance._id),
       label: allowance.name ?? allowance.code ?? 'Phụ cấp',
       amount: assignedAmounts.get(String(allowance._id)) ?? allowance.amount ?? 0,
-      taxable: allowance.taxable ?? true,
+      // R1: mọi phụ cấp đều chịu thuế TNCN. Cờ `OrganizationAllowance.taxable`
+      // vẫn còn trong schema (deprecated) nhưng không còn được đọc ở đây.
+      taxable: true,
     }));
     const totalAllowances = allowanceBreakdown.reduce((sum: number, item: any) => sum + item.amount, 0);
-    const nonTaxableAllowances = allowanceBreakdown
-      .filter((item: any) => !item.taxable)
-      .reduce((sum: number, item: any) => sum + item.amount, 0);
+    const nonTaxableAllowances = 0;
 
     const attendanceBonusPolicy: any = salaryProfile?.attendanceBonusPolicyId
       ? await this.attendanceBonusPolicyModel.findOne({
@@ -302,48 +345,65 @@ export class PayrollSnapshotService {
     }).lean();
     const kpiBonus = kpiInput?.amount ?? 0;
 
-    // Calculate OT pay (simplified — full logic in TASK-089)
-    const otWorkingDayRate = 1.5; // 150% for working day OT
-    const otWeeklyOffRate = 2.0; // 200% for weekly off OT
-    const otPublicHolidayRate = 3.0; // 300% for public holiday OT
-    const hourlyRate = standardWorkingDays > 0
-      ? monthlyBaseSalary / (standardWorkingDays * 8)
-      : monthlyBaseSalary / (24 * 8); // 8 hours/day, fallback to standard month
+    // Calculate OT pay — hệ số dùng chung ở OVERTIME_RATES (SRS §30D.2)
+    const hourlyRate = hourlyRateFor(monthlyBaseSalary, standardWorkingDays);
 
-    const otPay =
-      (summary.otWorkingDayMinutes * otWorkingDayRate * hourlyRate) / 60 +
-      (summary.otWeeklyOffMinutes * otWeeklyOffRate * hourlyRate) / 60 +
-      (summary.otPublicHolidayMinutes * otPublicHolidayRate * hourlyRate) / 60;
+    // Tiền OT = số giờ × tiền công 1 giờ × hệ số, cộng theo từng loại ngày.
+    const otWorkingDayPay = computeOvertimePay(summary.otWorkingDayMinutes, hourlyRate, OVERTIME_RATES.workingDay);
+    const otWeeklyOffPay = computeOvertimePay(summary.otWeeklyOffMinutes, hourlyRate, OVERTIME_RATES.weeklyOff);
+    const otPublicHolidayPay = computeOvertimePay(summary.otPublicHolidayMinutes, hourlyRate, OVERTIME_RATES.publicHoliday);
+    const otPay = otWorkingDayPay + otWeeklyOffPay + otPublicHolidayPay;
 
-    // Split OT into non-taxable (base 100%) and taxable (premium above 100%)
-    const otNonTaxableEarnings =
-      (summary.otWorkingDayMinutes * hourlyRate) / 60 +
-      (summary.otWeeklyOffMinutes * hourlyRate) / 60 +
-      (summary.otPublicHolidayMinutes * hourlyRate) / 60;
-
-    const otTaxableEarnings = otPay - otNonTaxableEarnings;
+    // Cờ công ty: cả tiền OT chịu thuế hay miễn hết. Không chia tiền OT.
+    const overtimeTaxable = taxPolicy?.overtimeTaxable === true;
 
     // Calculate insurance contributions (TASK-090/091/092)
+    // Lương đóng bảo hiểm suy ra: lương cơ bản hợp đồng − tổng phụ cấp (không âm).
+    // KHÔNG nhập tay nữa — xem Docs/DOCS_DECISION_LOG.md.
+    const insuranceSalary = deriveInsuranceSalary(monthlyBaseSalary, totalAllowances);
+    const insuranceProfile = await this.resolveInsuranceProfile(
+      organizationId,
+      summary.employeeProfileId,
+      periodKey,
+    );
+    // D40: tham gia BHXH/BHYT/BHTN là nghĩa vụ luật định → thiếu hồ sơ nghĩa là mặc định tham gia.
+    const participation = {
+      participatesSocialInsurance: insuranceProfile?.participatesSocialInsurance ?? true,
+      participatesHealthInsurance: insuranceProfile?.participatesHealthInsurance ?? true,
+      participatesUnemploymentInsurance: insuranceProfile?.participatesUnemploymentInsurance ?? true,
+    };
+    // Engine chuẩn: kẹp sàn/trần theo TỪNG loại và tôn trọng participation.
+    const insuranceResult = calculateInsuranceContributions(
+      insurancePolicy,
+      participation,
+      insuranceSalary,
+    );
+    const insuranceLine = (type: InsuranceContributionType) =>
+      insuranceResult.lines.find((line) => line.type === type);
     const socialInsuranceRate = insurancePolicy?.socialInsuranceEmployeeRate ?? 0.08;
     const healthInsuranceRate = insurancePolicy?.healthInsuranceEmployeeRate ?? 0.015;
     const unemploymentInsuranceRate = insurancePolicy?.unemploymentInsuranceEmployeeRate ?? 0.01;
-    const configuredCaps = (insurancePolicy?.capRules ?? [])
-      .map((rule: any) => rule.capAmount)
-      .filter((value: unknown): value is number => typeof value === 'number' && value > 0);
-    const contributionCap = configuredCaps.length ? Math.min(...configuredCaps) : Number.POSITIVE_INFINITY;
-    const contributionBase = Math.min(salaryProfile?.insuranceSalary ?? monthlyBaseSalary, contributionCap);
-
-    const socialInsurance = Math.round(contributionBase * socialInsuranceRate);
-    const healthInsurance = Math.round(contributionBase * healthInsuranceRate);
-    const unemploymentInsurance = Math.round(contributionBase * unemploymentInsuranceRate);
+    const contributionBase =
+      insuranceLine(InsuranceContributionType.SOCIAL_INSURANCE)?.base ?? insuranceSalary;
+    const socialInsurance = insuranceLine(InsuranceContributionType.SOCIAL_INSURANCE)?.employeeContribution ?? 0;
+    const healthInsurance = insuranceLine(InsuranceContributionType.HEALTH_INSURANCE)?.employeeContribution ?? 0;
+    const unemploymentInsurance = insuranceLine(InsuranceContributionType.UNEMPLOYMENT_INSURANCE)?.employeeContribution ?? 0;
 
     // Calculate dependent deductions (TASK-095)
     const dependents = profile.dependents?.filter(d => d.status === 'ACTIVE') || [];
-    const dependentDeductionPerPerson = taxPolicy?.dependentDeduction ?? 4400000; // 2026 rate
+    const dependentDeductionPerPerson = taxPolicy?.dependentDeduction ?? PitService.DEPENDENT_DEDUCTION;
     const totalDependentDeductions = dependents.length * dependentDeductionPerPerson;
 
     // Generate source hash for integrity verification
-    const sourceHash = this.generateSourceHash(summary, salaryProfile, insurancePolicy, taxPolicy, dependents.length);
+    const sourceHash = this.generateSourceHash(
+      summary,
+      salaryProfile,
+      insurancePolicy,
+      taxPolicy,
+      dependents.length,
+      kpiBonus,
+      { insuranceSalary, participation, standardWorkingDays, payableWorkingDays },
+    );
 
     return {
       periodId: new Types.ObjectId(periodId),
@@ -356,6 +416,9 @@ export class PayrollSnapshotService {
       // Earnings inputs
       monthlyBaseSalary,
       proratedBaseSalary,
+      standardWorkingDays,
+      payableWorkingDays,
+      hourlyRate,
       totalAllowances,
       attendanceBonus,
       kpiBonus,
@@ -368,8 +431,7 @@ export class PayrollSnapshotService {
         totalOvertimeMinutes: summary.totalOvertimeMinutes,
       },
       otPay,
-      otNonTaxableEarnings: Math.max(0, otNonTaxableEarnings),
-      otTaxableEarnings: Math.max(0, otTaxableEarnings),
+      overtimeTaxable,
 
       // Insurance inputs
       socialInsuranceRate,
@@ -381,7 +443,7 @@ export class PayrollSnapshotService {
       unemploymentInsurance,
 
       // PIT inputs
-      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + otPay - nonTaxableAllowances - otNonTaxableEarnings - socialInsurance - healthInsurance - unemploymentInsurance),
+      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + (overtimeTaxable ? otPay : 0) - socialInsurance - healthInsurance - unemploymentInsurance),
       totalDependentDeductions,
       dependentCount: dependents.length,
       taxPolicyVersion: taxPolicy?.version ?? 1,
@@ -396,6 +458,31 @@ export class PayrollSnapshotService {
   }
 
   /**
+   * Hồ sơ tham gia bảo hiểm hiệu lực của nhân viên tại kỳ lương.
+   * `undefined` = chưa có hồ sơ → coi như tham gia đủ (D40).
+   */
+  private async resolveInsuranceProfile(
+    organizationId: string,
+    employeeProfileId: string,
+    periodKey: string,
+  ): Promise<InsuranceProfile | null> {
+    const at = new Date(`${periodKey}-01T00:00:00.000Z`);
+    return this.insuranceProfileModel
+      .findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        employeeId: new Types.ObjectId(employeeProfileId),
+        effectiveFrom: { $lte: at },
+        $or: [
+          { effectiveTo: { $exists: false } },
+          { effectiveTo: null },
+          { effectiveTo: { $gte: at } },
+        ],
+      })
+      .sort({ effectiveFrom: -1 })
+      .lean();
+  }
+
+  /**
    * Generate a source hash for integrity verification.
    * Combines key input values — if any change, hash will mismatch → trigger re-generation.
    */
@@ -405,7 +492,31 @@ export class PayrollSnapshotService {
     insurancePolicy: any,
     taxPolicy: any,
     dependentCount: number,
+    kpiBonus = 0,
+    insurance: {
+      insuranceSalary: number;
+      participation: {
+        participatesSocialInsurance: boolean;
+        participatesHealthInsurance: boolean;
+        participatesUnemploymentInsurance: boolean;
+      };
+      standardWorkingDays: number;
+      payableWorkingDays: number;
+    } = {
+      insuranceSalary: 0,
+      participation: {
+        participatesSocialInsurance: true,
+        participatesHealthInsurance: true,
+        participatesUnemploymentInsurance: true,
+      },
+      standardWorkingDays: 0,
+      payableWorkingDays: 0,
+    },
   ): string {
+    const assignedAllowances = (salaryProfile?.allowances ?? [])
+      .map((item: any) => `${item.allowanceId}:${item.amount}`)
+      .sort()
+      .join(',');
     const hashInput = [
       String(summary.periodId),
       String(summary.employeeProfileId),
@@ -417,9 +528,27 @@ export class PayrollSnapshotService {
       String(summary.otPublicHolidayMinutes),
       String(salaryProfile?._id ?? 'none'),
       String(salaryProfile?.baseSalary ?? 0),
+      String(salaryProfile?.attendanceBonusPolicyId ?? 'none'),
+      (salaryProfile?.organizationAllowanceIds ?? []).map(String).sort().join(','),
+      assignedAllowances,
       String(insurancePolicy?._id ?? 'none'),
       String(taxPolicy?._id ?? 'none'),
+      // version chứ không chỉ _id: sửa chính sách là tạo document mới, nhưng giữ
+      // version trong hash để đổi cờ overtimeTaxable chắc chắn làm hash lệch.
+      String(taxPolicy?.version ?? 0),
+      String(taxPolicy?.overtimeTaxable ?? false),
+      String(taxPolicy?.dependentDeduction ?? 0),
       String(dependentCount),
+      // Thưởng KPI là nguồn tiền riêng, đổi KPI phải làm hash lệch.
+      String(kpiBonus),
+      // Lương đóng bảo hiểm giờ là số DẪN XUẤT (base − phụ cấp) → hash theo input
+      // gốc và theo hồ sơ tham gia, để đổi phụ cấp/participation là hash lệch.
+      String(insurance.insuranceSalary),
+      String(insurance.participation.participatesSocialInsurance),
+      String(insurance.participation.participatesHealthInsurance),
+      String(insurance.participation.participatesUnemploymentInsurance),
+      String(insurance.standardWorkingDays),
+      String(insurance.payableWorkingDays),
     ].join('|');
 
     return createHash('sha256').update(hashInput).digest('hex');
@@ -507,7 +636,20 @@ export class PayrollSnapshotService {
     );
     const profile = await this.employeeProfileModel.findById(snapshot.employeeProfileId).lean();
     const dependentCount = profile?.dependents?.filter((d) => d.status === 'ACTIVE').length ?? 0;
-    const currentHash = this.generateSourceHash(summary as any, salaryProfile, insurancePolicy, taxPolicy, dependentCount);
+    const kpiInput: any = await this.kpiPayrollInputModel.findOne({
+      organizationId: snapshot.organizationId,
+      employeeProfileId: snapshot.employeeProfileId,
+      period: snapshot.periodKey,
+      status: 'CONFIRMED',
+    }).lean();
+    const currentHash = this.generateSourceHash(
+      summary as any,
+      salaryProfile,
+      insurancePolicy,
+      taxPolicy,
+      dependentCount,
+      kpiInput?.amount ?? 0,
+    );
 
     return currentHash === snapshot.sourceHash;
   }

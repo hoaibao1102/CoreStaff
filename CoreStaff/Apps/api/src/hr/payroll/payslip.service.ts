@@ -7,6 +7,7 @@ import { PayrollInputSnapshot, PayrollInputSnapshotDocument } from '../../databa
 import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.schema';
 import { InsuranceService } from './insurance.service';
+import { OVERTIME_RATES, computeOvertimePay } from '../timesheet/payroll-snapshot.service';
 import { PitService } from './pit.service';
 
 type EarningItem = { type: string; label: string; amount: number; taxable: boolean };
@@ -21,7 +22,8 @@ export function buildPayslipEarnings(snapshot: any): {
         type: item.type,
         label: item.label || item.type,
         amount: item.amount || 0,
-        taxable: item.taxable !== false,
+        // R1: mọi phụ cấp đều chịu thuế — cờ cũ trong snapshot chỉ còn tính lịch sử.
+        taxable: true,
       }))
     : [];
   const totalAllowances = allowanceBreakdown.length
@@ -32,7 +34,7 @@ export function buildPayslipEarnings(snapshot: any): {
     ...(totalAllowances > 0 ? [{ type: 'ALLOWANCE', label: 'Tổng phụ cấp', amount: totalAllowances, taxable: true }] : []),
     ...(snapshot.attendanceBonus > 0 ? [{ type: 'ATTENDANCE_BONUS', label: 'Thưởng chuyên cần', amount: snapshot.attendanceBonus, taxable: true }] : []),
     ...(snapshot.kpiBonus > 0 ? [{ type: 'KPI_BONUS', label: 'Thưởng KPI', amount: snapshot.kpiBonus, taxable: true }] : []),
-    ...(snapshot.otPay > 0 ? [{ type: 'OVERTIME', label: 'Tiền làm thêm giờ', amount: snapshot.otPay, taxable: false }] : []),
+    ...(snapshot.otPay > 0 ? [{ type: 'OVERTIME', label: 'Tiền làm thêm giờ', amount: snapshot.otPay, taxable: snapshot.overtimeTaxable === true }] : []),
   ];
   return {
     grossEarnings: earningBreakdown.reduce((sum, item) => sum + item.amount, 0),
@@ -153,11 +155,10 @@ export class PayslipService {
 
     // Calculate PIT for this employee
     // ── PIT Calculation ──────────────────────────────────────────────
-    // Theo luật thuế Việt Nam:
-    // Step 1: Gross Earnings = TẤT CẢ thu nhập (có cả OT non-taxable + taxable)
-    // Step 2: Taxable Gross = Gross - OT_nonTaxable - NonTaxableAllowances
-    // Step 3: Taxable Earnings = Taxable Gross - Insurance - Deductions
-    
+    // Step 1: Gross Earnings = TẤT CẢ thu nhập (đã gồm otPay)
+    // Step 2: Taxable Gross = Gross − (cờ OT tắt ? otPay : 0) − NonTaxableAllowances
+    // Step 3: Taxable Earnings = Taxable Gross − Insurance − Deductions
+
     const earnings = buildPayslipEarnings(snapshot);
     const grossEarnings = earnings.grossEarnings;
 
@@ -166,48 +167,44 @@ export class PayslipService {
       snapshot.healthInsurance +
       snapshot.unemploymentInsurance;
 
-    const otTaxableEarnings = snapshot.otTaxableEarnings || 0;
-    const otNonTaxableEarnings = snapshot.otNonTaxableEarnings || 0;
+    const otPay = snapshot.otPay || 0;
+    const overtimeTaxable = snapshot.overtimeTaxable === true;
     const nonTaxableAllowances = snapshot.nonTaxableAllowances || 0;
-    
-    // ✅ Truyền grossEarnings ĐẦY ĐỦ vào calculateFullPIT
-    // Bên trong calculateTaxableEarnings sẽ tự trừ otNonTaxable + nonTaxableAllowances
+
+    // Truyền grossEarnings ĐẦY ĐỦ + cờ OT: PIT tự quyết định miễn hay không.
     const pitResult = await this.pitService.calculateFullPIT({
-      grossEarnings: grossEarnings,           // ✅ Tổng thu nhập đầy đủ
+      grossEarnings,
       insuranceContributions: totalInsurance,
       employeeProfileId: snapshot.employeeProfileId,
       organizationId: String(snapshot.organizationId),
-      otNonTaxableEarnings,                   // ✅ Sẽ được trừ trong calculateTaxableEarnings
-      nonTaxableAllowances,                   // ✅ Sẽ được trừ trong calculateTaxableEarnings
+      otPay,
+      overtimeTaxable,
+      nonTaxableAllowances,
     });
 
     // Net salary = gross (có đầy đủ OT non-taxable + taxable) - insurance - PIT
-    const netSalary = grossEarnings - totalInsurance - pitResult.pitAmount;
-
-    // Reconciliation check
-    const calculatedNet = grossEarnings - totalInsurance - pitResult.pitAmount;
-    const variance = Math.abs(calculatedNet - netSalary);
-    if (variance > 1) {
-      console.warn(`Reconciliation variance for ${snapshot.employeeProfileId}: ${variance} VND`);
-    }
+    const otherDeductions = 0;
+    const netSalary = grossEarnings - totalInsurance - pitResult.pitAmount - otherDeductions;
 
     const { earningBreakdown, allowanceBreakdown } = earnings;
 
-    // Build OT breakdown (chi tiết làm thêm giờ theo luật thuế)
-    // ✅ LOGIC ĐÚNG: 1 tháng = 192 giờ chuẩn, phút → giờ trước khi tính
+    // Build OT breakdown — số giờ × tiền công 1 giờ × hệ số, dùng ĐÚNG tiền công 1 giờ
+    // mà snapshot đã dùng để ra `otPay` (trước đây tự tính lại → lệch số).
     const otBreakdown = snapshot.otMinutesByType ? (() => {
-      const hourlyRate = snapshot.proratedBaseSalary / 192; // Tiền công 1 giờ (chuẩn 192h/tháng)
+      const hourlyRate = snapshot.hourlyRate ?? 0;
       const otMinutes = snapshot.otMinutesByType;
-      
+
       // Đổi phút → giờ cho tất cả các loại OT
       const workingDayHours = (otMinutes.otWorkingDayMinutes || 0) / 60;
       const weeklyOffHours = (otMinutes.otWeeklyOffMinutes || 0) / 60;
       const publicHolidayHours = (otMinutes.otPublicHolidayMinutes || 0) / 60;
       const totalHours = (otMinutes.totalOvertimeMinutes || 0) / 60;
-      
-      const otNonTaxable = snapshot.otNonTaxableEarnings || 0;
-      const otTaxable = snapshot.otTaxableEarnings || 0;
-      
+
+      // Cờ công ty: cả tiền OT chịu thuế hay miễn hết — không chia tiền OT.
+      const overtimeTaxable = snapshot.overtimeTaxable === true;
+      const workingDayAmount = computeOvertimePay(otMinutes.otWorkingDayMinutes || 0, hourlyRate, OVERTIME_RATES.workingDay);
+      const weeklyOffAmount = computeOvertimePay(otMinutes.otWeeklyOffMinutes || 0, hourlyRate, OVERTIME_RATES.weeklyOff);
+      const publicHolidayAmount = computeOvertimePay(otMinutes.otPublicHolidayMinutes || 0, hourlyRate, OVERTIME_RATES.publicHoliday);
       return {
         totalMinutes: otMinutes.totalOvertimeMinutes || 0,
         totalHours: totalHours,
@@ -218,39 +215,32 @@ export class PayslipService {
         publicHolidayMinutes: otMinutes.otPublicHolidayMinutes || 0,
         publicHolidayHours: publicHolidayHours,
         hourlyRate: Math.round(hourlyRate),
-        otNonTaxable,
-        otTaxable,
+        overtimeTaxable,
         otPay: snapshot.otPay,
         breakdown: [
           ...(otMinutes.otWorkingDayMinutes > 0 ? [{
             type: 'WORKING_DAY',
-            label: 'Ngày thường (hệ số 1.5)',
+            label: 'Ngày thường',
             minutes: otMinutes.otWorkingDayMinutes,
             hours: workingDayHours,
-            coefficient: 1.5,
-            amount: Math.round(workingDayHours * hourlyRate * 1.5),
-            nonTaxable: Math.round(workingDayHours * hourlyRate * 1.0),
-            taxable: Math.round(workingDayHours * hourlyRate * 0.5),
+            coefficient: OVERTIME_RATES.workingDay,
+            amount: workingDayAmount,
           }] : []),
           ...(otMinutes.otWeeklyOffMinutes > 0 ? [{
             type: 'WEEKLY_OFF',
-            label: 'Cuối tuần (hệ số 2.0)',
+            label: 'Cuối tuần',
             minutes: otMinutes.otWeeklyOffMinutes,
             hours: weeklyOffHours,
-            coefficient: 2.0,
-            amount: Math.round(weeklyOffHours * hourlyRate * 2.0),
-            nonTaxable: Math.round(weeklyOffHours * hourlyRate * 1.0),
-            taxable: Math.round(weeklyOffHours * hourlyRate * 1.0),
+            coefficient: OVERTIME_RATES.weeklyOff,
+            amount: weeklyOffAmount,
           }] : []),
           ...(otMinutes.otPublicHolidayMinutes > 0 ? [{
             type: 'PUBLIC_HOLIDAY',
-            label: 'Lễ, Tết (hệ số 3.0)',
+            label: 'Lễ, Tết',
             minutes: otMinutes.otPublicHolidayMinutes,
             hours: publicHolidayHours,
-            coefficient: 3.0,
-            amount: Math.round(publicHolidayHours * hourlyRate * 3.0),
-            nonTaxable: Math.round(publicHolidayHours * hourlyRate * 1.0),
-            taxable: Math.round(publicHolidayHours * hourlyRate * 2.0),
+            coefficient: OVERTIME_RATES.publicHoliday,
+            amount: publicHolidayAmount,
           }] : []),
         ],
       };
@@ -268,7 +258,7 @@ export class PayslipService {
     const pitBreakdown = pitResult.breakdown || [];
 
     // Create payslip document
-    await this.payslipModel.create({
+    const created = await this.payslipModel.create({
       payrollRunId: new Types.ObjectId(payrollRunId),
       organizationId: new Types.ObjectId(snapshot.organizationId),
       employeeProfileId: new Types.ObjectId(snapshot.employeeProfileId),
@@ -279,9 +269,16 @@ export class PayslipService {
       
       // Earnings
       grossEarnings,
+      taxableIncome: pitResult.taxableIncome,
       taxableEarnings: pitResult.taxableEarnings,
-      
-      // Insurance — calculated on contributionBase (not baseSalary)
+
+      // Workday inputs — frozen để FE hiện được chi tiết lương công
+      monthlyBaseSalary: snapshot.monthlyBaseSalary ?? 0,
+      standardWorkingDays: snapshot.standardWorkingDays ?? 0,
+      payableWorkingDays: snapshot.payableWorkingDays ?? 0,
+      hourlyRate: snapshot.hourlyRate ?? 0,
+
+      // Insurance — base đã kẹp sàn/trần theo từng loại ở bước sinh snapshot
       contributionBase: snapshot.contributionBase,
       socialInsuranceRate: snapshot.socialInsuranceRate,
       healthInsuranceRate: snapshot.healthInsuranceRate,
@@ -296,7 +293,7 @@ export class PayslipService {
       pitAmount: pitResult.pitAmount,
       
       // Other deductions
-      otherDeductions: 0,
+      otherDeductions,
       
       // Net
       netSalary,
@@ -315,6 +312,21 @@ export class PayslipService {
       status: PayslipStatus.GENERATED,
       generatedAt: new Date(),
     });
+
+    // Reconciliation check — dựng lại Net từ các khoản đã LƯU, không sao chép netSalary.
+    const persistedNet =
+      created.grossEarnings -
+      (created.socialInsurance || 0) -
+      (created.healthInsurance || 0) -
+      (created.unemploymentInsurance || 0) -
+      (created.pitAmount || 0) -
+      (created.otherDeductions || 0);
+    const variance = Math.abs(persistedNet - created.netSalary);
+    if (variance > 1) {
+      throw new Error(
+        `PAYSLIP_RECONCILIATION_FAILED: employee ${snapshot.employeeProfileId} lệch ${variance} VND`,
+      );
+    }
   }
 
   /**

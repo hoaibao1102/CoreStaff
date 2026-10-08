@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
   X,
   Plus,
+  FileUp,
 } from 'lucide-react';
 import type { AuthUser } from '../../services/auth';
 import { navigationEvent } from '../../components/AppLink';
@@ -22,6 +23,7 @@ import { hrErrorMessage, paginateEmployees, type EligibleEmployeeAccount } from 
 import { useHrResource } from '../../lib/useHrResource';
 import { EmployeeTable } from './components/EmployeeTable';
 import { EmployeeCreateDialog } from './components/EmployeeCreateDialog';
+import { EmployeeImportDialog } from './components/EmployeeImportDialog';
 import { EmployeeDetailDialog } from '@/screens/EmployeeDetail/EmployeeDetailDialog';
 
 /* ───────── Stat Card ───────── */
@@ -200,6 +202,7 @@ export function EmployeeDirectoryScreen({
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const loader = useCallback(async () => {
     const [employees, departments, positions] = await Promise.all([
@@ -299,6 +302,10 @@ export function EmployeeDirectoryScreen({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" className="min-h-11" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-4 w-4" />
+            Import Excel
+          </Button>
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             Tạo hồ sơ
@@ -359,6 +366,12 @@ export function EmployeeDirectoryScreen({
                 setCreateOpen(false);
               }
             }}
+          />
+          <EmployeeImportDialog
+            apiBase={apiBase}
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            onImported={loadEmployees}
           />
           {employeeId && (
             <EmployeeDetailDialog

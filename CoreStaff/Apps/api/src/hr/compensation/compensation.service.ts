@@ -9,6 +9,7 @@ import { EmployeeProfile } from '../../database/schemas/employee-profile.schema'
 import { assertNoEffectiveOverlap, calculateProbationRate, evaluateAttendanceBonus, resolveConfirmedKpiAmount } from './compensation-domain';
 import { CreateAllowanceDto, CreateBonusPolicyDto, CreateKpiInputDto, CreateKpiPolicyDto, CreateSalaryProfileDto, UpdateAllowanceDto, UpdateBonusPolicyDto, UpdateKpiInputDto, UpdateKpiPolicyDto, UpdateSalaryProfileDto } from './dto/compensation.dto';
 import { ManagerScopeService } from '../manager/manager-scope.service';
+import { deriveInsuranceSalary } from '../timesheet/payroll-snapshot.service';
 
 const duplicate = (e: unknown, code: string): never => {
   if (e && typeof e === 'object' && (e as { code?: number }).code === 11000) throw new ConflictException(code);
@@ -51,6 +52,14 @@ export class CompensationService {
     if (dto.attendanceBonusPolicyId && !(await this.bonusPolicies.exists({ _id: dto.attendanceBonusPolicyId, organizationId: org, active: true }))) throw new BadRequestException('ATTENDANCE_BONUS_POLICY_INVALID');
   }
 
+  /**
+   * Lương đóng bảo hiểm là số DẪN XUẤT: lương cơ bản − tổng phụ cấp gán cho nhân viên
+   * (không âm). HR không nhập tay nữa. Snapshot lương tính lại lần nữa khi chốt kỳ,
+   * nhưng ghi ở đây để màn hồ sơ lương hiện được số khớp với payroll.
+   */
+  private deriveInsuranceSalary(baseSalary: number, allowances: Array<{ amount?: number }>): number {
+    return deriveInsuranceSalary(baseSalary, allowances.reduce((sum, item) => sum + (item?.amount ?? 0), 0));
+  }
   async createSalary(org: string, dto: CreateSalaryProfileDto) {
     await this.assertEmployee(org, dto.employeeId); await this.validateRefs(org, dto);
     const start = date(dto.effectiveFrom), end = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
@@ -68,6 +77,7 @@ export class CompensationService {
     const allowances = dto.allowances ?? allowanceIds.map(id => ({ allowanceId: id, amount: 0 }));
     const row = await this.salaries.create({
       ...dto,
+      insuranceSalary: this.deriveInsuranceSalary(dto.baseSalary, allowances),
       organizationAllowanceIds: allowanceIds,
       allowances,
       employeeProfileId: dto.employeeId,
@@ -112,7 +122,7 @@ export class CompensationService {
     const allowances = merged.allowances ?? old.allowances ?? allowanceIds.map(aId => ({ allowanceId: aId, amount: 0 }));
     return this.salaries.findOneAndUpdate(
       { _id: id, organizationId: org },
-      { $set: { ...dto, organizationAllowanceIds: allowanceIds, allowances, effectiveFrom: start, effectiveTo: end, probationRate } },
+      { $set: { ...dto, insuranceSalary: this.deriveInsuranceSalary(merged.baseSalary, allowances), organizationAllowanceIds: allowanceIds, allowances, effectiveFrom: start, effectiveTo: end, probationRate } },
       { new: true, runValidators: true },
     ).lean();
   }

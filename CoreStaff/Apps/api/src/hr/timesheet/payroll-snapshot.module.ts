@@ -11,6 +11,7 @@ import {
   SalaryProfileSchema,
 } from '../../database/schemas/compensation.schema';
 import { InsurancePolicySchema } from '../../database/schemas/insurance-policy.schema';
+import { InsuranceProfileSchema } from '../../database/schemas/insurance-profile.schema';
 import { TaxPolicySchema } from '../../database/schemas/tax-policy.schema';
 
 @Module({
@@ -24,6 +25,7 @@ import { TaxPolicySchema } from '../../database/schemas/tax-policy.schema';
       { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
       { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
       { name: 'InsurancePolicy', schema: InsurancePolicySchema },
+      { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
       { name: 'TaxPolicy', schema: TaxPolicySchema },
     ]),
   ],

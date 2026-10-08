@@ -90,6 +90,7 @@ export class TimesheetSummaryService {
       .find(
         {
           organizationId: new Types.ObjectId(organizationId),
+          periodKey,
           classificationStatus: 'FINAL', // Only approved/finalized OT
         },
         { _id: 1, employeeId: 1, eligibleMinutes: 1, overtimeType: 1 },

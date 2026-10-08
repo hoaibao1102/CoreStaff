@@ -402,6 +402,7 @@ export class PayrollRunService {
     organizationId: string
   ): Promise<{
     grossEarnings: number;
+    taxableIncome: number;
     taxableEarnings: number;
     socialInsurance: number;
     healthInsurance: number;
@@ -411,7 +412,7 @@ export class PayrollRunService {
     pitAmount: number;
     netSalary: number;
   }> {
-    // Gross earnings = proratedBaseSalary + allowances + attendanceBonus + TOTAL_OT (otPay = otNonTaxable + otTaxable)
+    // Gross earnings = proratedBaseSalary + allowances + attendanceBonus + kpiBonus + otPay
     const grossEarnings =
       snapshot.proratedBaseSalary +
       snapshot.totalAllowances +
@@ -425,28 +426,17 @@ export class PayrollRunService {
     const unemploymentInsurance = snapshot.unemploymentInsurance || 0;
     const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
 
-    // ── PIT Calculation — chỉ đưa OT CHỊU THUẾ vào taxable earnings ──
-    // Theo luật thuế Việt Nam:
-    // - OT không chịu thuế = hệ số 1.0 (tiền cơ bản) → KHÔNG đưa vào PIT base
-    // - OT chịu thuế = hệ số 0.5 (tiền hệ số cộng thêm) → ĐƯA VÀO PIT base
-    const otTaxableEarnings = snapshot.otTaxableEarnings || 0;
-    const otNonTaxableEarnings = snapshot.otNonTaxableEarnings || 0;
-    
-    // Taxable income cho PIT = base + allowances + bonus + otTaxable
-    const taxableIncomeForPIT = 
-      snapshot.proratedBaseSalary + 
-      snapshot.totalAllowances + 
-      snapshot.attendanceBonus +
-      (snapshot.kpiBonus || 0) +
-      otTaxableEarnings;
-
+    // ── PIT Calculation ──
+    // Truyền GROSS ĐẦY ĐỦ + cờ OT để PIT tự loại trừ — giống hệt đường tính
+    // trong payslip.service.
     const pitResult = await this.pitService.calculateFullPIT({
-      grossEarnings: taxableIncomeForPIT,
+      grossEarnings,
       insuranceContributions: totalInsurance,
       employeeProfileId: snapshot.employeeProfileId,
       organizationId,
-      otNonTaxableEarnings,  // ✅ Truyền OT không chịu thuế
-      nonTaxableAllowances: 0,  // TODO: Thêm field này vào snapshot nếu có phụ cấp miễn thuế
+      otPay: snapshot.otPay || 0,
+      overtimeTaxable: snapshot.overtimeTaxable === true,
+      nonTaxableAllowances: snapshot.nonTaxableAllowances || 0,
     });
 
     // Net salary = gross (có đầy đủ OT non-taxable + taxable) - insurance - PIT
@@ -454,6 +444,7 @@ export class PayrollRunService {
 
     return {
       grossEarnings,
+      taxableIncome: pitResult.taxableIncome,
       taxableEarnings: pitResult.taxableEarnings,
       socialInsurance,
       healthInsurance,

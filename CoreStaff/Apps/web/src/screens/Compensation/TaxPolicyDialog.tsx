@@ -45,6 +45,7 @@ export function TaxPolicyDialog({
   const [brackets, setBrackets] = useState(BRACKET_DEFAULTS.map(b => ({ ...b })));
   const [legalReference, setLegalReference] = useState('Luật Thuế TNCN 2007/QH12');
   const [roundingRule, setRoundingRule] = useState('ROUND_HALF_UP_TO_VND');
+  const [overtimeTaxable, setOvertimeTaxable] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function TaxPolicyDialog({
       setBrackets(editItem.progressiveBrackets?.map(b => ({ ...b })) ?? BRACKET_DEFAULTS);
       setLegalReference(editItem.legalReference);
       setRoundingRule(editItem.roundingRule ?? 'ROUND_HALF_UP_TO_VND');
+      setOvertimeTaxable(editItem.overtimeTaxable ?? false);
     } else {
       resetForm();
     }
@@ -75,6 +77,7 @@ export function TaxPolicyDialog({
     setBrackets(BRACKET_DEFAULTS.map(b => ({ ...b })));
     setLegalReference('Luật Thuế TNCN 2007/QH12');
     setRoundingRule('ROUND_HALF_UP_TO_VND');
+    setOvertimeTaxable(false);
   };
 
   const addBracket = () => {
@@ -106,6 +109,7 @@ export function TaxPolicyDialog({
         progressiveBrackets: brackets,
         roundingRule,
         legalReference,
+        overtimeTaxable,
       };
 
       if (editItem) {
@@ -188,6 +192,35 @@ export function TaxPolicyDialog({
                   className="h-11"
                   placeholder="Luật Thuế TNCN 2007/QH12"
                 />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Overtime tax */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Thuế TNCN cho tiền tăng ca (OT)</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setOvertimeTaxable(false)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${!overtimeTaxable ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-muted/40'}`}
+                >
+                  <div className="text-sm font-semibold text-foreground">Không chịu thuế</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Phần tiền OT ứng với hệ số 1.0 được miễn thuế, chỉ phần chênh (hệ số 1.5/2.0/3.0) chịu thuế.
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOvertimeTaxable(true)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${overtimeTaxable ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-muted/40'}`}
+                >
+                  <div className="text-sm font-semibold text-foreground">Chịu thuế</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Toàn bộ tiền tăng ca được cộng vào thu nhập chịu thuế TNCN.
+                  </div>
+                </button>
               </div>
             </div>
 

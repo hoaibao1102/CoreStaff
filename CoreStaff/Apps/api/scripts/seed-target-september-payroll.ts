@@ -520,7 +520,8 @@ async function main() {
         employeeProfileId: profile._id,
         effectiveFrom: periodStart,
         baseSalary,
-        insuranceSalary: Math.round(baseSalary * 0.8),
+        // Số dẫn xuất: lương cơ bản − tổng phụ cấp (seed này không ghi amount phụ cấp).
+        insuranceSalary: baseSalary,
         probationJobSalary: baseSalary,
         probationAgreedSalary: Math.ceil(baseSalary * 0.85),
         probationRate: 0.85,

@@ -60,6 +60,7 @@ interface EmployeeResult {
   proratedBaseSalary: number;
   totalAllowances: number;
   grossEarnings: number;
+  /** Lương đóng bảo hiểm = lương cơ bản − tổng phụ cấp (không âm). */
   insuranceSalary: number;
   socialInsurance: number;
   healthInsurance: number;
@@ -93,11 +94,13 @@ function calculateEmployee(
   // 3. Gross earnings
   const grossEarnings = proratedBaseSalary + totalAllowances + (snapshot.otPay || 0);
 
-  // 4. Insurance contributions
-  const insuranceSalary = snapshot.baseSalary;
-  const socialInsurance = Math.round(insuranceSalary * insurancePolicy.socialRate);
-  const healthInsurance = Math.round(insuranceSalary * insurancePolicy.healthRate);
-  const unemploymentInsurance = Math.round(insuranceSalary * insurancePolicy.unemploymentRate);
+  // 4. Insurance contributions — base suy ra từ lương cơ bản − tổng phụ cấp,
+  //    rồi kẹp trần luật định (không nhập tay).
+  const insuranceSalary = Math.max(0, snapshot.baseSalary - totalAllowances);
+  const contributionBase = Math.min(insuranceSalary, insurancePolicy.maxContributionBase);
+  const socialInsurance = Math.round(contributionBase * insurancePolicy.socialRate);
+  const healthInsurance = Math.round(contributionBase * insurancePolicy.healthRate);
+  const unemploymentInsurance = Math.round(contributionBase * insurancePolicy.unemploymentRate);
   const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
 
   // 5. Taxable earnings
@@ -167,13 +170,14 @@ describe('calculateEmployee — Full Calculation', () => {
     // OT: 800K
     expect(result.grossEarnings).toBe(30_000_000 + 700_000 + 800_000); // 31,500,000
 
-    // Insurance: based on baseSalary 30M
-    expect(result.socialInsurance).toBe(Math.round(30_000_000 * 0.08)); // 2,400,000
-    expect(result.healthInsurance).toBe(Math.round(30_000_000 * 0.015)); // 450,000
-    expect(result.unemploymentInsurance).toBe(Math.round(30_000_000 * 0.01)); // 300,000
+    // Insurance: base = 30M − 700K phụ cấp = 29.3M
+    expect(result.insuranceSalary).toBe(29_300_000);
+    expect(result.socialInsurance).toBe(Math.round(29_300_000 * 0.08)); // 2,344,000
+    expect(result.healthInsurance).toBe(Math.round(29_300_000 * 0.015)); // 439,500
+    expect(result.unemploymentInsurance).toBe(Math.round(29_300_000 * 0.01)); // 293,000
 
-    // Taxable: 31,500,000 - 3,150,000 = 28,350,000
-    expect(result.taxableEarnings).toBe(31_500_000 - 3_150_000);
+    // Taxable: 31,500,000 - 3,076,500 = 28,423,500
+    expect(result.taxableEarnings).toBe(31_500_000 - 3_076_500);
 
     // Personal deduction: 11M
     expect(result.personalDeduction).toBe(STANDARD_DEDUCTION);
@@ -258,6 +262,7 @@ describe('Gross/Net Reconciliation', () => {
     const result = calculateEmployee(highSnapshot, mockInsurancePolicy, mockTaxPolicy);
 
     expect(result.grossEarnings).toBe(100_000_000 + 700_000 + 800_000);
+    // base = 100M − 700K = 99.3M → kẹp trần 52.2M
     expect(result.socialInsurance).toBe(Math.round(52_200_000 * 0.08)); // Capped at max base
     expect(result.netSalary).toBeGreaterThan(0);
   });

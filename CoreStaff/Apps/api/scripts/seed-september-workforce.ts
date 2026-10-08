@@ -167,7 +167,7 @@ async function main() {
       const salary: any = await Salary.findOne({ organizationId, employeeProfileId: profile._id, active: true, effectiveFrom: { $lte: PERIOD_END } }).sort({ effectiveFrom: -1 }).lean();
       if (!salary) {
         const baseSalary = profile.employmentStatus === EmploymentStatus.PROBATION ? 14_000_000 : 18_000_000 + index * 500_000;
-        const values = { organizationId, employeeProfileId: profile._id, effectiveFrom: EFFECTIVE_FROM, baseSalary, insuranceSalary: Math.round(baseSalary * 0.8), probationJobSalary: baseSalary, probationAgreedSalary: Math.ceil(baseSalary * 0.85), probationRate: 0.85, organizationAllowanceIds: anchorSalary.organizationAllowanceIds ?? [], attendanceBonusPolicyId: anchorSalary.attendanceBonusPolicyId, currency: 'VND', roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true };
+        const values = { organizationId, employeeProfileId: profile._id, effectiveFrom: EFFECTIVE_FROM, baseSalary, insuranceSalary: baseSalary, probationJobSalary: baseSalary, probationAgreedSalary: Math.ceil(baseSalary * 0.85), probationRate: 0.85, organizationAllowanceIds: anchorSalary.organizationAllowanceIds ?? [], attendanceBonusPolicyId: anchorSalary.attendanceBonusPolicyId, currency: 'VND', roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true };
         if (APPLY) await Salary.create(values);
         mark('SalaryProfile', APPLY ? 'created' : 'planned');
       } else mark('SalaryProfile', VERIFY ? 'verified' : 'skipped');

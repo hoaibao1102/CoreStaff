@@ -11,7 +11,8 @@ export function Tooltip({ children, content, disabled = false }: {
     <TooltipPrimitive.Root disabled={disabled}>
       <TooltipPrimitive.Trigger render={children} delay={200} />
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Positioner side="right" sideOffset={12} className="z-50">
+        {/* Dialog dùng z-index 1000+ (xem dialog.tsx) nên popup phải vượt lên trên. */}
+        <TooltipPrimitive.Positioner side="right" sideOffset={12} style={{ zIndex: 9999 }}>
           <TooltipPrimitive.Popup role="tooltip" className="max-w-64 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md transition-opacity duration-150 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none">
             {content}
           </TooltipPrimitive.Popup>

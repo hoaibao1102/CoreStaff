@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
 	IsArray,
+	IsBoolean,
 	IsDateString,
 	IsIn,
 	IsNumber,
@@ -102,6 +103,15 @@ export class CreateTaxPolicyDto {
 	@IsOptional()
 	@IsString()
 	legalReference?: string;
+
+	@ApiPropertyOptional({
+		description: 'Tiền tăng ca (OT) có chịu thuế TNCN không. false = miễn phần hệ số 1.0 (mặc định)',
+		example: false,
+		default: false,
+	})
+	@IsOptional()
+	@IsBoolean()
+	overtimeTaxable?: boolean;
 
 	@ApiPropertyOptional({
 		description: 'Optional client-supplied version hint (ignored — version is auto-incremented)',

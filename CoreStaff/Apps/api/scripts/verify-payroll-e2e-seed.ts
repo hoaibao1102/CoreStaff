@@ -304,7 +304,10 @@ async function main() {
     otWeeklyOffMinutes: __seedAmounts.otWeeklyOffMinutes,
     dependentCount: 1,
     insurance: computeEmployeeInsurance({
-      baseSalary: __seedAmounts.baseSalary,
+      // Số dẫn xuất: lương cơ bản − tổng phụ cấp (D46) — khớp __seedLedger.
+      baseSalary: __seedAmounts.baseSalary
+        - __seedAmounts.mealAllowance
+        - __seedAmounts.responsibilityAllowance,
       socialRate: __seedAmounts.insuranceSocialRate,
       healthRate: __seedAmounts.insuranceHealthRate,
       unemploymentRate: __seedAmounts.insuranceUnemploymentRate,

@@ -7,7 +7,7 @@ import { Input } from '@/components/input';
 import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/dropdown-menu';
-import { listSalaryProfiles, type SalaryProfile } from '@/services/compensation.service';
+import { deriveInsuranceSalary, listSalaryProfiles, type SalaryProfile } from '@/services/compensation.service';
 import { hrErrorMessage } from '@/services/hrService';
 import { SalaryProfileCreateDialog, SalaryProfileDetailDialog, SalaryProfileEditDialog } from './SalaryProfileDialogs';
 
@@ -128,7 +128,7 @@ export function SalaryProfilesScreen({ apiBase, canManage = true }: { apiBase: s
                   <TableCell className="font-semibold text-emerald-600 dark:text-emerald-400">
                     {formatVnd(row.baseSalary)}
                   </TableCell>
-                  <TableCell>{formatVnd(row.insuranceSalary)}</TableCell>
+                  <TableCell>{formatVnd(deriveInsuranceSalary(row.baseSalary, row.allowances))}</TableCell>
                   <TableCell>
                     {row.probationJobSalary ? (
                       <div className="space-y-0.5">

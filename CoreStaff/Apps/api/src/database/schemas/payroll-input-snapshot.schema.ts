@@ -49,6 +49,18 @@ export class PayrollInputSnapshot {
   @Prop({ required: true, min: 0, default: 0 })
   proratedBaseSalary: number;
 
+  /** Số ngày công chuẩn của kỳ — mẫu số khi chia lương tháng ra lương ngày. */
+  @Prop({ required: true, min: 0, default: 0 })
+  standardWorkingDays: number;
+
+  /** Số ngày công thực tế được trả lương (đã trừ nghỉ không lương). */
+  @Prop({ required: true, min: 0, default: 0 })
+  payableWorkingDays: number;
+
+  /** Tiền công 1 giờ = monthlyBaseSalary / (standardWorkingDays × 8). Dùng cho OT. */
+  @Prop({ required: true, min: 0, default: 0 })
+  hourlyRate: number;
+
   /** Total allowances for the period (TASK-088). */
   @Prop({ required: true, min: 0, default: 0 })
   totalAllowances: number;
@@ -56,6 +68,10 @@ export class PayrollInputSnapshot {
   /** Attendance bonus for the period (TASK-088). */
   @Prop({ required: true, min: 0, default: 0 })
   attendanceBonus: number;
+
+  /** KPI bonus confirmed for the period (KpiPayrollInput). */
+  @Prop({ required: true, min: 0, default: 0 })
+  kpiBonus: number;
 
   /** OT minutes by type (frozen from TimesheetSummary). */
   @Prop({ type: Object, required: false })
@@ -70,33 +86,36 @@ export class PayrollInputSnapshot {
   @Prop({ required: true, min: 0, default: 0 })
   otPay: number;
 
-  /** OT non-taxable portion = hours × coeff 1.0 × hourlyRate (Vietnam tax law). This is the base OT payment that is NOT subject to PIT. */
-  @Prop({ required: true, min: 0, default: 0 })
-  otNonTaxableEarnings: number;
-
-  /** OT taxable portion = hours × coeff 0.5 × hourlyRate (Vietnam tax law). Only this coefficient premium is subject to PIT. */
-  @Prop({ required: true, min: 0, default: 0 })
-  otTaxableEarnings: number;
+  /**
+   * Cờ công ty: TOÀN BỘ tiền OT có chịu PIT không (chép từ TaxPolicy lúc sinh snapshot).
+   * Không chia tiền OT thành hai phần — chỉ có một trong hai trạng thái:
+   * `true` → cả `otPay` vào thu nhập tính thuế; `false` → `otPay` miễn thuế hoàn toàn.
+   */
+  @Prop({ required: true, default: false })
+  overtimeTaxable: boolean;
 
   // ───────── NON-TAXABLE ALLOWANCES ─────────
-  // Theo luật thuế Việt Nam: một số phụ cấp được miễn thuế (trợ cấp nuôi ăn giữa ca, đi lại, ...
-  // Cần tách biệt taxable vs non-taxable allowances để tính PIT đúng.
+  // R1: mọi phụ cấp đều chịu thuế TNCN, nên trường này LUÔN bằng 0. Giữ lại để
+  // snapshot cũ còn đọc được; `allowanceBreakdown[].taxable` cũng luôn true.
 
-  /** Total non-taxable allowances (miễn thuế theo luật). These are EXCLUDED from PIT calculation. */
+  /** Luôn 0 (R1 — mọi phụ cấp chịu thuế). Giữ để tương thích snapshot cũ. */
   @Prop({ required: true, min: 0, default: 0 })
   nonTaxableAllowances: number;
 
-  /** Allowance breakdown with taxable flag per item (for payslip display). */
+  /** Allowance breakdown for payslip display. `taxable` luôn true kể từ R1. */
   @Prop({ type: [], default: [] })
   allowanceBreakdown?: Array<{
     type: string;      // meal, phone, transport, ...
     label: string;     // 'Trợ cấp nuôi ăn', 'Phụ cấp đi lại', ...
     amount: number;
-    taxable: boolean;  // true = chịu thuế PIT, false = miễn thuế
+    taxable: boolean;  // luôn true (R1)
   }>;
 
   // ───────── INSURANCE INPUTS ─────────
   // Employee contributions (BHXH 8%, BHYT 1.5%, BHTN 1%)
+  //
+  // Lương đóng bảo hiểm KHÔNG còn nhập tay: suy ra từ `monthlyBaseSalary − totalAllowances`
+  // rồi để engine `calculateInsuranceContributions` kẹp sàn/trần theo TỪNG loại.
 
   /** BHXH employee rate (8%). */
   @Prop({ required: true, min: 0, max: 1, default: 0.08 })
@@ -110,7 +129,12 @@ export class PayrollInputSnapshot {
   @Prop({ required: true, min: 0, max: 1, default: 0.01 })
   unemploymentInsuranceRate: number;
 
-  /** Contribution base capped at policy maximum. */
+  /**
+   * Base dùng cho dòng BHXH (đã kẹp sàn/trần của loại đó).
+   * ponytail: một số duy nhất; nếu HR cấu hình sàn/trần KHÁC NHAU giữa 3 loại thì
+   * base 3 khoản lệch nhau — số tiền từng khoản vẫn đúng vì lưu riêng bên dưới.
+   * Nâng cấp: đổi thành `insuranceLines[]` khi thật sự cần hiện base từng loại.
+   */
   @Prop({ required: true, min: 0, default: 0 })
   contributionBase: number;
 

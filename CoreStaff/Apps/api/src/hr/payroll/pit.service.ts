@@ -31,30 +31,29 @@ export class PitService {
 
   /**
    * TASK-094: Calculate taxable earnings.
-   * 
-   * Formula (updated to exclude non-taxable income):
-   * TaxableEarnings = max(0, TaxableGross - InsuranceContributions - StandardDeduction - DependentDeductions)
-   * 
-   * Trong đó:
-   * TaxableGross = BaseSalary + TaxableAllowances + AttendanceBonus + OT_Taxable
-   *              = Gross - NonTaxableAllowances - OT_NonTaxable
-   * 
-   * Non-taxable components (KHÔNG đưa vào PIT):
-   * - OT không chịu thuế = hệ số 1.0 (tiền cơ bản)
-   * - Phụ cấp miễn thuế (meal, transport, ...)
-   * - BHXH/BHYT/BHTN phần employee đóng
-   * - Giảm trừ bản thân (15.5M)
-   * - Giảm trừ người phụ thuộc (6.2M/người)
+   *
+   * Formula:
+   * TaxableIncome  = Gross - NonTaxableComponents      ← §2 trên bảng lương
+   * TaxableEarnings = max(0, TaxableIncome - Insurance - StandardDeduction - DependentDeductions)   ← §3
+   *
+   * Trong đó NonTaxableComponents:
+   * - Tiền OT: TOÀN BỘ `otPay` miễn thuế khi công ty tắt cờ `overtimeTaxable`
+   *   (§30D.2). Bật cờ → phần này = 0, cả tiền OT vào thu nhập tính thuế.
+   *   Không chia tiền OT thành hai phần.
+   * - Phụ cấp miễn thuế: luôn 0 — mọi phụ cấp đều chịu thuế (R1).
+   * - BHXH/BHYT/BHTN phần employee đóng (trừ ở bước sau).
+   * - Giảm trừ bản thân (15.5M) và người phụ thuộc (6.2M/người) (trừ ở bước sau).
    */
   async calculateTaxableEarnings(params: {
     grossEarnings: number;
     insuranceContributions: number;
     employeeProfileId: string;
     organizationId: string;
-    otNonTaxableEarnings?: number;    // OT không chịu thuế
-    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế
-  }): Promise<{ taxableEarnings: number; standardDeduction: number; dependentDeduction: number; dependentCount: number }> {
-    const { grossEarnings, insuranceContributions, employeeProfileId, organizationId, otNonTaxableEarnings = 0, nonTaxableAllowances = 0 } = params;
+    otPay?: number;              // Tổng tiền OT trong gross
+    overtimeTaxable?: boolean;   // Cờ công ty: true = cả tiền OT chịu thuế
+    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế (luôn 0 — R1)
+  }): Promise<{ taxableEarnings: number; taxableIncome: number; standardDeduction: number; dependentDeduction: number; dependentCount: number }> {
+    const { grossEarnings, insuranceContributions, employeeProfileId, organizationId, otPay = 0, overtimeTaxable = false, nonTaxableAllowances = 0 } = params;
 
     // Get active dependents count
     const profile = await this.employeeProfileModel
@@ -71,14 +70,16 @@ export class PitService {
     const dependentDeduction = dependentCount * dependentDeductionPerPerson;
 
     // ── TAXABLE GROSS = Gross - NonTaxableComponents ──
-    // Chỉ những phần ĐÓNG THUẾ mới đưa vào tính PIT
-    const taxableGross = grossEarnings - otNonTaxableEarnings - nonTaxableAllowances;
+    // Chỉ những phần ĐÓNG THUẾ mới đưa vào tính PIT. Cờ tắt → trừ cả tiền OT.
+    const nonTaxableOt = overtimeTaxable ? 0 : otPay;
+    const taxableGross = grossEarnings - nonTaxableOt - nonTaxableAllowances;
 
     // Taxable earnings = TaxableGross - Insurance - StandardDeduction - DependentDeduction
     const taxableEarnings = Math.max(0, taxableGross - insuranceContributions - standardDeduction - dependentDeduction);
 
     return {
       taxableEarnings,
+      taxableIncome: taxableGross,
       standardDeduction,
       dependentDeduction,
       dependentCount,
@@ -195,9 +196,11 @@ export class PitService {
     employeeProfileId: string;
     organizationId: string;
     roundingRule?: RoundingRule;
-    otNonTaxableEarnings?: number;    // OT không chịu thuế
-    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế
+    otPay?: number;              // Tổng tiền OT trong gross
+    overtimeTaxable?: boolean;   // Cờ công ty: true = cả tiền OT chịu thuế
+    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế (luôn 0 — R1)
   }): Promise<{
+    taxableIncome: number;
     taxableEarnings: number;
     personalDeduction: number;
     dependentDeduction: number;
@@ -208,13 +211,14 @@ export class PitService {
     breakdown: Array<{ bracket: number; income: number; rate: number; tax: number }>;
   }> {
     // Step 1: Calculate taxable earnings (TASK-094)
-    const { taxableEarnings, standardDeduction, dependentDeduction, dependentCount } =
+    const { taxableEarnings, taxableIncome, standardDeduction, dependentDeduction, dependentCount } =
       await this.calculateTaxableEarnings({
         grossEarnings: params.grossEarnings,
         insuranceContributions: params.insuranceContributions,
         employeeProfileId: params.employeeProfileId,
         organizationId: params.organizationId,
-        otNonTaxableEarnings: params.otNonTaxableEarnings ?? 0,
+        otPay: params.otPay ?? 0,
+        overtimeTaxable: params.overtimeTaxable ?? false,
         nonTaxableAllowances: params.nonTaxableAllowances ?? 0,
       });
 
@@ -228,6 +232,7 @@ export class PitService {
     const totalDeductions = params.insuranceContributions + standardDeduction + dependentDeduction;
 
     return {
+      taxableIncome,
       taxableEarnings,
       personalDeduction: standardDeduction,
       dependentDeduction,
@@ -248,9 +253,11 @@ export class PitService {
     dependentCount: number;
     organizationId: string;
     roundingRule?: RoundingRule;
-    otNonTaxableEarnings?: number;    // OT không chịu thuế
-    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế
+    otPay?: number;              // Tổng tiền OT trong gross
+    overtimeTaxable?: boolean;   // Cờ công ty: true = cả tiền OT chịu thuế
+    nonTaxableAllowances?: number;     // Phụ cấp miễn thuế (luôn 0 — R1)
   }): Promise<{
+    taxableIncome: number;
     taxableEarnings: number;
     personalDeduction: number;
     dependentDeduction: number;
@@ -263,7 +270,8 @@ export class PitService {
     const dependentDeduction = params.dependentCount * dependentDeductionPerPerson;
 
     // ── TAXABLE GROSS = Gross - NonTaxableComponents ──
-    const taxableGross = params.grossEarnings - (params.otNonTaxableEarnings ?? 0) - (params.nonTaxableAllowances ?? 0);
+    const nonTaxableOt = params.overtimeTaxable ? 0 : (params.otPay ?? 0);
+    const taxableGross = params.grossEarnings - nonTaxableOt - (params.nonTaxableAllowances ?? 0);
 
     const taxableEarnings = Math.max(0, taxableGross - params.insuranceContributions - personalDeduction - dependentDeduction);
 
@@ -274,6 +282,7 @@ export class PitService {
     });
 
     return {
+      taxableIncome: taxableGross,
       taxableEarnings,
       personalDeduction,
       dependentDeduction,

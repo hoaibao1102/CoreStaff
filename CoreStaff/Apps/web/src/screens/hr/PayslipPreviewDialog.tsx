@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/dialog";
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
 import { Separator } from '@/components/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/tabs';
+import { Tooltip } from '@/components/tooltip';
 import { ChevronDown, ChevronRight, Calendar, User, Building2, Wallet } from 'lucide-react';
 
 export type PayslipRow = {
@@ -15,9 +16,21 @@ export type PayslipRow = {
   grossEarnings: number;
   netSalary: number;
   pitAmount: number;
+  /** §2 — thu nhập chịu thuế trước giảm trừ (backend tính). */
+  taxableIncome?: number;
+  /** §3 — thu nhập tính thuế sau bảo hiểm + giảm trừ gia cảnh. */
   taxableEarnings?: number;
+  otherDeductions?: number;
   personalDeduction?: number;
   dependentDeduction?: number;
+  /** Lương cơ bản theo hợp đồng (chưa chia ngày công) — dùng cho chi tiết lương công. */
+  monthlyBaseSalary?: number;
+  /** Số ngày công chuẩn của kỳ. */
+  standardWorkingDays?: number;
+  /** Số ngày công thực tế được trả lương. */
+  payableWorkingDays?: number;
+  /** Tiền công 1 giờ = monthlyBaseSalary / (standardWorkingDays × 8). */
+  hourlyRate?: number;
   contributionBase?: number;
   socialInsuranceRate?: number;
   healthInsuranceRate?: number;
@@ -33,17 +46,15 @@ export type PayslipRow = {
     weeklyOffMinutes: number;
     publicHolidayMinutes: number;
     hourlyRate: number;
-    otNonTaxable: number;
-    otTaxable: number;
     otPay: number;
+    /** Cờ công ty: true = cả tiền OT chịu thuế, false = miễn hết. */
+    overtimeTaxable?: boolean;
     breakdown: Array<{
       type: string;
       label: string;
       minutes: number;
       coefficient: number;
       amount: number;
-      nonTaxable: number;
-      taxable: number;
     }>;
   };
   deductionBreakdown?: Array<{ type: string; label: string; amount: number }>;
@@ -94,25 +105,99 @@ function getStatusBadgeVariant(status: string): BadgeVariant {
 }
 
 export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
+  const [showBaseDetail, setShowBaseDetail] = useState(false);
+  const [showOtDetail, setShowOtDetail] = useState(false);
   const totalEarnings = payslip.grossEarnings || 0;
   const allowances = payslip.allowanceBreakdown ?? [];
   const summaryRows = (payslip.earningBreakdown ?? []).filter((item) => item.type !== 'ALLOWANCE');
-  const formatMinutes = (minutes?: number) => {
-    const value = Math.max(0, minutes ?? 0);
-    const hours = Math.floor(value / 60);
-    const remainder = value % 60;
-    return remainder ? `${hours} giờ ${String(remainder).padStart(2, '0')} phút` : `${hours} giờ`;
-  };
+
+  // Chi tiết lương công: lương tháng ÷ ngày công chuẩn = tiền công 1 ngày, × ngày công thực tế.
+  const monthlyBaseSalary = payslip.monthlyBaseSalary || 0;
+  const standardWorkingDays = payslip.standardWorkingDays || 0;
+  const payableWorkingDays = payslip.payableWorkingDays || 0;
+  const dailyRate = standardWorkingDays > 0 ? monthlyBaseSalary / standardWorkingDays : 0;
+  const hasBaseDetail = monthlyBaseSalary > 0 && standardWorkingDays > 0;
+
+  // Chi tiết OT: giờ × (tiền công 1 giờ × hệ số) = thành tiền.
+  const otBreakdown = payslip.otBreakdown;
+  const otLines = (otBreakdown?.breakdown ?? []).filter((line) => line.amount > 0);
+
+  const detailToggle = (open: boolean, onToggle: () => void): ReactNode => (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-6 px-2 text-xs"
+      onClick={onToggle}
+    >
+      {open ? (
+        <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
+      ) : (
+        <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
+      )}
+      Chi tiết
+    </Button>
+  );
+
   return (
     <Card>
       <CardHeader><CardTitle>Tổng thu nhập (Gross)</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          {summaryRows.map((item, idx) => (
-            <div key={`${item.type}-${idx}`} className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-foreground">{item.label}</span><span className="font-mono">{formatCurrency(item.amount)}</span>
-            </div>
-          ))}
+          {summaryRows.map((item, idx) => {
+            const isBase = item.type === 'BASE_SALARY';
+            const isOt = item.type === 'OVERTIME';
+            const detail = isBase ? hasBaseDetail : isOt ? otLines.length > 0 : false;
+            const open = isBase ? showBaseDetail : showOtDetail;
+            return (
+              <div key={`${item.type}-${idx}`}>
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="flex items-center gap-2 text-foreground">
+                    {item.label}
+                    {detail && detailToggle(open, () => (isBase ? setShowBaseDetail(!showBaseDetail) : setShowOtDetail(!showOtDetail)))}
+                  </span>
+                  <span className="font-mono">{formatCurrency(item.amount)}</span>
+                </div>
+                {isBase && showBaseDetail && (
+                  <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Lương cơ bản tháng</span>
+                      <span className="font-mono">{formatCurrency(monthlyBaseSalary)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ngày công chuẩn</span>
+                      <span className="font-mono">{standardWorkingDays} ngày</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ngày công thực tế</span>
+                      <span className="font-mono">{payableWorkingDays} ngày</span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-2">
+                      <span className="text-muted-foreground">Tiền công 1 ngày</span>
+                      <span className="font-mono">{formatCurrency(dailyRate)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        {formatCurrency(dailyRate)} × {payableWorkingDays} ngày
+                      </span>
+                      <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
+                    </div>
+                  </div>
+                )}
+                {isOt && showOtDetail && (
+                  <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+                    {otLines.map((line, lineIdx) => (
+                      <div key={`${line.type}-${lineIdx}`} className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          {line.label} — {line.minutes / 60} giờ × ({formatCurrency(otBreakdown?.hourlyRate || 0)} × {line.coefficient})
+                        </span>
+                        <span className="font-mono font-semibold">{formatCurrency(line.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
         {allowances.length > 0 && (
           <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -122,17 +207,11 @@ export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
             <div className="space-y-2 border-t border-border pt-2">
               {allowances.map((item, idx) => (
                 <div key={`${item.type}-${idx}`} className="flex items-center justify-between gap-4 text-xs">
-                  <span className="flex items-center gap-2 text-muted-foreground">{item.label}<Badge variant={item.taxable === false ? 'success' : 'secondary'} className="h-5 px-1.5 text-[10px]">{item.taxable === false ? 'Miễn thuế' : 'Chịu thuế'}</Badge></span>
+                  <span className="text-muted-foreground">{item.label}</span>
                   <span className="font-mono">{formatCurrency(item.amount)}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-        {payslip.otBreakdown && payslip.otBreakdown.otPay > 0 && (
-          <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs">
-            <div className="flex items-center justify-between font-medium"><span>Chi tiết làm thêm giờ · {formatMinutes(payslip.otBreakdown.totalMinutes)}</span><span className="font-mono">{formatCurrency(payslip.otBreakdown.otPay)}</span></div>
-            <div className="mt-2 grid gap-1 border-t border-border pt-2 sm:grid-cols-3"><span className="text-muted-foreground">Ngày làm: {formatMinutes(payslip.otBreakdown.workingDayMinutes)}</span><span className="text-muted-foreground">Cuối tuần: {formatMinutes(payslip.otBreakdown.weeklyOffMinutes)}</span><span className="text-muted-foreground">Ngày lễ: {formatMinutes(payslip.otBreakdown.publicHolidayMinutes)}</span></div>
           </div>
         )}
         <Separator />
@@ -142,99 +221,197 @@ export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
   );
 }
 
-export function PitTaxDetails({ payslip }: { payslip: PayslipRow }) {
+/** §2 — Thu nhập chịu thuế TRƯỚC giảm trừ (chưa trừ bảo hiểm và giảm trừ gia cảnh). */
+export function TaxableIncomeCard({ payslip }: { payslip: PayslipRow }) {
   const earningRows = (payslip.earningBreakdown ?? []).filter(
-    (item) => item.type !== 'ALLOWANCE' && item.type !== 'OVERTIME' && item.taxable !== false && item.amount > 0,
-  );
-  const allowanceRows = (payslip.allowanceBreakdown ?? []).filter(
-    (item) => item.taxable !== false && item.amount > 0,
+    (item) => item.type !== 'ALLOWANCE' && item.type !== 'OVERTIME' && item.amount > 0,
   );
   const aggregateAllowance = (payslip.earningBreakdown ?? []).find((item) => item.type === 'ALLOWANCE');
-  const taxableAllowanceRows = allowanceRows.length > 0
-    ? allowanceRows
-    : aggregateAllowance && aggregateAllowance.taxable !== false && aggregateAllowance.amount > 0
-      ? [aggregateAllowance]
-      : [];
-  const taxableOt = payslip.otBreakdown?.otTaxable ?? 0;
-  const taxableIncomeBeforeDeductions =
-    earningRows.reduce((sum, item) => sum + item.amount, 0) +
-    taxableAllowanceRows.reduce((sum, item) => sum + item.amount, 0) +
-    taxableOt;
+  const totalAllowances =
+    (payslip.allowanceBreakdown ?? []).reduce((sum, item) => sum + item.amount, 0) ||
+    aggregateAllowance?.amount ||
+    0;
+  const overtimeTaxable = payslip.otBreakdown?.overtimeTaxable === true;
+  // Cờ bật → cả tiền OT chịu thuế; tắt → miễn hết. Không chia tiền OT.
+  const taxableOt = overtimeTaxable ? (payslip.otBreakdown?.otPay ?? 0) : 0;
+  // `taxableIncome` là số backend đã tính; công thức dưới chỉ là fallback cho
+  // payslip sinh trước khi field này tồn tại.
+  const taxableIncome =
+    payslip.taxableIncome ??
+    earningRows.reduce((sum, item) => sum + item.amount, 0) + totalAllowances + taxableOt;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Thu nhập chịu thuế trước giảm trừ</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {earningRows.map((item, idx) => (
+          <div key={`${item.type}-${idx}`} className="flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="font-mono">{formatCurrency(item.amount)}</span>
+          </div>
+        ))}
+        {totalAllowances > 0 && (
+          <div className="flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">Tổng phụ cấp</span>
+            <span className="font-mono">{formatCurrency(totalAllowances)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            Tiền làm thêm giờ chịu thuế
+            <Tooltip
+              content={
+                overtimeTaxable
+                  ? 'Chính sách thuế TNCN của công ty: toàn bộ tiền tăng ca chịu thuế.'
+                  : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập tính thuế.'
+              }
+            >
+              <span className="cursor-help font-semibold text-primary" aria-label="Chính sách thuế TNCN cho tiền tăng ca">*</span>
+            </Tooltip>
+          </span>
+          <span className="font-mono">{formatCurrency(taxableOt)}</span>
+        </div>
+        <Separator />
+        <div className="flex justify-between font-semibold text-foreground">
+          <span>Tổng thu nhập chịu thuế</span>
+          <span className="font-mono">{formatCurrency(taxableIncome)}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** §3 — Các khoản giảm trừ khỏi thu nhập chịu thuế, ra Thu nhập tính thuế. */
+export function TaxDeductionsCard({ payslip }: { payslip: PayslipRow }) {
+  const [showInsuranceDetail, setShowInsuranceDetail] = useState(false);
   const totalInsurance =
     (payslip.socialInsurance || 0) +
     (payslip.healthInsurance || 0) +
     (payslip.unemploymentInsurance || 0);
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-xs font-semibold text-foreground">
-        <span>Thu nhập chịu thuế trước giảm trừ</span>
-        <span className="font-mono">{formatCurrency(taxableIncomeBeforeDeductions)}</span>
-      </div>
-      <div className="space-y-1.5 border-l-2 border-border pl-3">
-        {[...earningRows, ...taxableAllowanceRows].map((item, idx) => (
-          <div key={`${item.type}-${idx}`} className="flex justify-between gap-4 text-xs">
-            <span className="text-muted-foreground">{item.label}</span>
-            <span className="font-mono">{formatCurrency(item.amount)}</span>
+    <Card>
+      <CardHeader>
+        <CardTitle>Các khoản giảm trừ thuế</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
+              {totalInsurance > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setShowInsuranceDetail(!showInsuranceDetail)}
+                >
+                  {showInsuranceDetail ? (
+                    <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
+                  )}
+                  Chi tiết
+                </Button>
+              )}
+            </div>
+            <span className="font-mono text-sm text-destructive">-{formatCurrency(totalInsurance)}</span>
           </div>
-        ))}
-        {taxableOt > 0 && (
-          <div className="flex justify-between gap-4 text-xs">
-            <span className="text-muted-foreground">Phần làm thêm giờ chịu thuế</span>
-            <span className="font-mono">{formatCurrency(taxableOt)}</span>
+          {showInsuranceDetail && totalInsurance > 0 && (
+            <div className="mt-3 space-y-2 border-t pt-3">
+              {payslip.contributionBase && payslip.contributionBase > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Lương đóng BHXH</span>
+                  <span className="font-mono">{formatCurrency(payslip.contributionBase)}</span>
+                </div>
+              )}
+              {(payslip.socialInsurance || 0) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">BHXH ({(payslip.socialInsuranceRate || 0) * 100}%)</span>
+                  <span className="font-mono">-{formatCurrency(payslip.socialInsurance || 0)}</span>
+                </div>
+              )}
+              {(payslip.healthInsurance || 0) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">BHYT ({(payslip.healthInsuranceRate || 0) * 100}%)</span>
+                  <span className="font-mono">-{formatCurrency(payslip.healthInsurance || 0)}</span>
+                </div>
+              )}
+              {(payslip.unemploymentInsurance || 0) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">BHTN ({(payslip.unemploymentInsuranceRate || 0) * 100}%)</span>
+                  <span className="font-mono">-{formatCurrency(payslip.unemploymentInsurance || 0)}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Giảm trừ bản thân</span>
+          <span className="font-mono text-destructive">-{formatCurrency(payslip.personalDeduction || 0)}</span>
+        </div>
+        {(payslip.dependentDeduction || 0) > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              Giảm trừ người phụ thuộc ({payslip.dependents?.length || 0} người)
+            </span>
+            <span className="font-mono text-destructive">-{formatCurrency(payslip.dependentDeduction || 0)}</span>
           </div>
         )}
-      </div>
-      <Separator />
-      {totalInsurance > 0 && (
-        <div className="flex justify-between text-xs">
-          <span className="text-muted-foreground">Bảo hiểm bắt buộc</span>
-          <span className="font-mono text-destructive">-{formatCurrency(totalInsurance)}</span>
+
+        <Separator />
+        <div className="flex justify-between font-semibold text-foreground">
+          <span>Thu nhập tính thuế</span>
+          <span className="font-mono">{formatCurrency(payslip.taxableEarnings || 0)}</span>
         </div>
-      )}
-      <div className="flex justify-between text-xs">
-        <span className="text-muted-foreground">Giảm trừ bản thân</span>
-        <span className="font-mono text-destructive">-{formatCurrency(payslip.personalDeduction || 0)}</span>
-      </div>
-      {(payslip.dependentDeduction || 0) > 0 && (
-        <div className="flex justify-between text-xs">
-          <span className="text-muted-foreground">Giảm trừ người phụ thuộc ({payslip.dependents?.length || 0} người)</span>
-          <span className="font-mono text-destructive">-{formatCurrency(payslip.dependentDeduction || 0)}</span>
-        </div>
-      )}
-      <div className="flex justify-between text-xs font-semibold text-foreground">
-        <span>Thu nhập tính thuế</span>
-        <span className="font-mono">{formatCurrency(payslip.taxableEarnings || 0)}</span>
-      </div>
-      {payslip.pitBreakdown && payslip.pitBreakdown.length > 0 && (
-        <>
-          <Separator />
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Biểu thuế lũy tiến</p>
-          {payslip.pitBreakdown.map((bracket, idx) => (
-            <div key={idx} className="flex justify-between gap-4 text-xs">
+      </CardContent>
+    </Card>
+  );
+}
+
+/** §4 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
+export function PitTaxDetails({ payslip }: { payslip: PayslipRow }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Thuế TNCN (PIT)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {payslip.pitBreakdown && payslip.pitBreakdown.length > 0 ? (
+          payslip.pitBreakdown.map((bracket, idx) => (
+            <div key={idx} className="flex justify-between gap-4 text-sm">
               <span className="text-muted-foreground">
                 Bậc {bracket.bracket}: {formatCurrency(bracket.income)} × {bracket.rate}%
               </span>
               <span className="font-mono">{formatCurrency(bracket.tax)}</span>
             </div>
-          ))}
-        </>
-      )}
-    </div>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">Không phát sinh thuế TNCN.</p>
+        )}
+        <Separator />
+        <div className="flex justify-between font-semibold text-foreground">
+          <span>Thuế TNCN phải nộp</span>
+          <span className="font-mono text-destructive">-{formatCurrency(payslip.pitAmount || 0)}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Props) {
-  const [showInsuranceDetail, setShowInsuranceDetail] = useState(false);
-  const [showPitDetail, setShowPitDetail] = useState(false);
-
   if (!payslip) return null;
 
   const totalInsurance =
     (payslip.socialInsurance || 0) + (payslip.healthInsurance || 0) + (payslip.unemploymentInsurance || 0);
   const effectivePIT = payslip.pitAmount || 0;
-  const totalDeductions = totalInsurance + effectivePIT;
-  const totalTaxReductions = totalInsurance + (payslip.personalDeduction || 0) + (payslip.dependentDeduction || 0);
+  const otherDeductions = payslip.otherDeductions || 0;
+  // Tổng khấu trừ = tiền thực sự bị trừ khỏi Gross. Khớp công thức Net của backend:
+  // netSalary = gross − insurance − PIT − otherDeductions.
+  const totalDeductions = totalInsurance + effectivePIT + otherDeductions;
   const netSalary = payslip.netSalary || 0;
 
   return (
@@ -280,101 +457,35 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
             </CardContent>
           </Card>
 
-          {/* Gross Earnings */}
+          {/* 1. GROSS */}
           <GrossEarningsCard payslip={payslip} />
 
-          {/* Deductions */}
+          {/* 2. TAXABLE INCOME */}
+          <TaxableIncomeCard payslip={payslip} />
+
+          {/* 3. TAX DEDUCTIONS */}
+          <TaxDeductionsCard payslip={payslip} />
+
+          {/* 4. PIT + tổng khấu trừ */}
+          <PitTaxDetails payslip={payslip} />
+
           <Card>
-            <CardHeader>
-              <CardTitle>Các khoản khấu trừ</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {/* Insurance summary */}
-                <div className="rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
-                      {totalInsurance > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => setShowInsuranceDetail(!showInsuranceDetail)}
-                        >
-                          {showInsuranceDetail ? (
-                            <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
-                          ) : (
-                            <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                          )}
-                          Chi tiết
-                        </Button>
-                      )}
-                    </div>
-                    <span className="font-mono text-sm font-medium text-destructive">
-                      -{formatCurrency(totalInsurance)}
-                    </span>
-                  </div>
-                  {showInsuranceDetail && totalInsurance > 0 && (
-                    <div className="mt-3 space-y-2 border-t pt-3">
-                      {payslip.contributionBase && payslip.contributionBase > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Lương đóng BHXH</span>
-                          <span className="font-mono">{formatCurrency(payslip.contributionBase)}</span>
-                        </div>
-                      )}
-                      {(payslip.socialInsurance || 0) > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">BHXH ({(payslip.socialInsuranceRate || 0) * 100}%)</span>
-                          <span className="font-mono">-{formatCurrency(payslip.socialInsurance || 0)}</span>
-                        </div>
-                      )}
-                      {(payslip.healthInsurance || 0) > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">BHYT ({(payslip.healthInsuranceRate || 0) * 100}%)</span>
-                          <span className="font-mono">-{formatCurrency(payslip.healthInsurance || 0)}</span>
-                        </div>
-                      )}
-                      {(payslip.unemploymentInsurance || 0) > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">BHTN ({(payslip.unemploymentInsuranceRate || 0) * 100}%)</span>
-                          <span className="font-mono">-{formatCurrency(payslip.unemploymentInsurance || 0)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Bảo hiểm</span>
+                  <span className="font-mono text-destructive">-{formatCurrency(totalInsurance)}</span>
                 </div>
-
-                {/* PIT summary */}
-                <div className="rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">Thuế TNCN (PIT)</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setShowPitDetail(!showPitDetail)}
-                      >
-                        {showPitDetail ? (
-                          <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
-                        ) : (
-                          <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                        )}
-                        Chi tiết
-                      </Button>
-                    </div>
-                    <span className="font-mono text-sm font-medium text-destructive">
-                      -{formatCurrency(effectivePIT)}
-                    </span>
-                  </div>
-                  {showPitDetail && (
-                    <div className="mt-3 border-t pt-3">
-                      <PitTaxDetails payslip={payslip} />
-                    </div>
-                  )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Thuế TNCN</span>
+                  <span className="font-mono text-destructive">-{formatCurrency(effectivePIT)}</span>
                 </div>
-
+                {otherDeductions > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Khấu trừ khác</span>
+                    <span className="font-mono text-destructive">-{formatCurrency(otherDeductions)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold text-foreground">
                   <span>Tổng khấu trừ</span>
@@ -393,6 +504,9 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
               </div>
               <span className="font-mono text-2xl font-bold text-primary">{formatCurrency(netSalary)}</span>
             </div>
+            <p className="mt-2 border-t border-primary/20 pt-2 text-xs text-muted-foreground">
+              {formatCurrency(payslip.grossEarnings || 0)} − {formatCurrency(totalDeductions)} = {formatCurrency(netSalary)}
+            </p>
           </div>
 
           {/* Timestamps */}

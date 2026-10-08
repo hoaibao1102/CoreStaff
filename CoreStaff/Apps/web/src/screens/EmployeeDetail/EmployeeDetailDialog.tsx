@@ -56,6 +56,7 @@ import {
     DEPENDENT_RELATIONSHIP_LABELS,
 } from '../../services/hrService';
 import {
+    deriveInsuranceSalary,
     listSalaryProfiles,
     getOrganizationAllowances,
     type SalaryProfile,
@@ -1096,7 +1097,7 @@ function EmployeeDetailContent({
                                         <CardContent>
                                             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                                 <FieldRow label="Lương cơ bản" value={formatVnd(salaryProfile.baseSalary)} />
-                                                <FieldRow label="Lương đóng BHXH" value={formatVnd(salaryProfile.insuranceSalary)} />
+                                                <FieldRow label="Lương đóng BHXH (tự tính)" value={formatVnd(deriveInsuranceSalary(salaryProfile.baseSalary, salaryProfile.allowances))} />
                                                 {salaryProfile.probationJobSalary ? (
                                                     <FieldRow label="Lương theo công việc thử việc" value={formatVnd(salaryProfile.probationJobSalary)} />
                                                 ) : null}

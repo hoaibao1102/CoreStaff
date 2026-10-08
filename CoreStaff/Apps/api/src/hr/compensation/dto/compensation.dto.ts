@@ -14,7 +14,8 @@ export class CreateSalaryProfileDto {
   @IsDateString() effectiveFrom: string;
   @IsOptional() @IsDateString() effectiveTo?: string;
   @IsInt() @Min(0) baseSalary: number;
-  @IsInt() @Min(0) insuranceSalary: number;
+  /** @deprecated Lương đóng bảo hiểm là số dẫn xuất (lương cơ bản − tổng phụ cấp). Client gửi lên bị bỏ qua. */
+  @IsOptional() @IsInt() @Min(0) insuranceSalary?: number;
   @IsOptional() @IsInt() @Min(1) probationJobSalary?: number;
   @IsOptional() @IsInt() @Min(1) probationAgreedSalary?: number;
   @IsOptional() @IsArray() @IsMongoId({ each: true }) organizationAllowanceIds?: string[];

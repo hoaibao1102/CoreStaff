@@ -396,7 +396,6 @@ export const HR_ERROR_CODES: Record<string, string> = {
     ALLOWANCE_CODE_TAKEN: 'Mã phụ cấp này đã được sử dụng trong tổ chức.',
     ORGANIZATION_ALLOWANCE_NOT_FOUND: 'Không tìm thấy phụ cấp của tổ chức.',
     ATTENDANCE_BONUS_TEMPLATE_NOT_FOUND: 'Không tìm thấy mẫu thưởng chuyên cần.',
-    ATTENDANCE_BONUS_POLICY_NOT_FOUND: 'Không tìm thấy chính sách thưởng chuyên cần.',
     ATTENDANCE_BONUS_AMOUNT_INVALID: 'Số tiền thưởng chuyên cần không hợp lệ.',
     ATTENDANCE_BONUS_PERCENTAGE_INVALID: 'Tỷ lệ phần trăm thưởng chuyên cần phải từ 0 đến 100%.',
     KPI_INPUT_NOT_FOUND: 'Không tìm thấy dữ liệu KPI.',
@@ -462,6 +461,48 @@ export const HR_ERROR_CODES: Record<string, string> = {
     // Payroll export errors
     PAYROLL_RUN_NOT_EXPORTABLE: 'Chỉ có thể xuất Excel khi bảng lương ở trạng thái Đã khóa hoặc Đã phát hành.',
 
+    // Bulk employee import errors
+    EMPLOYEE_IMPORT_FILE_REQUIRED: 'Vui lòng chọn tệp Excel (.xlsx) để import.',
+    EMPLOYEE_IMPORT_FILE_TYPE_NOT_ALLOWED: 'Chỉ chấp nhận tệp Excel định dạng .xlsx.',
+    EMPLOYEE_IMPORT_FILE_TOO_LARGE: 'Tệp quá lớn. Giới hạn import là 5 MB.',
+    EMPLOYEE_IMPORT_FILE_INVALID: 'Không đọc được tệp. Tệp có thể bị hỏng hoặc không phải Excel.',
+    EMPLOYEE_IMPORT_MISSING_COLUMNS: 'Tệp thiếu cột bắt buộc. Vui lòng dùng lại file mẫu.',
+    EMPLOYEE_IMPORT_TOO_MANY_ROWS: 'Tệp vượt quá 1000 dòng. Vui lòng chia nhỏ và import nhiều lần.',
+
+    // Row-level errors (reported per row inside the import result)
+    DUPLICATE_IN_FILE: 'Dữ liệu trùng với một dòng khác trong cùng tệp.',
+    EMPLOYEE_CODE_REQUIRED: 'Thiếu mã nhân viên.',
+    EMAIL_REQUIRED: 'Thiếu email — cần để tạo tài khoản đăng nhập.',
+    EMAIL_INVALID: 'Email không hợp lệ.',
+    ROLE_NOT_ALLOWED: 'Vai trò không được phép import. Chỉ nhận Nhân viên, Quản lý phòng ban hoặc HR.',
+    PHONE_INVALID: 'Số điện thoại phải gồm đúng 10 chữ số.',
+    JOIN_DATE_REQUIRED: 'Ngày vào làm không hợp lệ hoặc bị thiếu (MM/DD/YYYY).',
+    JOIN_DATE_FUTURE: 'Ngày vào làm không được ở tương lai.',
+    DOB_FUTURE_DATE: 'Ngày sinh không được ở tương lai.',
+    GENDER_INVALID: 'Giới tính không hợp lệ (Nam/Nữ/Khác).',
+    CITIZEN_ID_INVALID: 'CCCD/CMND phải gồm 9–12 chữ số.',
+    TAX_CODE_INVALID: 'Mã số thuế phải gồm 10–12 chữ số.',
+    SOCIAL_INSURANCE_CODE_INVALID: 'Mã số BHXH phải gồm 1–12 chữ số.',
+    BANK_ACCOUNT_INVALID: 'Số tài khoản phải gồm 6–17 chữ số.',
+    ADDRESS_TOO_LONG: 'Địa chỉ tối đa 256 ký tự.',
+    DEPARTMENT_REQUIRED: 'Thiếu mã phòng ban.',
+    POSITION_REQUIRED: 'Thiếu mã chức danh.',
+    DEPENDENT_NAME_REQUIRED: 'Người phụ thuộc thiếu họ tên.',
+    DEPENDENT_DOB_INVALID: 'Ngày sinh người phụ thuộc không hợp lệ (MM/DD/YYYY).',
+    DEPENDENT_RELATIONSHIP_REQUIRED: 'Người phụ thuộc thiếu quan hệ với nhân viên.',
+    DEPENDENT_EMPLOYEE_CODE_REQUIRED: 'Người phụ thuộc thiếu mã nhân viên để gắn vào.',
+    DEPENDENT_ORPHAN: 'Người phụ thuộc trỏ tới mã nhân viên không có ở sheet NhanVien.',
+    BASE_SALARY_INVALID: 'Lương cơ bản không hợp lệ.',
+    ALLOWANCE_NOT_FOUND: 'Không tìm thấy phụ cấp có mã này trong tổ chức.',
+    ALLOWANCE_AMOUNT_INVALID: 'Số tiền phụ cấp không hợp lệ.',
+    ATTENDANCE_BONUS_POLICY_NOT_FOUND: 'Không tìm thấy chính sách thưởng chuyên cần đã chọn. Vui lòng tải lại file mẫu.',
+    INSURANCE_EFFECTIVE_TO_BEFORE_FROM: 'Ngày hết hạn bảo hiểm phải sau ngày hiệu lực bảo hiểm.',
+    // `CONTRACT_TYPE_INVALID` and `CONTRACT_EFFECTIVE_DATE_REQUIRED` are import-only.
+    // The other three already map above, in "Contract errors (TASK-028/030)" — the
+    // import reuses those codes, so repeating them here would be a duplicate key.
+    CONTRACT_TYPE_INVALID: 'Loại hợp đồng không hợp lệ. Chỉ nhận Thử việc, Có thời hạn hoặc Không thời hạn.',
+    CONTRACT_EFFECTIVE_DATE_REQUIRED: 'Thiếu ngày hiệu lực hợp đồng — bắt buộc khi đã chọn loại hợp đồng.',
+
     // System errors
     SERVER_ERROR: 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.',
     SERVICE_UNAVAILABLE: 'Dịch vụ tạm thời không khả dụng. Vui lòng thử lại.',
@@ -485,7 +526,14 @@ export function hrErrorMessage(error: unknown): string {
     const err = error as { code?: string; status?: number; message?: string };
 
     // Ưu tiên code lỗi từ backend
-    if (err.code && HR_ERROR_CODES[err.code]) return HR_ERROR_CODES[err.code];
+    if (err.code && HR_ERROR_CODES[err.code]) {
+        // Lỗi thiếu cột có dạng `MÃ:Sheet:Tên cột` — nói rõ thiếu cột nào thì HR
+        // mới sửa được, chỉ báo mã lỗi chung chung thì vô ích.
+        if (err.code === 'EMPLOYEE_IMPORT_MISSING_COLUMNS' && err.message?.includes(':')) {
+            return `${HR_ERROR_CODES[err.code]} (${err.message.split(':').slice(1).join(':')})`;
+        }
+        return HR_ERROR_CODES[err.code];
+    }
 
     // Xử lý theo HTTP status
     if (err.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
@@ -647,6 +695,63 @@ export async function createMyEmployeeProfile(
 
 export async function listEligibleEmployeeAccounts(base: string): Promise<EligibleEmployeeAccount[]> {
     return hrRequest<EligibleEmployeeAccount[]>(base, '/api/hr/employees/eligible-users');
+}
+
+// ── Bulk Employee Import (HR-only) ────────────────────────────────────
+
+export interface EmployeeImportRowError {
+    row: number;
+    employeeCode: string | null;
+    code: string;
+    message: string;
+}
+
+export interface EmployeeImportResult {
+    total: number;
+    created: number;
+    failed: number;
+    dryRun: boolean;
+    errors: EmployeeImportRowError[];
+    /** Shown once — never stored or logged. Relay to the employee out-of-band. */
+    tempPasswords: { employeeCode: string; email: string; tempPassword: string }[];
+}
+
+/** Multipart upload via raw fetch — never set Content-Type manually. */
+export function importEmployees(
+    base: string,
+    file: File,
+    dryRun: boolean,
+): Promise<EmployeeImportResult> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('dryRun', String(dryRun));
+    return fetchRaw<EmployeeImportResult>(base, '/api/hr/employees/import', { method: 'POST', body: form }, true);
+}
+
+/** Same blob → object-URL → anchor dance as `downloadDocument`. */
+export async function downloadEmployeeImportTemplate(base: string): Promise<void> {
+    const res = await fetch(apiUrl(base, '/api/hr/employees/import/template'), {
+        method: 'GET',
+        credentials: 'include',
+    });
+    if (!res.ok) {
+        const body = await parseJson<ApiFailure>(res);
+        const error = new Error(body?.error?.message ?? `HTTP ${res.status}`);
+        (error as any).code = body?.error?.code;
+        (error as any).status = res.status;
+        throw error;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition');
+    const filename = disposition?.match(/filename="?([^"]+)"?/)?.[1] ?? 'mau-import-nhan-vien.xlsx';
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', decodeURIComponent(filename));
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 }
 
 // ── Update Employee (HR-only) ─────────────────────────────────────────
@@ -1289,6 +1394,8 @@ export interface TaxPolicy {
     progressiveBrackets: TaxBracket[];
     roundingRule: string;
     legalReference: string;
+    /** Công ty có tính thuế TNCN cho tiền tăng ca không. false = miễn toàn bộ tiền OT. */
+    overtimeTaxable?: boolean;
     version: number;
     active: boolean;
     createdAt?: string;
@@ -1334,6 +1441,7 @@ export async function createTaxPolicy(
         progressiveBrackets: TaxBracket[];
         roundingRule?: string;
         legalReference: string;
+        overtimeTaxable?: boolean;
     },
 ): Promise<TaxPolicy> {
     return hrRequest<TaxPolicy>(base, '/api/hr/policies/tax', {
@@ -1355,6 +1463,7 @@ export async function updateTaxPolicy(
         progressiveBrackets: TaxBracket[];
         roundingRule: string;
         legalReference: string;
+        overtimeTaxable: boolean;
     }>,
 ): Promise<TaxPolicy> {
     return hrRequest<TaxPolicy>(base, `/api/hr/policies/tax/${encodeURIComponent(id)}`, {

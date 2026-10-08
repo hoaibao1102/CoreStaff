@@ -194,7 +194,8 @@ async function main() {
       const isProbation = profile.employmentStatus === EmploymentStatus.PROBATION;
       const salaryDoc: Record<string, unknown> = {
         organizationId, employeeProfileId: profile._id, effectiveFrom: EFFECTIVE_FROM,
-        baseSalary, insuranceSalary: Math.round(baseSalary * 0.8),
+        // Lương đóng BHXH là số dẫn xuất: lương cơ bản − tổng phụ cấp (seed này không ghi amount phụ cấp).
+        baseSalary, insuranceSalary: baseSalary,
         organizationAllowanceIds: allowanceIds, attendanceBonusPolicyId: bonusPolicyId,
         currency: 'VND', roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true,
       };

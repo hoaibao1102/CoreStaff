@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
 import { Separator } from '@/components/separator';
@@ -57,6 +58,16 @@ export function TaxPolicyDetailDialog({
               <div className="space-y-1 sm:col-span-2">
                 <dt className="text-xs text-muted-foreground">Văn bản pháp lý</dt>
                 <dd className="text-sm font-medium">{policy.legalReference}</dd>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">Thuế TNCN cho tiền tăng ca (OT)</dt>
+                <dd className="text-sm font-medium">
+                  {policy.overtimeTaxable ? (
+                    <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">Chịu thuế toàn bộ</Badge>
+                  ) : (
+                    <Badge variant="outline">Miễn phần hệ số 1.0</Badge>
+                  )}
+                </dd>
               </div>
             </div>
           </div>

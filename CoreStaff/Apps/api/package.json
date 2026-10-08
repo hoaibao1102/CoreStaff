@@ -27,6 +27,7 @@
     "seed:full:new": "ts-node scripts/seed-full-data-new.ts",
     "seed:attendance": "ts-node-script scripts/seed-attendance-for-period.ts",
     "seed:full:org": "ts-node-script scripts/seed-full-organization.ts",
+    "seed:full:org:reset": "ts-node-script scripts/seed-full-organization.ts --apply --reset",
     "verify:compensation": "ts-node-script scripts/verify-compensation-seed.ts",
     "migrate:insurance-mandatory:dry": "ts-node-script scripts/migrate-insurance-mandatory.ts",
     "migrate:insurance-mandatory": "ts-node-script scripts/migrate-insurance-mandatory.ts --apply",
