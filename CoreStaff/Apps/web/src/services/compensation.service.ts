@@ -37,7 +37,8 @@ export interface CreateSalaryProfilePayload {
   effectiveFrom: string;
   effectiveTo?: string | null;
   baseSalary: number;
-  insuranceSalary: number;
+  /** @deprecated Lương đóng BHXH là số dẫn xuất — backend tự tính, gửi lên bị bỏ qua. */
+  insuranceSalary?: number;
   probationJobSalary?: number;
   probationAgreedSalary?: number;
   organizationAllowanceIds?: string[];
@@ -49,12 +50,25 @@ export interface UpdateSalaryProfilePayload {
   effectiveFrom?: string;
   effectiveTo?: string | null;
   baseSalary?: number;
+  /** @deprecated Lương đóng BHXH là số dẫn xuất — backend tự tính, gửi lên bị bỏ qua. */
   insuranceSalary?: number;
   probationJobSalary?: number;
   probationAgreedSalary?: number;
   organizationAllowanceIds?: string[];
   allowances?: EmployeeAssignedAllowance[];
   attendanceBonusPolicyId?: string | null;
+}
+
+/**
+ * Lương đóng bảo hiểm = lương cơ bản − tổng phụ cấp (không âm).
+ * Cùng công thức backend dùng khi ghi hồ sơ — dùng để hiển thị khớp payroll.
+ */
+export function deriveInsuranceSalary(
+  baseSalary: number,
+  allowances?: EmployeeAssignedAllowance[],
+): number {
+  const totalAllowances = (allowances ?? []).reduce((sum, item) => sum + (item?.amount ?? 0), 0);
+  return Math.max(0, baseSalary - totalAllowances);
 }
 
 export async function listSalaryProfiles(base: string, employeeId?: string): Promise<SalaryProfile[]> {

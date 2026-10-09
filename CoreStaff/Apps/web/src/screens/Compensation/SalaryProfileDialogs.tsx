@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/input';
 import {
   createSalaryProfile,
+  deriveInsuranceSalary,
   getAttendanceBonusPolicies,
   getOrganizationAllowances,
   updateSalaryProfile,
@@ -45,7 +46,6 @@ export function SalaryProfileCreateDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
   const [effectiveTo, setEffectiveTo] = useState('');
   const [baseSalary, setBaseSalary] = useState('');
-  const [insuranceSalary, setInsuranceSalary] = useState('');
   const [isProbation, setIsProbation] = useState(false);
   const [probationJobSalary, setProbationJobSalary] = useState('');
   const [probationAgreedSalary, setProbationAgreedSalary] = useState('');
@@ -108,9 +108,7 @@ export function SalaryProfileCreateDialog({
     if (!employeeId) return setError('Vui lòng chọn nhân viên.');
     if (!effectiveFrom) return setError('Vui lòng chọn ngày hiệu lực.');
     const base = Number(baseSalary);
-    const ins = Number(insuranceSalary);
     if (Number.isNaN(base) || base < 0) return setError('Lương cơ bản không hợp lệ.');
-    if (Number.isNaN(ins) || ins < 0) return setError('Lương bảo hiểm không hợp lệ.');
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
@@ -137,7 +135,6 @@ export function SalaryProfileCreateDialog({
         effectiveFrom,
         effectiveTo: effectiveTo || null,
         baseSalary: base,
-        insuranceSalary: ins,
         probationJobSalary: jobSal,
         probationAgreedSalary: agreedSal,
         organizationAllowanceIds: enabledList.map(x => x.allowanceId),
@@ -153,6 +150,14 @@ export function SalaryProfileCreateDialog({
       setSubmitting(false);
     }
   };
+
+  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  const derivedInsuranceSalary = deriveInsuranceSalary(
+    Number(baseSalary) || 0,
+    Object.entries(assignedAllowances)
+      .filter(([_, v]) => v.enabled)
+      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -203,8 +208,11 @@ export function SalaryProfileCreateDialog({
               <Input type="number" min="0" step="500000" placeholder="15000000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Lương đóng BHXH (VND) <span className="text-red-500">*</span></label>
-              <Input type="number" min="0" step="500000" placeholder="12000000" value={insuranceSalary} onChange={e => setInsuranceSalary(e.target.value)} disabled={submitting} />
+              <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
+                {formatVnd(derivedInsuranceSalary)}
+              </div>
+              <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
             </div>
           </div>
 
@@ -341,7 +349,6 @@ export function SalaryProfileEditDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(profile.effectiveFrom ? profile.effectiveFrom.split('T')[0] : '');
   const [effectiveTo, setEffectiveTo] = useState(profile.effectiveTo ? profile.effectiveTo.split('T')[0] : '');
   const [baseSalary, setBaseSalary] = useState(String(profile.baseSalary ?? ''));
-  const [insuranceSalary, setInsuranceSalary] = useState(String(profile.insuranceSalary ?? ''));
   const [isProbation, setIsProbation] = useState(!!profile.probationJobSalary);
   const [probationJobSalary, setProbationJobSalary] = useState(String(profile.probationJobSalary ?? ''));
   const [probationAgreedSalary, setProbationAgreedSalary] = useState(String(profile.probationAgreedSalary ?? ''));
@@ -403,9 +410,7 @@ export function SalaryProfileEditDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const base = Number(baseSalary);
-    const ins = Number(insuranceSalary);
     if (Number.isNaN(base) || base < 0) return setError('Lương cơ bản không hợp lệ.');
-    if (Number.isNaN(ins) || ins < 0) return setError('Lương bảo hiểm không hợp lệ.');
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
@@ -431,7 +436,6 @@ export function SalaryProfileEditDialog({
         effectiveFrom: effectiveFrom || undefined,
         effectiveTo: effectiveTo || null,
         baseSalary: base,
-        insuranceSalary: ins,
         probationJobSalary: isProbation ? jobSal : undefined,
         probationAgreedSalary: isProbation ? agreedSal : undefined,
         organizationAllowanceIds: enabledList.map(x => x.allowanceId),
@@ -447,6 +451,14 @@ export function SalaryProfileEditDialog({
       setSubmitting(false);
     }
   };
+
+  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  const editDerivedInsuranceSalary = deriveInsuranceSalary(
+    Number(baseSalary) || 0,
+    Object.entries(assignedAllowances)
+      .filter(([_, v]) => v.enabled)
+      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -481,7 +493,10 @@ export function SalaryProfileEditDialog({
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
-              <Input type="number" min="0" step="500000" value={insuranceSalary} onChange={e => setInsuranceSalary(e.target.value)} disabled={submitting} />
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
+                {formatVnd(editDerivedInsuranceSalary)}
+              </div>
+              <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
             </div>
           </div>
 
@@ -620,8 +635,8 @@ export function SalaryProfileDetailDialog({
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatVnd(profile.baseSalary)}</span>
           </div>
           <div className="flex justify-between border-b pb-2">
-            <span className="text-muted-foreground">Lương đóng BHXH:</span>
-            <span className="font-medium">{formatVnd(profile.insuranceSalary)}</span>
+            <span className="text-muted-foreground">Lương đóng BHXH (tự tính):</span>
+            <span className="font-medium">{formatVnd(deriveInsuranceSalary(profile.baseSalary, profile.allowances))}</span>
           </div>
           {profile.probationJobSalary ? (
             <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 space-y-1.5 border border-amber-200 dark:border-amber-900">

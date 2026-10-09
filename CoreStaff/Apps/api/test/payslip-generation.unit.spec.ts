@@ -57,7 +57,8 @@ interface PayslipData {
   periodLabel: string;
   grossEarnings: number;
   earningBreakdown: Array<{ type: string; label: string; amount: number; taxable: boolean }>;
-  insuranceSalary: number;
+  /** Base đã kẹp sàn/trần từng loại — payslip không còn lưu `insuranceSalary` nhập tay. */
+  contributionBase: number;
   socialInsurance: number;
   healthInsurance: number;
   unemploymentInsurance: number;
@@ -122,7 +123,7 @@ function createPayslip(
     periodLabel: snapshot.periodLabel,
     grossEarnings,
     earningBreakdown,
-    insuranceSalary: snapshot.baseSalary,
+    contributionBase: insurance.contributionBase,
     socialInsurance: insurance.socialInsurance,
     healthInsurance: insurance.healthInsurance,
     unemploymentInsurance: insurance.unemploymentInsurance,
@@ -304,6 +305,7 @@ describe('Edge Cases', () => {
 
     const highInsurance = {
       ...mockInsuranceResult,
+      contributionBase: 52_200_000, // Kẹp trần
       socialInsurance: Math.round(52_200_000 * 0.08), // Capped
       healthInsurance: Math.round(52_200_000 * 0.015),
       unemploymentInsurance: Math.round(52_200_000 * 0.01),
@@ -313,7 +315,7 @@ describe('Edge Cases', () => {
     const payslip = createPayslip('run_001', highSnapshot, highInsurance, mockPITResult);
 
     expect(payslip.grossEarnings).toBe(200_700_000);
-    expect(payslip.insuranceSalary).toBe(200_000_000);
+    expect(payslip.contributionBase).toBe(52_200_000);
     expect(payslip.netSalary).toBeGreaterThan(0);
   });
 

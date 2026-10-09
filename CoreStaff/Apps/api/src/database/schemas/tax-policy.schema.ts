@@ -51,6 +51,15 @@ export class TaxPolicy {
 	@Prop({ required: false, trim: true })
 	legalReference?: string;
 
+	/**
+	 * Công ty quyết định tiền tăng ca (OT) có chịu PIT không.
+	 * false (mặc định) = giữ nguyên cách loại trừ cũ (phần hệ số 1.0 miễn thuế,
+	 *                    chỉ phần chênh trên 1.0 chịu thuế).
+	 * true            = toàn bộ tiền OT vào thu nhập tính thuế.
+	 */
+	@Prop({ required: true, default: false })
+	overtimeTaxable: boolean;
+
 	@Prop({ required: true, min: 1, default: 1 })
 	version: number;
 

@@ -121,6 +121,7 @@ export function TaxPolicyList({ apiBase }: { apiBase: string | null }) {
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Giảm trừ phụ thuộc</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Số bậc</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tham chiếu pháp lý</th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Thuế OT</th>
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground">Phiên bản</th>
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground">Trạng thái</th>
                     <th className="px-4 py-3 pr-6 text-center font-medium text-muted-foreground">Thao tác</th>
@@ -134,6 +135,13 @@ export function TaxPolicyList({ apiBase }: { apiBase: string | null }) {
                       <td className="px-4 py-3 text-right tabular-nums">{formatVnd(row.dependentDeduction)}</td>
                       <td className="px-4 py-3 text-center tabular-nums">{row.progressiveBrackets?.length ?? 0}</td>
                       <td className="px-4 py-3 max-w-xs whitespace-normal break-words">{row.legalReference}</td>
+                      <td className="px-4 py-3 text-center">
+                        {row.overtimeTaxable ? (
+                          <span className="inline-flex rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300">Chịu thuế</span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-900 dark:text-slate-300">Miễn hệ số 1.0</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">v{row.version}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${isActive(row, now) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>

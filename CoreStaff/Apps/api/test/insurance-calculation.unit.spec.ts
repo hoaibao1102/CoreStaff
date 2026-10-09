@@ -1,170 +1,142 @@
 /**
  * BE Unit Tests — Insurance Calculation (TASK-090/091/092)
- * 
+ *
+ * Trước đây file này dựng lại một bản sao của `InsuranceService.calculateContributions`
+ * — hàm đó đã bị xoá (D46) vì không caller nào và thiếu sàn luật định. Test nay
+ * chạy thẳng engine chuẩn, cũng là engine mà luồng tính lương dùng.
+ *
  * Test coverage:
- * - Employee insurance contributions (BHXH 8%, BHYT 1.5%, BHTN 1%)
- * - Contribution base capping at policy maximum
- * - Employer insurance contributions
- * - Default rates when no policy found
+ * - Employee contributions (BHXH 8%, BHYT 1.5%, BHTN 1%)
+ * - Sàn + trần áp theo TỪNG loại (§30D.3 / AC-INS-03)
+ * - `participates* = false` → khoản đó không phát sinh
+ * - Làm tròn ROUND_HALF_UP_TO_VND theo từng dòng
  */
 
 import { describe, expect, it } from '@jest/globals';
+import {
+  calculateInsuranceContributions,
+  roundHalfUpToVnd,
+  type InsuranceParticipation,
+  type InsurancePolicyLike,
+} from '../src/hr/insurance-policy/insurance-calculation';
+import { InsuranceContributionType } from '../src/database/schemas/enums';
 
-// Simulate InsuranceService logic (pure functions extracted from service)
-const SOCIAL_INSURANCE_RATE = 0.08;   // 8% BHXH
-const HEALTH_INSURANCE_RATE = 0.015;  // 1.5% BHYT
-const UNEMPLOYMENT_INSURANCE_RATE = 0.01; // 1% BHTN
-const DEFAULT_MAX_BASE = 20 * 2_610_000; // 52,200,000 VND (20x minimum salary 2026)
+const CAP = 52_200_000; // 20× lương tối thiểu vùng (2026)
 
-interface InsuranceResult {
-  contributionBase: number;
-  socialInsurance: number;
-  healthInsurance: number;
-  unemploymentInsurance: number;
-  totalInsurance: number;
-}
+const POLICY: InsurancePolicyLike = {
+  socialInsuranceEmployeeRate: 0.08,
+  healthInsuranceEmployeeRate: 0.015,
+  unemploymentInsuranceEmployeeRate: 0.01,
+  salaryBaseRules: [
+    { type: InsuranceContributionType.SOCIAL_INSURANCE, floorAmount: null },
+    { type: InsuranceContributionType.HEALTH_INSURANCE, floorAmount: null },
+    { type: InsuranceContributionType.UNEMPLOYMENT_INSURANCE, floorAmount: null },
+  ],
+  capRules: [
+    { type: InsuranceContributionType.SOCIAL_INSURANCE, capAmount: CAP },
+    { type: InsuranceContributionType.HEALTH_INSURANCE, capAmount: CAP },
+    { type: InsuranceContributionType.UNEMPLOYMENT_INSURANCE, capAmount: CAP },
+  ],
+  employerContributionRates: [
+    { type: InsuranceContributionType.SOCIAL_INSURANCE, rate: 0.175 },
+    { type: InsuranceContributionType.HEALTH_INSURANCE, rate: 0 },
+    { type: InsuranceContributionType.UNEMPLOYMENT_INSURANCE, rate: 0.01 },
+  ],
+};
 
-/**
- * Calculate employee insurance contributions.
- */
-function calculateEmployeeInsurance(
-  insuranceSalary: number,
-  maxContributionBase: number = DEFAULT_MAX_BASE
-): InsuranceResult {
-  // Cap contribution base at policy maximum
-  const contributionBase = Math.min(insuranceSalary, maxContributionBase);
+const FULL: InsuranceParticipation = {
+  participatesSocialInsurance: true,
+  participatesHealthInsurance: true,
+  participatesUnemploymentInsurance: true,
+};
 
-  const socialInsurance = Math.round(contributionBase * SOCIAL_INSURANCE_RATE);
-  const healthInsurance = Math.round(contributionBase * HEALTH_INSURANCE_RATE);
-  const unemploymentInsurance = Math.round(contributionBase * UNEMPLOYMENT_INSURANCE_RATE);
-  const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
+const lineOf = (result: ReturnType<typeof calculateInsuranceContributions>, type: InsuranceContributionType) =>
+  result.lines.find((l) => l.type === type);
 
-  return {
-    contributionBase,
-    socialInsurance,
-    healthInsurance,
-    unemploymentInsurance,
-    totalInsurance,
-  };
-}
+describe('calculateInsuranceContributions — employee rates', () => {
+  it('tính đúng BHXH 8% / BHYT 1.5% / BHTN 1% khi lương dưới trần', () => {
+    const salary = 25_000_000;
+    const result = calculateInsuranceContributions(POLICY, FULL, salary);
 
-/**
- * Calculate employer insurance contributions.
- */
-function calculateEmployerInsurance(
-  insuranceSalary: number,
-  maxContributionBase: number = DEFAULT_MAX_BASE
-): InsuranceResult {
-  const contributionBase = Math.min(insuranceSalary, maxContributionBase);
-
-  // Employer rates: BHXH 17.5%, BHTN 1%
-  const socialInsurance = Math.round(contributionBase * 0.175);
-  const healthInsurance = 0;
-  const unemploymentInsurance = Math.round(contributionBase * 0.01);
-  const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
-
-  return {
-    contributionBase,
-    socialInsurance,
-    healthInsurance,
-    unemploymentInsurance,
-    totalInsurance,
-  };
-}
-
-/* ───────── TESTS ───────── */
-
-describe('calculateEmployeeInsurance — Normal Cases', () => {
-  it('should calculate correctly for salary below cap', () => {
-    const result = calculateEmployeeInsurance(25_000_000);
-
-    expect(result.contributionBase).toBe(25_000_000);
-    expect(result.socialInsurance).toBe(Math.round(25_000_000 * 0.08)); // 2,000,000
-    expect(result.healthInsurance).toBe(Math.round(25_000_000 * 0.015)); // 375,000
-    expect(result.unemploymentInsurance).toBe(Math.round(25_000_000 * 0.01)); // 250,000
-    expect(result.totalInsurance).toBe(2_000_000 + 375_000 + 250_000); // 2,625,000
+    expect(lineOf(result, InsuranceContributionType.SOCIAL_INSURANCE)?.employeeContribution).toBe(roundHalfUpToVnd(salary * 0.08));
+    expect(lineOf(result, InsuranceContributionType.HEALTH_INSURANCE)?.employeeContribution).toBe(roundHalfUpToVnd(salary * 0.015));
+    expect(lineOf(result, InsuranceContributionType.UNEMPLOYMENT_INSURANCE)?.employeeContribution).toBe(roundHalfUpToVnd(salary * 0.01));
+    expect(result.mandatoryEmployeeInsurance).toBe(roundHalfUpToVnd(salary * 0.105));
   });
 
-  it('should calculate correctly for salary above cap', () => {
-    const result = calculateEmployeeInsurance(100_000_000);
+  it('kẹp trần theo từng loại', () => {
+    const result = calculateInsuranceContributions(POLICY, FULL, 100_000_000);
 
-    // Should be capped at DEFAULT_MAX_BASE
-    expect(result.contributionBase).toBe(DEFAULT_MAX_BASE);
-    expect(result.socialInsurance).toBe(Math.round(DEFAULT_MAX_BASE * 0.08));
-    expect(result.healthInsurance).toBe(Math.round(DEFAULT_MAX_BASE * 0.015));
-    expect(result.unemploymentInsurance).toBe(Math.round(DEFAULT_MAX_BASE * 0.01));
+    for (const line of result.lines) {
+      expect(line.base).toBe(CAP);
+    }
+    expect(lineOf(result, InsuranceContributionType.SOCIAL_INSURANCE)?.employeeContribution).toBe(roundHalfUpToVnd(CAP * 0.08));
   });
 
-  it('should return 0 for zero salary', () => {
-    const result = calculateEmployeeInsurance(0);
+  it('trả 0 khi lương đóng bảo hiểm bằng 0', () => {
+    const result = calculateInsuranceContributions(POLICY, FULL, 0);
 
-    expect(result.contributionBase).toBe(0);
-    expect(result.socialInsurance).toBe(0);
-    expect(result.healthInsurance).toBe(0);
-    expect(result.unemploymentInsurance).toBe(0);
-    expect(result.totalInsurance).toBe(0);
-  });
-
-  it('should use custom maxContributionBase', () => {
-    const customCap = 30_000_000;
-    const result = calculateEmployeeInsurance(40_000_000, customCap);
-
-    expect(result.contributionBase).toBe(customCap);
-    expect(result.socialInsurance).toBe(Math.round(customCap * 0.08));
+    expect(result.mandatoryEmployeeInsurance).toBe(0);
+    expect(result.lines.every((l) => l.employeeContribution === 0)).toBe(true);
   });
 });
 
-describe('calculateEmployerInsurance — Normal Cases', () => {
-  it('should calculate correctly for salary below cap', () => {
-    const result = calculateEmployerInsurance(25_000_000);
+describe('calculateInsuranceContributions — sàn theo từng loại (AC-INS-03)', () => {
+  it('nâng base lên sàn của đúng loại đó, không đụng loại khác', () => {
+    const policy: InsurancePolicyLike = {
+      ...POLICY,
+      salaryBaseRules: [
+        { type: InsuranceContributionType.SOCIAL_INSURANCE, floorAmount: 5_000_000 },
+        { type: InsuranceContributionType.HEALTH_INSURANCE, floorAmount: null },
+        { type: InsuranceContributionType.UNEMPLOYMENT_INSURANCE, floorAmount: null },
+      ],
+    };
+    const result = calculateInsuranceContributions(policy, FULL, 3_000_000);
 
-    expect(result.contributionBase).toBe(25_000_000);
-    expect(result.socialInsurance).toBe(Math.round(25_000_000 * 0.175)); // 4,375,000
-    expect(result.healthInsurance).toBe(0);
-    expect(result.unemploymentInsurance).toBe(Math.round(25_000_000 * 0.01)); // 250,000
-    expect(result.totalInsurance).toBe(4_375_000 + 250_000); // 4,625,000
-  });
-
-  it('should cap at policy maximum', () => {
-    const result = calculateEmployerInsurance(100_000_000);
-
-    expect(result.contributionBase).toBe(DEFAULT_MAX_BASE);
-    expect(result.socialInsurance).toBe(Math.round(DEFAULT_MAX_BASE * 0.175));
-  });
-});
-
-describe('Edge Cases', () => {
-  it('should handle very small salary', () => {
-    const result = calculateEmployeeInsurance(1_000_000);
-
-    expect(result.contributionBase).toBe(1_000_000);
-    expect(result.socialInsurance).toBe(80_000);
-    expect(result.healthInsurance).toBe(15_000);
-    expect(result.unemploymentInsurance).toBe(10_000);
-    expect(result.totalInsurance).toBe(105_000);
-  });
-
-  it('should handle exact cap boundary', () => {
-    const result = calculateEmployeeInsurance(DEFAULT_MAX_BASE);
-
-    expect(result.contributionBase).toBe(DEFAULT_MAX_BASE);
-    expect(result.socialInsurance).toBe(Math.round(DEFAULT_MAX_BASE * 0.08));
-  });
-
-  it('should round correctly for fractional amounts', () => {
-    const result = calculateEmployeeInsurance(1_234_567);
-
-    expect(Number.isInteger(result.socialInsurance)).toBe(true);
-    expect(Number.isInteger(result.healthInsurance)).toBe(true);
-    expect(Number.isInteger(result.unemploymentInsurance)).toBe(true);
+    // BHXH bị đẩy lên sàn, hai khoản còn lại giữ nguyên lương thật.
+    expect(lineOf(result, InsuranceContributionType.SOCIAL_INSURANCE)?.base).toBe(5_000_000);
+    expect(lineOf(result, InsuranceContributionType.HEALTH_INSURANCE)?.base).toBe(3_000_000);
+    expect(lineOf(result, InsuranceContributionType.UNEMPLOYMENT_INSURANCE)?.base).toBe(3_000_000);
   });
 });
 
-describe('Total Employee Rate Verification', () => {
-  it('should sum to 10.5% total employee contribution', () => {
-    const result = calculateEmployeeInsurance(50_000_000);
+describe('calculateInsuranceContributions — participation (AC-INS-02)', () => {
+  it('không tham gia → không sinh dòng, khoản đó bằng 0', () => {
+    const result = calculateInsuranceContributions(POLICY, { ...FULL, participatesHealthInsurance: false }, 25_000_000);
 
-    const effectiveRate = result.totalInsurance / result.contributionBase;
-    expect(effectiveRate).toBeCloseTo(0.105, 2); // 10.5%
+    expect(lineOf(result, InsuranceContributionType.HEALTH_INSURANCE)).toBeUndefined();
+    expect(result.lines).toHaveLength(2);
+    expect(result.mandatoryEmployeeInsurance).toBe(roundHalfUpToVnd(25_000_000 * 0.09));
+  });
+
+  it('không tham gia khoản nào → tổng bằng 0', () => {
+    const result = calculateInsuranceContributions(POLICY, {
+      participatesSocialInsurance: false,
+      participatesHealthInsurance: false,
+      participatesUnemploymentInsurance: false,
+    }, 25_000_000);
+
+    expect(result.lines).toEqual([]);
+    expect(result.mandatoryEmployeeInsurance).toBe(0);
+    expect(result.employerInsuranceCost).toBe(0);
+  });
+});
+
+describe('calculateInsuranceContributions — làm tròn & employer cost', () => {
+  it('mọi dòng đều là số nguyên VND', () => {
+    const result = calculateInsuranceContributions(POLICY, FULL, 1_234_567);
+
+    for (const line of result.lines) {
+      expect(Number.isInteger(line.employeeContribution)).toBe(true);
+      expect(Number.isInteger(line.employerContribution)).toBe(true);
+    }
+  });
+
+  it('cộng chi phí người sử dụng lao động riêng, không trừ vào Net', () => {
+    const salary = 25_000_000;
+    const result = calculateInsuranceContributions(POLICY, FULL, salary);
+
+    expect(result.employerInsuranceCost).toBe(roundHalfUpToVnd(salary * 0.175) + roundHalfUpToVnd(salary * 0.01));
+    expect(result.mandatoryEmployeeInsurance).toBe(roundHalfUpToVnd(salary * 0.105));
   });
 });

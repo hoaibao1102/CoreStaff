@@ -15,7 +15,7 @@ import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { Types } from 'mongoose';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, vn } from './fixtures';
+import { Fixture, seedTenant, cookieFor, vn, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -23,6 +23,7 @@ let testApp: TestApp;
 let http: Http;
 let fixture: Fixture;
 let hrCookie: string;
+let managerCookie: string;
 
 beforeAll(async () => {
   testApp = await createTestApp();
@@ -37,30 +38,46 @@ beforeEach(async () => {
   await clearDatabase();
   fixture = await seedTenant();
   hrCookie = await cookieFor(fixture.hrId, fixture.organizationId);
+  managerCookie = await cookieFor(fixture.managerId, fixture.organizationId);
 });
 
 /* ───────── HELPERS ───────── */
 
-async function createPeriod(period: string, startDate: string, endDate: string) {
-  const res = await http.post('/api/timesheet-periods')
+/**
+ * A period starting today. `create()` rejects a start date in the past
+ * (PERIOD_IN_PAST), so a fixed '2026-10-01' turns into a 400 the moment the
+ * clock passes it and every `res.body.data._id` below becomes undefined.
+ */
+async function createPeriod(): Promise<string> {
+  const today = vnToday();
+  const [year, month, day] = today.split('-').map(Number);
+  const end = new Date(Date.UTC(year, month - 1, day + 30));
+  const res = await http.post('/api/hr/timesheet-periods')
     .set('Cookie', hrCookie)
-    .send({ period, startDate, endDate });
-  return res.body.data;
+    .send({
+      period: today.slice(0, 7),
+      startDate: today,
+      endDate: end.toISOString().slice(0, 10),
+    });
+
+  expect(res.status).toBe(201);
+  return res.body.data._id;
 }
 
-async function seedAttendanceDay(organizationId: string, employeeProfileId: string, workDate: string, dayResult: string, checkInAt?: string, checkOutAt?: string, leaveType?: string) {
-  const model = await connection().model('AttendanceDay');
-  await model.create({
-    organizationId: new Types.ObjectId(organizationId),
-    employeeProfileId: new Types.ObjectId(employeeProfileId),
-    userId: new Types.ObjectId(), // Will be set correctly
-    workDate,
-    dayResult,
-    checkInAt: checkInAt ? new Date(checkInAt) : undefined,
-    checkOutAt: checkOutAt ? new Date(checkOutAt) : undefined,
-    leaveType,
-    status: 'CONFIRMED',
-  });
+/**
+ * Summaries are a close-time artifact (TASK-077/078) — transitioning status is
+ * not enough to produce them. Close the period to generate them.
+ */
+async function closePeriod(periodId: string): Promise<void> {
+  const confirmed = await http
+    .post(`/api/hr/timesheet-periods/${periodId}/department-confirmations`)
+    .set('Cookie', managerCookie)
+    .send({ departmentId: fixture.departmentId, expectedPeriodVersion: 1 });
+  expect(confirmed.status).toBe(201);
+
+  const closed = await http.post(`/api/hr/timesheet-periods/${periodId}/close`)
+    .set('Cookie', hrCookie);
+  expect(closed.status).toBe(201);
 }
 
 // Get the actual employee profile id from fixture
@@ -78,24 +95,17 @@ import { connection } from './app-factory';
 
 describe('TASK-077 — Summary Generation', () => {
   let periodId: string;
-  let periodKey: string;
 
   beforeEach(async () => {
-    const period = await createPeriod('2026-10', '2026-10-01', '2026-10-31');
-    periodId = period._id;
-    periodKey = '2026-10';
+    periodId = await createPeriod();
   });
 
   it('should generate summary with zero attendance days', async () => {
-    // Call close period which triggers summary generation
-    const res = await http.put(`/api/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
+    await closePeriod(periodId);
 
-    // Verify summary was created via direct DB query
     const summaryModel = await connection().model('TimesheetSummary');
     const summaries = await summaryModel.find({ periodId: new Types.ObjectId(periodId) }).lean();
-    
+
     // Should have at least one summary for the seeded employee
     expect(summaries.length).toBeGreaterThan(0);
   });
@@ -105,24 +115,16 @@ describe('TASK-077 — Summary Generation', () => {
     const model = await connection().model('AttendanceDay');
     await model.create({
       organizationId: new Types.ObjectId(fixture.organizationId),
-      employeeProfileId: new Types.ObjectId(fixture.profileId),
-      workDate: '2026-10-05',
+      employeeId: new Types.ObjectId(fixture.employeeId),
+      workDate: vnToday(),
       dayResult: 'PRESENT',
-      checkInAt: vn('2026-10-05', '08:00'),
-      checkOutAt: vn('2026-10-05', '17:00'),
-      status: 'CONFIRMED',
+      attendanceStatus: 'COMPLETED',
+      checkInAt: vn(vnToday(), '08:00'),
+      checkOutAt: vn(vnToday(), '17:00'),
+      workingMinutes: 480,
     });
 
-    // Transition to READY_TO_CLOSE and then CLOSED
-    await http.put(`/api/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
-    await http.put(`/api/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'READY_TO_CLOSE' });
-    await http.put(`/api/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'CLOSED' });
+    await closePeriod(periodId);
 
     const summaries = await connection().model('TimesheetSummary').find({
       periodId: new Types.ObjectId(periodId),
@@ -232,8 +234,7 @@ describe('TASK-077 — Leave Breakdown Aggregation', () => {
   let periodId: string;
 
   beforeEach(async () => {
-    const period = await createPeriod('2026-10', '2026-10-01', '2026-10-31');
-    periodId = period._id;
+    periodId = await createPeriod();
   });
 
   it('should aggregate sick leave days', async () => {
@@ -292,8 +293,7 @@ describe('TASK-077 — Minute Aggregations', () => {
   let periodId: string;
 
   beforeEach(async () => {
-    const period = await createPeriod('2026-10', '2026-10-01', '2026-10-31');
-    periodId = period._id;
+    periodId = await createPeriod();
   });
 
   it('should aggregate total working minutes', async () => {

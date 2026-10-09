@@ -92,6 +92,7 @@ export class TaxPolicyService {
 			})),
 			roundingRule,
 			legalReference: dto.legalReference,
+			overtimeTaxable: dto.overtimeTaxable ?? false,
 			version: nextVersion,
 			active: true,
 		});
@@ -137,6 +138,7 @@ export class TaxPolicyService {
 			})) ?? existing.progressiveBrackets,
 			roundingRule,
 			legalReference: dto.legalReference ?? existing.legalReference,
+			overtimeTaxable: dto.overtimeTaxable ?? existing.overtimeTaxable ?? false,
 			version: nextVersion,
 			active: true,
 		});

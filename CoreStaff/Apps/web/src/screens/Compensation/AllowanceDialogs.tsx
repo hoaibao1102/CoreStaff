@@ -35,7 +35,6 @@ export function AllowanceCreateDialog({
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [taxable, setTaxable] = useState(false);
   const [insuranceBased, setInsuranceBased] = useState(false);
   const [prorated, setProrated] = useState(true);
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
@@ -61,7 +60,6 @@ export function AllowanceCreateDialog({
       setCode(selected.code);
       setName(selected.defaultName);
       setDescription(selected.description || '');
-      setTaxable(selected.defaultTaxable);
       setInsuranceBased(selected.defaultInsuranceBased);
     }
   };
@@ -83,7 +81,7 @@ export function AllowanceCreateDialog({
         name: name.trim(),
         description: description.trim() || undefined,
         amount: 0,
-        taxable,
+        taxable: true,
         insuranceBased,
         prorated,
         effectiveFrom,
@@ -190,13 +188,10 @@ export function AllowanceCreateDialog({
             <div className="space-y-2 rounded-lg border border-border p-3.5 bg-muted/20">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quy tắc tính toán</span>
               <div className="space-y-2 pt-1">
-                <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${taxable ? 'bg-purple-50/60 border-purple-200 dark:bg-purple-950/40 dark:border-purple-800' : 'bg-card border-border hover:bg-muted/40'}`}>
-                  <input type="checkbox" checked={taxable} onChange={e => setTaxable(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">Tính vào thu nhập chịu thuế PIT</div>
-                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này sẽ được cộng vào tổng thu nhập trước thuế khi tính thuế TNCN</div>
-                  </div>
-                </label>
+                <div className="rounded-lg border border-border bg-card p-2.5">
+                  <div className="text-xs font-semibold text-foreground">Mọi phụ cấp đều chịu thuế TNCN</div>
+                  <div className="text-[11px] text-muted-foreground">Không cần cấu hình — mọi khoản phụ cấp đều được cộng vào thu nhập chịu thuế khi tính thuế TNCN.</div>
+                </div>
 
                 <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${insuranceBased ? 'bg-blue-50/60 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800' : 'bg-card border-border hover:bg-muted/40'}`}>
                   <input type="checkbox" checked={insuranceBased} onChange={e => setInsuranceBased(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />
@@ -245,7 +240,6 @@ export function AllowanceEditDialog({
   const [code, setCode] = useState(allowance.code);
   const [name, setName] = useState(allowance.name);
   const [description, setDescription] = useState(allowance.description || '');
-  const [taxable, setTaxable] = useState(allowance.taxable);
   const [insuranceBased, setInsuranceBased] = useState(allowance.insuranceBased);
   const [prorated, setProrated] = useState(allowance.prorated);
   const [effectiveFrom, setEffectiveFrom] = useState(allowance.effectiveFrom ? allowance.effectiveFrom.split('T')[0] : '');
@@ -265,7 +259,7 @@ export function AllowanceEditDialog({
         code: code.trim().toUpperCase(),
         name: name.trim(),
         description: description.trim() || undefined,
-        taxable,
+        taxable: true,
         insuranceBased,
         prorated,
         effectiveFrom: effectiveFrom || undefined,
@@ -340,13 +334,10 @@ export function AllowanceEditDialog({
             <div className="space-y-2 rounded-lg border border-border p-3.5 bg-muted/20">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quy tắc tính toán</span>
               <div className="space-y-2 pt-1">
-                <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${taxable ? 'bg-purple-50/60 border-purple-200 dark:bg-purple-950/40 dark:border-purple-800' : 'bg-card border-border hover:bg-muted/40'}`}>
-                  <input type="checkbox" checked={taxable} onChange={e => setTaxable(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">Tính vào thu nhập chịu thuế PIT</div>
-                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này sẽ được cộng vào tổng thu nhập trước thuế khi tính thuế TNCN</div>
-                  </div>
-                </label>
+                <div className="rounded-lg border border-border bg-card p-2.5">
+                  <div className="text-xs font-semibold text-foreground">Mọi phụ cấp đều chịu thuế TNCN</div>
+                  <div className="text-[11px] text-muted-foreground">Không cần cấu hình — mọi khoản phụ cấp đều được cộng vào thu nhập chịu thuế khi tính thuế TNCN.</div>
+                </div>
 
                 <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${insuranceBased ? 'bg-blue-50/60 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800' : 'bg-card border-border hover:bg-muted/40'}`}>
                   <input type="checkbox" checked={insuranceBased} onChange={e => setInsuranceBased(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />

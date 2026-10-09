@@ -25,6 +25,7 @@ import { Input } from '../../components/input';
 import { Separator } from '../../components/separator';
 import { Skeleton } from '../../components/skeleton';
 import { hrRequest, listEmployees, type Department, type EmployeeProfile } from '../../services/hrService';
+import { deriveInsuranceSalary, type EmployeeAssignedAllowance } from '../../services/compensation.service';
 
 /* ───────── Types ───────── */
 
@@ -33,6 +34,7 @@ interface SalaryProfileRow {
     employeeId: string;
     employeeProfileId: string;
     baseSalary: number;
+    /** Lương đóng bảo hiểm — số DẪN XUẤT (lương cơ bản − tổng phụ cấp), không nhập tay. */
     insuranceSalary: number;
     effectiveFrom: string;
     effectiveTo?: string | null;
@@ -100,7 +102,11 @@ function enrichProfiles(
             employeeId: empId,
             employeeProfileId: empId,
             baseSalary: Number(p.baseSalary ?? 0),
-            insuranceSalary: Number(p.insuranceSalary ?? 0),
+            // Số dẫn xuất — tính lại từ base − phụ cấp để khớp với payroll.
+            insuranceSalary: deriveInsuranceSalary(
+                Number(p.baseSalary ?? 0),
+                Array.isArray(p.allowances) ? (p.allowances as EmployeeAssignedAllowance[]) : undefined,
+            ),
             effectiveFrom: String(p.effectiveFrom ?? ''),
             effectiveTo: p.effectiveTo ? String(p.effectiveTo) : null,
             version: Number(p.version ?? 1),

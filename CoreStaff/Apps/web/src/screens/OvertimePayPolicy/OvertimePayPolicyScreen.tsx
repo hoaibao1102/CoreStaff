@@ -37,6 +37,8 @@ import {
   TableRow,
 } from "@/components/table";
 import { toast } from "@/components/toast";
+import { Tooltip } from "@/components/tooltip";
+import { listTaxPolicies, type TaxPolicy } from "@/services/hrService";
 import {
   createOvertimePolicy,
   listOvertimePolicies,
@@ -129,10 +131,12 @@ function fromPolicy(policy: OvertimePayPolicy): Form {
 
 function OvertimeDetailDialog({
   policy,
+  overtimeTaxable,
   open,
   onClose,
 }: {
   policy: OvertimePayPolicy | null;
+  overtimeTaxable: boolean;
   open: boolean;
   onClose: () => void;
 }) {
@@ -175,6 +179,12 @@ function OvertimeDetailDialog({
             {[
               { label: "Tham chiếu pháp lý", value: policy.legalReference },
               { label: "Phiên bản", value: `v${policy.version}` },
+              {
+                label: "Thuế TNCN cho tiền tăng ca",
+                value: overtimeTaxable
+                  ? "Chịu thuế toàn bộ"
+                  : "Miễn thuế toàn bộ",
+              },
               {
                 label: "Trạng thái",
                 value: policy.active ? "Đang hiệu lực" : "Ngưng hiệu lực",
@@ -360,8 +370,27 @@ export function OvertimePayPolicyScreen({ apiBase }: { apiBase: string | null })
   const [createOpen, setCreateOpen] = useState(false);
   const [editPolicy, setEditPolicy] = useState<OvertimePayPolicy | null>(null);
   const [detailPolicy, setDetailPolicy] = useState<OvertimePayPolicy | null>(null);
+  const [taxPolicies, setTaxPolicies] = useState<TaxPolicy[]>([]);
 
   useEffect(() => { setPage(1); }, [search, status]);
+
+  // Chính sách thuế TNCN quyết định tiền tăng ca có chịu thuế hay không (TaxPolicy.overtimeTaxable).
+  useEffect(() => {
+    if (!apiBase) return;
+    let cancelled = false;
+    void listTaxPolicies(apiBase)
+      .then((data) => { if (!cancelled) setTaxPolicies(data); })
+      .catch(() => { if (!cancelled) setTaxPolicies([]); });
+    return () => { cancelled = true; };
+  }, [apiBase, revision]);
+
+  const overtimeTaxable = useMemo(() => {
+    const now = new Date();
+    const effective = taxPolicies
+      .filter((p) => new Date(p.effectiveFrom) <= now && (!p.effectiveTo || new Date(p.effectiveTo) > now))
+      .sort((a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime());
+    return effective[0]?.overtimeTaxable === true;
+  }, [taxPolicies]);
 
   const load = useCallback(() => {
     if (!apiBase) {
@@ -420,6 +449,23 @@ export function OvertimePayPolicyScreen({ apiBase }: { apiBase: string | null })
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Hệ số lương tăng ca cho ngày làm việc, ngày nghỉ tuần và ngày lễ
+            <Tooltip
+              content={
+                <>
+                  <span className="block font-semibold">Chính sách thuế TNCN cho tiền tăng ca</span>
+                  <span className="mt-1 block">
+                    {overtimeTaxable
+                      ? "Công ty đang áp dụng: toàn bộ tiền tăng ca chịu thuế TNCN."
+                      : "Công ty đang áp dụng: tiền tăng ca được miễn thuế, không vào thu nhập tính thuế."}
+                  </span>
+                  <span className="mt-1 block text-muted-foreground">
+                    Cấu hình tại Chính sách thuế TNCN.
+                  </span>
+                </>
+              }
+            >
+              <span className="ml-0.5 cursor-help font-semibold text-primary" aria-label="Chính sách thuế TNCN cho tiền tăng ca">*</span>
+            </Tooltip>
           </p>
         </div>
         <Button
@@ -599,6 +645,7 @@ export function OvertimePayPolicyScreen({ apiBase }: { apiBase: string | null })
       />
       <OvertimeDetailDialog
         policy={detailPolicy}
+        overtimeTaxable={overtimeTaxable}
         open={detailPolicy !== null}
         onClose={() => setDetailPolicy(null)}
       />

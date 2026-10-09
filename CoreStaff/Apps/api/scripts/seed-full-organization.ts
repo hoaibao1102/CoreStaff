@@ -10,6 +10,7 @@
  *
  * Run dry-run:  npm run seed:full:org
  * Run apply:    npm run seed:full:org -- --apply
+ * Re-seed sạch: npm run seed:full:org -- --apply --reset
  */
 
 import * as mongoose from 'mongoose';
@@ -36,9 +37,24 @@ import {
   normalizeEmail,
 } from '../src/database/schemas/enums';
 import { InsuranceContributionType } from '../src/database/schemas/enums';
+import { calculateInsuranceContributions } from '../src/hr/insurance-policy/insurance-calculation';
+import { deriveInsuranceSalary, PayrollSnapshotService } from '../src/hr/timesheet/payroll-snapshot.service';
+import { TimesheetSummaryService } from '../src/hr/timesheet/timesheet-summary.service';
+import { InsuranceService } from '../src/hr/payroll/insurance.service';
+import { PitService } from '../src/hr/payroll/pit.service';
+import { PayslipService } from '../src/hr/payroll/payslip.service';
+import { PayrollRunService } from '../src/hr/payroll/payroll-run.service';
 import { userFields } from '../src/database/seed/provision';
 
 const APPLY = process.argv.includes('--apply');
+/**
+ * `--reset`: xoá toàn bộ dữ liệu của org FLOW trước khi seed lại.
+ *
+ * Seed này ghi qua `insertIfMissing`/`upsert` — chạy lại KHÔNG duplicate nhưng
+ * cũng KHÔNG sửa bản ghi cũ (skip). Sau khi công thức lương đổi, phải xoá
+ * snapshot/payslip cũ thì số mới mới được sinh ra. `--reset` làm việc đó.
+ */
+const RESET = process.argv.includes('--reset');
 const ORG_CODE = 'FLOW';
 const ORG_NAME = 'Flow Software JSC';
 const PERIOD = '2026-09';
@@ -46,109 +62,6 @@ const PERIOD_START = new Date('2026-09-01T00:00:00.000Z');
 const PERIOD_END = new Date('2026-09-30T23:59:59.999Z');
 
 const password = process.env.SEED_PASSWORD || 'FlowDemo1!';
-
-/** Progressive PIT brackets for Vietnam 2026 (VND/month). */
-const DEFAULT_TAX_BRACKETS = [
-  { upperLimit: 10_000_000, rate: 5 },
-  { upperLimit: 30_000_000, rate: 10 },
-  { upperLimit: 60_000_000, rate: 20 },
-  { upperLimit: 100_000_000, rate: 30 },
-  { upperLimit: Infinity, rate: 35 },
-];
-
-/** Compute PIT and related deduction fields locally for seeding payslips. */
-async function computePit(
-  grossEarnings: number,
-  totalInsurance: number,
-  profileId: mongoose.Types.ObjectId,
-  organizationId: mongoose.Types.ObjectId,
-  snapshot: any,
-): Promise<{
-  taxableEarnings: number;
-  personalDeduction: number;
-  dependentDeduction: number;
-  pitAmount: number;
-  breakdown: Array<{ bracket: number; income: number; rate: number; tax: number }>;
-}> {
-  const EmployeeProfile = mongoose.model('EmployeeProfile');
-  const profile = await EmployeeProfile.findById(profileId).lean();
-  const activeDependents = ((profile as any)?.dependents || []).filter(
-    (d: any) => d.status === 'ACTIVE' || !d.status,
-  ).length;
-  const personalDeduction = 15_500_000;
-  const dependentDeduction = activeDependents * 6_200_000;
-  // Taxable gross = gross earnings - non-taxable allowances - OT non-taxable portion
-  const nonTaxableAllowances = snapshot.nonTaxableAllowances || 0;
-  const otNonTaxable = snapshot.otNonTaxableEarnings || 0;
-  const taxableGross = grossEarnings - nonTaxableAllowances - otNonTaxable;
-  const taxableEarnings = Math.max(
-    0,
-    taxableGross - totalInsurance - personalDeduction - dependentDeduction,
-  );
-
-  let remaining = taxableEarnings;
-  let previousLimit = 0;
-  let totalTax = 0;
-  const breakdown: Array<{ bracket: number; income: number; rate: number; tax: number }> = [];
-
-  for (let i = 0; i < DEFAULT_TAX_BRACKETS.length; i++) {
-    if (remaining <= 0) break;
-    const bracket = DEFAULT_TAX_BRACKETS[i];
-    const bracketWidth = bracket.upperLimit - previousLimit;
-    const taxableInBracket = Math.min(remaining, bracketWidth);
-    const taxInBracket = taxableInBracket * (bracket.rate / 100);
-    totalTax += taxInBracket;
-    remaining -= taxableInBracket;
-    previousLimit = bracket.upperLimit;
-    breakdown.push({ bracket: i + 1, income: taxableInBracket, rate: bracket.rate, tax: Math.round(taxInBracket) });
-  }
-
-  return {
-    taxableEarnings,
-    personalDeduction,
-    dependentDeduction,
-    pitAmount: Math.round(totalTax),
-    breakdown,
-  };
-}
-
-function buildEarningBreakdown(snapshot: any, grossEarnings: number): Array<{ type: string; label: string; amount: number; taxable: boolean }> {
-  const breakdown: Array<{ type: string; label: string; amount: number; taxable: boolean }> = [
-    { type: 'BASE_SALARY', label: "Lương cơ bản", amount: snapshot.proratedBaseSalary || 0, taxable: true },
-  ];
-
-  // Allowances: split taxable vs non-taxable for earning breakdown
-  const taxableAllowances = (snapshot.allowanceBreakdown || []).filter((a: any) => a.taxable);
-  const nonTaxableAllowances = (snapshot.allowanceBreakdown || []).filter((a: any) => !a.taxable);
-
-  if (taxableAllowances.length > 0) {
-    breakdown.push({ type: "ALLOWANCE", label: "Trợ cấp chịu thuế", amount: taxableAllowances.reduce((sum: number, a: any) => sum + (a.amount || 0), 0), taxable: true });
-  }
-  if (nonTaxableAllowances.length > 0) {
-    breakdown.push({ type: "ALLOWANCE", label: "Trợ cấp không chịu thuế", amount: nonTaxableAllowances.reduce((sum: number, a: any) => sum + (a.amount || 0), 0), taxable: false });
-  }
-
-  if (snapshot.attendanceBonus > 0) {
-    breakdown.push({ type: "ATTENDANCE_BONUS", label: "Thưởng chuyên cần", amount: snapshot.attendanceBonus, taxable: true });
-  }
-  if (snapshot.kpiBonus > 0) {
-    breakdown.push({ type: "KPI_BONUS", label: "Thưởng KPI", amount: snapshot.kpiBonus, taxable: true });
-  }
-  if (snapshot.otPay > 0) {
-    breakdown.push({ type: "OVERTIME", label: "Làm thêm giờ", amount: snapshot.otPay, taxable: false });
-  }
-
-  return breakdown;
-}
-
-function buildDeductionBreakdown(snapshot: any, pitAmount: number): Array<{ type: string; label: string; amount: number }> {
-  return [
-    ...(snapshot.socialInsurance > 0 ? [{ type: "SOCIAL_INSURANCE", label: "BHXH (8%)", amount: snapshot.socialInsurance }] : []),
-    ...(snapshot.healthInsurance > 0 ? [{ type: "HEALTH_INSURANCE", label: "BHYT (1.5%)", amount: snapshot.healthInsurance }] : []),
-    ...(snapshot.unemploymentInsurance > 0 ? [{ type: "UNEMPLOYMENT_INSURANCE", label: "BHTN (1%)", amount: snapshot.unemploymentInsurance }] : []),
-    ...(pitAmount > 0 ? [{ type: "PIT", label: "Thuế TNCN", amount: pitAmount }] : []),
-  ];
-}
 
 interface Summary { planned: number; created: number; skipped: number; }
 const summary = new Map<string, Summary>();
@@ -250,6 +163,35 @@ async function main() {
   const Evidence = db.model("Evidence");
   const ApprovalHistory = db.model("ApprovalHistory");
 
+  // ── --reset: xoá sạch dữ liệu org FLOW trước khi seed lại ───────────────
+  // Quét mọi model có path `organizationId` → không phải bảo trì danh sách tay
+  // khi schema thêm collection mới. `AllowanceCatalog` là catalog toàn cục
+  // (không có organizationId) nên được giữ nguyên — seed upsert theo `code`.
+  if (RESET) {
+    if (!APPLY) {
+      console.log('[seed:full:org] --reset bỏ qua ở chế độ DRY-RUN (cần --apply).');
+    } else {
+      const existingOrg: any = await Organization.findOne({ code: ORG_CODE }).select('_id').lean();
+      if (existingOrg) {
+        const resetOrgId = existingOrg._id;
+        let purged = 0;
+        for (const { name, schema } of SCHEMA_REGISTRY) {
+          if (!schema.path('organizationId')) continue;
+          const result = await db.model(name).deleteMany({ organizationId: resetOrgId });
+          if (result.deletedCount) {
+            purged += result.deletedCount;
+            console.log(`  reset ${name.padEnd(28)} deleted=${result.deletedCount}`);
+          }
+        }
+        await Organization.deleteOne({ _id: resetOrgId });
+        purged += 1;
+        console.log(`[seed:full:org] --reset: đã xoá ${purged} bản ghi của org ${ORG_CODE}.`);
+      } else {
+        console.log(`[seed:full:org] --reset: chưa có org ${ORG_CODE}, không cần xoá.`);
+      }
+    }
+  }
+
   // ── Organization ─────────────────────────────────────────────────────────
   const organizationId = await upsert(
     Organization,
@@ -268,16 +210,25 @@ async function main() {
     deptIds.set(d.code, await upsert(Department, { organizationId, code: d.code }, { organizationId, ...d, active: true }, 'Department'));
   }
 
+  // `Position.departmentId` bắt buộc (position.schema.ts:19) nhưng seed cũ bỏ sót
+  // → create() ném ValidationError. Query giữ nguyên `{organizationId, code}` để
+  // vẫn khớp bản ghi cũ (tạo trước khi có field) thay vì nhân bản chúng.
   const positionData = [
-    { code: 'CEO', name: 'Chief Executive Officer' },
-    { code: 'HRBP', name: 'HR Business Partner' },
-    { code: 'DLEAD', name: 'Engineering Lead' },
-    { code: 'DEV', name: 'Software Developer' },
-    { code: 'QA', name: 'QA Engineer' },
+    { code: 'CEO', name: 'Chief Executive Officer', departmentCode: 'ENG' },
+    { code: 'HRBP', name: 'HR Business Partner', departmentCode: 'HR' },
+    { code: 'DLEAD', name: 'Engineering Lead', departmentCode: 'ENG' },
+    { code: 'DEV', name: 'Software Developer', departmentCode: 'ENG' },
+    { code: 'QA', name: 'QA Engineer', departmentCode: 'ENG' },
   ];
   const posIds = new Map<string, mongoose.Types.ObjectId>();
   for (const p of positionData) {
-    posIds.set(p.code, await upsert(Position, { organizationId, code: p.code }, { organizationId, ...p, active: true }, 'Position'));
+    const { departmentCode, ...rest } = p;
+    posIds.set(p.code, await upsert(
+      Position,
+      { organizationId, code: p.code },
+      { organizationId, departmentId: deptIds.get(departmentCode), ...rest, active: true },
+      'Position',
+    ));
   }
 
   // ── Workplace & Shift ────────────────────────────────────────────────────
@@ -403,6 +354,9 @@ async function main() {
         socialInsuranceCode: '1234567890',
         dependents: Array.from({ length: emp.dependentCount ?? 0 }, (_, i) => ({
           fullName: `Người phụ thuộc ${i + 1} của ${emp.fullName.split(' ').pop()}`,
+          // DependentItem.dateOfBirth bắt buộc (employee-profile.schema.ts:23) —
+          // seed cũ bỏ sót nên create() ném ValidationError.
+          dateOfBirth: `${2012 + i}-03-15`,
           relationship: 'CON',
           status: 'ACTIVE',
         })),
@@ -540,15 +494,21 @@ async function main() {
 
   await upsert(OvertimePolicy, { organizationId, version: 1 }, { organizationId, effectiveFrom: new Date('2026-01-01'), workingDayRate: 1.5, weeklyOffRate: 2.0, publicHolidayRate: 3.0, legalReference: 'BLLĐ 45/2019/QH14', version: 1, active: true }, 'OvertimePayPolicy');
 
-  await upsert(TaxPolicy, { organizationId, version: 2 }, { organizationId, effectiveFrom: new Date('2026-01-01'), personalDeduction: 15_500_000, dependentDeduction: 6_200_000, progressiveBrackets: [
+  // `standardDeduction` bắt buộc trong schema (tax-policy.schema.ts:31) nhưng seed
+  // cũ chỉ set `personalDeduction` → create() ném ValidationError. Đặt cả hai:
+  // `PitService` đọc `personalDeduction` (pit.service.ts:68), `TaxPolicyService`
+  // đọc `standardDeduction` (tax-policy.service.ts:159).
+  // Bậc cuối dùng `null` chứ không `Infinity` — cùng quy ước với
+  // `PitService.getDefaultBrackets` (pit.service.ts:314).
+  await upsert(TaxPolicy, { organizationId, version: 2 }, { organizationId, effectiveFrom: new Date('2026-01-01'), standardDeduction: 15_500_000, personalDeduction: 15_500_000, dependentDeduction: 6_200_000, progressiveBrackets: [
     { upperLimit: 10_000_000, rate: 5 },
     { upperLimit: 30_000_000, rate: 10 },
     { upperLimit: 60_000_000, rate: 20 },
     { upperLimit: 100_000_000, rate: 30 },
-    { upperLimit: Infinity, rate: 35 },
+    { upperLimit: null, rate: 35 },
   ], roundingRule: 'ROUND_HALF_UP_TO_VND', legalReference: 'Luật Thuế TNCN 200/QH12; Nghị định 126/2023/NĐ-CP', version: 2, active: true }, 'TaxPolicy');
 
-  const insurancePolicyId = await upsert(
+  await upsert(
     InsurancePolicy,
     { organizationId, version: 1 },
     { organizationId, effectiveFrom: new Date('2026-01-01'), version: 1, legalReference: 'Luật BHXH 58/2014/QH13', socialInsuranceEmployeeRate: 0.08, healthInsuranceEmployeeRate: 0.015, unemploymentInsuranceEmployeeRate: 0.01, salaryBaseRules: [
@@ -584,15 +544,25 @@ async function main() {
     const profileId = profileIds.get(emp.employeeCode)!;
     const isProbation = !emp.activeDate;
     const baseSalary = emp.baseSalary;
-    // PHONE (taxable) + FUEL (non-taxable) per employee; MEAL is org-wide and prorated
-    const personalAllowances = [
-      { allowanceId: catalogIds.get('PHONE')!, amount: personalAllowancesAmounts[emp.employeeCode] || 300_000 },
-      { allowanceId: catalogIds.get('FUEL')!, amount: 300_000 },
+    // MEAL (org-wide, dùng đơn giá của OrganizationAllowance) + FUEL + PHONE (ghi đè theo NV).
+    // `organizationAllowanceIds` phải trỏ đúng bộ phụ cấp được gán — engine dựng
+    // allowanceBreakdown từ danh sách id này, không đọc `allowances` trực tiếp.
+    const assignedAllowanceIds = [
+      orgAllowanceIds.get('MEAL')!,
+      orgAllowanceIds.get('FUEL')!,
+      orgAllowanceIds.get('PHONE')!,
     ];
+    const personalAllowances = [
+      { allowanceId: orgAllowanceIds.get('FUEL')!, amount: 300_000 },
+      { allowanceId: orgAllowanceIds.get('PHONE')!, amount: personalAllowancesAmounts[emp.employeeCode] || 300_000 },
+    ];
+    // Lương đóng bảo hiểm là số DẪN XUẤT: lương cơ bản − tổng phụ cấp (MEAL + FUEL + PHONE).
+    const seedTotalAllowances = 650_000
+      + personalAllowances.reduce((sum, a) => sum + a.amount, 0);
     await insertIfMissing(
       SalaryProfile,
       { organizationId, employeeProfileId: profileId, effectiveFrom: new Date('2026-09-01') },
-      { organizationId, employeeProfileId: profileId, effectiveFrom: new Date('2026-09-01'), baseSalary, insuranceSalary: Math.round(baseSalary * 0.8), organizationAllowanceIds: Array.from(orgAllowanceIds.values()), allowances: personalAllowances, attendanceBonusPolicyId: bonusPolicyId, currency: 'VND', roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true, ...(isProbation ? { probationJobSalary: baseSalary, probationAgreedSalary: Math.ceil(baseSalary * 0.85), probationRate: 0.85 } : {}) },
+      { organizationId, employeeProfileId: profileId, effectiveFrom: new Date('2026-09-01'), baseSalary, insuranceSalary: Math.max(0, baseSalary - seedTotalAllowances), organizationAllowanceIds: assignedAllowanceIds, allowances: personalAllowances, attendanceBonusPolicyId: bonusPolicyId, currency: 'VND', roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true, ...(isProbation ? { probationJobSalary: baseSalary, probationAgreedSalary: Math.ceil(baseSalary * 0.85), probationRate: 0.85 } : {}) },
       'SalaryProfile',
     );
 
@@ -670,8 +640,25 @@ async function main() {
   for (const emp of employees) {
     const userId = userIds.get(emp.employeeCode)!;
     for (const date of workdays) {
-      const existing = await AttendanceDay.findOne({ organizationId, employeeId: userId, workDate: date }).lean();
-      if (existing) { mark('AttendanceDay', 'skipped'); continue; }
+      const existing: any = await AttendanceDay.findOne({ organizationId, employeeId: userId, workDate: date }).lean();
+      if (existing) {
+        // Unique index (organizationId, employeeId, workDate) — attendance-day.schema.ts:125
+        // nghĩa là mỗi ngày chỉ thuộc MỘT kỳ. Bản ghi cũ có thể trỏ vào periodId đã bị
+        // xoá (vd. seed-payroll-e2e --reset xoá TimesheetPeriod), khiến engine lọc
+        // theo periodId mới ra 0 ngày công → lương theo công = 0 → net âm.
+        // Re-point thay vì bỏ qua; nếu không có gì đổi thì chỉ tốn một update vô hại.
+        if (String(existing.periodId) !== String(timesheetPeriodId)) {
+          if (!APPLY) { mark('AttendanceDay', 'planned'); continue; }
+          await AttendanceDay.updateOne(
+            { _id: existing._id },
+            { $set: { periodId: timesheetPeriodId } },
+          );
+          mark('AttendanceDay', 'created');
+          continue;
+        }
+        mark('AttendanceDay', 'skipped');
+        continue;
+      }
       if (!APPLY) { mark('AttendanceDay', 'planned'); continue; }
 
       const checkInAt = new Date(`${date}T01:05:00.000Z`); // 08:05 VN
@@ -691,7 +678,9 @@ async function main() {
         checkInAt,
         checkOutAt,
         workingMinutes: Math.round(workingMinutes),
-        lateMinutes: 5,
+        // Trong ân hạn 10 phút của ca → không tính là đi muộn, để engine đủ điều
+        // kiện thưởng chuyên cần (payroll-snapshot.service.ts:333-339).
+        lateMinutes: 0,
         earlyMinutes: 0,
         shiftSnapshot: { shiftTemplateId: shiftId, shiftName: 'Ca hành chính', startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 10 },
         workplaceSnapshot: { workplaceId, workplaceName: 'Flow Software HQ', workplaceType: 'IN_OFFICE', address: 'TP. Hồ Chí Minh' },
@@ -811,292 +800,153 @@ async function main() {
     'OvertimeResult',
   );
 
-  // ── Timesheet summaries ──────────────────────────────────────────────────
-  const totalDaysInPeriod = 30;
-  for (const emp of employees) {
-    const userId = userIds.get(emp.employeeCode)!;
-    const profileId = profileIds.get(emp.employeeCode)!;
-    const departmentId = deptIds.get(emp.departmentCode)!;
-    const workMinutes = workdays.length * 480;
-    const sourceHash = crypto.createHash('md5').update(`${emp.employeeCode}-${PERIOD}`).digest('hex').slice(0, 16);
-    // OT for FLOW-ENG-001 only (matches OvertimeResult above)
-    const otMinutes = emp.employeeCode === 'FLOW-ENG-001' ? 180 : 0;
-    const paidLeaveDays = emp.employeeCode === 'FLOW-ENG-001' ? 2 : 0;
-    const presentDays = workdays.length - paidLeaveDays;
-    const totalWorkingMinutes = presentDays * 480;
-    const summaryDoc = await insertIfMissing(
-      TimesheetSummary,
-      { periodId: timesheetPeriodId, employeeProfileId: profileId },
-      {
-        periodId: timesheetPeriodId,
-        employeeProfileId: profileId,
-        userId,
-        organizationId,
-        departmentId,
-        departmentName: departmentData.find(d => d.code === emp.departmentCode)?.name,
-        employeeCode: emp.employeeCode,
-        fullName: emp.fullName,
-        periodKey: PERIOD,
-        totalDays: totalDaysInPeriod,
-        workingDays: workdays.length,
-        paidLeaveDays,
-        unpaidLeaveDays: 0,
-        holidayDays: 1,
-        absentDays: 0,
-        presentDays,
-        incompleteDays: 0,
-        totalWorkingMinutes,
-        totalLateMinutes: presentDays * 5,
-        totalEarlyMinutes: 0,
-        otWorkingDayMinutes: otMinutes,
-        otWeeklyOffMinutes: 0,
-        otPublicHolidayMinutes: 0,
-        totalOvertimeMinutes: otMinutes,
-        sickLeaveDays: 0,
-        personalLeaveDays: 0,
-        annualLeaveDays: 0,
-        otherPaidLeaveDays: paidLeaveDays,
-        otherUnpaidLeaveDays: 0,
-        sourceHash,
-        version: 1,
-        generatedAt: new Date(),
-      },
-      'TimesheetSummary',
+  // ── Timesheet summaries, snapshots, payroll run & payslips ───────────────
+  // Không chép lại công thức lương ở đây nữa — gọi thẳng engine của production:
+  //   TimesheetSummaryService.previewSummariesForDepartment()  tổng hợp công/OT
+  //   PayrollSnapshotService.previewSnapshotsForDepartment()   chốt input lương
+  //   PayrollRunService.create/calculate/lock() + PayslipService.releaseForPayrollRun()
+  //
+  // Dùng các hàm `preview*` (không cần ClientSession) rồi tự upsert — đường
+  // `generate*` bắt buộc chạy trong transaction, mà transaction đòi MongoDB
+  // replica set. Công thức vẫn là của engine, chỉ khác chỗ ghi.
+  //
+  // Đổi hành vi có chủ đích: engine loại tài khoản role HR khỏi bảng lương
+  // (timesheet-summary.service.ts:599) — giống hệt production. Seed trước đây
+  // tự dựng nên vẫn tính cả HR-001, đó là một trong các chỗ lệch số.
+  // Ở đây còn 7/8 người (chỉ HR-001 bị loại).
+  const payrollUserId = String(userIds.get('FLOW-HR-001')!);
+
+  if (!APPLY) {
+    mark('TimesheetSummary', 'planned');
+    mark('PayrollInputSnapshot', 'planned');
+    mark('PayrollRun', 'planned');
+    mark('Payslip', 'planned');
+  } else {
+    // `create()` từ chối khi đã có run active → xoá artifact lương cũ của kỳ.
+    // Chỉ đụng đúng kỳ này, không lan sang dữ liệu khác của org.
+    const staleRuns: any[] = await PayrollRun.find({ organizationId, timesheetPeriodId }).select('_id').lean();
+    if (staleRuns.length) {
+      const staleRunIds = staleRuns.map((r) => r._id);
+      const deletedPayslips = await Payslip.deleteMany({ payrollRunId: { $in: staleRunIds } });
+      await PayrollRun.deleteMany({ _id: { $in: staleRunIds } });
+      console.log(`[seed:full:org] xoá run cũ=${staleRuns.length} payslip cũ=${deletedPayslips.deletedCount}`);
+    }
+
+    const employeeProfileModel = db.model('EmployeeProfile');
+    const taxPolicyModel = db.model('TaxPolicy');
+
+    // Nối tay đồ thị DI — cùng cách verify-target-snapshot-preview.ts:31-50.
+    const insuranceService = new InsuranceService(InsurancePolicy as any);
+    const pitService = new PitService(taxPolicyModel as any, employeeProfileModel as any);
+    const timesheetSummaryService = new TimesheetSummaryService(
+      TimesheetSummary as any,
+      AttendanceDay as any,
+      OvertimeResult as any,
+      employeeProfileModel as any,
+      User as any,
+      Assignment as any,
     );
-  }
-
-  // ── Payroll input snapshots ──────────────────────────────────────────────
-  const insurancePolicy = await InsurancePolicy.findById(insurancePolicyId).lean();
-  const maxContributionBase = 52_200_000;
-  for (const emp of employees) {
-    const profileId = profileIds.get(emp.employeeCode)!;
-    const userId = userIds.get(emp.employeeCode)!;
-    const salaryProfile = await SalaryProfile.findOne({ organizationId, employeeProfileId: profileId }).lean();
-    const monthlyBaseSalary = (salaryProfile as any)?.baseSalary ?? emp.baseSalary;
-    const insuranceSalary = (salaryProfile as any)?.insuranceSalary ?? Math.round(monthlyBaseSalary * 0.8);
-
-    // Determine present days from summary (FLOW-ENG-001 has 2 paid leave days)
-    const paidLeaveDays = emp.employeeCode === 'FLOW-ENG-001' ? 2 : 0;
-    const presentDays = workdays.length - paidLeaveDays;
-    const proratedBaseSalary = Math.round((monthlyBaseSalary / totalDaysInPeriod) * presentDays);
-
-    // Insurance contribution base: insuranceSalary capped at maxContributionBase
-    const contributionBase = Math.min(insuranceSalary, maxContributionBase);
-    const socialInsurance = Math.round(contributionBase * 0.08);
-    const healthInsurance = Math.round(contributionBase * 0.015);
-    const unemploymentInsurance = Math.round(contributionBase * 0.01);
-    const totalInsurance = socialInsurance + healthInsurance + unemploymentInsurance;
-
-    // Allowances from salary profile + org-wide MEAL allowance
-    const mealAllowance = 650_000;
-    const phoneAllowance = ((salaryProfile as any)?.allowances || []).find((a: any) => {
-      const code = orgAllowances.find(o => (orgAllowanceIds.get(o.code)?.toString() === (a.allowanceId?.toString?.() || a.allowanceId)))?.code;
-      return code === 'PHONE';
-    })?.amount || 300_000;
-    const fuelAllowance = ((salaryProfile as any)?.allowances || []).find((a: any) => {
-      const code = orgAllowances.find(o => (orgAllowanceIds.get(o.code)?.toString() === (a.allowanceId?.toString?.() || a.allowanceId)))?.code;
-      return code === 'FUEL';
-    })?.amount || 300_000;
-
-    const allowanceBreakdown = [
-      { type: 'MEAL', label: 'Phụ cấp ăn trưa', amount: mealAllowance, taxable: false },
-      { type: 'FUEL', label: 'Phụ cấp xăng xe', amount: fuelAllowance, taxable: false },
-      { type: 'PHONE', label: 'Phụ cấp điện thoại', amount: phoneAllowance, taxable: true },
-    ];
-    const totalAllowances = allowanceBreakdown.reduce((sum, a) => sum + a.amount, 0);
-    const nonTaxableAllowances = allowanceBreakdown.filter(a => !a.taxable).reduce((sum, a) => sum + a.amount, 0);
-
-    // Attendance bonus: everyone has 5 min late each day, so no one gets 100%; give 70% for demo
-    const attendanceBonus = 560_000; // 70% of 800_000
-
-    // KPI bonus from confirmed KPI input
-    const kpiInput = await KpiPayrollInput.findOne({ organizationId, employeeProfileId: profileId, period: PERIOD }).lean();
-    const kpiBonus = (kpiInput as any)?.status === 'CONFIRMED' ? (kpiInput as any).amount || 0 : 0;
-
-    // OT pay for FLOW-ENG-001 (180 minutes on working day)
-    const otMinutes = emp.employeeCode === 'FLOW-ENG-001' ? 180 : 0;
-    const hourlyRate = monthlyBaseSalary / (26 * 8);
-    // Working day OT: coefficient 1.5 => 1.0 non-taxable + 0.5 taxable premium
-    const otNonTaxableEarnings = otMinutes > 0 ? Math.round((otMinutes / 60) * hourlyRate * 1.0) : 0;
-    const otTaxableEarnings = otMinutes > 0 ? Math.round((otMinutes / 60) * hourlyRate * 0.5) : 0;
-    const otPay = otNonTaxableEarnings + otTaxableEarnings;
-
-    const profile = await EmployeeProfile.findById(profileId).lean();
-    const activeDependents = ((profile as any)?.dependents || []).filter((d: any) => d.status === 'ACTIVE').length;
-    const dependentDeduction = activeDependents * 6_200_000;
-    const grossEarnings = proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + otPay;
-    const taxableEarnings = Math.max(0, grossEarnings - nonTaxableAllowances - otNonTaxableEarnings - totalInsurance - 15_500_000 - dependentDeduction);
-
-    await insertIfMissing(
-      PayrollInputSnapshot,
-      { periodId: timesheetPeriodId, employeeProfileId: profileId },
-      {
-        periodId: timesheetPeriodId,
-        employeeProfileId: profileId,
-        userId,
-        organizationId,
-        departmentId: deptIds.get(emp.departmentCode),
-        periodKey: PERIOD,
-        monthlyBaseSalary,
-        proratedBaseSalary,
-        totalAllowances,
-        attendanceBonus,
-        kpiBonus,
-        otMinutesByType: { otWorkingDayMinutes: otMinutes, otWeeklyOffMinutes: 0, otPublicHolidayMinutes: 0, totalOvertimeMinutes: otMinutes },
-        otPay,
-        otNonTaxableEarnings,
-        otTaxableEarnings,
-        nonTaxableAllowances,
-        allowanceBreakdown,
-        socialInsuranceRate: 0.08,
-        healthInsuranceRate: 0.015,
-        unemploymentInsuranceRate: 0.01,
-        contributionBase,
-        socialInsurance,
-        healthInsurance,
-        unemploymentInsurance,
-        taxableEarnings,
-        totalDependentDeductions: dependentDeduction,
-        dependentCount: activeDependents,
-        taxPolicyVersion: 2,
-        legalReference: 'Luật Thuế TNCN 200/QH12; Nghị định 126/2023/NĐ-CP',
-        status: 'GENERATED',
-        sourceHash: crypto.createHash('md5').update(`${profileId}-${PERIOD}`).digest('hex').slice(0, 16),
-        version: 1,
-        generatedAt: new Date(),
-      },
-      'PayrollInputSnapshot',
+    const payrollSnapshotService = new PayrollSnapshotService(
+      PayrollInputSnapshot as any,
+      TimesheetSummary as any,
+      employeeProfileModel as any,
+      SalaryProfile as any,
+      OrganizationAllowance as any,
+      AttendanceBonusPolicy as any,
+      KpiPayrollInput as any,
+      InsurancePolicy as any,
+      InsuranceProfile as any,
+      taxPolicyModel as any,
     );
-  }
+    const payslipService = new PayslipService(
+      Payslip as any,
+      PayrollRun as any,
+      PayrollInputSnapshot as any,
+      employeeProfileModel as any,
+      taxPolicyModel as any,
+      insuranceService,
+      pitService,
+    );
 
-  // ── Payroll run & payslips ───────────────────────────────────────────────
-  // Compute totals from snapshots before creating the payroll run.
-  let totalGross = 0;
-  let totalNet = 0;
-  let totalEmployerCost = 0;
-  const payslipDocs: Array<{ profileId: mongoose.Types.ObjectId; grossEarnings: number; netSalary: number; employerCost: number }> = [];
+    // Tổng hợp công → snapshot, đều do engine dựng, seed chỉ ghi lại.
+    // Xoá trước: đường `preview*` không dọn bản ghi thừa (khác `generate*`), nên
+    // nhân viên HR của lần seed cũ sẽ nằm lại trong bảng lương nếu không xoá.
+    await TimesheetSummary.deleteMany({ organizationId, periodId: timesheetPeriodId });
+    await PayrollInputSnapshot.deleteMany({ organizationId, periodId: timesheetPeriodId });
 
-  for (const emp of employees) {
-    const profileId = profileIds.get(emp.employeeCode)!;
-    const snapshot = await PayrollInputSnapshot.findOne({ periodId: timesheetPeriodId, employeeProfileId: profileId }).lean();
-    if (!snapshot) continue;
+    // ponytail: `previewSummariesForDepartment` lọc OvertimeResult theo org +
+    // FINAL, không theo `periodKey` (timesheet-summary.service.ts:192-200) —
+    // seed một kỳ nên không lộ. Nâng cấp: thêm tham số periodKey vào preview khi
+    // seed nhiều kỳ cùng lúc.
+    const summaries = await timesheetSummaryService.previewSummariesForDepartment(
+      String(timesheetPeriodId), PERIOD, String(organizationId),
+    );
+    for (const s of summaries) {
+      await TimesheetSummary.findOneAndUpdate(
+        { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
+        { $set: s },
+        { upsert: true },
+      );
+    }
+    const snapshots = await payrollSnapshotService.previewSnapshotsForDepartment(
+      String(timesheetPeriodId), PERIOD, String(organizationId), summaries,
+    );
+    for (const s of snapshots) {
+      await PayrollInputSnapshot.findOneAndUpdate(
+        { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
+        { $set: s },
+        { upsert: true },
+      );
+    }
 
-    const proratedBaseSalary = (snapshot as any).proratedBaseSalary || 0;
-    const totalAllowances = (snapshot as any).totalAllowances || 0;
-    const attendanceBonus = (snapshot as any).attendanceBonus || 0;
-    const kpiBonus = (snapshot as any).kpiBonus || 0;
-    const otPay = (snapshot as any).otPay || 0;
-    const grossEarnings = proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + otPay;
-    const totalInsurance =
-      ((snapshot as any).socialInsurance || 0) +
-      ((snapshot as any).healthInsurance || 0) +
-      ((snapshot as any).unemploymentInsurance || 0);
+    // Hai service tuỳ chọn để trống: snapshot đã ghi xong ở trên, không cần
+    // `refreshPayrollInputs` dựng lại (nó cũng cần transaction).
+    const payrollRunService = new PayrollRunService(
+      PayrollRun as any,
+      PayrollInputSnapshot as any,
+      TimesheetPeriod as any,
+      employeeProfileModel as any,
+      insuranceService,
+      pitService,
+      payslipService,
+    );
 
-    const pitResult = await computePit(grossEarnings, totalInsurance, profileId, organizationId, snapshot as any);
-    const netSalary = grossEarnings - totalInsurance - pitResult.pitAmount;
-
-    // Employer cost: employee insurance + employer contributions (BHXH 17.5%, BHTN 1%)
-    const contributionBase = (snapshot as any).contributionBase || 0;
-    const employerInsurance = Math.round(contributionBase * 0.175) + Math.round(contributionBase * 0.01);
-    const employerCost = grossEarnings + employerInsurance;
-
-    payslipDocs.push({ profileId, grossEarnings, netSalary, employerCost });
-    totalGross += grossEarnings;
-    totalNet += netSalary;
-    totalEmployerCost += employerCost;
-  }
-
-  const payrollRunId = await upsert(
-    PayrollRun,
-    { organizationId, timesheetPeriodId },
-    {
-      organizationId,
-      timesheetPeriodId,
-      periodLabel: '09/2026',
-      status: 'RELEASED',
-      runDate: new Date('2026-09-25T09:00:00.000Z'),
-      totalGross,
-      totalNet,
-      totalEmployerCost,
-      processedEmployeeCount: employees.length,
-      totalEmployeeCount: employees.length,
+    const run = await payrollRunService.create({
+      organizationId: String(organizationId),
+      timesheetPeriodId: String(timesheetPeriodId),
       notes: 'Bảng lương demo tháng 09/2026',
-      version: 4,
-      active: true,
-    },
-    'PayrollRun',
-  );
+      userId: payrollUserId,
+    });
+    const runId = String(run._id);
+    const calculated = await payrollRunService.calculate(runId, payrollUserId);
+    await payrollRunService.lock(runId, payrollUserId);
+    await payslipService.releaseForPayrollRun(runId, payrollUserId);
 
-  for (const emp of employees) {
-    const profileId = profileIds.get(emp.employeeCode)!;
-    const snapshot = await PayrollInputSnapshot.findOne({ periodId: timesheetPeriodId, employeeProfileId: profileId }).lean();
-    if (!snapshot) continue;
+    mark('TimesheetSummary', 'created');
+    mark('PayrollInputSnapshot', 'created');
+    mark('PayrollRun', 'created');
+    mark('Payslip', 'created');
 
-    const proratedBaseSalary = (snapshot as any).proratedBaseSalary || 0;
-    const totalAllowances = (snapshot as any).totalAllowances || 0;
-    const attendanceBonus = (snapshot as any).attendanceBonus || 0;
-    const kpiBonus = (snapshot as any).kpiBonus || 0;
-    const otPay = (snapshot as any).otPay || 0;
-    const grossEarnings = proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + otPay;
-    const totalInsurance =
-      ((snapshot as any).socialInsurance || 0) +
-      ((snapshot as any).healthInsurance || 0) +
-      ((snapshot as any).unemploymentInsurance || 0);
-
-    const pitResult = await computePit(grossEarnings, totalInsurance, profileId, organizationId, snapshot as any);
-    const netSalary = grossEarnings - totalInsurance - pitResult.pitAmount;
-
-    // OT breakdown for payslip
-    const otBreakdown = (snapshot as any).otPay > 0 ? {
-      totalMinutes: (snapshot as any).otMinutesByType?.totalOvertimeMinutes || 0,
-      workingDayMinutes: (snapshot as any).otMinutesByType?.otWorkingDayMinutes || 0,
-      weeklyOffMinutes: 0,
-      publicHolidayMinutes: 0,
-      hourlyRate: Math.round(((snapshot as any).monthlyBaseSalary || 0) / (26 * 8)),
-      otNonTaxable: (snapshot as any).otNonTaxableEarnings || 0,
-      otTaxable: (snapshot as any).otTaxableEarnings || 0,
-      otPay: (snapshot as any).otPay || 0,
-      breakdown: [
-        { type: 'WORKING_DAY', minutes: (snapshot as any).otMinutesByType?.otWorkingDayMinutes || 0, coefficient: 1.5, amount: (snapshot as any).otPay || 0, taxable: false },
-      ],
-    } : undefined;
-
-    await insertIfMissing(
-      Payslip,
-      { payrollRunId, employeeProfileId: profileId },
-      {
-        payrollRunId,
-        organizationId,
-        employeeProfileId: profileId,
-        employeeName: emp.fullName,
-        employeeCode: emp.employeeCode,
-        taxCode: '0123456789',
-        periodLabel: '09/2026',
-        status: 'RELEASED',
-        grossEarnings,
-        taxableEarnings: pitResult.taxableEarnings,
-        contributionBase: (snapshot as any).contributionBase || 0,
-        socialInsuranceRate: (snapshot as any).socialInsuranceRate || 0.08,
-        healthInsuranceRate: (snapshot as any).healthInsuranceRate || 0.015,
-        unemploymentInsuranceRate: (snapshot as any).unemploymentInsuranceRate || 0.01,
-        socialInsurance: (snapshot as any).socialInsurance || 0,
-        healthInsurance: (snapshot as any).healthInsurance || 0,
-        unemploymentInsurance: (snapshot as any).unemploymentInsurance || 0,
-        personalDeduction: pitResult.personalDeduction,
-        dependentDeduction: pitResult.dependentDeduction,
-        pitAmount: pitResult.pitAmount,
-        otherDeductions: 0,
-        netSalary,
-        earningBreakdown: buildEarningBreakdown(snapshot as any, grossEarnings),
-        allowanceBreakdown: (snapshot as any).allowanceBreakdown || [],
-        otBreakdown: otBreakdown || undefined,
-        deductionBreakdown: buildDeductionBreakdown(snapshot as any, pitResult.pitAmount),
-        pitBreakdown: pitResult.breakdown || [],
-        dependents: ((await EmployeeProfile.findById(profileId).lean()) as any)?.dependents || [],
-        generatedAt: new Date('2026-09-25T09:00:00.000Z'),
-        releasedAt: new Date('2026-09-25T10:00:00.000Z'),
+    // Engine không ghi `totalEmployerCost`/`runDate` (payroll-run.service.ts:112).
+    // Bù lại để dữ liệu demo khớp kỳ 09/2026 — chi phí chủ dùng chính engine
+    // bảo hiểm, không hard-code tỉ lệ.
+    const insurancePolicy: any = await InsurancePolicy.findOne({ organizationId, version: 1 }).lean();
+    const employerInsuranceCost = snapshots.reduce((sum, s) => sum
+      + calculateInsuranceContributions(
+          insurancePolicy,
+          { participatesSocialInsurance: true, participatesHealthInsurance: true, participatesUnemploymentInsurance: true },
+          deriveInsuranceSalary(s.monthlyBaseSalary ?? 0, s.totalAllowances ?? 0),
+        ).employerInsuranceCost, 0);
+    await PayrollRun.findByIdAndUpdate(runId, {
+      $set: {
+        totalEmployerCost: (calculated.totalGross ?? 0) + employerInsuranceCost,
+        runDate: new Date('2026-09-25T09:00:00.000Z'),
       },
-      'Payslip',
+    });
+
+    console.log(
+      `[seed:full:org] payroll run=${runId} summary=${summaries.length}`
+      + ` snapshot=${snapshots.length} gross=${calculated.totalGross} net=${calculated.totalNet}`,
     );
   }
 

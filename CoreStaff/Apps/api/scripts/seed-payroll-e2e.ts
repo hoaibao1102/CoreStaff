@@ -592,7 +592,13 @@ async function main() {
       employeeProfileId: empProfileId,
       effectiveFrom: salaryEffective,
       baseSalary: FIXTURE_AMOUNTS.baseSalary,
-      insuranceSalary: Math.min(FIXTURE_AMOUNTS.baseSalary, VN_INSURANCE_CAP),
+      // Số dẫn xuất: lương cơ bản − tổng phụ cấp gán cho nhân viên (D46).
+      insuranceSalary: FIXTURE_AMOUNTS.baseSalary
+        - FIXTURE_AMOUNTS.mealAllowance
+        - FIXTURE_AMOUNTS.responsibilityAllowance,
+      // Snapshot dựng allowanceBreakdown từ organizationAllowanceIds, nên phải ghi
+      // danh sách id — thiếu nó thì tổng phụ cấp = 0 và base bảo hiểm lệch ledger.
+      organizationAllowanceIds: [mealCatalogId, respCatalogId],
       allowances: [
         { allowanceId: mealCatalogId, amount: FIXTURE_AMOUNTS.mealAllowance },
         { allowanceId: respCatalogId, amount: FIXTURE_AMOUNTS.responsibilityAllowance },
@@ -626,12 +632,11 @@ async function main() {
 
   await upsertByQuery(
     InsuranceProfile,
-    { organizationId, employeeProfileId: empProfileId, effectiveFrom: salaryEffective },
+    { organizationId, employeeId: empProfileId, effectiveFrom: salaryEffective },
     {
       organizationId,
-      employeeProfileId: empProfileId,
+      employeeId: empProfileId,
       effectiveFrom: salaryEffective,
-      insuranceSalary: Math.min(FIXTURE_AMOUNTS.baseSalary, VN_INSURANCE_CAP),
       socialInsuranceNumber: '1234567890',
       healthInsuranceNumber: '1234567890',
       version: 1,
@@ -790,7 +795,10 @@ async function main() {
     otWeeklyOffMinutes: FIXTURE_AMOUNTS.otWeeklyOffMinutes,
     dependentCount: 1,
     insurance: computeEmployeeInsurance({
-      baseSalary: FIXTURE_AMOUNTS.baseSalary,
+      // Lương đóng BHXH là số dẫn xuất: lương cơ bản − tổng phụ cấp (D46).
+      baseSalary: FIXTURE_AMOUNTS.baseSalary
+        - FIXTURE_AMOUNTS.mealAllowance
+        - FIXTURE_AMOUNTS.responsibilityAllowance,
       socialRate: FIXTURE_AMOUNTS.insuranceSocialRate,
       healthRate: FIXTURE_AMOUNTS.insuranceHealthRate,
       unemploymentRate: FIXTURE_AMOUNTS.insuranceUnemploymentRate,

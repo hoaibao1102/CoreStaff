@@ -60,9 +60,31 @@ export class Payslip {
   @Prop({ required: true, min: 0, default: 0 })
   grossEarnings: number;
 
-  /** Income subject to PIT after non-taxable allowances removed. */
+  /** §2 — Thu nhập chịu thuế TRƯỚC giảm trừ = gross − OT miễn thuế − phụ cấp miễn thuế. */
+  @Prop({ required: true, min: 0, default: 0 })
+  taxableIncome: number;
+
+  /** §3 — Thu nhập TÍNH thuế = taxableIncome − bảo hiểm − giảm trừ bản thân − giảm trừ người phụ thuộc. */
   @Prop({ required: true, min: 0, default: 0 })
   taxableEarnings: number;
+
+  // ── WORKDAY INPUTS (frozen from snapshot, dùng để hiện chi tiết lương công) ──
+
+  /** Lương cơ bản theo hợp đồng (chưa chia ngày công). */
+  @Prop({ required: true, min: 0, default: 0 })
+  monthlyBaseSalary: number;
+
+  /** Số ngày công chuẩn của kỳ. */
+  @Prop({ required: true, min: 0, default: 0 })
+  standardWorkingDays: number;
+
+  /** Số ngày công thực tế được trả lương. */
+  @Prop({ required: true, min: 0, default: 0 })
+  payableWorkingDays: number;
+
+  /** Tiền công 1 giờ = monthlyBaseSalary / (standardWorkingDays × 8). */
+  @Prop({ required: true, min: 0, default: 0 })
+  hourlyRate: number;
 
   // ── INSURANCE (employee portion) ───────────────────────────────────────
 
@@ -96,8 +118,8 @@ export class Payslip {
 
   // ── PIT DEDUCTIONS ─────────────────────────────────────────────────────
 
-  /** Personal deduction standard (11,000,000 VND). */
-  @Prop({ required: true, min: 0, default: 11000000 })
+  /** Personal deduction standard (defaults to PitService.STANDARD_DEDUCTION = 15,500,000 VND). */
+  @Prop({ required: true, min: 0, default: 15500000 })
   personalDeduction: number;
 
   /** Dependent deduction total (6,200,000 × count). */
@@ -144,23 +166,27 @@ export class Payslip {
 
   // ── OT BREAKDOWN (detailed overtime calculation) ───────────────────────
 
-  /** Detailed overtime breakdown with hours, rates, and tax split. */
+  /** Detailed overtime breakdown: hours × hourly rate × coefficient per day type. */
   @Prop({ type: Object })
   otBreakdown?: {
     totalMinutes: number;
+    totalHours?: number;
     workingDayMinutes: number;
+    workingDayHours?: number;
     weeklyOffMinutes: number;
+    weeklyOffHours?: number;
     publicHolidayMinutes: number;
+    publicHolidayHours?: number;
     hourlyRate: number;
-    otNonTaxable: number; // Phần không chịu thuế (hệ số 1.0)
-    otTaxable: number; // Phần chịu thuế (hệ số 0.5)
+    overtimeTaxable?: boolean; // Cờ công ty: true = toàn bộ OT chịu thuế
     otPay: number; // Tổng OT nhận
     breakdown: Array<{
       type: string; // WORKING_DAY, WEEKLY_OFF, PUBLIC_HOLIDAY
+      label?: string;
       minutes: number;
+      hours?: number;
       coefficient: number;
       amount: number;
-      taxable: boolean;
     }>;
   };
 

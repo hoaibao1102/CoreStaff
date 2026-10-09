@@ -8,7 +8,7 @@ import { Skeleton } from '../../components/skeleton';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
 import { useHrResource } from '../../lib/useHrResource';
 import { hrErrorMessage, listEmployees, listInsuranceProfiles, listInsurancePolicies, type InsuranceProfile, type InsurancePolicy } from '../../services/hrService';
-import { listSalaryProfiles, type SalaryProfile } from '../../services/compensation.service';
+import { deriveInsuranceSalary, listSalaryProfiles, type SalaryProfile } from '../../services/compensation.service';
 import { InsuranceProfileCreateDialog, InsuranceProfileDetailDialog, type InsuranceEmployeeOption } from './components/InsuranceProfileDialogs';
 
 const PAGE_SIZE = 10;
@@ -93,7 +93,7 @@ function estimateMonthlyEmployeeContribution(
     if (!participates[type]) continue;
     const floorAmount = policy.salaryBaseRules.find((r) => r.type === type)?.floorAmount;
     const capAmount = policy.capRules.find((r) => r.type === type)?.capAmount;
-    const base = clampToBase(salaryProfile.insuranceSalary, floorAmount, capAmount);
+    const base = clampToBase(deriveInsuranceSalary(salaryProfile.baseSalary, salaryProfile.allowances), floorAmount, capAmount);
     total += roundHalfUpToVnd(base * employeeRate[type]);
   }
   return total;
@@ -112,7 +112,7 @@ function estimateContributionForType(
   if (!salaryProfile || !policy) return { kind: 'unknown' };
   const floorAmount = policy.salaryBaseRules.find((r) => r.type === type)?.floorAmount;
   const capAmount = policy.capRules.find((r) => r.type === type)?.capAmount;
-  const base = clampToBase(salaryProfile.insuranceSalary, floorAmount, capAmount);
+  const base = clampToBase(deriveInsuranceSalary(salaryProfile.baseSalary, salaryProfile.allowances), floorAmount, capAmount);
   const rate = policy[EMPLOYEE_RATE_KEY[type]] as number;
   return { kind: 'amount', amount: roundHalfUpToVnd(base * rate) };
 }
