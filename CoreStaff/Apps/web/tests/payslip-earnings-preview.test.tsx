@@ -1,5 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactNode } from 'react';
 import { GrossEarningsCard, TaxableIncomeCard, TaxDeductionsCard, PitTaxDetails, PayslipPreviewDialog } from '../src/screens/hr/PayslipPreviewDialog';
+
+jest.mock('@/components/tooltip', () => ({
+  Tooltip: ({ children, content }: { children: ReactNode; content: ReactNode }) => <>{children}<span>{content}</span></>,
+}));
+
+jest.mock('@/components/dialog', () => ({
+  Dialog: ({ children, open }: { children: ReactNode; open?: boolean }) => open === false ? null : <div>{children}</div>,
+  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+}));
 
 // gross = 16.000.000 + 3.130.000 + 1.000.000 + 2.000.000 + 5.100.000 = 27.230.000
 // cờ OT tắt → taxableIncome = 27.230.000 − 5.100.000 = 22.130.000

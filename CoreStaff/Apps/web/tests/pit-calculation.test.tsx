@@ -111,6 +111,8 @@ const DEFAULT_BRACKETS: TaxBracket[] = [
   { upperLimit: 100_000_000, rate: 30 },    // Bậc 4: trên 60 đến 100 triệu
   { upperLimit: null, rate: 35 },           // Bậc 5: trên 100 triệu
 ];
+const STANDARD_DEDUCTION = 11000000;
+const DEPENDENT_DEDUCTION = 9000000;
 
 describe('calculateProgressivePIT — Bracket Calculations', () => {
   it('should return 0 when taxable income is 0', () => {
@@ -130,28 +132,14 @@ describe('calculateProgressivePIT — Bracket Calculations', () => {
 
   it('should calculate progressive tax across multiple brackets', () => {
     // Income: 80,000,000
-    // Bracket 1: 6,000,000 * 5% = 300,000
-    // Bracket 2: (10,000,000 - 6,000,000) * 10% = 400,000
-    // Bracket 3: (80,000,000 - 10,000,000) * 20% = 14,000,000
-    // Total: 300,000 + 400,000 + 14,000,000 = 14,700,000
-    
-    // Wait — the brackets represent cumulative thresholds, not widths.
-    // Let me recalculate with proper understanding:
-    
-    // Actually, looking at the code: bracketWidth = bracketUpper - previousUpperLimit
-    // So for bracket 2: width = 10M - 6M = 4M
-    // For bracket 3: width = 20M - 10M = 10M
-    
-    // Income: 80,000,000
-    // B1: min(80M, 6M) * 5% = 6M * 5% = 300,000
-    // B2: min(74M, 4M) * 10% = 4M * 10% = 400,000
-    // B3: min(70M, 10M) * 20% = 10M * 20% = 2,000,000
-    // B4: min(60M, 20M) * 25% = 20M * 25% = 5,000,000
-    // B5: min(40M, ∞) * 30% = 40M * 30% = 12,000,000
-    // Total: 19,700,000
+    // B1: 10M * 5% = 0.5M
+    // B2: 20M * 10% = 2M
+    // B3: 30M * 20% = 6M
+    // B4: 20M * 30% = 6M
+    // Total: 14.5M
     
     const result = calculateProgressivePIT(80000000, DEFAULT_BRACKETS);
-    expect(result).toBe(19700000);
+    expect(result).toBe(14500000);
   });
 
   it('should handle single bracket perfectly', () => {
@@ -163,25 +151,16 @@ describe('calculateProgressivePIT — Bracket Calculations', () => {
 
   it('should handle income spanning all brackets', () => {
     // Income: 150,000,000
-    // B1: 6M * 5% = 300,000
-    // B2: 4M * 10% = 400,000
-    // B3: 10M * 20% = 2,000,000
-    // B4: 20M * 25% = 5,000,000
-    // B5: 110M - 40M = 110M... wait let me recalc
-    
-    // After B1-B4: 150M - 6M - 4M - 10M - 20M = 110M remaining
-    // B5: 110M * 30% = 33,000,000
-    // Total: 300K + 400K + 2M + 5M + 33M = 40,700,000
+    // B1-B4: 0.5M + 2M + 6M + 12M = 20.5M
+    // B5: 50M * 35% = 17.5M
+    // Total: 38M
     
     const result = calculateProgressivePIT(150000000, DEFAULT_BRACKETS);
-    expect(result).toBe(40700000);
+    expect(result).toBe(38000000);
   });
 });
 
 describe('calculatePIT — Full Calculation with Deductions', () => {
-  const STANDARD_DEDUCTION = 11000000;
-  const DEPENDENT_DEDUCTION = 9000000;
-
   it('should apply standard deduction correctly', () => {
     // Gross: 25,000,000
     // Insurance: 0

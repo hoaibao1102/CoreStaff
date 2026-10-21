@@ -15,6 +15,7 @@ import {
 import { employeeRequest } from '@/services/employeeService';
 import { PayslipPreviewDialog, type PayslipRow } from '@/screens/hr/PayslipPreviewDialog';
 import { FileText, RefreshCw, Eye } from 'lucide-react';
+import { getSocket } from '@/services/socket';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -77,7 +78,7 @@ function EmptyState() {
   );
 }
 
-export function MyPayslipsScreen() {
+export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [expandedSlipId, setExpandedSlipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,6 +134,14 @@ export function MyPayslipsScreen() {
       loadMyPayslips();
     }
   }, []);
+
+  useEffect(() => {
+    if (!apiBase) return;
+    const socket = getSocket(apiBase);
+    const onReleased = () => { void handleRefresh(); };
+    socket.on('payslip:released', onReleased);
+    return () => { socket.off('payslip:released', onReleased); };
+  }, [apiBase]);
 
   const totalNet = payslips.reduce((sum, s) => sum + s.netSalary, 0);
   const selectedPayslip = payslips.find((slip) => slip._id === expandedSlipId) ?? null;

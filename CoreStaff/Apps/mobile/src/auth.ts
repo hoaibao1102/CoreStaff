@@ -27,7 +27,7 @@ export class AuthApiError extends Error {
 
 /**
  * Credential endpoints. A 401 from these answers the credential the call just
- * sent, not an expired session — renewing first would be pointless (and for
+ * sent, not an expired session. Renewing first would be pointless (and for
  * login, wrong: there is no session to renew yet).
  */
 const NO_REFRESH_PATHS = new Set([
@@ -43,7 +43,7 @@ export function setSignedOutHandler(handler: (() => void) | null): void {
   signedOutHandler = handler;
 }
 
-async function request<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
+export async function apiRequest<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
   const response = await fetch(apiUrl(base, path), {
     ...init,
     credentials: 'include',
@@ -54,7 +54,7 @@ async function request<T>(base: string, path: string, init?: RequestInit, allowR
   // "renew me", not "log in again". Retry once behind the refresh cookie.
   if (response.status === 401 && allowRefresh && !NO_REFRESH_PATHS.has(path)) {
     if (await tryRefreshSession(base)) {
-      return request<T>(base, path, init, false);
+      return apiRequest<T>(base, path, init, false);
     }
     signedOutHandler?.();
   }
@@ -79,7 +79,7 @@ async function request<T>(base: string, path: string, init?: RequestInit, allowR
 let refreshInflight: Promise<boolean> | null = null;
 
 export function tryRefreshSession(base: string): Promise<boolean> {
-  refreshInflight ??= request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
+  refreshInflight ??= apiRequest<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
     .then(() => true)
     .catch(() => false)
     .finally(() => {
@@ -88,20 +88,20 @@ export function tryRefreshSession(base: string): Promise<boolean> {
   return refreshInflight;
 }
 
-export const login = (base: string, identifier: string, password: string) => request<LoginResult>(base, '/api/auth/login', {
+export const login = (base: string, identifier: string, password: string) => apiRequest<LoginResult>(base, '/api/auth/login', {
   method: 'POST', body: JSON.stringify({ identifier: identifier.trim(), password }),
 });
-export const getCurrentUser = (base: string) => request<AuthUser>(base, '/api/auth/me');
-export const changePassword = (base: string, currentPassword: string, newPassword: string, confirmPassword: string) => request<void>(base, '/api/auth/change-password', {
+export const getCurrentUser = (base: string) => apiRequest<AuthUser>(base, '/api/auth/me');
+export const changePassword = (base: string, currentPassword: string, newPassword: string, confirmPassword: string) => apiRequest<void>(base, '/api/auth/change-password', {
   method: 'POST', body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
 });
-export const forgotPassword = (base: string, email: string) => request<void>(base, '/api/auth/forgot-password', {
+export const forgotPassword = (base: string, email: string) => apiRequest<void>(base, '/api/auth/forgot-password', {
   method: 'POST', body: JSON.stringify({ email: email.trim() }),
 });
-export const resetPassword = (base: string, token: string, newPassword: string) => request<void>(base, '/api/auth/reset-password', {
+export const resetPassword = (base: string, token: string, newPassword: string) => apiRequest<void>(base, '/api/auth/reset-password', {
   method: 'POST', body: JSON.stringify({ token: token.trim(), newPassword }),
 });
-export const logout = (base: string) => request<void>(base, '/api/auth/logout', { method: 'POST' });
+export const logout = (base: string) => apiRequest<void>(base, '/api/auth/logout', { method: 'POST' });
 
 export function friendlyAuthError(error: unknown): string {
   if (error instanceof AuthApiError) {

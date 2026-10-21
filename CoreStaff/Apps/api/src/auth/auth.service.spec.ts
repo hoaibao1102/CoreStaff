@@ -6,6 +6,10 @@ import { hashToken } from './strategies/token-strategy';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ResetMailer } from './strategies/reset-mailer';
 
+// These specs deliberately exercise real bcrypt hashes. Slower Windows CI
+// runners can exceed Jest's 5 s default even though the assertions are healthy.
+jest.setTimeout(15_000);
+
 /**
  * Model fakes: AuthService only touches the methods below. Real bcryptjs +
  * node:crypto run for genuine hashing; no in-memory Mongo dependency.

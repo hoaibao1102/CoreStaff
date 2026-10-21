@@ -6,6 +6,7 @@ let currentTargetKey: string | null = null;
 export function getSocket(apiBase?: string | null): Socket {
   let targetOrigin = window.location.origin;
   let socketPath = '/socket.io';
+  const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
   // In development, connect Socket.IO straight to Nest instead of tunnelling
   // the long-lived WebSocket through Vite. Nest watch restarts legitimately
@@ -13,14 +14,14 @@ export function getSocket(apiBase?: string | null): Socket {
   // ECONNRESET` logs while Socket.IO performs its normal reconnection. Keep the
   // browser hostname (localhost vs 127.0.0.1) so the first-party sid cookie is
   // still sent, and only replace the dev-server port with the API port.
-  if (import.meta.env.DEV) {
+  if (isLocalDevelopment) {
     targetOrigin = `${window.location.protocol}//${window.location.hostname}:3000`;
   }
 
   if (apiBase) {
     try {
       const url = new URL(apiBase, window.location.origin);
-      if (import.meta.env.DEV && url.origin === window.location.origin) {
+      if (isLocalDevelopment && url.origin === window.location.origin) {
         socketPath = '/socket.io';
       } else if (url.origin !== window.location.origin) {
         // Direct remote backend URL (e.g. production)

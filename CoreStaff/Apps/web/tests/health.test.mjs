@@ -21,6 +21,7 @@ function loadClient(platform, fetch, production = false, useDefaults = false) {
     exports, fetch, AbortController, setTimeout, clearTimeout,
     require: () => ({ Platform: { OS: 'android' } }),
     window: { location: { origin: 'http://web.test' } },
+    __VITE_ENV__: { PROD: String(production), VITE_API_URL: useDefaults ? undefined : 'https://api.test/' },
     testEnv: { PROD: production, VITE_API_URL: useDefaults ? undefined : 'https://api.test/' },
     process: { env: { EXPO_PUBLIC_API_URL: useDefaults ? undefined : 'https://api.test/' } },
     __DEV__: !production,

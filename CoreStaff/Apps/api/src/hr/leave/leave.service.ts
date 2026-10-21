@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
@@ -12,6 +12,7 @@ import { ManagerScopeService } from '../manager/manager-scope.service';
 import { PeriodVersionService } from '../timesheet/period-version.service';
 import { dateOnly, enumerateDates } from '../../common/date-only';
 import { CreateLeaveRequestDto, LeaveRequestQueryDto } from './dto/leave.dto';
+import { EventsGateway } from '../../events/events.gateway';
 
 const ACTIVE_LEAVE_STATUSES = [LeaveRequestStatus.PENDING_MANAGER, LeaveRequestStatus.APPROVED, LeaveRequestStatus.HR_APPLIED];
 
@@ -27,6 +28,7 @@ export class LeaveService {
     @InjectConnection() private readonly connection: Connection,
     private readonly managerScope: ManagerScopeService,
     private readonly periodVersion: PeriodVersionService,
+    @Optional() private readonly eventsGateway?: EventsGateway,
   ) {}
 
   async create(org: string, employeeId: string, dto: CreateLeaveRequestDto) {
@@ -51,6 +53,10 @@ export class LeaveService {
 
     const row = await this.requests.create({ ...dto, reason: dto.reason.trim(), startDate, endDate, organizationId: org, employeeId, departmentId, status: LeaveRequestStatus.PENDING_MANAGER });
     await this.actions.create({ organizationId: org, leaveRequestId: row._id, actorId: employeeId, action: 'SUBMIT', previousStatus: 'NONE', newStatus: LeaveRequestStatus.PENDING_MANAGER });
+    this.eventsGateway?.notifyLeaveCreated(org, departmentId, {
+      requestId: String(row._id), employeeUserId: employeeId, departmentId: String(departmentId),
+      startDate, endDate, leaveType: row.leaveType, status: row.status,
+    });
     return row.toObject();
   }
 
@@ -91,6 +97,9 @@ export class LeaveService {
     ).lean();
     if (!row) throw new ConflictException('LEAVE_REQUEST_ALREADY_DECIDED');
     await this.actions.create({ organizationId: org, leaveRequestId: id, actorId: managerId, action: approve ? 'APPROVE' : 'REJECT', previousStatus: old.status, newStatus: next, comment: comment?.trim() });
+    this.eventsGateway?.notifyLeaveChanged(old.employeeId, org, old.departmentId, {
+      requestId: id, employeeUserId: String(old.employeeId), departmentId: String(old.departmentId), status: next,
+    });
     return row;
   }
 
@@ -137,6 +146,12 @@ export class LeaveService {
         await this.actions.create([{ organizationId: org, leaveRequestId: id, actorId: hrId, action: 'APPLY', previousStatus: old.status, newStatus: LeaveRequestStatus.HR_APPLIED, beforeData: { status: old.status }, afterData: { status: LeaveRequestStatus.HR_APPLIED, dates } }], { session });
         applied = row;
       });
+      if (applied) {
+        const row = applied as any;
+        this.eventsGateway?.notifyLeaveChanged(row.employeeId, org, row.departmentId, {
+          requestId: id, employeeUserId: String(row.employeeId), departmentId: String(row.departmentId), status: LeaveRequestStatus.HR_APPLIED,
+        });
+      }
       return applied;
     } finally { await session.endSession(); }
   }

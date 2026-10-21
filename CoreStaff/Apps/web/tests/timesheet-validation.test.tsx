@@ -126,17 +126,17 @@ function validateReopenReason(reason: string): { valid: boolean; error?: string 
 
 describe('validatePeriodDates', () => {
   it('should accept valid 31-day month', () => {
-    const result = validatePeriodDates('2026-10-01', '2026-10-31');
+    const result = validatePeriodDates('2099-01-01', '2099-01-31');
     expect(result.valid).toBe(true);
   });
 
   it('should accept valid 30-day month', () => {
-    const result = validatePeriodDates('2026-11-01', '2026-11-30');
+    const result = validatePeriodDates('2099-04-01', '2099-04-30');
     expect(result.valid).toBe(true);
   });
 
   it('should accept valid 28-day month', () => {
-    const result = validatePeriodDates('2026-02-01', '2026-02-28');
+    const result = validatePeriodDates('2099-02-01', '2099-02-28');
     expect(result.valid).toBe(true);
   });
 
@@ -163,7 +163,8 @@ describe('validatePeriodDates', () => {
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     
     const result = validatePeriodDates(startDate, endDate);
     expect(result.valid).toBe(true);

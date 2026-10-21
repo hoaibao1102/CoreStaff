@@ -146,4 +146,37 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (departmentId) this.server.to(`dept:${String(departmentId?._id ?? departmentId)}`).emit('compliance:warning', payload);
     if (organizationId) this.server.to(`org:${String(organizationId)}:managers`).emit('compliance:warning', payload);
   }
+
+  /** Keep an employee's open devices and the responsible management views in sync. */
+  notifyAttendanceChanged(employeeUserId: any, organizationId: any, departmentId: any, payload: any) {
+    if (!this.server) return;
+    const rooms = [`user:${String(employeeUserId?._id ?? employeeUserId)}`];
+    if (departmentId) rooms.push(`dept:${String(departmentId?._id ?? departmentId)}`);
+    if (organizationId) rooms.push(`org:${String(organizationId)}:managers`);
+    this.server.to(rooms).emit('attendance:changed', payload);
+  }
+
+  notifyLeaveCreated(organizationId: any, departmentId: any, payload: any) {
+    if (!this.server) return;
+    const rooms: string[] = [];
+    if (departmentId) rooms.push(`dept:${String(departmentId?._id ?? departmentId)}`);
+    if (organizationId) rooms.push(`org:${String(organizationId)}:managers`);
+    if (rooms.length) this.server.to(rooms).emit('leave:new', payload);
+  }
+
+  notifyLeaveChanged(employeeUserId: any, organizationId: any, departmentId: any, payload: any) {
+    if (!this.server) return;
+    const rooms = [`user:${String(employeeUserId?._id ?? employeeUserId)}`];
+    if (departmentId) rooms.push(`dept:${String(departmentId?._id ?? departmentId)}`);
+    if (organizationId) rooms.push(`org:${String(organizationId)}:managers`);
+    this.server.to(rooms).emit('leave:changed', payload);
+  }
+
+  notifyPayslipReleased(employeeUserIds: any[], payload: any) {
+    if (!this.server) return;
+    const rooms = employeeUserIds
+      .filter(Boolean)
+      .map((userId) => `user:${String(userId?._id ?? userId)}`);
+    if (rooms.length) this.server.to(rooms).emit('payslip:released', payload);
+  }
 }

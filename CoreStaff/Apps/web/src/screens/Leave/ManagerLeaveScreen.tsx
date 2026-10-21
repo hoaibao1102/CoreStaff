@@ -15,10 +15,12 @@ import { approveLeaveRequest, listManagerLeaveRequests, rejectLeaveRequest, type
 import { getManagerContext, getManagerEmployees, type ManagerEmployee } from '@/services/manager.service';
 import { formatLeaveDate, leaveDays, leaveError, LeaveStatusBadge, leaveTypeLabel } from './leave-ui';
 import { LeaveDetail } from './EmployeeLeaveScreen';
+import { getSocket } from '@/services/socket';
 
 export function ManagerLeaveScreen({apiBase}:{apiBase:string}){
   const [rows,setRows]=useState<LeaveRequest[]>([]),[employees,setEmployees]=useState<ManagerEmployee[]>([]),[departments,setDepartments]=useState<Array<{id:string;code:string;name:string}>>([]),[departmentId,setDepartmentId]=useState(''),[status,setStatus]=useState<'all'|LeaveStatus>('PENDING_MANAGER'),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState(''),[detail,setDetail]=useState<LeaveRequest|null>(null),[decision,setDecision]=useState<{row:LeaveRequest;action:'approve'|'reject'}|null>(null),[reason,setReason]=useState(''),[formError,setFormError]=useState(''),[busy,setBusy]=useState(false),[rev,setRev]=useState(0);
   useEffect(()=>{let cancelled=false;setLoading(true);setError('');Promise.all([listManagerLeaveRequests(apiBase,status==='all'?undefined:status,departmentId||undefined),getManagerEmployees(apiBase,departmentId||undefined),getManagerContext(apiBase)]).then(([requests,people,context])=>{if(cancelled)return;setRows(requests);setEmployees(people);setDepartments(context.managedDepartments)}).catch(e=>!cancelled&&setError(leaveError(e))).finally(()=>!cancelled&&setLoading(false));return()=>{cancelled=true}},[apiBase,departmentId,rev,status]);
+  useEffect(()=>{const socket=getSocket(apiBase);const refresh=()=>setRev(value=>value+1);socket.on('leave:new',refresh);socket.on('leave:changed',refresh);return()=>{socket.off('leave:new',refresh);socket.off('leave:changed',refresh)}},[apiBase]);
   const employeeMap=useMemo(()=>new Map(employees.map(e=>[e.userId,e])),[employees]);
   const visible=useMemo(()=>{const key=query.trim().toLocaleLowerCase('vi');return rows.filter(row=>!key||[employeeMap.get(row.employeeId)?.fullName,employeeMap.get(row.employeeId)?.employeeCode,row.reason,row.startDate,row.endDate].some(value=>String(value||'').toLocaleLowerCase('vi').includes(key)))},[employeeMap,query,rows]);
   const pending=rows.filter(r=>r.status==='PENDING_MANAGER').length;
