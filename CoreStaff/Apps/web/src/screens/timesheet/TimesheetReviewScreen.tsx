@@ -143,16 +143,18 @@ export function TimesheetReviewScreen({
     const socket = getSocket(apiBase);
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const onRequestDecided = (payload: { type?: string }) => {
-      if (payload?.type !== 'ATTENDANCE') return;
+      if (payload?.type && payload.type !== 'ATTENDANCE') return;
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         void loadPeriodDetail(selectedPeriod._id);
       }, 250);
     };
     socket.on('request:decided', onRequestDecided);
+    socket.on('attendance:changed', onRequestDecided);
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       socket.off('request:decided', onRequestDecided);
+      socket.off('attendance:changed', onRequestDecided);
     };
   }, [apiBase, selectedPeriod?._id]);
 

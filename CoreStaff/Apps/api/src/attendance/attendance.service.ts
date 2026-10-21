@@ -114,7 +114,9 @@ export class AttendanceService {
       .lean();
 
     const workplace = assignment?.workplaceId;
-    const shift = await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate) || assignment?.shiftTemplateId || assignment?.shiftId;
+    // An explicit employee assignment is more specific than an organization or
+    // department schedule resolved as a fallback.
+    const shift = assignment?.shiftTemplateId || assignment?.shiftId || await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate);
 
     // 2. Tìm AttendanceDay hôm nay
     const day = await this.attendanceDayModel
@@ -306,7 +308,7 @@ export class AttendanceService {
     }
 
     const workplace = assignment.workplaceId;
-    const shift = await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate) || assignment.shiftTemplateId || assignment.shiftId;
+    const shift = assignment.shiftTemplateId || assignment.shiftId || await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate);
     const recordedAt = new Date();
 
     let method: AttendanceMethod;
@@ -535,6 +537,12 @@ export class AttendanceService {
       },
     };
     await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_IN', requestHash, response as any);
+    this.eventsGateway?.notifyAttendanceChanged(
+      employeeId,
+      organizationId,
+      assignment.departmentId?._id || assignment.departmentId,
+      response,
+    );
     return response;
   }
 
@@ -809,6 +817,12 @@ export class AttendanceService {
       },
     };
     await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_OUT', requestHash, response as any);
+    this.eventsGateway?.notifyAttendanceChanged(
+      employeeId,
+      organizationId,
+      assignment?.departmentId?._id || assignment?.departmentId,
+      response,
+    );
     return response;
   }
 

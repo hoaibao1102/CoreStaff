@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payslip, PayslipDocument, PayslipStatus } from '../../database/schemas/payslip.schema';
@@ -9,6 +9,7 @@ import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.
 import { InsuranceService } from './insurance.service';
 import { OVERTIME_RATES, computeOvertimePay } from '../timesheet/payroll-snapshot.service';
 import { PitService } from './pit.service';
+import { EventsGateway } from '../../events/events.gateway';
 
 type EarningItem = { type: string; label: string; amount: number; taxable: boolean };
 
@@ -59,6 +60,7 @@ export class PayslipService {
     @InjectModel('TaxPolicy') private readonly taxPolicyModel: Model<TaxPolicyDocument>,
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
+    @Optional() private readonly eventsGateway?: EventsGateway,
   ) {}
 
   /**
@@ -342,6 +344,15 @@ export class PayslipService {
       throw new BadRequestException('PAYROLL_RUN_NOT_FOUND_OR_NOT_LOCKED');
     }
 
+    const releasedPayslips = await this.payslipModel
+      .find({ payrollRunId: new Types.ObjectId(payrollRunId) })
+      .select({ employeeProfileId: 1 })
+      .lean();
+    const profileIds = releasedPayslips.map((row) => row.employeeProfileId);
+    const profiles = profileIds.length
+      ? await this.employeeProfileModel.find({ _id: { $in: profileIds } }).select({ userId: 1 }).lean()
+      : [];
+
     // Update all payslips to RELEASED
     await this.payslipModel.updateMany(
       { payrollRunId: new Types.ObjectId(payrollRunId) },
@@ -352,6 +363,11 @@ export class PayslipService {
     await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
       $set: { status: PayrollRunStatus.RELEASED },
     });
+
+    this.eventsGateway?.notifyPayslipReleased(
+      profiles.map((profile) => profile.userId),
+      { payrollRunId, periodLabel: payrollRun.periodLabel, status: PayslipStatus.RELEASED },
+    );
   }
 
   /**

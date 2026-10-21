@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, Min, Max, IsOptional, IsEnum } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, MaxLength, Min, Max, IsOptional, IsEnum, IsArray, ValidateNested, IsBoolean } from 'class-validator';
 import { WorkplaceType } from '../../../database/schemas/workplace.schema';
+import { WorkplaceNetworkRuleDto } from './create-workplace.dto';
 
 export class UpdateWorkplaceDto {
 	@ApiProperty({ required: false, example: 'OUTDOOR-01', description: 'Workplace code' })
@@ -47,5 +49,27 @@ export class UpdateWorkplaceDto {
 	@IsOptional()
 	@Min(0)
 	maximumAccuracyMeters?: number;
+
+	@ApiProperty({ required: false, type: [WorkplaceNetworkRuleDto] })
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => WorkplaceNetworkRuleDto)
+	@IsOptional()
+	allowedNetworks?: WorkplaceNetworkRuleDto[];
+
+	@ApiProperty({ required: false })
+	@IsBoolean()
+	@IsOptional()
+	allowNetworkAttendance?: boolean;
+
+	@ApiProperty({ required: false })
+	@IsBoolean()
+	@IsOptional()
+	allowGpsAttendance?: boolean;
+
+	@ApiProperty({ required: false })
+	@IsBoolean()
+	@IsOptional()
+	allowSelfieFallback?: boolean;
 }
 

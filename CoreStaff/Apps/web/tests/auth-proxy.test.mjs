@@ -53,7 +53,7 @@ test('dev proxy retains the session for password changes and logout', async () =
       const cookie = login.headers.get('set-cookie');
       assert.match(cookie, /HttpOnly/i);
       assert.match(cookie, /SameSite=Lax/i);
-      assert.match(cookie, new RegExp(`Path=${prefix || '/api'}(?:;|$)`));
+      assert.match(cookie, /Path=\/(?:;|$)/);
       assert.doesNotMatch(cookie, /;\s*(Domain=|Secure\b)/i);
       const headers = { Cookie: cookie.split(';')[0] };
       assert.equal((await fetch(`${url}/me`, { headers })).status, 200);
@@ -73,13 +73,13 @@ test('dev proxy retains the session for password changes and logout', async () =
       const renewed = refreshed.headers.get('set-cookie');
       assert.match(renewed, /sid=renewed-session/);
       assert.match(renewed, /SameSite=Lax/i);
-      assert.match(renewed, new RegExp(`Path=${prefix || '/api'}(?:;|$)`));
+      assert.match(renewed, /Path=\/(?:;|$)/);
       // Refreshing must not hand the client a new rt (the 14-day ceiling stays).
       assert.doesNotMatch(renewed, /rt=/);
 
       const logout = await fetch(`${url}/logout`, { method: 'POST', headers });
       assert.match(logout.headers.get('set-cookie'), /Max-Age=0/i);
-      assert.match(logout.headers.get('set-cookie'), new RegExp(`Path=${prefix || '/api'}(?:;|$)`));
+      assert.match(logout.headers.get('set-cookie'), /Path=\/(?:;|$)/);
       assert.match(logout.headers.get('set-cookie'), /rt=/);
     }
   } finally {

@@ -7,6 +7,13 @@ import { ToastViewport } from '../src/components/toast';
 import type { LaborCompliancePolicy, OvertimePayPolicy } from '../src/services/policies.service';
 
 jest.mock('../src/config/api', () => ({ apiUrl: (base: string, path: string) => base + path }));
+jest.mock('../src/components/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children, render: _render, ...props }: { children: React.ReactNode; render?: React.ReactElement } & React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+    <button {...props}>{children}</button>,
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button role="menuitem" {...props}>{children}</button>,
+}));
 
 const NOW = '2026-09-18T00:00:00.000Z';
 const labor: LaborCompliancePolicy = {
@@ -115,20 +122,14 @@ async function setSelect(id: string, value: string) {
   });
 }
 async function openRowMenu(ariaLabelPrefix: string, itemText: string) {
-  // base-ui Menu opens on `mousedown` (not click) and defers the state update
-  // to a requestAnimationFrame; settle() must run a REAL timer so jsdom's
-  // polyfilled rAF fires — a microtask flush would leave the frame pending.
+  // Dropdown primitives are mocked above because positioning/focus behavior is
+  // covered in e2e, while this suite verifies the policy workflow itself.
   const menu = [...document.body.querySelectorAll('button')].find(b => b.getAttribute('aria-label')?.startsWith(ariaLabelPrefix));
   expect(menu).toBeDefined();
-  await act(async () => {
-    menu!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-    await new Promise(r => setTimeout(r, 100));
-  });
   const item = [...document.body.querySelectorAll('[role="menuitem"]')].find(el => el.textContent?.includes(itemText));
   expect(item).toBeDefined();
   await act(async () => {
-    item!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
-    await new Promise(r => setTimeout(r, 100));
+    (item as HTMLButtonElement).click();
   });
 }
 

@@ -32,13 +32,14 @@ interface MobileBottomNavProps {
 
 function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps) {
     const tabs = manager ? [
-        { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint },
         { href: '/app/attendance/history', label: 'Lịch sử', icon: Clock },
         { href: '/app/leave', label: 'Đơn từ', icon: FileText },
+        { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint, primary: true },
         { href: '/manager/department', label: 'Phòng ban', icon: Building2 },
+        { href: '/app/profile', label: 'Cá nhân', icon: User },
     ] : [
-        { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint },
         { href: '/app/attendance/history', label: 'Lịch sử', icon: Clock },
+        { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint, primary: true },
         { href: '/app/profile', label: 'Cá nhân', icon: User },
     ];
 
@@ -49,23 +50,32 @@ function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps)
             aria-label="Thanh điều hướng nhân viên"
             className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[64px] border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-around px-4 shadow-[0_-3px_16px_rgba(0,0,0,0.05)]"
         >
-            {tabs.map(({ href, label, icon: Icon }) => {
+            {tabs.map(({ href, label, icon: Icon, primary }) => {
                 const isActive = path === href || (href !== '/app/attendance' && path.startsWith(href));
                 return (
                     <AppLink
                         key={href}
                         href={href}
-                        className="flex flex-col items-center justify-center flex-1 transition-all"
+                        className="flex min-w-0 flex-1 flex-col items-center justify-center transition-all"
                     >
-                        {isActive ? (
-                            <div className="flex flex-col items-center justify-center rounded-full bg-[#3ae39f] px-5 py-1.5 shadow-xs transition-transform active:scale-95">
-                                <Icon className="size-5 text-slate-950 stroke-[2.5]" />
-                                <span className="text-[10px] font-bold text-slate-950 mt-0.5 leading-tight">{label}</span>
+                        {primary ? (
+                            <div className="-mt-7 flex flex-col items-center justify-center transition-transform active:scale-95">
+                                <span className={`grid size-14 place-items-center rounded-full border-4 border-white shadow-lg ${isActive ? 'bg-[#3ae39f] text-slate-950' : 'bg-slate-900 text-white'}`}>
+                                    <Icon className="size-6 stroke-[2.5]" />
+                                </span>
+                                <span className={`mt-0.5 text-[10px] font-bold leading-tight ${isActive ? 'text-slate-950' : 'text-slate-600'}`}>{label}</span>
+                            </div>
+                        ) : isActive ? (
+                            <div className="flex flex-col items-center justify-center text-[#0f766e] transition-transform active:scale-95">
+                                <span className="grid size-8 place-items-center rounded-xl bg-emerald-50">
+                                    <Icon className="size-5 stroke-[2.5]" />
+                                </span>
+                                <span className="mt-0.5 max-w-full truncate text-[10px] font-bold leading-tight">{label}</span>
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600 transition-colors">
                                 <Icon className="size-5" />
-                                <span className="text-[10px] font-medium mt-0.5 leading-tight">{label}</span>
+                                <span className="mt-0.5 max-w-full truncate text-[10px] font-medium leading-tight">{label}</span>
                             </div>
                         )}
                     </AppLink>

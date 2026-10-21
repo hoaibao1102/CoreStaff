@@ -41,10 +41,10 @@ test('loads eligible payroll periods from the API base resolved by the workspace
     expect.objectContaining({ credentials: 'include' }),
   );
 
-  const createButton = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Tạo Bảng Lương'))!;
+  const createButton = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Tạo bảng lương'))!;
   await act(async () => createButton.click());
-  expect(container.textContent).toContain('2026-09');
-  expect(container.textContent).toContain('Đã chốt');
+  expect(document.body.textContent).toContain('2026-09');
+  expect(document.body.textContent).toContain('Đã chốt');
 });
 
 test('offers recalculation only for a calculated payroll run and calls the recalculate endpoint', async () => {

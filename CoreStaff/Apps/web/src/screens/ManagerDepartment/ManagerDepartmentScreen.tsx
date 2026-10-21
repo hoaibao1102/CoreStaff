@@ -114,6 +114,7 @@ export function ManagerDepartmentScreen({
       setPendingCount((prev) => Math.max(0, prev - 1));
       setSocketRev((r) => r + 1);
     };
+    const onAttendanceChanged = () => setSocketRev((r) => r + 1);
 
     // D39 — punches that fall outside both the shift and any OT request arrive
     // here as `UNREPORTED_OVERTIME` when the employee checks out. The manager
@@ -132,11 +133,13 @@ export function ManagerDepartmentScreen({
     socket.on('request:new', onNewRequest);
     socket.on('request:decided', onRequestDecided);
     socket.on('compliance:warning', onComplianceWarning);
+    socket.on('attendance:changed', onAttendanceChanged);
 
     return () => {
       socket.off('request:new', onNewRequest);
       socket.off('request:decided', onRequestDecided);
       socket.off('compliance:warning', onComplianceWarning);
+      socket.off('attendance:changed', onAttendanceChanged);
     };
   }, [apiBase]);
 

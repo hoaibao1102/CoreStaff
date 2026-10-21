@@ -23,6 +23,7 @@ import {
 } from '@/services/leave.service';
 import { formatLeaveDate, leaveDays, leaveError, LeaveStatusBadge, leaveTypeLabel } from './leave-ui';
 import { LeaveDetail } from './EmployeeLeaveScreen';
+import { getSocket } from '@/services/socket';
 
 const today=()=>new Date().toISOString().slice(0,10);
 const firstOfMonth=()=>`${today().slice(0,7)}-01`;
@@ -31,6 +32,7 @@ export function HrLeaveScreen({apiBase}:{apiBase:string}){
   const [rows,setRows]=useState<LeaveRequest[]>([]),[employees,setEmployees]=useState<Array<{userId:string;employeeCode:string;fullName?:string|null}>>([]),[status,setStatus]=useState<'all'|LeaveStatus>('APPROVED'),[employeeId,setEmployeeId]=useState(''),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState(''),[detail,setDetail]=useState<LeaveRequest|null>(null),[applying,setApplying]=useState<LeaveRequest|null>(null),[busy,setBusy]=useState(false),[rev,setRev]=useState(0);
   const [result,setResult]=useState<{request:LeaveRequest;overrides:EmployeeDayOverride[]}|null>(null),[rebuildOpen,setRebuildOpen]=useState(false),[from,setFrom]=useState(firstOfMonth()),[to,setTo]=useState(today()),[rebuildEmployee,setRebuildEmployee]=useState(''),[formError,setFormError]=useState('');
   useEffect(()=>{let cancelled=false;setLoading(true);setError('');Promise.all([listHrLeaveRequests(apiBase,status==='all'?undefined:status),getEmployees(apiBase,{})]).then(([requests,people])=>{if(cancelled)return;setRows(requests);setEmployees(people.employees)}).catch(e=>!cancelled&&setError(leaveError(e))).finally(()=>!cancelled&&setLoading(false));return()=>{cancelled=true}},[apiBase,rev,status]);
+  useEffect(()=>{const socket=getSocket(apiBase);const refresh=()=>setRev(value=>value+1);socket.on('leave:new',refresh);socket.on('leave:changed',refresh);return()=>{socket.off('leave:new',refresh);socket.off('leave:changed',refresh)}},[apiBase]);
   const employeeMap=useMemo(()=>new Map(employees.map(e=>[e.userId,e])),[employees]);
   const visible=useMemo(()=>{const key=query.trim().toLocaleLowerCase('vi');return rows.filter(row=>(!employeeId||row.employeeId===employeeId)&&(!key||[employeeMap.get(row.employeeId)?.fullName,employeeMap.get(row.employeeId)?.employeeCode,row.reason,row.startDate,row.endDate].some(value=>String(value||'').toLocaleLowerCase('vi').includes(key))))},[employeeId,employeeMap,query,rows]);
   const approved=rows.filter(row=>row.status==='APPROVED').length,applied=rows.filter(row=>row.status==='HR_APPLIED').length;

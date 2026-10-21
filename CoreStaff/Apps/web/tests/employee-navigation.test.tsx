@@ -15,6 +15,11 @@ jest.mock('../src/config/api', () => ({
   getApiBaseSync: () => 'https://api.example.test',
 }));
 
+jest.mock('../src/services/socket', () => ({
+  getSocket: () => ({ on: jest.fn(), off: jest.fn() }),
+  disconnectSocket: jest.fn(),
+}));
+
 const user: AuthUser = {
   id: 'u1',
   organizationId: 'org1',
@@ -58,7 +63,7 @@ beforeEach(() => {
       body = status === 200 ? { success: true } : { success: false };
     } else if (url.includes('/api/hr/employees/me')) {
       body = { success: true, data: { _id: 'p1', userId: session?.id, organizationId: session?.organizationId, employeeCode: 'HR001', employmentStatus: 'ACTIVE' } };
-    } else if (url.includes('/api/hr/')) {
+    } else if (url.includes('/api/hr/') || url.endsWith('/api/app/documents')) {
       body = { success: true, data: [] };
     } else if (url.endsWith('/api/auth/logout')) {
       session = null;
@@ -179,7 +184,6 @@ test('change password uses auth layout and returns to login when the session exp
   expect(container.querySelector('header button')).toBeNull();
   expect(container.querySelector('header')?.textContent).toContain('CoreStaff');
 
-  await input(container.querySelector<HTMLInputElement>('input[autocomplete="current-password"]')!, 'OldPass1');
   const newPasswordInputs = container.querySelectorAll<HTMLInputElement>('input[autocomplete="new-password"]');
   await input(newPasswordInputs[0], 'NewPass1');
   await input(newPasswordInputs[1], 'NewPass1');

@@ -1,6 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MaxLength, Min, Max, IsOptional, IsEnum, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, MaxLength, Min, Max, IsOptional, IsEnum, ValidateIf, IsArray, ValidateNested, IsBoolean } from 'class-validator';
 import { WorkplaceType } from '../../../database/schemas/workplace.schema';
+
+export class WorkplaceNetworkRuleDto {
+	@ApiProperty({ required: false, example: 'Wi-Fi văn phòng' })
+	@IsString()
+	@IsOptional()
+	@MaxLength(100)
+	label?: string;
+
+	@ApiProperty({ example: '192.168.1.0/24' })
+	@IsString()
+	@IsNotEmpty()
+	cidrOrIp!: string;
+
+	@ApiProperty({ required: false, default: true })
+	@IsBoolean()
+	@IsOptional()
+	active?: boolean;
+}
 
 export class CreateWorkplaceDto {
 	@ApiProperty({ example: 'OUTDOOR-01', description: 'Unique workplace code within the tenant.' })
@@ -53,4 +72,26 @@ export class CreateWorkplaceDto {
 	@IsNotEmpty()
 	@Min(80)
 	maximumAccuracyMeters?: number;
+
+	@ApiProperty({ required: false, type: [WorkplaceNetworkRuleDto] })
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => WorkplaceNetworkRuleDto)
+	@IsOptional()
+	allowedNetworks?: WorkplaceNetworkRuleDto[];
+
+	@ApiProperty({ required: false, default: true })
+	@IsBoolean()
+	@IsOptional()
+	allowNetworkAttendance?: boolean;
+
+	@ApiProperty({ required: false, default: true })
+	@IsBoolean()
+	@IsOptional()
+	allowGpsAttendance?: boolean;
+
+	@ApiProperty({ required: false, default: true })
+	@IsBoolean()
+	@IsOptional()
+	allowSelfieFallback?: boolean;
 }

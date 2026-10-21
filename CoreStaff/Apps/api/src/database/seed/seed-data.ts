@@ -34,6 +34,23 @@ export interface CatalogSeed {
 	departmentCode?: string;
 }
 
+export interface WorkplaceSeed {
+	orgCode: string;
+	code: string;
+	name: string;
+	address: string;
+	latitude: number;
+	longitude: number;
+}
+
+export interface ShiftSeed {
+	orgCode: string;
+	code: string;
+	name: string;
+	startTime: string;
+	endTime: string;
+}
+
 export interface EmployeeSeed {
 	email: string;
 	fullName: string;
@@ -83,6 +100,23 @@ export const POSITIONS: CatalogSeed[] = [
 	{ orgCode: 'ABC', code: 'SLS', name: 'Sales Staff', departmentCode: 'SAL' },
 	{ orgCode: 'ABC', code: 'ACC', name: 'Accountant', departmentCode: 'FIN' },
 ];
+
+export const WORKPLACES: WorkplaceSeed[] = ORGS.map((org) => ({
+	orgCode: org.code,
+	code: 'HQ',
+	name: 'Văn phòng chính',
+	address: 'TP. Hồ Chí Minh',
+	latitude: 10.7769,
+	longitude: 106.7009,
+}));
+
+export const SHIFTS: ShiftSeed[] = ORGS.map((org) => ({
+	orgCode: org.code,
+	code: 'HC-0800',
+	name: 'Ca hành chính',
+	startTime: '08:00',
+	endTime: '17:00',
+}));
 
 export const EMPLOYEES: EmployeeSeed[] = [
 	// --- TVS ---

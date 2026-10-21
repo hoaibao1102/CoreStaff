@@ -424,8 +424,10 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     };
 
     socket.on('request:decided', onDecision);
+    socket.on('attendance:changed', fetchTodayData);
     return () => {
       socket.off('request:decided', onDecision);
+      socket.off('attendance:changed', fetchTodayData);
     };
   }, [apiBase, fetchTodayData]);
 

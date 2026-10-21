@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from '@/components/toast';
 import { createLeaveRequest, listMyLeaveRequests, type LeaveRequest, type LeaveStatus, type LeaveType } from '@/services/leave.service';
 import { formatLeaveDate, leaveDays, leaveError, LeaveStatusBadge, leaveTypeLabel } from './leave-ui';
+import { getSocket } from '@/services/socket';
 
 type Form={startDate:string;endDate:string;leaveType:LeaveType;reason:string};
 const emptyForm=():Form=>{const date=new Date().toISOString().slice(0,10);return{startDate:date,endDate:date,leaveType:'PAID_LEAVE',reason:''}};
@@ -20,6 +21,7 @@ const emptyForm=():Form=>{const date=new Date().toISOString().slice(0,10);return
 export function EmployeeLeaveScreen({apiBase}:{apiBase:string}){
   const [rows,setRows]=useState<LeaveRequest[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[status,setStatus]=useState<'all'|LeaveStatus>('all'),[open,setOpen]=useState(false),[detail,setDetail]=useState<LeaveRequest|null>(null),[form,setForm]=useState<Form>(emptyForm()),[formError,setFormError]=useState(''),[busy,setBusy]=useState(false),[rev,setRev]=useState(0);
   useEffect(()=>{let cancelled=false;setLoading(true);setError('');listMyLeaveRequests(apiBase).then(data=>!cancelled&&setRows(data)).catch(e=>!cancelled&&setError(leaveError(e))).finally(()=>!cancelled&&setLoading(false));return()=>{cancelled=true}},[apiBase,rev]);
+  useEffect(()=>{const socket=getSocket(apiBase);const refresh=()=>setRev(value=>value+1);socket.on('leave:changed',refresh);return()=>{socket.off('leave:changed',refresh)}},[apiBase]);
   const visible=useMemo(()=>{const key=query.trim().toLocaleLowerCase('vi');return rows.filter(row=>(status==='all'||row.status===status)&&(!key||[row.reason,row.startDate,row.endDate,leaveTypeLabel[row.leaveType]].some(value=>value.toLocaleLowerCase('vi').includes(key))))},[query,rows,status]);
   const stats=useMemo(()=>({pending:rows.filter(r=>r.status==='PENDING_MANAGER').length,approved:rows.filter(r=>r.status==='APPROVED'||r.status==='HR_APPLIED').length,total:rows.length}),[rows]);
   function showCreate(){setForm(emptyForm());setFormError('');setOpen(true)}

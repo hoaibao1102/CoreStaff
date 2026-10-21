@@ -71,3 +71,34 @@ describe('EventsGateway socket authorization', () => {
     expect(service.handleJoinDepartment).toBeUndefined();
   });
 });
+
+describe('EventsGateway scoped domain events', () => {
+  function withServer() {
+    const service = gateway();
+    const emit = jest.fn();
+    const to = jest.fn(() => ({ emit }));
+    (service as any).server = { to };
+    return { service, to, emit };
+  }
+
+  it('sends attendance changes to the employee and responsible management rooms', () => {
+    const { service, to, emit } = withServer();
+    service.notifyAttendanceChanged('u1', 'o1', 'd1', { attendanceStatus: 'CHECKED_IN' });
+    expect(to).toHaveBeenCalledWith(['user:u1', 'dept:d1', 'org:o1:managers']);
+    expect(emit).toHaveBeenCalledWith('attendance:changed', { attendanceStatus: 'CHECKED_IN' });
+  });
+
+  it('sends leave decisions to the employee and tenant-scoped management rooms', () => {
+    const { service, to, emit } = withServer();
+    service.notifyLeaveChanged('u1', 'o1', 'd1', { status: 'APPROVED' });
+    expect(to).toHaveBeenCalledWith(['user:u1', 'dept:d1', 'org:o1:managers']);
+    expect(emit).toHaveBeenCalledWith('leave:changed', { status: 'APPROVED' });
+  });
+
+  it('sends a payroll release only to the affected employees', () => {
+    const { service, to, emit } = withServer();
+    service.notifyPayslipReleased(['u1', 'u2'], { periodLabel: '2026-10' });
+    expect(to).toHaveBeenCalledWith(['user:u1', 'user:u2']);
+    expect(emit).toHaveBeenCalledWith('payslip:released', { periodLabel: '2026-10' });
+  });
+});

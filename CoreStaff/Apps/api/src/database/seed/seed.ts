@@ -9,16 +9,19 @@ import { EmployeeProfileSchema } from '../schemas/employee-profile.schema';
 import { EmploymentHistorySchema } from '../schemas/employment-history.schema';
 import { EmploymentContractSchema } from '../schemas/employment-contract.schema';
 import { EmployeeDocumentSchema } from '../schemas/employee-document.schema';
+import { WorkplaceSchema } from '../schemas/workplace.schema';
+import { ShiftTemplateSchema } from '../schemas/shift-template.schema';
+import { EmployeeAssignmentSchema } from '../schemas/assignment.schema';
 import {
   AllowanceCatalogSchema,
   AttendanceBonusTemplateSchema,
   LaborCompliancePolicySchema,
   OvertimePayPolicySchema,
 } from '../schemas/compensation.schema';
-import { EmploymentStatus, Role, OrganizationStatus, normalizeEmail } from '../schemas/enums';
+import { EmploymentStatus, Role, OrganizationStatus, ShiftScope, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
-import { ORGS, HRS, DEPARTMENTS, POSITIONS, EMPLOYEES, CONTRACTS, DOCUMENTS, DEV_SEED_PASSWORD, type ContractSeed, type DocumentSeed } from './seed-data';
+import { ORGS, HRS, DEPARTMENTS, POSITIONS, WORKPLACES, SHIFTS, EMPLOYEES, CONTRACTS, DOCUMENTS, DEV_SEED_PASSWORD, type ContractSeed, type DocumentSeed } from './seed-data';
 
 /**
  * Idempotent seed: TASK-019 Organizations + HR/System Admin accounts, plus the
@@ -42,6 +45,7 @@ type ProfileModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 type HistoryModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 type ContractModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 type DocumentModel = mongoose.Model<IdDoc & Record<string, unknown>>;
+type SchedulingModel = mongoose.Model<IdDoc & Record<string, unknown>>;
 
 /** Row shape shared by HRS and EMPLOYEES — every seeded account is an employee. */
 interface AccountSeed {
@@ -105,6 +109,9 @@ async function main(): Promise<void> {
     const History = connection.model('EmploymentHistory', EmploymentHistorySchema) as unknown as HistoryModel;
     const Contract = connection.model('EmploymentContract', EmploymentContractSchema) as unknown as ContractModel;
     const Doc = connection.model('EmployeeDocument', EmployeeDocumentSchema) as unknown as DocumentModel;
+    const Workplace = connection.model('Workplace', WorkplaceSchema) as unknown as SchedulingModel;
+    const ShiftTemplate = connection.model('ShiftTemplate', ShiftTemplateSchema) as unknown as SchedulingModel;
+    const Assignment = connection.model('Assignment', EmployeeAssignmentSchema) as unknown as SchedulingModel;
     const LaborPolicy = connection.model('LaborCompliancePolicy', LaborCompliancePolicySchema);
     const OvertimePolicy = connection.model('OvertimePayPolicy', OvertimePayPolicySchema);
     const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
@@ -222,6 +229,55 @@ async function main(): Promise<void> {
     for (const account of accounts) {
       if (account.role === Role.HR) continue;
       await upsertProfile(Profile, orgIds, ids, account);
+    }
+
+    // Real scheduling configuration for every demo employee. Attendance must
+    // never depend on the presentation fallbacks returned by /attendance/today.
+    const workplaceIds = new Map<string, mongoose.Types.ObjectId>();
+    const shiftIds = new Map<string, mongoose.Types.ObjectId>();
+    for (const row of SHIFTS) {
+      const organizationId = requireOrg(orgIds, row.orgCode);
+      const shift = await ShiftTemplate.findOneAndUpdate(
+        { organizationId, code: row.code },
+        { $set: { organizationId, code: row.code, name: row.name, scope: ShiftScope.ORGANIZATION, weekdays: [1, 2, 3, 4, 5], effectiveFrom: '2026-01-01', startTime: row.startTime, endTime: row.endTime, breakMinutes: 60, gracePeriodMinutes: 10, active: true } },
+        { upsert: true, new: true, runValidators: true },
+      ).exec();
+      if (!shift) throw new Error(`Could not seed shift ${row.orgCode}/${row.code}`);
+      shiftIds.set(row.orgCode, shift._id);
+      console.log(`[seed] UPSERTED shift ${row.orgCode}/${row.code}`);
+    }
+    for (const row of WORKPLACES) {
+      const organizationId = requireOrg(orgIds, row.orgCode);
+      const workplace = await Workplace.findOneAndUpdate(
+        { organizationId, code: row.code },
+        { $set: { organizationId, code: row.code, name: row.name, type: 'IN_OFFICE', address: row.address, latitude: row.latitude, longitude: row.longitude, allowedRadiusMeters: 200, maximumAccuracyMeters: 100, allowedNetworks: [{ label: 'Local Expo development', cidrOrIp: '127.0.0.1/32', active: true }], allowNetworkAttendance: true, allowGpsAttendance: true, allowSelfieFallback: true, defaultShiftTemplateId: shiftIds.get(row.orgCode), active: true } },
+        { upsert: true, new: true, runValidators: true },
+      ).exec();
+      if (!workplace) throw new Error(`Could not seed workplace ${row.orgCode}/${row.code}`);
+      workplaceIds.set(row.orgCode, workplace._id);
+      console.log(`[seed] UPSERTED workplace ${row.orgCode}/${row.code}`);
+    }
+    for (const account of EMPLOYEES) {
+      const organizationId = requireOrg(orgIds, account.orgCode);
+      const userId = userIds.get(account.employeeCode);
+      const departmentId = catalogId(deptIds, account.orgCode, account.departmentCode, 'department');
+      const workplaceId = workplaceIds.get(account.orgCode);
+      const shiftTemplateId = shiftIds.get(account.orgCode);
+      if (!userId || !departmentId || !workplaceId || !shiftTemplateId) {
+        throw new Error(`Incomplete scheduling references for ${account.employeeCode}`);
+      }
+      const existing = await Assignment.findOne({ organizationId, userId, active: true }).sort({ createdAt: -1 }).exec();
+      if (existing) {
+        await Assignment.updateOne(
+          { _id: existing._id },
+          { $set: { departmentId, workplaceId, shiftTemplateId, effectiveFrom: existing.get('effectiveFrom') || '2026-01-01', active: true } },
+          { runValidators: true },
+        ).exec();
+        console.log(`[seed] UPDATED assignment ${account.employeeCode}`);
+      } else {
+        await Assignment.create({ organizationId, userId, departmentId, workplaceId, shiftTemplateId, effectiveFrom: '2026-01-01', active: true });
+        console.log(`[seed] CREATED assignment ${account.employeeCode}`);
+      }
     }
 
     // History mirrors what the app would have written: PROBATION at creation has
@@ -358,6 +414,15 @@ async function upsertUser(
   const emailN = normalizeEmail(account.email);
   const existing = await User.findOne({ organizationId, emailN }).exec();
   if (existing) {
+    if (process.env.RESET_SEED_PASSWORDS === 'true') {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('[seed] RESET_SEED_PASSWORDS is forbidden in production.');
+      }
+      existing.set({ passwordHash, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null });
+      await existing.save();
+      console.log(`[seed] RESET password ${account.email}`);
+      return existing._id as mongoose.Types.ObjectId;
+    }
     console.log(`[seed] SKIPPED user ${account.email}`);
     return existing._id as mongoose.Types.ObjectId;
   }
@@ -466,6 +531,15 @@ async function seedSystemAdmin(User: UserModel): Promise<void> {
   const emailN = normalizeEmail(email);
   const existing = await User.findOne({ emailN }).exec();
   if (existing) {
+    if (process.env.RESET_SEED_PASSWORDS === 'true') {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('[seed] RESET_SEED_PASSWORDS is forbidden in production.');
+      }
+      existing.set({ passwordHash: await hashPassword(password), mustChangePassword: false, failedLoginCount: 0, lockedUntil: null });
+      await existing.save();
+      console.log(`[seed] RESET password ${email} (role=SYSTEM_ADMIN)`);
+      return;
+    }
     console.log(`[seed] SKIPPED system admin ${email}`);
     return;
   }
