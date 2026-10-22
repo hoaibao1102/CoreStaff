@@ -8,19 +8,35 @@
     "userInterfaceStyle": "light",
     "scheme": "corestaff",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Chụp ảnh selfie để xác thực chấm công.",
+        "NSLocationWhenInUseUsageDescription": "Lấy vị trí để xác thực chấm công tại nơi làm việc.",
+        "NSLocalNetworkUsageDescription": "Đọc tên và địa chỉ access point của Wi-Fi công ty để xác thực chấm công."
+      }
     },
     "android": {
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "NEARBY_WIFI_DEVICES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.corestaff"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-splash-screen"
+    ]
   }
 }

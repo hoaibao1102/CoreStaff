@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Wifi,
   MapPin,
   Camera,
   Clock,
@@ -30,9 +29,7 @@ import type {
 import { useLocation, fetchAddressFromCoords, formatCoords } from './verification/useLocation';
 import { useGpsVerification } from './verification/useGpsVerification';
 import { CameraCapture, SelfiePreview } from './components/CameraComponents';
-import { NetworkAttendanceFlow } from './components/NetworkAttendanceFlow';
-import { GpsAttendanceFlow } from './components/GpsAttendanceFlow';
-import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
+import { GpsAttendanceFlow } from './components/GpsAttendanceFlow';import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
 import { PolicyModal } from './components/PolicyModal';
 import { CheckInSuccessModal } from './components/CheckInSuccessModal';
 import { ResultBanner, type ResultBannerProps } from './components/ResultBanner';
@@ -218,7 +215,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
   const [userWorkplace, setUserWorkplace] = useState<Workplace | null>(null);
   const [isLoadingWorkplace, setIsLoadingWorkplace] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('NETWORK');
+  const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('GPS');
   const [attendanceRecord, setAttendanceRecord] = useState<DayAttendance>({
     id: 'att-today',
     workDate: new Date().toISOString().split('T')[0],
@@ -228,16 +225,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     workplaceAddress: 'Đang kiểm tra dữ liệu vị trí...',
     status: 'NOT_CHECKED_IN',
     availableAction: 'CHECK_IN',
-    attendanceMethod: 'NETWORK',
-    verificationContext: {
-      method: 'NETWORK',
-      status: 'CONNECTED_TO_ALLOWED_NETWORK',
-      canAttend: true,
-      networkId: 'net-office-1',
-      networkName: 'CoreStaff-Office-5G',
-      workplaceId: 'wp-default',
-      workplaceName: 'Đang tải nơi làm việc...',
-    },
+    attendanceMethod: 'GPS',
     checkIn: null,
     checkOut: null,
   });
@@ -367,19 +355,6 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             } as any)
           : null,
         totalWorkingMinutes: todayData.workingMinutes ?? undefined,
-        verificationContext: isOutOffice
-          ? {
-              method: 'SELFIE',
-            }
-          : {
-              method: 'NETWORK',
-              status: 'CONNECTED_TO_ALLOWED_NETWORK',
-              canAttend: true,
-              networkId: 'net-office-1',
-              networkName: 'Mạng văn phòng',
-              workplaceId: todayData.assignment.workplaceId,
-              workplaceName: todayData.assignment.workplaceName,
-            },
       }));
     } catch {
       setLoadError('Không thể tải trạng thái chấm công hôm nay. Vui lòng thử lại.');
@@ -488,29 +463,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
   // Update verification context when switching methods
   const handleSelectMethod = (m: AttendanceMethod) => {
     setSelectedMethod(m);
-    setAttendanceRecord((prev) => ({
-      ...prev,
-      attendanceMethod: m,
-      verificationContext:
-        m === 'NETWORK'
-          ? {
-              method: 'NETWORK',
-              status: 'CONNECTED_TO_ALLOWED_NETWORK',
-              canAttend: true,
-              networkId: 'net-office-1',
-              networkName: 'CoreStaff-Office-5G',
-              workplaceId: userWorkplace?._id || 'wp-default',
-              workplaceName: userWorkplace?.name || 'Văn phòng CoreStaff',
-            }
-          : m === 'GPS'
-            ? {
-                method: 'GPS',
-                workplace: workplaceGps,
-              }
-            : {
-                method: 'SELFIE',
-              },
-    }));
+    setAttendanceRecord((prev) => ({ ...prev, attendanceMethod: m }));
   };
 
   // Check-in / Check-out dispatch
@@ -568,8 +521,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             },
           });
         } else {
-          // NETWORK
-          await apiCheckIn(apiBase, { workMode: 'IN_OFFICE' });
+          throw new Error('Phương thức chấm công không hợp lệ.');
         }
 
         await fetchTodayData();
@@ -604,8 +556,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             },
           });
         } else {
-          // NETWORK
-          await apiCheckOut(apiBase, {});
+          throw new Error('Phương thức chấm công không hợp lệ.');
         }
 
         await fetchTodayData();
@@ -620,7 +571,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
         setSelectedMethod('SELFIE');
         setResult({
           status: 'error',
-          message: 'Không nhận diện được Wi-Fi hoặc vị trí công ty. Đã chuyển sang chế độ Selfie để bạn gửi Quản lý duyệt.',
+          message: 'Vị trí GPS ngoài phạm vi văn phòng. Đã chuyển sang chế độ Selfie để bạn gửi Quản lý duyệt.',
         });
       } else {
         setResult({
@@ -687,19 +638,6 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             </div>
           ) : (
             <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('NETWORK')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'NETWORK'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Wifi className="size-3.5" />
-                <span>Wi-Fi</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => handleSelectMethod('GPS')}
@@ -798,7 +736,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground self-start sm:self-center">
-                    <span>Phương thức ưu tiên: Wi-Fi / GPS</span>
+                    <span>Phương thức ưu tiên: GPS</span>
                   </div>
                 )}
               </div>
@@ -816,7 +754,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
                   <div className="flex items-start sm:items-center gap-2">
                     <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <span>
-                      Gặp sự cố không kết nối được Wi-Fi văn phòng hoặc GPS ngoài phạm vi?
+                      Vị trí GPS ngoài phạm vi văn phòng?
                     </span>
                   </div>
                   <button
@@ -838,10 +776,10 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleSelectMethod('NETWORK')}
+                    onClick={() => handleSelectMethod('GPS')}
                     className="inline-flex items-center gap-1 font-semibold text-primary hover:underline transition-colors whitespace-nowrap"
                   >
-                    Quay lại Wi-Fi &rarr;
+                    Quay lại GPS &rarr;
                   </button>
                 </div>
               )}
@@ -857,19 +795,6 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             )}
 
             {/* Selected Method Flow */}
-            {selectedMethod === 'NETWORK' && (
-              <NetworkAttendanceFlow
-                today={attendanceRecord}
-                employeeName={user.fullName}
-                employeeCode={user.employeeCode || 'CS-0248'}
-                department={user.role === 'HR' ? 'Phòng Nhân sự' : 'Phòng Kinh doanh'}
-                submitting={isSubmitting}
-                onSubmit={handleAction}
-                onOpenPolicy={() => setIsPolicyOpen(true)}
-                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
-              />
-            )}
-
             {selectedMethod === 'GPS' && (
               <GpsAttendanceFlow
                 today={attendanceRecord}

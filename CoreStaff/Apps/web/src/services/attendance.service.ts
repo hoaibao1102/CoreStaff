@@ -47,7 +47,7 @@ export interface TodayAttendanceData {
     longitude: number;
     allowedRadiusMeters: number;
     maximumAccuracyMeters: number;
-    allowNetworkAttendance: boolean;
+    allowWifiAttendance: boolean;
     allowGpsAttendance: boolean;
     allowSelfieFallback: boolean;
   };
@@ -149,12 +149,12 @@ export function mapAttendanceError(code?: string): string {
     ALREADY_CHECKED_IN: 'Bạn đã thực hiện check-in vào ca hôm nay rồi.',
     ALREADY_CHECKED_OUT: 'Bạn đã hoàn thành check-out ra ca hôm nay rồi.',
     INVALID_ATTENDANCE_ACTION: 'Thao tác không hợp lệ với trạng thái công hiện tại.',
-    NETWORK_NOT_ALLOWED: 'Mạng Wi-Fi hiện tại không thuộc danh sách mạng cho phép của công ty.',
+    NETWORK_NOT_ALLOWED: 'Không xác thực được Wi-Fi văn phòng. Wi-Fi chỉ dùng được trên ứng dụng di động.',
     OUTSIDE_ALLOWED_AREA: 'Vị trí của bạn đang ở ngoài bán kính cho phép của nơi làm việc.',
     LOW_LOCATION_ACCURACY: 'Độ chính xác GPS quá thấp hoặc không ổn định. Vui lòng di chuyển ra nơi thoáng đãng và thử lại.',
     LOCATION_PERMISSION_REQUIRED: 'Trình duyệt chưa được cấp quyền vị trí. Vui lòng bật GPS trên trình duyệt.',
     CAMERA_PERMISSION_REQUIRED: 'Trình duyệt chưa được cấp quyền Camera. Hãy cho phép sử dụng Camera để chụp ảnh.',
-    SELFIE_REQUIRED: 'Không nhận diện được Wi-Fi hoặc vị trí công ty. Vui lòng chấm công bằng Selfie để Quản lý duyệt.',
+    SELFIE_REQUIRED: 'Vị trí ngoài phạm vi văn phòng. Vui lòng chấm công bằng Selfie để Quản lý duyệt.',
     SELFIE_IMAGE_INVALID: 'Ảnh chụp selfie không hợp lệ. Vui lòng chụp lại.',
     FILE_TOO_LARGE: 'Dung lượng ảnh quá lớn (vượt quá 5MB). Vui lòng thử lại.',
     UNSUPPORTED_FILE_TYPE: 'Định dạng ảnh không được hỗ trợ. Chỉ chấp nhận JPEG, PNG, WebP.',

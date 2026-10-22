@@ -2,6 +2,14 @@ import { hrRequest, mapHrError } from './hrService';
 
 export type WorkplaceType = 'IN_OFFICE' | 'OUT_OFFICE';
 
+/** One trusted access point. Only `bssid` is verified; `ssid`/`label` are for HR. */
+export interface WifiNetworkRule {
+  label?: string;
+  ssid: string;
+  bssid: string;
+  active: boolean;
+}
+
 export interface Workplace {
   _id: string;
   organizationId?: string;
@@ -13,6 +21,10 @@ export interface Workplace {
   longitude: number;
   allowedRadiusMeters: number;
   maximumAccuracyMeters: number;
+  allowedWifiNetworks?: WifiNetworkRule[];
+  allowWifiAttendance?: boolean;
+  allowGpsAttendance?: boolean;
+  allowSelfieFallback?: boolean;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -27,6 +39,10 @@ export interface CreateWorkplacePayload {
   longitude?: number;
   allowedRadiusMeters?: number;
   maximumAccuracyMeters?: number;
+  allowedWifiNetworks?: WifiNetworkRule[];
+  allowWifiAttendance?: boolean;
+  allowGpsAttendance?: boolean;
+  allowSelfieFallback?: boolean;
 }
 export type UpdateWorkplacePayload = Partial<CreateWorkplacePayload>;
 export interface WorkplaceFilters { active?: boolean; search?: string; type?: WorkplaceType; }
@@ -51,6 +67,8 @@ export function workplaceErrorMessage(error: unknown) {
     WORKPLACE_COORDINATES_ALREADY_EXISTS: 'Tọa độ này đã được sử dụng cho một nơi làm việc khác.',
     WORKPLACE_NOT_FOUND: 'Không tìm thấy nơi làm việc.',
     CANNOT_DEACTIVATE_WORKPLACE_IN_USE_BY_ACTIVE_ASSIGNMENTS: 'Không thể ngưng hoạt động nơi làm việc vì vẫn còn nhân viên đang được phân công tại đây.',
+    WIFI_BSSID_DUPLICATE: 'Địa chỉ BSSID này đã có trong danh sách. Mỗi access point chỉ cần khai báo một lần.',
+    WIFI_SSID_REQUIRED: 'Tên Wi-Fi (SSID) không được để trống.',
     VALIDATION_FAILED: 'Thông tin nơi làm việc chưa hợp lệ. Vui lòng kiểm tra lại.',
   };
   return (code && messages[code]) || mapHrError(code, 'Không thể thực hiện thao tác. Vui lòng thử lại.');

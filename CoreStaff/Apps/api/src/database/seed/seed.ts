@@ -250,7 +250,7 @@ async function main(): Promise<void> {
       const organizationId = requireOrg(orgIds, row.orgCode);
       const workplace = await Workplace.findOneAndUpdate(
         { organizationId, code: row.code },
-        { $set: { organizationId, code: row.code, name: row.name, type: 'IN_OFFICE', address: row.address, latitude: row.latitude, longitude: row.longitude, allowedRadiusMeters: 200, maximumAccuracyMeters: 100, allowedNetworks: [{ label: 'Local Expo development', cidrOrIp: '127.0.0.1/32', active: true }], allowNetworkAttendance: true, allowGpsAttendance: true, allowSelfieFallback: true, defaultShiftTemplateId: shiftIds.get(row.orgCode), active: true } },
+        { $set: { organizationId, code: row.code, name: row.name, type: 'IN_OFFICE', address: row.address, latitude: row.latitude, longitude: row.longitude, allowedRadiusMeters: 200, maximumAccuracyMeters: 100, allowedWifiNetworks: [], allowWifiAttendance: true, allowGpsAttendance: true, allowSelfieFallback: true, defaultShiftTemplateId: shiftIds.get(row.orgCode), active: true }, $unset: { allowedNetworks: '', allowNetworkAttendance: '' } },
         { upsert: true, new: true, runValidators: true },
       ).exec();
       if (!workplace) throw new Error(`Could not seed workplace ${row.orgCode}/${row.code}`);

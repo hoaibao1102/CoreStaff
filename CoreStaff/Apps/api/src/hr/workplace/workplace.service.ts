@@ -4,11 +4,29 @@ import { Model } from 'mongoose';
 import { WorkplaceDocument, WorkplaceType } from '../../database/schemas/workplace.schema';
 import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
 import { normalizeCode } from '../../database/schemas/enums';
+import { normalizeBssid } from '../../attendance/services/wifi-matcher';
 import { CreateWorkplaceDto } from './dto/create-workplace.dto';
 import { UpdateWorkplaceDto } from './dto/update-workplace.dto';
 import { BatchValidator } from '../../common/batch-validator';
 
 const DUPLICATE_KEY_ERROR = 11000;
+
+/**
+ * Trim, canonicalise BSSIDs and reject duplicates within the same workplace.
+ * A duplicated BSSID would silently make one row unreachable, and a blank SSID
+ * would give HR a row they cannot recognise.
+ */
+function normalizeWifiRules(rules: Array<{ label?: string; ssid: string; bssid: string; active?: boolean }>) {
+	const seen = new Set<string>();
+	return rules.map((rule) => {
+		const bssid = normalizeBssid(rule.bssid);
+		if (seen.has(bssid)) throw new ConflictException('WIFI_BSSID_DUPLICATE');
+		seen.add(bssid);
+		const ssid = rule.ssid.trim();
+		if (!ssid) throw new ConflictException('WIFI_SSID_REQUIRED');
+		return { label: rule.label?.trim() || undefined, ssid, bssid, active: rule.active ?? true };
+	});
+}
 
 @Injectable()
 export class WorkplaceService {
@@ -51,6 +69,7 @@ export class WorkplaceService {
 				longitude: dto.longitude ?? 0,
 				allowedRadiusMeters: dto.allowedRadiusMeters ?? 0,
 				maximumAccuracyMeters: dto.maximumAccuracyMeters ?? 0,
+				...(dto.allowedWifiNetworks ? { allowedWifiNetworks: normalizeWifiRules(dto.allowedWifiNetworks) } : {}),
 			};
 			const doc = await this.workplaceModel.create(payload);
 			return doc.toObject();
@@ -87,6 +106,9 @@ export class WorkplaceService {
 
 		const batch = new BatchValidator();
 		const patch: Record<string, unknown> = { ...dto };
+		if (patch.allowedWifiNetworks) {
+			patch.allowedWifiNetworks = normalizeWifiRules(patch.allowedWifiNetworks as Array<{ label?: string; ssid: string; bssid: string; active?: boolean }>);
+		}
 		if (typeof patch.code === 'string') {
 			patch.code = normalizeCode(patch.code);
 			const existingByCode = await this.workplaceModel.findOne({

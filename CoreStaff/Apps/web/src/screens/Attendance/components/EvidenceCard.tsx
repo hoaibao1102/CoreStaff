@@ -248,10 +248,10 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
         <div className="flex flex-col gap-1 text-xs min-w-0">
           <span className="font-semibold text-foreground flex items-center gap-1">
             <CheckCircle2 className="size-3.5 text-blue-600" />
-            Xác thực Mạng nội bộ Wi-Fi/LAN
+            Xác thực Wi-Fi văn phòng (ứng dụng di động)
           </span>
           <p className="text-muted-foreground text-[11px]">
-            Mạng kết nối: <strong>{'networkName' in event ? event.networkName : 'CoreStaff-Office-5G'}</strong>
+            Mạng kết nối: <strong>{'networkName' in event ? event.networkName : 'Wi-Fi văn phòng'}</strong>
           </p>
           <p className="text-muted-foreground text-[11px]">
             Địa điểm: {event.workplaceName || 'Văn phòng CoreStaff Quận 8'}
