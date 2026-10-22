@@ -30,6 +30,10 @@ export interface TodayAttendance {
     workplaceName: string;
     workplaceType: 'IN_OFFICE' | 'OUT_OFFICE';
     address: string;
+    allowWifiAttendance?: boolean;
+    allowGpsAttendance?: boolean;
+    allowSelfieFallback?: boolean;
+    hasWifiNetworks?: boolean;
   };
 }
 
@@ -122,12 +126,54 @@ export const getTodayAttendance = (base: string) =>
 export const getAttendanceHistory = (base: string, month: string) =>
   apiRequest<AttendanceHistory>(base, `/api/attendance/history?month=${encodeURIComponent(month)}`);
 
-export const punchAttendance = (base: string, action: 'CHECK_IN' | 'CHECK_OUT', workMode: 'IN_OFFICE' | 'OUT_OFFICE', note?: string) =>
-  apiRequest<unknown>(base, action === 'CHECK_IN' ? '/api/attendance/check-in' : '/api/attendance/check-out', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': newIdempotencyKey() },
-    body: JSON.stringify(action === 'CHECK_IN' ? { workMode, note } : { note }),
-  });
+export interface PunchLocation {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  address?: string;
+}
+
+/**
+ * Mirrors the web client: GPS proves IN_OFFICE presence, a selfie proves
+ * OUT_OFFICE (or falls back when the server answers SELFIE_REQUIRED). The
+ * selfie goes as multipart so the server's FileInterceptor picks it up.
+ */
+export const punchAttendance = (
+  base: string,
+  action: 'CHECK_IN' | 'CHECK_OUT',
+  payload: { workMode?: 'IN_OFFICE' | 'OUT_OFFICE'; location?: PunchLocation; selfieUri?: string; note?: string; wifi?: { ssid?: string; bssid?: string } },
+) => {
+  const path = action === 'CHECK_IN' ? '/api/attendance/check-in' : '/api/attendance/check-out';
+  const headers = { 'Idempotency-Key': newIdempotencyKey() };
+  const wifiSsid = payload.wifi?.ssid;
+  const wifiBssid = payload.wifi?.bssid;
+  if (!payload.selfieUri) {
+    return apiRequest<unknown>(base, path, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ...(action === 'CHECK_IN' ? { workMode: payload.workMode } : {}),
+        location: payload.location,
+        note: payload.note,
+        ...(wifiSsid ? { wifiSsid } : {}),
+        ...(wifiBssid ? { wifiBssid } : {}),
+      }),
+    });
+  }
+  const form = new FormData();
+  if (action === 'CHECK_IN' && payload.workMode) form.append('workMode', payload.workMode);
+  form.append('selfie', { uri: payload.selfieUri, name: 'selfie.jpg', type: 'image/jpeg' } as unknown as Blob);
+  if (payload.location) {
+    form.append('latitude', String(payload.location.latitude));
+    form.append('longitude', String(payload.location.longitude));
+    if (payload.location.accuracyMeters != null) form.append('accuracyMeters', String(payload.location.accuracyMeters));
+    if (payload.location.address) form.append('address', payload.location.address);
+  }
+  if (payload.note) form.append('note', payload.note);
+  if (wifiSsid) form.append('wifiSsid', wifiSsid);
+  if (wifiBssid) form.append('wifiBssid', wifiBssid);
+  return apiRequest<unknown>(base, path, { method: 'POST', headers, body: form });
+};
 
 export const getMyLeaveRequests = (base: string) =>
   apiRequest<LeaveRequest[]>(base, '/api/leave-requests/mine');
@@ -162,8 +208,9 @@ export function friendlyEmployeeError(error: unknown): string {
     ALREADY_CHECKED_IN: 'Bạn đã vào ca hôm nay.',
     ALREADY_CHECKED_OUT: 'Bạn đã hoàn thành ca hôm nay.',
     NETWORK_NOT_ALLOWED: 'Mạng hiện tại không thuộc mạng công ty.',
-    SELFIE_REQUIRED: 'Ca này cần xác thực vị trí hoặc ảnh selfie trên phiên bản đầy đủ.',
+    SELFIE_REQUIRED: 'Không xác thực được vị trí công ty. Vui lòng chấm công bằng ảnh selfie.',
     OUTSIDE_ALLOWED_AREA: 'Bạn đang ở ngoài phạm vi chấm công.',
+    LOW_LOCATION_ACCURACY: 'Tín hiệu GPS chưa đủ chính xác. Hãy ra nơi thoáng hơn và thử lại.',
     ATTENDANCE_LOCKED: 'Kỳ công đã khóa, không thể thay đổi.',
     LEAVE_DATE_RANGE_INVALID: 'Khoảng ngày nghỉ chưa hợp lệ.',
     OVERTIME_OVERLAPS_SCHEDULE: 'Khung giờ OT đang trùng với ca làm chính.',

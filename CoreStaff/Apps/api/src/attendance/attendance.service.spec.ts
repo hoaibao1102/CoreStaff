@@ -42,7 +42,6 @@ function build(options: {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
     storage as any,
     { resolveForEmployeeDate: jest.fn(async () => null) } as any,
     undefined, // eventsGateway

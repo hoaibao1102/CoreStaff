@@ -1,19 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsNotEmpty, MaxLength, Min, Max, IsOptional, IsEnum, ValidateIf, IsArray, ValidateNested, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, MaxLength, Min, Max, IsOptional, IsEnum, ValidateIf, IsArray, ValidateNested, IsBoolean, Matches, ArrayMaxSize } from 'class-validator';
 import { WorkplaceType } from '../../../database/schemas/workplace.schema';
 
-export class WorkplaceNetworkRuleDto {
-	@ApiProperty({ required: false, example: 'Wi-Fi văn phòng' })
+const BSSID_PATTERN = /^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$/;
+
+export class WifiNetworkRuleDto {
+	@ApiProperty({ required: false, example: 'Wi-Fi văn phòng Q1' })
 	@IsString()
 	@IsOptional()
 	@MaxLength(100)
 	label?: string;
 
-	@ApiProperty({ example: '192.168.1.0/24' })
+	@ApiProperty({ example: 'CoreStaff-Office' })
 	@IsString()
 	@IsNotEmpty()
-	cidrOrIp!: string;
+	@MaxLength(64)
+	ssid!: string;
+
+	@ApiProperty({ example: 'a4:2b:8c:11:22:33', description: "MAC của access point — dùng để xác thực." })
+	@IsString()
+	@Matches(BSSID_PATTERN, { message: 'bssid must be a MAC address (aa:bb:cc:dd:ee:ff)' })
+	bssid!: string;
 
 	@ApiProperty({ required: false, default: true })
 	@IsBoolean()
@@ -73,17 +81,18 @@ export class CreateWorkplaceDto {
 	@Min(80)
 	maximumAccuracyMeters?: number;
 
-	@ApiProperty({ required: false, type: [WorkplaceNetworkRuleDto] })
+	@ApiProperty({ required: false, type: [WifiNetworkRuleDto] })
 	@IsArray()
+	@ArrayMaxSize(50)
 	@ValidateNested({ each: true })
-	@Type(() => WorkplaceNetworkRuleDto)
+	@Type(() => WifiNetworkRuleDto)
 	@IsOptional()
-	allowedNetworks?: WorkplaceNetworkRuleDto[];
+	allowedWifiNetworks?: WifiNetworkRuleDto[];
 
 	@ApiProperty({ required: false, default: true })
 	@IsBoolean()
 	@IsOptional()
-	allowNetworkAttendance?: boolean;
+	allowWifiAttendance?: boolean;
 
 	@ApiProperty({ required: false, default: true })
 	@IsBoolean()

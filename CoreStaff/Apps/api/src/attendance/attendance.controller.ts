@@ -19,15 +19,22 @@ import { Roles, RolesGuard } from '../common/rbac.decorator';
 import { AttendanceService } from './attendance.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
-import { NetworkValidatorService } from './services/network-validator.service';
+
+/**
+ * Recorded on the event for audit only — nothing decides on it. It comes from a
+ * header the caller controls, so it must never gate attendance again.
+ */
+function clientIpOf(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = (typeof forwarded === 'string' ? forwarded : forwarded?.[0])?.split(',')[0]?.trim();
+  const ip = first || req.socket?.remoteAddress || req.ip || '';
+  return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+}
 
 @Controller('attendance')
 @UseGuards(AuthGuard, RolesGuard)
 export class AttendanceController {
-  constructor(
-    private readonly attendanceService: AttendanceService,
-    private readonly networkValidatorService: NetworkValidatorService,
-  ) {}
+  constructor(private readonly attendanceService: AttendanceService) {}
 
   private getUserId(req: any): string {
     return req.user?._id?.toString() || req.user?.userId || req.user?.id || req.user?.sub;
@@ -53,7 +60,7 @@ export class AttendanceController {
   ) {
     const userId = this.getUserId(req);
     const organizationId = req.user.organizationId;
-    const clientIp = this.networkValidatorService.extractClientIp(req);
+    const clientIp = clientIpOf(req);
     const userAgent = req.headers['user-agent'];
 
     // Nếu gửi từ FormData, các trường số có thể ở dạng string, chuyển đổi an toàn
@@ -84,7 +91,7 @@ export class AttendanceController {
   ) {
     const userId = this.getUserId(req);
     const organizationId = req.user.organizationId;
-    const clientIp = this.networkValidatorService.extractClientIp(req);
+    const clientIp = clientIpOf(req);
     const userAgent = req.headers['user-agent'];
 
     if (typeof dto.latitude === 'string') dto.latitude = parseFloat(dto.latitude);

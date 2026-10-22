@@ -6,7 +6,7 @@ Human Resource, Attendance & Payroll — monorepo. API, Web và **Employee Mobil
 |---|---|---|---|
 | `Apps/api` | NestJS + Mongoose | http://localhost:3000/api | REST, prefix `/api` |
 | `Apps/web` | ReactJS + Vite | http://localhost:5173 | Web MVP (mọi role) |
-| `Apps/mobile` | React Native + Expo | Expo Go / emulator | Employee app |
+| `Apps/mobile` | React Native + Expo | Dev client (dev build) / emulator | Employee app |
 
 Ba app dùng chung API. Mobile **không** nằm trong npm workspaces (React 19 / Expo vs React 18 của web) — cài deps riêng, vẫn setup cùng lúc với api+web.
 
@@ -16,7 +16,7 @@ Tài liệu kiến trúc: [`Docs/CORESTAFF_REPO_STRUCTURE.md`](../Docs/CORESTAFF
 
 - Node.js **20+** (CI dùng 22) và npm
 - Cluster **MongoDB Atlas replica set** (không dùng standalone — transaction cần replica set)
-- Dev mobile: [Expo Go](https://expo.dev/go) trên điện thoại, hoặc Android emulator / iOS simulator
+- Dev mobile: **dev build** (Expo dev client) trên Android emulator / máy thật, hoặc iOS simulator. Chấm công bằng Wi-Fi cần native module `react-native-network-info` nên **không chạy được trong Expo Go** — Expo Go vẫn dùng được nhưng chỉ có GPS + selfie.
 
 Thư mục làm việc của mọi lệnh bên dưới là **`CoreStaff/`** (sau khi clone repo, `cd CoreStaff`).
 
@@ -112,14 +112,55 @@ API vẫn start khi thiếu URI (Mongo no-op). Login / chấm công / leave chư
 
 ## Mobile — chạy & nối API
 
-`Apps/mobile` là Expo app (`slug`: `corestaff`, scheme `corestaff`). Dev server: `expo start`.
+`Apps/mobile` là Expo app (`slug`: `corestaff`, scheme `corestaff`). App dùng **dev build** (Expo dev client), không phải Expo Go, vì chấm công Wi-Fi đọc BSSID qua native module.
+
+### Lần đầu: build + cài
+
+```bash
+cd Apps/mobile
+npm run android:dev      # expo run:android — build native, cài APK, bật Metro
+```
+
+Hoặc từ `CoreStaff/`: `npm run dev:mobile:dev-build`
+
+Build đầu ~5-15 phút (Gradle). Sau đó APK `com.anonymous.corestaff` đã nằm trên máy.
+
+Lỗi CMake path quá 260 ký tự trên Windows:
+
+```bash
+npm run android:dev -- -PreactNativeArchitectures=x86_64
+```
+
+### Hằng ngày: chỉ bật Metro
+
+```bash
+cd Apps/mobile
+npm run start:dev        # expo start --dev-client — không build lại
+```
+
+Mở app CoreStaff trên máy, hoặc deep link:
+
+```bash
+adb shell am start -a android.intent.action.VIEW \
+  -d "corestaff://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082"
+```
+
+Sửa `.ts`/`.tsx` → Fast Refresh, không cần build lại.
+
+### Khi nào phải build lại
+
+- Thêm/xoá native dep (`react-native-network-info`, `expo-*`)
+- Sửa `app.json` (permissions, plugins)
+- Chạy `npm run prebuild`
+
+### Lệnh khác
 
 | Lệnh | Việc |
 |---|---|
-| `npm run dev:mobile` | Expo start (từ `CoreStaff/`) |
+| `npm run dev:mobile` | Expo start cho **Expo Go** (GPS + selfie, không có Wi-Fi) |
 | `npm run lint:mobile` | `tsc --noEmit` |
-| `cd Apps/mobile && npm run android` | Mở Android emulator |
-| `cd Apps/mobile && npm run ios` | Mở iOS simulator (macOS) |
+| `cd Apps/mobile && npm run prebuild` | Sinh lại `android/` + `ios/` (`--clean`) |
+| `cd Apps/mobile && npm run ios:dev` | `expo run:ios` (macOS) |
 | `cd Apps/mobile && npm run web` | Expo web (không thay `Apps/web`) |
 
 Dev thử `EXPO_PUBLIC_API_URL` trước; hỏng thì `EXPO_PUBLIC_API_FALLBACK_URL`.
@@ -128,7 +169,7 @@ Dev thử `EXPO_PUBLIC_API_URL` trước; hỏng thì `EXPO_PUBLIC_API_FALLBACK_
 |---|---|
 | Android emulator | `http://10.0.2.2:3000` (localhost trong env được rewrite) |
 | iOS simulator / Expo web | `http://localhost:3000` |
-| Máy thật (Expo Go) | API remote, hoặc đổi fallback thành IP LAN máy chạy API |
+| Máy thật (dev build) | API remote, hoặc đổi fallback thành IP LAN máy chạy API |
 
 Máy thật + fallback local: điện thoại phải gọi được máy dev (cùng Wi‑Fi, firewall mở cổng 3000). CORS API `origin: true`.
 
@@ -140,7 +181,8 @@ Restart Expo sau khi sửa `.env` (`EXPO_PUBLIC_*` chỉ nạp lúc start).
 |---|---|
 | `npm run dev:api` | NestJS watch |
 | `npm run dev:web` | Vite dev + proxy `/api` |
-| `npm run dev:mobile` | Expo start |
+| `npm run dev:mobile` | Expo start (Expo Go) |
+| `npm run dev:mobile:dev-build` | Build + cài dev client lên emulator/máy thật |
 | `npm run lint` | `tsc --noEmit` api + web |
 | `npm run lint:mobile` | `tsc --noEmit` mobile |
 | `npm run build` | nest build + vite build |

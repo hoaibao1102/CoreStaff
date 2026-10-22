@@ -9,5 +9,5 @@ export {
 } from '../../database/schemas/workplace.schema';
 export type {
   WorkplaceDocument,
-  WorkplaceNetworkRule,
+  WorkplaceWifiRule,
 } from '../../database/schemas/workplace.schema';

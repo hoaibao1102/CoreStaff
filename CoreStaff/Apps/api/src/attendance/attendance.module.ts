@@ -3,7 +3,6 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { HaversineService } from './services/haversine.service';
-import { NetworkValidatorService } from './services/network-validator.service';
 import { AttendanceCalculatorService } from './services/attendance-calculator.service';
 import { StorageModule } from '../storage/storage.module';
 import { PeriodVersionModule } from '../hr/timesheet/period-version.module';
@@ -49,7 +48,6 @@ import { OvertimeModule } from '../hr/overtime/overtime.module';
   providers: [
     AttendanceService,
     HaversineService,
-    NetworkValidatorService,
     AttendanceCalculatorService,
   ],
   exports: [AttendanceService],

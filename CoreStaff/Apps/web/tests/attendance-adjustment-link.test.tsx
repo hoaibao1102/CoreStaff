@@ -65,7 +65,7 @@ test.each(['CHECK_IN', 'CHECK_OUT'] as const)(
       id: 'day-1', workDate, shiftName: 'Ca hành chính', shiftHours: '08:00–17:00',
       workplace: 'Văn phòng', workplaceAddress: '', workdayType: 'WORKING_DAY',
       status: checkInAt ? 'CHECKED_IN' : 'NOT_CHECKED_IN', availableAction: 'NONE',
-      attendanceMethod: 'NETWORK', verificationContext: { method: 'SELFIE' }, checkInAt,
+      attendanceMethod: 'NETWORK', checkInAt,
       checkIn: checkInAt ? {
         eventId: 'event-1', method: 'NETWORK', recordedAt: checkInAt, networkName: 'Office',
       } : null,

@@ -51,10 +51,10 @@ export function PolicyModal({ isOpen, onClose }: PolicyModalProps) {
           <div className="rounded-xl bg-muted/40 p-3 border border-border space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-foreground">
               <Wifi className="size-4 text-emerald-600" />
-              <span>Chấm công qua mạng nội bộ</span>
+              <span>Chấm công qua Wi-Fi (ứng dụng di động)</span>
             </div>
-            <p>• Áp dụng khi kết nối đúng Wi-Fi / LAN của văn phòng công ty.</p>
-            <p>• Hệ thống tự động xác thực IP LAN nội bộ để mở khóa nút điểm danh.</p>
+            <p>• Chỉ áp dụng trên ứng dụng di động, khi thiết bị kết nối đúng access point của văn phòng.</p>
+            <p>• Hệ thống xác thực theo BSSID của access point do HR cấu hình. Trình duyệt không đọc được thông tin này nên web dùng GPS hoặc Selfie.</p>
           </div>
 
           <div className="rounded-xl bg-muted/40 p-3 border border-border space-y-1.5">
