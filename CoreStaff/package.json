@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.63.3",
+    "@types/exceljs": "^0.5.3",
     "rollup": "npm:@rollup/wasm-node@^4.63.2"
   }
 }
