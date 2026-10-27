@@ -22,7 +22,7 @@ import {
   WorkMode,
 } from '../database/schemas/enums';
 import { HaversineService } from './services/haversine.service';
-import { NetworkValidatorService } from './services/network-validator.service';
+import { resolveVerification } from './services/attendance-verification';
 import { AttendanceCalculatorService } from './services/attendance-calculator.service';
 import { StorageService } from '../storage/storage.service';
 import { CheckInDto } from './dto/check-in.dto';
@@ -60,7 +60,6 @@ export class AttendanceService {
     @InjectModel('IdempotencyRecord') private idempotencyModel: Model<any>,
     @InjectModel('TimesheetPeriod') private readonly periodModel: Model<TimesheetPeriodDocument>,
     private haversineService: HaversineService,
-    private networkValidatorService: NetworkValidatorService,
     private calculatorService: AttendanceCalculatorService,
     private storageService: StorageService,
     private shiftResolver: ShiftResolverService,
@@ -213,9 +212,10 @@ export class AttendanceService {
         longitude: workplace?.longitude || 106.7009,
         allowedRadiusMeters: workplace?.allowedRadiusMeters || 100,
         maximumAccuracyMeters: workplace?.maximumAccuracyMeters || 80,
-        allowNetworkAttendance: workplace?.allowNetworkAttendance ?? true,
+        allowWifiAttendance: workplace?.allowWifiAttendance ?? true,
         allowGpsAttendance: workplace?.allowGpsAttendance ?? true,
         allowSelfieFallback: workplace?.allowSelfieFallback ?? true,
+        hasWifiNetworks: (workplace?.allowedWifiNetworks?.filter((rule: any) => rule.active !== false).length ?? 0) > 0,
       },
     };
   }
@@ -324,16 +324,24 @@ export class AttendanceService {
     const rawAddress = dto.location?.address ?? dto.address;
     const address = await this.resolveLocationAddress(lat, lng, rawAddress, workplace?.address);
 
-    // 3. Phân định luồng xác thực
-    if (file || dto.workMode === WorkMode.OUT_OFFICE) {
-      // Luồng Selfie (OUT_OFFICE hoặc Fallback)
-      if (!file) {
-        throw new BadRequestException('SELFIE_IMAGE_INVALID');
-      }
+    // 3. Phân định luồng xác thực: Wi-Fi (BSSID) -> GPS -> Selfie
+    const verification = resolveVerification(
+      {
+        hasFile: !!file,
+        workMode: dto.workMode,
+        wifiBssid: dto.wifiBssid,
+        location: { latitude: lat, longitude: lng, accuracyMeters: accuracy },
+        workplace,
+      },
+      this.haversineService,
+    );
+    method = verification.method;
+    distanceFromWorkplaceMeters = verification.distanceMeters;
 
-      this.validateImageFile(file);
-
-      method = AttendanceMethod.SELFIE;
+    if (method === AttendanceMethod.SELFIE) {
+      // resolveVerification only returns SELFIE when a file was uploaded.
+      const selfie = file as UploadedFile;
+      this.validateImageFile(selfie);
       approvalStatus = AttendanceApprovalStatus.PENDING;
 
       if (dto.workMode === WorkMode.IN_OFFICE) {
@@ -346,7 +354,7 @@ export class AttendanceService {
 
       if (this.storageService.isConfigured()) {
         try {
-          await this.storageService.upload(storageKey, file.buffer, file.mimetype);
+          await this.storageService.upload(storageKey, selfie.buffer, selfie.mimetype);
         } catch (uploadErr: any) {
           console.error('[AttendanceService] Storage upload failed:', uploadErr);
           throw new InternalServerErrorException('EVIDENCE_STORAGE_UPLOAD_FAILED');
@@ -358,9 +366,9 @@ export class AttendanceService {
         organizationId: orgObjectId,
         ownerUserId: empObjectId,
         storageKey,
-        originalFileName: file.originalname || 'selfie.jpg',
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
+        originalFileName: selfie.originalname || 'selfie.jpg',
+        mimeType: selfie.mimetype,
+        sizeBytes: selfie.size,
       });
 
       evidenceId = evidenceDoc._id as Types.ObjectId;
@@ -371,47 +379,6 @@ export class AttendanceService {
           { latitude: lat, longitude: lng },
           { latitude: workplace.latitude, longitude: workplace.longitude },
         );
-      }
-    } else {
-      // Luồng IN_OFFICE bình thường: Ưu tiên Network -> GPS
-      let networkMatched = false;
-
-      if (clientIp && workplace?.allowedNetworks?.length) {
-        networkMatched = this.networkValidatorService.isIpAllowed(clientIp, workplace.allowedNetworks);
-      }
-
-      if (networkMatched && workplace?.allowNetworkAttendance !== false) {
-        method = AttendanceMethod.NETWORK;
-      } else {
-        // Thử GPS
-        if (lat != null && lng != null && workplace?.latitude && workplace?.longitude) {
-          const maxAcc = workplace.maximumAccuracyMeters || 80;
-          if (accuracy && accuracy > maxAcc) {
-            throw new UnprocessableEntityException('LOW_LOCATION_ACCURACY');
-          }
-
-          const geofence = this.haversineService.isInsideGeofence(
-            { latitude: lat, longitude: lng },
-            { latitude: workplace.latitude, longitude: workplace.longitude },
-            workplace.allowedRadiusMeters || 100,
-          );
-
-          distanceFromWorkplaceMeters = geofence.distanceMeters;
-
-          if (geofence.isInside && workplace?.allowGpsAttendance !== false) {
-            method = AttendanceMethod.GPS;
-          } else {
-            if (workplace?.allowSelfieFallback !== false) {
-              throw new UnprocessableEntityException('SELFIE_REQUIRED');
-            }
-            throw new UnprocessableEntityException('OUTSIDE_ALLOWED_AREA');
-          }
-        } else {
-          if (workplace?.allowSelfieFallback !== false) {
-            throw new UnprocessableEntityException('SELFIE_REQUIRED');
-          }
-          throw new UnprocessableEntityException('NETWORK_NOT_ALLOWED');
-        }
       }
     }
 
@@ -488,6 +455,8 @@ export class AttendanceService {
       recordedAt,
       capturedAtClient: clientCapturedAt,
       publicIp: clientIp,
+      wifiSsid: dto.wifiSsid,
+      wifiBssid: dto.wifiBssid,
       latitude: lat,
       longitude: lng,
       accuracyMeters: accuracy,
@@ -615,15 +584,24 @@ export class AttendanceService {
     const rawAddress = dto.location?.address ?? dto.address;
     const address = await this.resolveLocationAddress(lat, lng, rawAddress, workplace?.address);
 
-    // Check-out sử dụng workMode đã lưu từ Check-in
-    if (file || day.workMode === WorkMode.OUT_OFFICE) {
-      if (!file) {
-        throw new BadRequestException('SELFIE_IMAGE_INVALID');
-      }
+    // Check-out dùng workMode đã lưu từ Check-in
+    const verification = resolveVerification(
+      {
+        hasFile: !!file,
+        workMode: day.workMode,
+        wifiBssid: dto.wifiBssid,
+        location: { latitude: lat, longitude: lng, accuracyMeters: accuracy },
+        workplace,
+      },
+      this.haversineService,
+    );
+    method = verification.method;
+    distanceFromWorkplaceMeters = verification.distanceMeters;
 
-      this.validateImageFile(file);
-
-      method = AttendanceMethod.SELFIE;
+    if (method === AttendanceMethod.SELFIE) {
+      // resolveVerification only returns SELFIE when a file was uploaded.
+      const selfie = file as UploadedFile;
+      this.validateImageFile(selfie);
       approvalStatus = AttendanceApprovalStatus.PENDING;
 
       if (day.workMode === WorkMode.IN_OFFICE) {
@@ -635,7 +613,7 @@ export class AttendanceService {
 
       if (this.storageService.isConfigured()) {
         try {
-          await this.storageService.upload(storageKey, file.buffer, file.mimetype);
+          await this.storageService.upload(storageKey, selfie.buffer, selfie.mimetype);
         } catch (uploadErr: any) {
           console.error('[AttendanceService] Storage upload failed:', uploadErr);
           throw new InternalServerErrorException('EVIDENCE_STORAGE_UPLOAD_FAILED');
@@ -647,9 +625,9 @@ export class AttendanceService {
         organizationId: orgObjectId,
         ownerUserId: empObjectId,
         storageKey,
-        originalFileName: file.originalname || 'checkout-selfie.jpg',
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
+        originalFileName: selfie.originalname || 'checkout-selfie.jpg',
+        mimeType: selfie.mimetype,
+        sizeBytes: selfie.size,
       });
 
       evidenceId = evidenceDoc._id as Types.ObjectId;
@@ -659,44 +637,6 @@ export class AttendanceService {
           { latitude: lat, longitude: lng },
           { latitude: workplace.latitude, longitude: workplace.longitude },
         );
-      }
-    } else {
-      let networkMatched = false;
-      if (clientIp && workplace?.allowedNetworks?.length) {
-        networkMatched = this.networkValidatorService.isIpAllowed(clientIp, workplace.allowedNetworks);
-      }
-
-      if (networkMatched && workplace?.allowNetworkAttendance !== false) {
-        method = AttendanceMethod.NETWORK;
-      } else {
-        if (lat != null && lng != null && workplace?.latitude && workplace?.longitude) {
-          const maxAcc = workplace.maximumAccuracyMeters || 80;
-          if (accuracy && accuracy > maxAcc) {
-            throw new UnprocessableEntityException('LOW_LOCATION_ACCURACY');
-          }
-
-          const geofence = this.haversineService.isInsideGeofence(
-            { latitude: lat, longitude: lng },
-            { latitude: workplace.latitude, longitude: workplace.longitude },
-            workplace.allowedRadiusMeters || 100,
-          );
-
-          distanceFromWorkplaceMeters = geofence.distanceMeters;
-
-          if (geofence.isInside && workplace?.allowGpsAttendance !== false) {
-            method = AttendanceMethod.GPS;
-          } else {
-            if (workplace?.allowSelfieFallback !== false) {
-              throw new UnprocessableEntityException('SELFIE_REQUIRED');
-            }
-            throw new UnprocessableEntityException('OUTSIDE_ALLOWED_AREA');
-          }
-        } else {
-          if (workplace?.allowSelfieFallback !== false) {
-            throw new UnprocessableEntityException('SELFIE_REQUIRED');
-          }
-          throw new UnprocessableEntityException('NETWORK_NOT_ALLOWED');
-        }
       }
     }
 
@@ -739,6 +679,8 @@ export class AttendanceService {
       recordedAt,
       capturedAtClient: clientCapturedAt,
       publicIp: clientIp,
+      wifiSsid: dto.wifiSsid,
+      wifiBssid: dto.wifiBssid,
       latitude: lat,
       longitude: lng,
       accuracyMeters: accuracy,

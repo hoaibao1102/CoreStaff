@@ -50,6 +50,7 @@ import {
   getWorkplaces,
   workplaceErrorMessage,
   type CreateWorkplacePayload,
+  type WifiNetworkRule,
   type Workplace,
   type WorkplaceType,
 } from "@/services/workplace.service";
@@ -58,6 +59,7 @@ import { WorkplaceActivateDialog } from "./WorkplaceActivateDialog";
 import { WorkplaceDeactivateDialog } from "./WorkplaceDeactivateDialog";
 import { WorkplaceDetailDialog } from "./WorkplaceDetailDialog";
 import { WorkplaceEditDialog } from "./WorkplaceEditDialog";
+import { WifiNetworkEditor, bssidError, normalizeBssid } from "./WifiNetworkEditor";
 
 type Form = {
   code: string;
@@ -68,6 +70,7 @@ type Form = {
   longitude: string;
   allowedRadiusMeters: string;
   maximumAccuracyMeters: string;
+  allowedWifiNetworks: WifiNetworkRule[];
 };
 
 const EMPTY: Form = {
@@ -79,6 +82,7 @@ const EMPTY: Form = {
   longitude: "",
   allowedRadiusMeters: "200",
   maximumAccuracyMeters: "100",
+  allowedWifiNetworks: [],
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -116,6 +120,13 @@ function validate(form: Form) {
       Number(form.maximumAccuracyMeters) < 80
     )
       return "Độ chính xác tối đa phải từ 80 m trở lên.";
+    for (let i = 0; i < form.allowedWifiNetworks.length; i += 1) {
+      const rule = form.allowedWifiNetworks[i];
+      if (!rule.ssid.trim())
+        return `Dòng Wi-Fi ${i + 1}: vui lòng nhập tên Wi-Fi (SSID).`;
+      const error = bssidError(rule.bssid, form.allowedWifiNetworks, i);
+      if (error) return `Dòng Wi-Fi ${i + 1}: ${error}`;
+    }
   }
   return "";
 }
@@ -220,6 +231,15 @@ export function WorkplaceScreen({
         longitude: form.type === "OUT_OFFICE" ? 0 : Number(form.longitude),
         allowedRadiusMeters: form.type === "OUT_OFFICE" ? 0 : Number(form.allowedRadiusMeters),
         maximumAccuracyMeters: form.type === "OUT_OFFICE" ? 0 : Number(form.maximumAccuracyMeters),
+        allowedWifiNetworks:
+          form.type === "OUT_OFFICE"
+            ? []
+            : form.allowedWifiNetworks.map((rule) => ({
+                ...rule,
+                label: rule.label?.trim() || undefined,
+                ssid: rule.ssid.trim(),
+                bssid: normalizeBssid(rule.bssid),
+              })),
       });
       toast.success("Tạo nơi làm việc thành công.");
       setCreateOpen(false);
@@ -639,6 +659,14 @@ export function WorkplaceScreen({
                   </FormLabel>
                 </div>
               </div>
+            )}
+
+            {form.type !== "OUT_OFFICE" && (
+              <WifiNetworkEditor
+                rules={form.allowedWifiNetworks}
+                onChange={(rules) => setForm({ ...form, allowedWifiNetworks: rules })}
+                disabled={creating}
+              />
             )}
           </div>
 

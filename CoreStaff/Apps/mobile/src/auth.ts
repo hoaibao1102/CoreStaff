@@ -44,10 +44,12 @@ export function setSignedOutHandler(handler: (() => void) | null): void {
 }
 
 export async function apiRequest<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
+  // FormData must keep the multipart boundary fetch generates itself.
+  const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const response = await fetch(apiUrl(base, path), {
     ...init,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { ...(isForm ? {} : { 'Content-Type': 'application/json' }), ...init?.headers },
   });
 
   // SRS §4.4: the session cookie is short-lived, so a 401 usually means

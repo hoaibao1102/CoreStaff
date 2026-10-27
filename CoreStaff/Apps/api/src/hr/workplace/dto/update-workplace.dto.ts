@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, MaxLength, Min, Max, IsOptional, IsEnum, IsArray, ValidateNested, IsBoolean } from 'class-validator';
+import { IsString, MaxLength, Min, Max, IsOptional, IsEnum, IsArray, ArrayMaxSize, ValidateNested, IsBoolean } from 'class-validator';
 import { WorkplaceType } from '../../../database/schemas/workplace.schema';
-import { WorkplaceNetworkRuleDto } from './create-workplace.dto';
+import { WifiNetworkRuleDto } from './create-workplace.dto';
 
 export class UpdateWorkplaceDto {
 	@ApiProperty({ required: false, example: 'OUTDOOR-01', description: 'Workplace code' })
@@ -50,17 +50,18 @@ export class UpdateWorkplaceDto {
 	@Min(0)
 	maximumAccuracyMeters?: number;
 
-	@ApiProperty({ required: false, type: [WorkplaceNetworkRuleDto] })
+	@ApiProperty({ required: false, type: [WifiNetworkRuleDto] })
 	@IsArray()
+	@ArrayMaxSize(50)
 	@ValidateNested({ each: true })
-	@Type(() => WorkplaceNetworkRuleDto)
+	@Type(() => WifiNetworkRuleDto)
 	@IsOptional()
-	allowedNetworks?: WorkplaceNetworkRuleDto[];
+	allowedWifiNetworks?: WifiNetworkRuleDto[];
 
 	@ApiProperty({ required: false })
 	@IsBoolean()
 	@IsOptional()
-	allowNetworkAttendance?: boolean;
+	allowWifiAttendance?: boolean;
 
 	@ApiProperty({ required: false })
 	@IsBoolean()

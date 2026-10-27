@@ -36,6 +36,13 @@ export class AttendanceEvent {
   @Prop({ required: false })
   publicIp?: string;
 
+  /** Wi-Fi reported by the device; `wifiBssid` is what proved presence. */
+  @Prop({ required: false })
+  wifiSsid?: string;
+
+  @Prop({ required: false })
+  wifiBssid?: string;
+
   @Prop({ type: Number, required: false })
   latitude?: number;
 

@@ -4,21 +4,11 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react';
-import type { DayAttendance, AttendanceMethod, NetworkVerification } from '../types';
+import type { DayAttendance, AttendanceMethod } from '../types';
 import { DayDetailModal } from './DayDetailModal';
 import { resolveApiBase, apiUrl } from '../../../config/api';
 import { getAttendanceHistory } from '../../../services/attendance.service';
 import { getAttendanceHistoryStatus } from '../historyStatus';
-
-const DEFAULT_NETWORK_CONTEXT: NetworkVerification = {
-  method: 'NETWORK',
-  status: 'CONNECTED_TO_ALLOWED_NETWORK',
-  canAttend: true,
-  networkId: 'net-office-1',
-  networkName: 'CoreStaff-Office-5G',
-  workplaceId: 'wp-default',
-  workplaceName: 'Văn phòng CoreStaff',
-};
 
 const WEEKDAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -82,7 +72,6 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         resolution: item.resolution,
         availableAction: 'NONE',
         attendanceMethod: (item.checkIn?.method || 'NETWORK') as AttendanceMethod,
-        verificationContext: DEFAULT_NETWORK_CONTEXT,
         checkIn: item.checkIn
           ? {
               ...item.checkIn,

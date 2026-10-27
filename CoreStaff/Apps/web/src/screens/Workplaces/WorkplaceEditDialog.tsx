@@ -17,6 +17,7 @@ import {
   getWorkplaceById,
   updateWorkplace,
   workplaceErrorMessage,
+  type WifiNetworkRule,
   type Workplace,
   type WorkplaceType,
 } from "@/services/workplace.service";
@@ -24,6 +25,7 @@ import {
   AddressAutocomplete,
   type SelectedLocation,
 } from "@/components/form/AddressAutocomplete";
+import { WifiNetworkEditor, bssidError, normalizeBssid } from "./WifiNetworkEditor";
 
 type Values = {
   code: string;
@@ -34,6 +36,7 @@ type Values = {
   longitude: string;
   allowedRadiusMeters: string;
   maximumAccuracyMeters: string;
+  allowedWifiNetworks: WifiNetworkRule[];
 };
 
 const from = (w: Workplace): Values => ({
@@ -45,7 +48,17 @@ const from = (w: Workplace): Values => ({
   longitude: String(w.longitude ?? 0),
   allowedRadiusMeters: String(w.allowedRadiusMeters || 200),
   maximumAccuracyMeters: String(w.maximumAccuracyMeters || 100),
+  allowedWifiNetworks: (w.allowedWifiNetworks ?? []).map((rule) => ({ ...rule })),
 });
+
+/** Trims and canonicalises BSSIDs so the payload is stable across saves. */
+const cleanWifiRules = (rules: WifiNetworkRule[]): WifiNetworkRule[] =>
+  rules.map((rule) => ({
+    ...rule,
+    label: rule.label?.trim() || undefined,
+    ssid: rule.ssid.trim(),
+    bssid: normalizeBssid(rule.bssid),
+  }));
 
 const validate = (v: Values) => {
   if (!v.code.trim()) return "Vui lòng nhập mã nơi làm việc.";
@@ -60,6 +73,13 @@ const validate = (v: Values) => {
       return "Bán kính cho phép tối thiểu là 100 m.";
     if (Number(v.maximumAccuracyMeters) < 80)
       return "Độ chính xác tối đa phải từ 80 m trở lên.";
+    for (let i = 0; i < v.allowedWifiNetworks.length; i += 1) {
+      const rule = v.allowedWifiNetworks[i];
+      if (!rule.ssid.trim())
+        return `Dòng Wi-Fi ${i + 1}: vui lòng nhập tên Wi-Fi (SSID).`;
+      const error = bssidError(rule.bssid, v.allowedWifiNetworks, i);
+      if (error) return `Dòng Wi-Fi ${i + 1}: ${error}`;
+    }
   }
   return "";
 };
@@ -135,7 +155,11 @@ export function WorkplaceEditDialog({
       payload.longitude = 0;
       payload.allowedRadiusMeters = 0;
       payload.maximumAccuracyMeters = 0;
+      if (original.allowedWifiNetworks.length > 0) payload.allowedWifiNetworks = [];
     } else {
+      const wifi = cleanWifiRules(values.allowedWifiNetworks);
+      if (JSON.stringify(wifi) !== JSON.stringify(original.allowedWifiNetworks))
+        payload.allowedWifiNetworks = wifi;
       if (values.latitude !== original.latitude || original.type === "OUT_OFFICE")
         payload.latitude = Number(values.latitude);
       if (values.longitude !== original.longitude || original.type === "OUT_OFFICE")
@@ -324,6 +348,14 @@ export function WorkplaceEditDialog({
                     </FormLabel>
                   </div>
                 </div>
+              )}
+
+              {values.type !== "OUT_OFFICE" && (
+                <WifiNetworkEditor
+                  rules={values.allowedWifiNetworks}
+                  onChange={(rules) => setValues({ ...values, allowedWifiNetworks: rules })}
+                  disabled={saving}
+                />
               )}
             </div>
             <div className="mx-6 mb-6 flex flex-wrap justify-end gap-3 border-t border-border pt-5">

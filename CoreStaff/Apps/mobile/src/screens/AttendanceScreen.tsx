@@ -1,10 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getAttendanceHistory, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceHistory, type TodayAttendance } from '../employee-api';
+import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { getAttendanceHistory, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceHistory, type PunchLocation, type TodayAttendance } from '../employee-api';
+import { currentWifi } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, ScreenHeader, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
 
 const monthKey = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7);
+
+/** Thrown when the device cannot produce the evidence this punch needs. */
+class PunchError extends Error {}
+
+async function currentLocation(): Promise<PunchLocation> {
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (!permission.granted) throw new PunchError('Cần quyền truy cập vị trí để chấm công. Hãy bật trong Cài đặt.');
+  const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  return {
+    latitude: fix.coords.latitude,
+    longitude: fix.coords.longitude,
+    accuracyMeters: fix.coords.accuracy ?? undefined,
+  };
+}
+
+/** Returns undefined when the employee backs out of the camera. */
+async function takeSelfie(): Promise<string | undefined> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) throw new PunchError('Cần quyền camera để chụp ảnh chấm công. Hãy bật trong Cài đặt.');
+  const shot = await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.6 });
+  return shot.canceled ? undefined : shot.assets[0]?.uri;
+}
 
 export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: string; realtimeRevision?: number }) {
   const [today, setToday] = useState<TodayAttendance | null>(null);
@@ -28,12 +53,47 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
   useEffect(() => { void load(); }, [load]);
 
   const actionLabel = today?.availableAction === 'CHECK_IN' ? 'Xác nhận vào ca' : today?.availableAction === 'CHECK_OUT' ? 'Xác nhận ra ca' : 'Ca làm đã hoàn tất';
+
+  /**
+   * Mirrors the server's order: Wi-Fi (BSSID) -> GPS -> selfie. Each step runs
+   * only after the previous one answered SELFIE_REQUIRED, so an employee in the
+   * office never gets a GPS or camera prompt. OUT_OFFICE skips straight to selfie,
+   * and a workplace with no trusted Wi-Fi skips straight to GPS.
+   */
   const submit = async () => {
     if (!today || today.availableAction === 'NONE') return;
+    const action = today.availableAction;
+    const outOffice = today.assignment.workplaceType === 'OUT_OFFICE';
+    const punch = (evidence: { location?: PunchLocation; selfieUri?: string; wifi?: { ssid?: string; bssid?: string } }) =>
+      punchAttendance(apiBase, action, { workMode: outOffice ? 'OUT_OFFICE' : 'IN_OFFICE', ...evidence });
+    const accepted = async (evidence: Parameters<typeof punch>[0]) => {
+      try { await punch(evidence); return true; } catch (err) { if (!isSelfieRequired(err)) throw err; return false; }
+    };
     setSubmitting(true); setError(null); setSuccess(null);
-    try { await punchAttendance(apiBase, today.availableAction, today.assignment.workplaceType); setSuccess(today.availableAction === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.'); await load(true); }
-    catch (err) { setError(friendlyEmployeeError(err)); }
-    finally { setSubmitting(false); }
+    try {
+      if (outOffice) {
+        const selfieUri = await takeSelfie();
+        if (!selfieUri) return;
+        await punch({ selfieUri });
+      } else {
+        const wifiFirst = today.assignment.hasWifiNetworks !== false;
+        const wifi = wifiFirst ? await currentWifi() : {};
+        if (!(wifiFirst && await accepted({ wifi }))) {
+          setError('Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…');
+          const location = await currentLocation();
+          if (!(await accepted({ location, wifi }))) {
+            setError('Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.');
+            const selfieUri = await takeSelfie();
+            if (!selfieUri) return;
+            await punch({ location, selfieUri, wifi });
+          }
+        }
+      }
+      setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof PunchError ? err.message : friendlyEmployeeError(err));
+    } finally { setSubmitting(false); }
   };
   const monthLabel = useMemo(() => { const [year, value] = month.split('-'); return `Tháng ${Number(value)}/${year}`; }, [month]);
   const canMoveNext = month < monthKey();
@@ -41,9 +101,10 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
   const confirmSubmit = () => {
     if (!today || today.availableAction === 'NONE') return;
     const checkingIn = today.availableAction === 'CHECK_IN';
+    const outOffice = today.assignment.workplaceType === 'OUT_OFFICE';
     Alert.alert(checkingIn ? 'Xác nhận vào ca' : 'Xác nhận ra ca', checkingIn ? `Ghi nhận vào ca tại ${today.assignment.workplaceName}?` : 'Ghi nhận kết thúc ca làm việc hôm nay?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: checkingIn ? 'Vào ca' : 'Ra ca', onPress: () => void submit() },
+      { text: outOffice ? 'Chụp selfie' : 'Vào ca', onPress: () => void submit() },
     ]);
   };
 
@@ -67,6 +128,7 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
 }
 
 function attendanceLabel(status?: string) { return ({ NOT_CHECKED_IN: 'Chưa vào ca', CHECKED_IN: 'Đang trong ca', COMPLETED: 'Hoàn thành', DAY_OFF: 'Ngày nghỉ', LOCKED: 'Đã khóa' } as Record<string, string>)[status || ''] || 'Chưa có dữ liệu'; }
+function isSelfieRequired(err: unknown): boolean { return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'SELFIE_REQUIRED'; }
 function TimelinePoint({ active, label, time }: { active: boolean; label: string; time: string }) { return <View style={styles.timelinePoint}><View style={[styles.dot, active && styles.dotActive]} /><Text style={styles.timelineLabel}>{label}</Text><Text style={styles.timelineTime}>{time}</Text></View>; }
 function Metric({ label, value }: { label: string; value: string }) { return <View style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>; }
 function Summary({ label, value }: { label: string; value: string | number }) { return <View style={styles.summary}><Text style={styles.summaryValue}>{value}</Text><Text style={styles.summaryLabel}>{label}</Text></View>; }

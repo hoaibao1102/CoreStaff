@@ -15,12 +15,6 @@ export type AvailableAction = 'CHECK_IN' | 'CHECK_OUT' | 'NONE';
 export type EventApprovalStatus = 'AUTO_APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
 export type DayApprovalStatus = 'NOT_SUBMITTED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 
-export type NetworkStatus =
-  | 'CONNECTED_TO_ALLOWED_NETWORK'
-  | 'NOT_CONNECTED_TO_ALLOWED_NETWORK'
-  | 'NETWORK_NOT_CONFIGURED'
-  | 'UNABLE_TO_VERIFY';
-
 export interface WorkplaceInfo {
   id: string;
   name: string;
@@ -30,30 +24,6 @@ export interface WorkplaceInfo {
   allowedRadiusMeters: number;
   maximumAccuracyMeters: number;
 }
-
-export interface NetworkVerification {
-  method: 'NETWORK';
-  status: NetworkStatus;
-  canAttend: boolean;
-  networkId: string | null;
-  networkName: string | null;
-  workplaceId: string | null;
-  workplaceName: string | null;
-}
-
-export interface GpsVerification {
-  method: 'GPS';
-  workplace: WorkplaceInfo | null;
-}
-
-export interface SelfieVerification {
-  method: 'SELFIE';
-}
-
-export type VerificationContext =
-  | NetworkVerification
-  | GpsVerification
-  | SelfieVerification;
 
 export interface OvertimeInfo {
   requestId: string;
@@ -131,7 +101,6 @@ export interface DayAttendance {
   };
   availableAction: AvailableAction;
   attendanceMethod: AttendanceMethod;
-  verificationContext: VerificationContext;
   checkIn?: AttendanceEvent | null;
   checkOut?: AttendanceEvent | null;
   totalWorkingMinutes?: number;

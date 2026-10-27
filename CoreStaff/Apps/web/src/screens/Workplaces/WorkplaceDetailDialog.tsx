@@ -65,7 +65,8 @@ export function WorkplaceDetailDialog({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : row ? (
-          <dl className="grid grid-cols-1 gap-5 px-6 pb-6 sm:grid-cols-2">
+          <div className="space-y-5 px-6 pb-6">
+            <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {(
               [
                 ["Mã nơi làm việc", row.code],
@@ -126,6 +127,31 @@ export function WorkplaceDetailDialog({
               </div>
             ))}
           </dl>
+            {row.type !== "OUT_OFFICE" && (
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-xs text-muted-foreground">Wi-Fi chấm công</p>
+                {(row.allowedWifiNetworks ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Chưa cấu hình — nhân viên chấm công bằng GPS hoặc ảnh selfie.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {(row.allowedWifiNetworks ?? []).map((rule) => (
+                      <li
+                        key={rule.bssid}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium">{rule.label || rule.ssid}</span>
+                        <span className="text-muted-foreground">SSID: {rule.ssid}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{rule.bssid}</span>
+                        {rule.active === false ? <Badge variant="secondary">Tắt</Badge> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         ) : null}
       </DialogContent>
     </Dialog>

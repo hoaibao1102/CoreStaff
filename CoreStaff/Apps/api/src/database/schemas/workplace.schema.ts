@@ -10,9 +10,15 @@ export type WorkplaceType = (typeof WorkplaceType)[keyof typeof WorkplaceType];
 
 export type WorkplaceDocument = HydratedDocument<Workplace>;
 
-export interface WorkplaceNetworkRule {
+/**
+ * One trusted Wi-Fi access point. `bssid` is the access point's MAC and is the
+ * only field used for verification — an SSID alone is trivially spoofed by any
+ * hotspot. `ssid` and `label` are for HR to recognise the row.
+ */
+export interface WorkplaceWifiRule {
   label?: string;
-  cidrOrIp: string;
+  ssid: string;
+  bssid: string;
   active: boolean;
 }
 
@@ -50,16 +56,16 @@ export class Workplace {
   @Prop({ required: false, default: 0 })
   maximumAccuracyMeters!: number;
 
-  /** Trusted office IPs/CIDRs used by the network attendance method. */
+  /** Wi-Fi access points the mobile app may punch from. Matched by BSSID. */
   @Prop({
-    type: [{ label: { type: String }, cidrOrIp: { type: String, required: true }, active: { type: Boolean, default: true } }],
+    type: [{ label: { type: String }, ssid: { type: String, required: true }, bssid: { type: String, required: true }, active: { type: Boolean, default: true } }],
     default: [],
     _id: false,
   })
-  allowedNetworks!: WorkplaceNetworkRule[];
+  allowedWifiNetworks!: WorkplaceWifiRule[];
 
   @Prop({ required: true, default: true })
-  allowNetworkAttendance!: boolean;
+  allowWifiAttendance!: boolean;
 
   @Prop({ required: true, default: true })
   allowGpsAttendance!: boolean;

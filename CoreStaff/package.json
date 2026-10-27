@@ -15,7 +15,8 @@
     "test": "npm run test --workspace @corestaff/api && npm run test --workspace @corestaff/web",
     "lint": "npm run lint --workspace @corestaff/api && npm run lint --workspace @corestaff/web",
     "lint:mobile": "npm --prefix Apps/mobile run lint",
-    "ensure-indexes": "npm run ensure-indexes --workspace @corestaff/api"
+    "ensure-indexes": "npm run ensure-indexes --workspace @corestaff/api",
+    "dev:mobile:dev-build": "npm --prefix Apps/mobile run android:dev"
   },
   "engines": {
     "node": ">=20"

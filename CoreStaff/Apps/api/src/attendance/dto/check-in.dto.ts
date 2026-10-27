@@ -56,4 +56,13 @@ export class CheckInDto {
   @IsOptional()
   @Type(() => Number)
   accuracyMeters?: number;
+
+  /** Wi-Fi the device is on. Only `wifiBssid` is verified; `wifiSsid` is kept for audit. */
+  @IsString()
+  @IsOptional()
+  wifiSsid?: string;
+
+  @IsString()
+  @IsOptional()
+  wifiBssid?: string;
 }
