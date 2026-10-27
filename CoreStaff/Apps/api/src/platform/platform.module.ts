@@ -5,6 +5,7 @@ import { RolesGuard } from '../common/rbac.decorator';
 import { OrganizationSchema } from '../database/schemas/organization.schema';
 import { UserSchema } from '../database/schemas/user.schema';
 import { UserSessionSchema } from '../database/schemas/user-session.schema';
+import { EmployeeProfileSchema } from '../database/schemas/employee-profile.schema';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
 
@@ -14,10 +15,8 @@ import { PlatformService } from './platform.service';
 		MongooseModule.forFeature([
 			{ name: 'Organization', schema: OrganizationSchema },
 			{ name: 'User', schema: UserSchema },
-			// AuthGuard is exported by AuthModule but this module's own models are
-			// resolved from its imports, so each one lists what it injects
-			// (precedent: employee.module.ts).
 			{ name: 'UserSession', schema: UserSessionSchema },
+			{ name: 'EmployeeProfile', schema: EmployeeProfileSchema },
 		]),
 	],
 	controllers: [PlatformController],

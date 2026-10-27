@@ -100,11 +100,27 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
+    const profile: any = await this.employeeProfileModel
+      .findOne({
+        organizationId: orgObjectId,
+        $or: [{ userId: empObjectId }, { _id: empObjectId }],
+      })
+      .select('_id userId departmentId')
+      .lean();
+
+    const possibleEmpIds = [empObjectId];
+    if (profile?.userId && !empObjectId.equals(profile.userId)) {
+      possibleEmpIds.push(new Types.ObjectId(profile.userId));
+    }
+    if (profile?._id && !empObjectId.equals(profile._id)) {
+      possibleEmpIds.push(new Types.ObjectId(profile._id));
+    }
+
     // 1. Tìm Assignment hiệu lực
     const assignment: any = await this.assignmentModel
       .findOne({
         organizationId: orgObjectId,
-        $or: [{ userId: empObjectId }, { employeeId: empObjectId }],
+        $or: [{ userId: { $in: possibleEmpIds } }, { employeeId: { $in: possibleEmpIds } }],
         active: true,
       })
       .populate('workplaceId')
@@ -121,9 +137,10 @@ export class AttendanceService {
     const day = await this.attendanceDayModel
       .findOne({
         organizationId: orgObjectId,
-        employeeId: empObjectId,
+        employeeId: { $in: possibleEmpIds },
         workDate,
       })
+      .sort({ workingMinutes: -1 })
       .lean();
 
     let checkInEvent: any = null;
@@ -775,6 +792,23 @@ export class AttendanceService {
     const orgObjectId = new Types.ObjectId(organizationId);
     const empObjectId = new Types.ObjectId(employeeId);
 
+    const profile: any = await this.employeeProfileModel
+      .findOne({
+        organizationId: orgObjectId,
+        $or: [{ userId: empObjectId }, { _id: empObjectId }],
+      })
+      .select('_id userId')
+      .lean();
+
+    const targetUserObjId = profile?.userId ? new Types.ObjectId(profile.userId) : empObjectId;
+    const possibleEmpIds = [empObjectId];
+    if (profile?.userId && !empObjectId.equals(profile.userId)) {
+      possibleEmpIds.push(new Types.ObjectId(profile.userId));
+    }
+    if (profile?._id && !empObjectId.equals(profile._id)) {
+      possibleEmpIds.push(new Types.ObjectId(profile._id));
+    }
+
     // monthStr ví dụ '2026-09'
     const targetMonth = monthStr || this.getTodayWorkDate().substring(0, 7);
     const startMonthStr = `${targetMonth}-01`;
@@ -785,11 +819,11 @@ export class AttendanceService {
     const endOfMonth = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
 
     // Chạy song song query days, otRequests và results đã tính, sử dụng B-tree index
-    const [days, otRequests, otResults]: [any[], any[], any[]] = await Promise.all([
+    const [rawDays, otRequests, otResults]: [any[], any[], any[]] = await Promise.all([
       this.attendanceDayModel
         .find({
           organizationId: orgObjectId,
-          employeeId: empObjectId,
+          employeeId: { $in: possibleEmpIds },
           workDate: { $gte: startMonthStr, $lte: endMonthStr },
         })
         .sort({ workDate: -1 })
@@ -797,15 +831,36 @@ export class AttendanceService {
       this.managerRequestModel
         .find({
           organizationId: orgObjectId,
-          $or: [{ employeeUserId: empObjectId }, { employeeId: empObjectId }],
+          $or: [
+            { employeeUserId: { $in: possibleEmpIds } },
+            { employeeId: { $in: possibleEmpIds } },
+          ],
           type: 'OVERTIME',
           status: 'APPROVED',
           workDate: { $gte: startOfMonth, $lt: endOfMonth },
         })
         .lean(),
       // Absent when AttendanceModule is loaded without OvertimeModule.
-      this.overtime?.resultsForRange(organizationId, employeeId, startMonthStr, endMonthStr) ?? Promise.resolve([]),
+      this.overtime?.resultsForRange(organizationId, targetUserObjId.toString(), startMonthStr, endMonthStr) ?? Promise.resolve([]),
     ]);
+
+    // Deduplicate in case multiple records exist for the same workDate (e.g. legacy seed records)
+    const daysByDate = new Map<string, any>();
+    for (const d of rawDays) {
+      const existing = daysByDate.get(d.workDate);
+      if (!existing) {
+        daysByDate.set(d.workDate, d);
+      } else {
+        const dMinutes = d.workingMinutes || 0;
+        const eMinutes = existing.workingMinutes || 0;
+        const dHasPunches = Boolean(d.checkInAt || d.checkOutAt);
+        const eHasPunches = Boolean(existing.checkInAt || existing.checkOutAt);
+        if ((dMinutes > eMinutes || (!eHasPunches && dHasPunches)) && d.attendanceStatus !== 'DAY_OFF') {
+          daysByDate.set(d.workDate, d);
+        }
+      }
+    }
+    const days = Array.from(daysByDate.values()).sort((a, b) => b.workDate.localeCompare(a.workDate));
 
     const dayIds = days.map((d) => d._id);
     const events: any[] = dayIds.length > 0

@@ -17,6 +17,7 @@ import { EnterpriseInsuranceScreen } from '../screens/EnterpriseInsurance/Enterp
 import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
+import { SysAdminOverviewScreen } from '../screens/SysAdminOverview/SysAdminOverviewScreen';
 import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
 import { TimesheetPeriodScreen } from '../screens/Departments/TimesheetPeriodsScreen';
 import { WorkspaceModules } from '../components/WorkspaceModules';
@@ -131,6 +132,24 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
         </WorkspaceShell>
       );
     }
+    if (user.role === 'HR') {
+      return (
+        <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+          <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+            <HrOverviewScreen user={user} apiBase={apiBase} />
+          </section>
+        </WorkspaceShell>
+      );
+    }
+    if (user.role === 'SYSTEM_ADMIN') {
+      return (
+        <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+          <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+            <SysAdminOverviewScreen user={user} apiBase={apiBase} health={health} apiSource={apiSource} />
+          </section>
+        </WorkspaceShell>
+      );
+    }
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} />
@@ -230,7 +249,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
             <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId} timesheetPeriodId="" />
           ) : (
-            <HrOverviewScreen user={user} />
+            <HrOverviewScreen user={user} apiBase={apiBase} />
           )}
         </section>
       </WorkspaceShell>
@@ -243,6 +262,15 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <PlatformOrganizationsScreen user={user} apiBase={apiBase} />
+        </section>
+      </WorkspaceShell>
+    );
+  }
+  if (route === '/platform/audit-logs' && user.role === 'SYSTEM_ADMIN') {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <EmployeeDataState status="unavailable" description="Platform Audit: Tính năng nhật ký kiểm toán nền tảng đang được phát triển." />
         </section>
       </WorkspaceShell>
     );

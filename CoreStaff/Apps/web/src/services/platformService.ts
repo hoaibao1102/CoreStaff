@@ -18,6 +18,8 @@ export interface Organization {
     createdBy?: string;
     createdAt?: string;
     updatedAt?: string;
+    employeeCount?: number;
+    activeEmployeeCount?: number;
 }
 
 export interface InitialHrResult {

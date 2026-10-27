@@ -115,6 +115,7 @@ export function PlatformOrganizationsScreen({ user, apiBase }: { user: AuthUser;
                                 <TableRow>
                                     <TableHead>Mã</TableHead>
                                     <TableHead>Tên</TableHead>
+                                    <TableHead>Nhân sự</TableHead>
                                     <TableHead>Trạng thái</TableHead>
                                     <TableHead>Múi giờ</TableHead>
                                     <TableHead>Ngày tạo</TableHead>
@@ -131,6 +132,14 @@ export function PlatformOrganizationsScreen({ user, apiBase }: { user: AuthUser;
                                             </span>
                                         </TableCell>
                                         <TableCell>{org.name}</TableCell>
+                                        <TableCell>
+                                            <span className="font-semibold text-foreground">{org.employeeCount ?? 0}</span>
+                                            {org.activeEmployeeCount !== undefined && org.activeEmployeeCount > 0 && (
+                                                <span className="text-xs text-muted-foreground ml-1.5">
+                                                    ({org.activeEmployeeCount} đang làm)
+                                                </span>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <Badge variant={org.status === 'ACTIVE' ? 'default' : 'destructive'}>
                                                 <ShieldCheck className="h-3 w-3" aria-hidden="true" />
