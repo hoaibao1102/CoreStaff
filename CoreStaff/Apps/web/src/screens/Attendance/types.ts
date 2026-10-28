@@ -107,6 +107,16 @@ export interface DayAttendance {
   workingMinutes?: number;
   lateMinutes?: number;
   earlyMinutes?: number;
+  attendanceRequirements?: {
+    durationTypes:string[];
+    approvedLeaveIntervals:Array<{from:string;to:string}>;
+    requiredWorkingIntervals:Array<{from:string;to:string}>;
+    approvedLeaveMinutes:number;
+    requiredWorkingMinutes:number;
+    effectiveCheckInTime:string|null;
+    effectiveCheckOutTime:string|null;
+  }|null;
+  pendingLeave?:{durationType:string;requestedStart?:string;requestedEnd?:string}|null;
   dayApprovalStatus?: DayApprovalStatus;
   overallApprovalStatus?: string;
   approvalComment?: string | null;

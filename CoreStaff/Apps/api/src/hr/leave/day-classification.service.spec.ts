@@ -6,6 +6,7 @@ describe('resolveClassification', () => {
     [{ calendarType: CalendarExceptionType.WEEKLY_OFF, hasWorkObligation: true }, { workdayType: WorkdayType.WEEKLY_OFF }],
     [{ overrideType: WorkdayType.PAID_LEAVE, calendarType: CalendarExceptionType.PUBLIC_HOLIDAY, hasWorkObligation: true }, { workdayType: WorkdayType.PAID_LEAVE }],
     [{ overrideType: WorkdayType.UNPAID_LEAVE, hasWorkObligation: true }, { workdayType: WorkdayType.UNPAID_LEAVE }],
+    [{ overrideType: WorkdayType.PAID_LEAVE, overrideDurationType: 'MORNING_HALF', hasWorkObligation: true }, { workdayType: WorkdayType.WORKING_DAY, dayResult: DayResult.ABSENT }],
     [{ calendarType: CalendarExceptionType.PUBLIC_HOLIDAY, hasWorkObligation: true }, { workdayType: WorkdayType.PUBLIC_HOLIDAY }],
     [{ hasWorkObligation: false }, { workdayType: WorkdayType.WEEKLY_OFF }],
     [{ calendarType: CalendarExceptionType.SPECIAL_WORKING_DAY, hasWorkObligation: false }, { workdayType: WorkdayType.WORKING_DAY, dayResult: DayResult.ABSENT }],

@@ -1,5 +1,6 @@
 import {
   applyLeaveRequest,
+  cancelMyLeaveRequest,
   approveLeaveRequest,
   createLeaveRequest,
   getMyLeaveRequest,
@@ -7,6 +8,7 @@ import {
   listHrLeaveRequests,
   listManagerLeaveRequests,
   listMyLeaveRequests,
+  previewLeaveRequest,
   rebuildDayClassifications,
   rejectLeaveRequest,
 } from '../src/services/leave.service';
@@ -39,9 +41,26 @@ test('employee creates and lists their own leave requests',async()=>{
   expect(fetchMock.mock.calls[1][0]).toBe(`${base}/api/leave-requests/mine`);
 });
 
+test('employee previews a morning half-day using the backend schedule calculation',async()=>{
+  const payload={startDate:'2026-10-28',endDate:'2026-10-28',durationType:'MORNING_HALF' as const};
+  await previewLeaveRequest(base,payload);
+  expect(fetchMock).toHaveBeenCalledWith(
+    `${base}/api/leave-requests/preview`,
+    expect.objectContaining({method:'POST',credentials:'include',body:JSON.stringify(payload)}),
+  );
+});
+
 test('employee detail encodes the leave request id',async()=>{
   await getMyLeaveRequest(base,'leave/a b');
   expect(fetchMock.mock.calls[0][0]).toBe(`${base}/api/leave-requests/mine/leave%2Fa%20b`);
+});
+
+test('employee cancellation targets only their own encoded pending request',async()=>{
+  await cancelMyLeaveRequest(base,'leave/a');
+  expect(fetchMock).toHaveBeenCalledWith(
+    `${base}/api/leave-requests/mine/leave%2Fa/cancel`,
+    expect.objectContaining({method:'POST',credentials:'include'}),
+  );
 });
 
 test('manager queue preserves status and department scope',async()=>{

@@ -25,7 +25,13 @@ export class DayClassificationService {
       this.shiftResolver.resolveForEmployeeDate(org, employeeId, date),
       this.attendance.findOne({ organizationId: org, employeeId, workDate: date }).lean(),
     ]);
-    return resolveClassification({ overrideType: override?.type, calendarType: exception?.type, hasWorkObligation: Boolean(shift), checkInAt: day?.checkInAt, checkOutAt: day?.checkOutAt });
+    return {
+      ...resolveClassification({ overrideType: override?.type, overrideDurationType: override?.durationType, calendarType: exception?.type, hasWorkObligation: Boolean(shift), checkInAt: day?.checkInAt, checkOutAt: day?.checkOutAt }),
+      approvedLeaveIntervals: override?.approvedLeaveIntervals ?? [],
+      requiredWorkingIntervals: override?.requiredWorkingIntervals ?? [],
+      leaveWorkingMinutes: override?.calculatedMinutes ?? 0,
+      leaveEquivalent: override?.leaveEquivalent ?? 0,
+    };
   }
 
   async rebuild(org: string, fromValue: string, toValue: string, employeeId?: string) {
@@ -50,12 +56,13 @@ export class DayClassificationService {
 
 export function resolveClassification(input: {
   overrideType?: string;
+  overrideDurationType?: string;
   calendarType?: string;
   hasWorkObligation: boolean;
   checkInAt?: Date;
   checkOutAt?: Date;
 }): { workdayType: WorkdayType; dayResult?: DayResult } {
-  if (input.overrideType === WorkdayType.PAID_LEAVE || input.overrideType === WorkdayType.UNPAID_LEAVE) return { workdayType: input.overrideType };
+  if ((input.overrideType === WorkdayType.PAID_LEAVE || input.overrideType === WorkdayType.UNPAID_LEAVE) && (!input.overrideDurationType || input.overrideDurationType === 'FULL_DAY')) return { workdayType: input.overrideType };
   if (input.calendarType === CalendarExceptionType.PUBLIC_HOLIDAY) return { workdayType: WorkdayType.PUBLIC_HOLIDAY };
   if (input.calendarType === CalendarExceptionType.WEEKLY_OFF) return { workdayType: WorkdayType.WEEKLY_OFF };
   const working = input.calendarType === CalendarExceptionType.SPECIAL_WORKING_DAY || input.hasWorkObligation;

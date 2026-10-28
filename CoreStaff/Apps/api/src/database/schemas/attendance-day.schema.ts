@@ -76,6 +76,11 @@ export class AttendanceDay {
   @Prop({ type: Number, required: false })
   workingMinutes?: number;
 
+  @Prop({ type: Number, default: 0 }) approvedLeaveMinutes?: number;
+  @Prop({ type: Number, required: false }) requiredWorkingMinutes?: number;
+  @Prop({ required: false }) effectiveCheckInTime?: string;
+  @Prop({ required: false }) effectiveCheckOutTime?: string;
+
   @Prop({ type: Number, default: 0 })
   lateMinutes: number;
 
@@ -94,6 +99,8 @@ export class AttendanceDay {
     startTime?: string;
     endTime?: string;
     breakMinutes?: number;
+    requiredWorkingIntervals?: Array<{ from: string; to: string }>;
+    approvedLeaveIntervals?: Array<{ from: string; to: string }>;
     gracePeriodMinutes?: number;
   };
 

@@ -8,6 +8,6 @@ describe('Sprint 4 scheduling schema invariants', () => {
   });
 
   it('enforces one employee override per date', () => {
-    expect(hasCompoundIndex(EmployeeDayOverrideSchema, ['organizationId', 'employeeId', 'date'], true)).toBe(true);
+    expect(hasCompoundIndex(EmployeeDayOverrideSchema, ['organizationId', 'employeeId', 'date', 'leaveRequestId'], true)).toBe(true);
   });
 });
