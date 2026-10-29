@@ -16,3 +16,4 @@ Apps/mobile/ios/
 
 # Never commit real credentials — .env files are local-only, see .env.example
 scratch/
+Apps/api/demo-import/

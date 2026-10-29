@@ -58,6 +58,7 @@ export interface AccountFields {
   /** Hashed by the caller — this module never sees or returns a plaintext password. */
   passwordHash: string;
   role: string;
+  mustChangePassword?: boolean;
 }
 
 /** An account that does not exist yet *and* its HR record: both halves. */
@@ -87,8 +88,8 @@ export function userFields(input: AccountFields): Record<string, unknown> {
     passwordHash: input.passwordHash,
     role: input.role,
     status: 'ACTIVE',
-    // Every provisioned account sets its own password on first login (§4.3).
-    mustChangePassword: true,
+    // Every provisioned account sets its own password on first login (§4.3) unless overridden.
+    mustChangePassword: input.mustChangePassword ?? true,
     failedLoginCount: 0,
   };
 }
