@@ -1,6 +1,6 @@
 import type { DayAttendance } from './types';
 
-export type AttendanceHistoryStatus = 'FORGOTTEN' | 'FORFEITED' | 'DAY_OFF' | 'LATE' | 'ATTENDED' | 'NONE';
+export type AttendanceHistoryStatus = 'FORGOTTEN' | 'FORFEITED' | 'DAY_OFF' | 'LATE' | 'EARLY_LEAVE' | 'ATTENDED' | 'NONE';
 
 export function getAttendanceHistoryStatus(
   day: DayAttendance,
@@ -17,6 +17,7 @@ export function getAttendanceHistoryStatus(
     return 'FORGOTTEN';
   }
   if ((day.lateMinutes ?? 0) > 0 || day.status === 'LATE') return 'LATE';
+  if ((day.earlyMinutes ?? 0) > 0 || day.status === 'EARLY_LEAVE') return 'EARLY_LEAVE';
   if (hasCheckIn || day.status === 'COMPLETED' || day.dayResult === 'PRESENT') return 'ATTENDED';
   return 'NONE';
 }

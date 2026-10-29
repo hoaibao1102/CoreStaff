@@ -21,6 +21,8 @@ function getStatusBadge(status: string) {
       return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Chờ duyệt</Badge>;
     case 'LATE':
       return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Đi trễ</Badge>;
+    case 'EARLY_LEAVE':
+      return <Badge variant="secondary" className="bg-rose-100 text-rose-800">Về sớm</Badge>;
     case 'DAY_OFF':
       return <Badge variant="outline">Nghỉ phép</Badge>;
     default:
@@ -112,7 +114,7 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-xl border border-border bg-muted/30">
             <span className="text-[11px] text-muted-foreground block">Trạng thái</span>
-            <div className="mt-1">
+            <div className="mt-1 flex flex-wrap gap-1.5">
               {historyStatus === 'FORFEITED'
                 ? <Badge variant="secondary" className="bg-red-100 text-red-800">Mất ngày công</Badge>
                 : historyStatus === 'FORGOTTEN'
@@ -121,7 +123,16 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
                     ? <Badge variant="secondary" className="bg-orange-100 text-orange-800">
                         Đi trễ{(day.lateMinutes ?? 0) > 0 ? ` · ${day.lateMinutes} phút` : ''}
                       </Badge>
+                    : historyStatus === 'EARLY_LEAVE'
+                      ? <Badge variant="secondary" className="bg-rose-100 text-rose-800">
+                          Về sớm{(day.earlyMinutes ?? 0) > 0 ? ` · ${day.earlyMinutes} phút` : ''}
+                        </Badge>
                     : getStatusBadge(day.status)}
+              {(day.earlyMinutes ?? 0) > 0 && historyStatus !== 'EARLY_LEAVE' && (
+                <Badge variant="secondary" className="bg-rose-100 text-rose-800">
+                  Về sớm · {day.earlyMinutes} phút
+                </Badge>
+              )}
             </div>
           </div>
           <div className="p-3 rounded-xl border border-border bg-muted/30">

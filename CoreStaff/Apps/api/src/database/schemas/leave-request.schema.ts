@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { LeaveRequestStatus, LeaveType } from './enums';
+import { LeaveDurationType, LeaveRequestStatus, LeaveType } from './enums';
 
 export type LeaveRequestDocument = HydratedDocument<LeaveRequest>;
 
@@ -12,6 +12,13 @@ export class LeaveRequest {
   @Prop({ required: true }) startDate: string;
   @Prop({ required: true }) endDate: string;
   @Prop({ required: true, enum: Object.values(LeaveType) }) leaveType: LeaveType;
+  @Prop({ required: true, enum: Object.values(LeaveDurationType), default: LeaveDurationType.FULL_DAY }) durationType: LeaveDurationType;
+  @Prop({ required: false }) requestedStart?: string;
+  @Prop({ required: false }) requestedEnd?: string;
+  @Prop({ required: false, min: 0 }) calculatedMinutes?: number;
+  @Prop({ required: false, min: 0 }) leaveEquivalent?: number;
+  @Prop({ type: [{ from: String, to: String }], required: false }) approvedLeaveIntervals?: Array<{ from: string; to: string }>;
+  @Prop({ type: [{ from: String, to: String }], required: false }) requiredWorkingIntervals?: Array<{ from: string; to: string }>;
   @Prop({ required: true, minlength: 10, maxlength: 1000 }) reason: string;
   @Prop({ type: 'ObjectId', ref: 'Evidence', required: false }) evidenceId?: string;
   @Prop({ required: true, enum: Object.values(LeaveRequestStatus), default: LeaveRequestStatus.PENDING_MANAGER, index: true }) status: LeaveRequestStatus;

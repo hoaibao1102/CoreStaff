@@ -31,6 +31,8 @@ import { ShiftResolverService } from '../hr/shift-template/shift-resolver.servic
 import { OvertimeService } from '../hr/overtime/overtime.service';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../database/schemas/timesheet-period.schema';
 import { PeriodVersionService } from '../hr/timesheet/period-version.service';
+import { EmployeeDayOverrideDocument } from '../database/schemas/employee-day-override.schema';
+import { LeaveRequestDocument } from '../database/schemas/leave-request.schema';
 
 /** File upload type matching Express/Multer used by NestJS controllers */
 interface UploadedFile {
@@ -43,6 +45,17 @@ interface UploadedFile {
   filename?: string;
   path?: string;
   buffer: Buffer;
+}
+
+function clockValue(value: string) { const [hours, minutes] = value.split(':').map(Number); return hours * 60 + minutes; }
+function clockText(value: number) { return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; }
+function clockIntervalMinutes(intervals: Array<{ from: string; to: string }>) {
+  return intervals.reduce((sum, interval) => sum + Math.max(0, clockValue(interval.to) - clockValue(interval.from)), 0);
+}
+function intersectClockIntervals(left: Array<{ from: string; to: string }>, right: Array<{ from: string; to: string }>) {
+  return left.flatMap(a => right.map(b => ({ from: Math.max(clockValue(a.from), clockValue(b.from)), to: Math.min(clockValue(a.to), clockValue(b.to)) })))
+    .filter(interval => interval.to > interval.from)
+    .map(interval => ({ from: clockText(interval.from), to: clockText(interval.to) }));
 }
 
 @Injectable()
@@ -68,7 +81,25 @@ export class AttendanceService {
     @Optional() private readonly overtime?: OvertimeService,
     // TASK-073 — appended last for the same reason; optional so specs keep compiling.
     @Optional() private readonly periodVersion?: PeriodVersionService,
+    @Optional() @InjectModel('EmployeeDayOverride') private readonly dayOverrides?: Model<EmployeeDayOverrideDocument>,
+    @Optional() @InjectModel('LeaveRequest') private readonly leaveRequests?: Model<LeaveRequestDocument>,
   ) {}
+
+  private async appliedLeave(organizationId: Types.ObjectId, employeeId: Types.ObjectId, workDate: string) {
+    if (!this.dayOverrides) return null;
+    const rows = await this.dayOverrides.find({ organizationId, employeeId, date: workDate }).lean();
+    if (!rows.length) return null;
+    const approvedLeaveIntervals = rows.flatMap(row => row.approvedLeaveIntervals ?? []);
+    const requiredSets = rows.map(row => row.requiredWorkingIntervals ?? []);
+    const requiredWorkingIntervals = requiredSets.reduce((current, next) => intersectClockIntervals(current, next));
+    return {
+      durationTypes: rows.map(row => row.durationType),
+      leaveTypes: rows.map(row => row.type),
+      approvedLeaveIntervals,
+      requiredWorkingIntervals,
+      approvedLeaveMinutes: rows.reduce((sum, row) => sum + (row.calculatedMinutes ?? 0), 0),
+    };
+  }
 
   /**
    * Lấy ngày làm việc hôm nay theo múi giờ Việt Nam (Asia/Ho_Chi_Minh) dạng YYYY-MM-DD
@@ -132,6 +163,8 @@ export class AttendanceService {
     // An explicit employee assignment is more specific than an organization or
     // department schedule resolved as a fallback.
     const shift = assignment?.shiftTemplateId || assignment?.shiftId || await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate);
+    const appliedLeave = await this.appliedLeave(orgObjectId, empObjectId, workDate);
+    const pendingLeave = this.leaveRequests ? await this.leaveRequests.findOne({ organizationId: orgObjectId, employeeId: empObjectId, status: 'PENDING_MANAGER', startDate: { $lte: workDate }, endDate: { $gte: workDate } }).lean() : null;
 
     // 2. Tìm AttendanceDay hôm nay
     const day = await this.attendanceDayModel
@@ -163,7 +196,8 @@ export class AttendanceService {
     let availableAction = 'NONE';
 
     if (attendanceStatus === AttendanceStatus.NOT_CHECKED_IN) {
-      availableAction = 'CHECK_IN';
+      availableAction = appliedLeave?.requiredWorkingIntervals.length === 0 ? 'NONE' : 'CHECK_IN';
+      if (appliedLeave?.requiredWorkingIntervals.length === 0) attendanceStatus = AttendanceStatus.DAY_OFF;
     } else if (attendanceStatus === AttendanceStatus.CHECKED_IN) {
       availableAction = 'CHECK_OUT';
     }
@@ -211,6 +245,13 @@ export class AttendanceService {
       workingMinutes: day?.workingMinutes ?? null,
       lateMinutes: day?.lateMinutes || 0,
       earlyMinutes: day?.earlyMinutes || 0,
+      attendanceRequirements: appliedLeave ? {
+        ...appliedLeave,
+        effectiveCheckInTime: appliedLeave.requiredWorkingIntervals[0]?.from ?? null,
+        effectiveCheckOutTime: appliedLeave.requiredWorkingIntervals[appliedLeave.requiredWorkingIntervals.length - 1]?.to ?? null,
+        requiredWorkingMinutes: clockIntervalMinutes(appliedLeave.requiredWorkingIntervals),
+      } : null,
+      pendingLeave: pendingLeave ? { durationType: pendingLeave.durationType, requestedStart: pendingLeave.requestedStart, requestedEnd: pendingLeave.requestedEnd } : null,
       overallApprovalStatus: day?.overallApprovalStatus || (latestRequest ? latestRequest.status : AttendanceApprovalStatus.NOT_REQUIRED),
       approvalComment: latestRequest?.reviewComment || null,
       approvalReviewedAt: latestRequest?.reviewedAt || null,
@@ -326,6 +367,8 @@ export class AttendanceService {
 
     const workplace = assignment.workplaceId;
     const shift = assignment.shiftTemplateId || assignment.shiftId || await this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate);
+    const appliedLeave = await this.appliedLeave(orgObjectId, empObjectId, workDate);
+    if (appliedLeave?.requiredWorkingIntervals.length === 0) throw new ConflictException('ATTENDANCE_NOT_REQUIRED');
     const recordedAt = new Date();
 
     let method: AttendanceMethod;
@@ -407,6 +450,8 @@ export class AttendanceService {
       endTime: shift?.endTime || '17:00',
       breakMinutes: shift?.breakMinutes ?? 60,
       gracePeriodMinutes: shift?.gracePeriodMinutes ?? 15,
+      requiredWorkingIntervals: appliedLeave?.requiredWorkingIntervals,
+      approvedLeaveIntervals: appliedLeave?.approvedLeaveIntervals,
     };
 
     const workplaceSnapshot = {
@@ -437,6 +482,10 @@ export class AttendanceService {
         overallApprovalStatus: approvalStatus,
         checkInAt: recordedAt,
         lateMinutes: calcResult.lateMinutes,
+        approvedLeaveMinutes: calcResult.approvedLeaveMinutes,
+        requiredWorkingMinutes: calcResult.requiredWorkingMinutes,
+        effectiveCheckInTime: calcResult.effectiveCheckInTime,
+        effectiveCheckOutTime: calcResult.effectiveCheckOutTime,
         shiftSnapshot,
         workplaceSnapshot,
       });
@@ -446,6 +495,10 @@ export class AttendanceService {
       day.overallApprovalStatus = approvalStatus;
       day.checkInAt = recordedAt;
       day.lateMinutes = calcResult.lateMinutes;
+      day.approvedLeaveMinutes = calcResult.approvedLeaveMinutes;
+      day.requiredWorkingMinutes = calcResult.requiredWorkingMinutes;
+      day.effectiveCheckInTime = calcResult.effectiveCheckInTime ?? undefined;
+      day.effectiveCheckOutTime = calcResult.effectiveCheckOutTime ?? undefined;
       day.shiftSnapshot = shiftSnapshot;
       day.workplaceSnapshot = workplaceSnapshot;
       // Update periodId if now has an active period
@@ -521,6 +574,7 @@ export class AttendanceService {
         distanceMeters: distanceFromWorkplaceMeters,
         approvalStatus: event.approvalStatus,
       },
+      attendanceRequirements: appliedLeave ? { ...appliedLeave, effectiveCheckInTime: calcResult.effectiveCheckInTime, effectiveCheckOutTime: calcResult.effectiveCheckOutTime, requiredWorkingMinutes: calcResult.requiredWorkingMinutes } : null,
     };
     await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_IN', requestHash, response as any);
     this.eventsGateway?.notifyAttendanceChanged(
@@ -671,6 +725,10 @@ export class AttendanceService {
     day.checkOutAt = recordedAt;
     day.workingMinutes = calcResult.workingMinutes ?? 0;
     day.earlyMinutes = calcResult.earlyMinutes;
+    day.approvedLeaveMinutes = calcResult.approvedLeaveMinutes;
+    day.requiredWorkingMinutes = calcResult.requiredWorkingMinutes;
+    day.effectiveCheckInTime = calcResult.effectiveCheckInTime ?? undefined;
+    day.effectiveCheckOutTime = calcResult.effectiveCheckOutTime ?? undefined;
     day.attendanceStatus = AttendanceStatus.COMPLETED;
 
     if (approvalStatus === AttendanceApprovalStatus.PENDING) {
@@ -766,6 +824,10 @@ export class AttendanceService {
       workingMinutes: day.workingMinutes,
       lateMinutes: day.lateMinutes,
       earlyMinutes: day.earlyMinutes,
+      approvedLeaveMinutes: day.approvedLeaveMinutes,
+      requiredWorkingMinutes: day.requiredWorkingMinutes,
+      effectiveCheckInTime: day.effectiveCheckInTime,
+      effectiveCheckOutTime: day.effectiveCheckOutTime,
       checkOut: {
         eventId: outEvent._id,
         eventType: outEvent.eventType,

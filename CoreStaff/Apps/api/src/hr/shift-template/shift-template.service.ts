@@ -11,6 +11,8 @@ import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 import { PoliciesService } from '../policies/policies.service';
 import { evaluateLaborLimits } from '../policies/policies-domain';
 
+const shiftMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+
 @Injectable()
 export class ShiftTemplateService {
   constructor(
@@ -61,6 +63,8 @@ export class ShiftTemplateService {
       startTime: dto.startTime ?? old.startTime,
       endTime: dto.endTime ?? old.endTime,
       breakMinutes: dto.breakMinutes ?? old.breakMinutes,
+      breakStartTime: dto.breakStartTime === undefined ? old.breakStartTime : dto.breakStartTime,
+      breakEndTime: dto.breakEndTime === undefined ? old.breakEndTime : dto.breakEndTime,
       gracePeriodMinutes: dto.gracePeriodMinutes ?? old.gracePeriodMinutes,
     });
     if (data.scope === ShiftScope.DEPARTMENT && await this.shifts.exists({ organizationId, departmentId: data.departmentId, _id: { $ne: id } })) {
@@ -104,14 +108,18 @@ export class ShiftTemplateService {
       if (!dto.departmentId) throw new BadRequestException('SHIFT_DEPARTMENT_REQUIRED');
       if (!await this.departments.exists({ _id: dto.departmentId, organizationId, active: true })) throw new NotFoundException('SHIFT_DEPARTMENT_NOT_FOUND_OR_INACTIVE');
     }
+    if ((dto.breakStartTime && !dto.breakEndTime) || (!dto.breakStartTime && dto.breakEndTime)) throw new BadRequestException('SHIFT_BREAK_INTERVAL_INCOMPLETE');
+    if (dto.breakStartTime && dto.breakEndTime) {
+      if (dto.breakStartTime < dto.startTime || dto.breakEndTime > dto.endTime || dto.breakStartTime >= dto.breakEndTime) throw new BadRequestException('SHIFT_BREAK_INTERVAL_INVALID');
+      if (shiftMinutes(dto.breakEndTime) - shiftMinutes(dto.breakStartTime) !== (dto.breakMinutes ?? 60)) throw new BadRequestException('SHIFT_BREAK_DURATION_MISMATCH');
+    }
     const data = { ...dto, name, weekdays, effectiveFrom, effectiveTo, breakMinutes: dto.breakMinutes ?? 60, departmentId: dto.scope === ShiftScope.DEPARTMENT ? dto.departmentId : undefined };
     await this.validateLaborPolicy(organizationId, data);
     return data;
   }
 
   private async validateLaborPolicy(organizationId: string, shift: CreateShiftTemplateDto) {
-    const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
-    const duration = minutes(shift.endTime) - minutes(shift.startTime);
+    const duration = shiftMinutes(shift.endTime) - shiftMinutes(shift.startTime);
     const rest = shift.breakMinutes ?? 60;
     if (!Number.isInteger(rest) || rest < 0 || rest >= duration) {
       throw new BadRequestException('SHIFT_BREAK_DURATION_INVALID');
