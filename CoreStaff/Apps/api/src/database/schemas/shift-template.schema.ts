@@ -41,6 +41,12 @@ export class ShiftTemplate {
 	@Prop({ required: true, default: 60 })
 	breakMinutes: number; // break duration in minutes
 
+	@Prop({ required: false })
+	breakStartTime?: string;
+
+	@Prop({ required: false })
+	breakEndTime?: string;
+
 	@Prop({ required: true, default: 5 })
 	gracePeriodMinutes: number; // grace period for late arrival in minutes
 

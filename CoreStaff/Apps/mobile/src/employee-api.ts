@@ -22,6 +22,21 @@ export interface TodayAttendance {
   lateMinutes: number;
   earlyMinutes: number;
   overallApprovalStatus: string;
+  attendanceRequirements: {
+    durationTypes: LeaveDurationType[];
+    leaveTypes: Array<'PAID_LEAVE' | 'UNPAID_LEAVE'>;
+    approvedLeaveIntervals: LeaveInterval[];
+    requiredWorkingIntervals: LeaveInterval[];
+    approvedLeaveMinutes: number;
+    requiredWorkingMinutes: number;
+    effectiveCheckInTime: string | null;
+    effectiveCheckOutTime: string | null;
+  } | null;
+  pendingLeave: {
+    durationType: LeaveDurationType;
+    requestedStart?: string;
+    requestedEnd?: string;
+  } | null;
   assignment: {
     shiftName: string;
     shiftHours: string;
@@ -63,12 +78,43 @@ export interface AttendanceHistory {
   items: AttendanceDay[];
 }
 
-export type LeaveStatus = 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED' | 'HR_APPLIED';
+export type LeaveStatus = 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'HR_APPLIED';
+export type LeaveDurationType = 'FULL_DAY' | 'MORNING_HALF' | 'AFTERNOON_HALF' | 'CUSTOM_HOURS';
+export interface LeaveInterval { from: string; to: string }
+export interface LeavePreviewDay {
+  date: string;
+  shiftStart: string;
+  shiftEnd: string;
+  breakMinutes: number;
+  breakStart: string;
+  breakEnd: string;
+  requestedStart: string;
+  requestedEnd: string;
+  calculatedMinutes: number;
+  leaveEquivalent: number;
+  approvedLeaveIntervals: LeaveInterval[];
+  requiredWorkingIntervals: LeaveInterval[];
+}
+export interface LeavePreview {
+  durationType: LeaveDurationType;
+  requestedStart?: string;
+  requestedEnd?: string;
+  calculatedMinutes: number;
+  leaveEquivalent: number;
+  days: LeavePreviewDay[];
+}
 export interface LeaveRequest {
   _id: string;
   startDate: string;
   endDate: string;
   leaveType: 'PAID_LEAVE' | 'UNPAID_LEAVE';
+  durationType?: LeaveDurationType;
+  requestedStart?: string;
+  requestedEnd?: string;
+  calculatedMinutes?: number;
+  leaveEquivalent?: number;
+  approvedLeaveIntervals?: LeaveInterval[];
+  requiredWorkingIntervals?: LeaveInterval[];
   reason: string;
   status: LeaveStatus;
   reviewComment?: string;
@@ -178,8 +224,17 @@ export const punchAttendance = (
 export const getMyLeaveRequests = (base: string) =>
   apiRequest<LeaveRequest[]>(base, '/api/leave-requests/mine');
 
-export const createLeaveRequest = (base: string, payload: { startDate: string; endDate: string; leaveType: 'PAID_LEAVE' | 'UNPAID_LEAVE'; reason: string }) =>
+export const previewLeaveRequest = (base: string, payload: { startDate: string; endDate: string; durationType: LeaveDurationType; requestedStart?: string; requestedEnd?: string }) =>
+  apiRequest<LeavePreview>(base, '/api/leave-requests/preview', { method: 'POST', body: JSON.stringify(payload) });
+
+export const createLeaveRequest = (base: string, payload: { startDate: string; endDate: string; leaveType: 'PAID_LEAVE' | 'UNPAID_LEAVE'; durationType?: LeaveDurationType; requestedStart?: string; requestedEnd?: string; reason: string }) =>
   apiRequest<LeaveRequest>(base, '/api/leave-requests', { method: 'POST', body: JSON.stringify(payload) });
+
+export const getMyLeaveRequest = (base: string, id: string) =>
+  apiRequest<LeaveRequest>(base, `/api/leave-requests/mine/${encodeURIComponent(id)}`);
+
+export const cancelMyLeaveRequest = (base: string, id: string) =>
+  apiRequest<LeaveRequest>(base, `/api/leave-requests/mine/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
 
 export const getMyOvertimeRequests = (base: string) =>
   apiRequest<OvertimeRequest[]>(base, '/api/overtime/mine');

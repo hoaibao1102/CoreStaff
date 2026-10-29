@@ -45,6 +45,14 @@ export class CreateShiftTemplateDto {
 	@Min(0)
 	breakMinutes?: number;
 
+	@ApiProperty({ required: false, example: '12:00' })
+	@IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+	breakStartTime?: string;
+
+	@ApiProperty({ required: false, example: '13:00' })
+	@IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+	breakEndTime?: string;
+
 	@ApiProperty({ required: false, example: 5, description: 'Grace period for late arrival in minutes.' })
 	@IsOptional()
 	@IsInt()

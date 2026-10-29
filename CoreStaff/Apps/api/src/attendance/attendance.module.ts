@@ -21,6 +21,8 @@ import { IdempotencyRecordSchema } from '../database/schemas/idempotency-record.
 import { TimesheetPeriodSchema } from '../database/schemas/timesheet-period.schema';
 import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module';
 import { OvertimeModule } from '../hr/overtime/overtime.module';
+import { EmployeeDayOverrideSchema } from '../database/schemas/employee-day-override.schema';
+import { LeaveRequestSchema } from '../database/schemas/leave-request.schema';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { OvertimeModule } from '../hr/overtime/overtime.module';
       { name: 'UserSession', schema: UserSessionSchema },
       { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
       { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
+      { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
+      { name: 'LeaveRequest', schema: LeaveRequestSchema },
     ]),
     StorageModule,
     ShiftTemplateModule,

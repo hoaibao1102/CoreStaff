@@ -218,6 +218,15 @@ export const LeaveRequestStatus = {
   PENDING_MANAGER: 'PENDING_MANAGER',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
   HR_APPLIED: 'HR_APPLIED',
 } as const;
 export type LeaveRequestStatus = (typeof LeaveRequestStatus)[keyof typeof LeaveRequestStatus];
+
+export const LeaveDurationType = {
+  FULL_DAY: 'FULL_DAY',
+  MORNING_HALF: 'MORNING_HALF',
+  AFTERNOON_HALF: 'AFTERNOON_HALF',
+  CUSTOM_HOURS: 'CUSTOM_HOURS',
+} as const;
+export type LeaveDurationType = (typeof LeaveDurationType)[keyof typeof LeaveDurationType];

@@ -29,6 +29,17 @@ export interface TodayAttendanceData {
   workingMinutes: number | null;
   lateMinutes: number;
   earlyMinutes: number;
+  attendanceRequirements: {
+    durationTypes: string[];
+    leaveTypes: string[];
+    approvedLeaveIntervals: Array<{from:string;to:string}>;
+    requiredWorkingIntervals: Array<{from:string;to:string}>;
+    approvedLeaveMinutes: number;
+    requiredWorkingMinutes: number;
+    effectiveCheckInTime: string|null;
+    effectiveCheckOutTime: string|null;
+  } | null;
+  pendingLeave:{durationType:string;requestedStart?:string;requestedEnd?:string}|null;
   overallApprovalStatus: string;
   approvalComment?: string | null;
   approvalReviewedAt?: string | null;

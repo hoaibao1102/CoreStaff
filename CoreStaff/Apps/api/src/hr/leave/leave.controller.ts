@@ -3,19 +3,23 @@ import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
 import { Tenant, requireOrganizationId } from '../../common/tenant-context';
 import { DayClassificationService } from './day-classification.service';
-import { CreateLeaveRequestDto, LeaveRequestQueryDto, RebuildClassificationDto, RejectLeaveRequestDto } from './dto/leave.dto';
+import { CreateLeaveRequestDto, LeaveRequestQueryDto, PreviewLeaveRequestDto, RebuildClassificationDto, RejectLeaveRequestDto } from './dto/leave.dto';
 import { LeaveService } from './leave.service';
 
 @UseGuards(AuthGuard, RolesGuard)
 @Controller('leave-requests')
 export class EmployeeLeaveController {
   constructor(private readonly leave: LeaveService) {}
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('preview')
+  async preview(@Tenant() org: string | null, @Req() req: any, @Body() dto: PreviewLeaveRequestDto) { return { success: true, data: await this.leave.preview(requireOrganizationId(org), String(req.user._id), dto) }; }
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post()
   async create(@Tenant() org: string | null, @Req() req: any, @Body() dto: CreateLeaveRequestDto) { return { success: true, data: await this.leave.create(requireOrganizationId(org), String(req.user._id), dto) }; }
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine')
   async mine(@Tenant() org: string | null, @Req() req: any) { return { success: true, data: await this.leave.mine(requireOrganizationId(org), String(req.user._id)) }; }
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine/:id')
   async one(@Tenant() org: string | null, @Req() req: any, @Param('id') id: string) { return { success: true, data: await this.leave.getMine(requireOrganizationId(org), String(req.user._id), id) }; }
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('mine/:id/cancel')
+  async cancel(@Tenant() org: string | null, @Req() req: any, @Param('id') id: string) { return { success: true, data: await this.leave.cancelMine(requireOrganizationId(org), String(req.user._id), id) }; }
 }
 
 @UseGuards(AuthGuard, RolesGuard)

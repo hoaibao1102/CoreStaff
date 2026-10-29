@@ -1,8 +1,8 @@
 import { hrRequest, mapHrError } from './hrService';
 
 export type ShiftScope = 'ORGANIZATION' | 'DEPARTMENT';
-export interface ShiftTemplate { _id:string; organizationId?:string; scope:ShiftScope; departmentId?:string; weekdays:number[]; effectiveFrom:string; effectiveTo?:string; code?:string; name?:string; startTime:string; endTime:string; breakMinutes:number; gracePeriodMinutes:number; active:boolean; createdAt?:string; updatedAt?:string }
-export interface CreateShiftTemplatePayload { scope:ShiftScope; departmentId?:string; weekdays:number[]; effectiveFrom:string; effectiveTo?:string; name:string; startTime:string; endTime:string; breakMinutes?:number; gracePeriodMinutes?:number }
+export interface ShiftTemplate { _id:string; organizationId?:string; scope:ShiftScope; departmentId?:string; weekdays:number[]; effectiveFrom:string; effectiveTo?:string; code?:string; name?:string; startTime:string; endTime:string; breakMinutes:number; breakStartTime?:string;breakEndTime?:string; gracePeriodMinutes:number; active:boolean; createdAt?:string; updatedAt?:string }
+export interface CreateShiftTemplatePayload { scope:ShiftScope; departmentId?:string; weekdays:number[]; effectiveFrom:string; effectiveTo?:string; name:string; startTime:string; endTime:string; breakMinutes?:number;breakStartTime?:string;breakEndTime?:string; gracePeriodMinutes?:number }
 export type UpdateShiftTemplatePayload = Partial<CreateShiftTemplatePayload>;
 export interface ShiftTemplateFilters { scope?:ShiftScope; departmentId?:string; active?:boolean }
 
