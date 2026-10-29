@@ -30,6 +30,7 @@ import {
   EmploymentStatus,
   Gender,
   InsuranceContributionType,
+  LeaveDurationType,
   LeaveRequestStatus,
   LeaveType,
   Role,
@@ -394,6 +395,7 @@ async function main() {
   const OvertimeResult = db.model('OvertimeResult');
   const ManagerRequest = db.model('ManagerRequest');
   const LeaveRequest = db.model('LeaveRequest');
+  const EmployeeDayOverride = db.model('EmployeeDayOverride');
   const DepartmentTimesheetConfirmation = db.model('DepartmentTimesheetConfirmation');
   const TimesheetSummary = db.model('TimesheetSummary');
   const PayrollInputSnapshot = db.model('PayrollInputSnapshot');
@@ -455,6 +457,7 @@ async function main() {
         OvertimeResult.deleteMany({ organizationId: orgId }),
         ManagerRequest.deleteMany({ organizationId: orgId }),
         LeaveRequest.deleteMany({ organizationId: orgId }),
+        EmployeeDayOverride.deleteMany({ organizationId: orgId }),
         TimesheetSummary.deleteMany({ organizationId: orgId }),
         PayrollInputSnapshot.deleteMany({ organizationId: orgId }),
         PayrollRun.deleteMany({ organizationId: orgId }),
@@ -1358,7 +1361,138 @@ async function main() {
           continue;
         }
 
-        // Scenario 4: NV-KD-002 Late arrival on Sep 8 & Sep 16, Early departure on Sep 22
+        // Scenario 4: NV-KD-002 Half-day leave (morning) + Late arrival & early departure (afternoon) on Sep 23
+        if (acc.employeeCode === 'NV-KD-002' && dayNumber === 23) {
+          const leaveReqId = await upsertDoc(
+            LeaveRequest,
+            { organizationId: orgId, employeeId: uId, startDate: dateStr, endDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              departmentId: deptMap.get('KD')!,
+              startDate: dateStr,
+              endDate: dateStr,
+              leaveType: LeaveType.PAID_LEAVE,
+              durationType: LeaveDurationType.MORNING_HALF,
+              requestedStart: '08:00',
+              requestedEnd: '12:00',
+              calculatedMinutes: 240,
+              leaveEquivalent: 0.5,
+              approvedLeaveIntervals: [{ from: '08:00', to: '12:00' }],
+              requiredWorkingIntervals: [{ from: '13:00', to: '17:00' }],
+              reason: 'Nghỉ khám sức khỏe định kỳ buổi sáng',
+              status: LeaveRequestStatus.HR_APPLIED,
+              reviewedBy: userIdMap.get('QL-KD-001')!,
+              reviewedAt: new Date(`${dateStr}T06:00:00.000Z`),
+              reviewComment: 'Đã duyệt nghỉ sáng',
+              appliedBy: userIdMap.get('HR-001')!,
+              appliedAt: new Date(`${dateStr}T06:30:00.000Z`),
+            },
+            'LeaveRequest',
+          );
+
+          await upsertDoc(
+            EmployeeDayOverride,
+            { organizationId: orgId, employeeId: uId, date: dateStr, leaveRequestId: leaveReqId },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              date: dateStr,
+              type: LeaveType.PAID_LEAVE,
+              durationType: LeaveDurationType.MORNING_HALF,
+              requestedStart: '08:00',
+              requestedEnd: '12:00',
+              calculatedMinutes: 240,
+              leaveEquivalent: 0.5,
+              approvedLeaveIntervals: [{ from: '08:00', to: '12:00' }],
+              requiredWorkingIntervals: [{ from: '13:00', to: '17:00' }],
+              leaveRequestId: leaveReqId,
+              reason: 'Nghỉ khám sức khỏe định kỳ buổi sáng',
+              createdBy: userIdMap.get('HR-001')!,
+            },
+            'EmployeeDayOverride',
+          );
+
+          const inTime = new Date(`${dateStr}T13:25:00.000Z`);
+          const outTime = new Date(`${dateStr}T16:30:00.000Z`);
+
+          const dayId = await upsertDoc(
+            AttendanceDay,
+            { organizationId: orgId, employeeId: uId, workDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              periodId: activePeriodId,
+              workDate: dateStr,
+              workdayType: WorkdayType.WORKING_DAY,
+              dayResult: DayResult.PRESENT,
+              attendanceStatus: AttendanceStatus.COMPLETED,
+              checkInAt: inTime,
+              checkOutAt: outTime,
+              workingMinutes: 185,
+              approvedLeaveMinutes: 240,
+              requiredWorkingMinutes: 240,
+              effectiveCheckInTime: '13:00',
+              effectiveCheckOutTime: '17:00',
+              lateMinutes: 25,
+              earlyMinutes: 30,
+              shiftSnapshot: {
+                shiftTemplateId,
+                shiftName: 'Ca hành chính',
+                shiftCode: 'HC-01',
+                startTime: '08:00',
+                endTime: '17:00',
+                breakMinutes: 60,
+                requiredWorkingIntervals: [{ from: '13:00', to: '17:00' }],
+                approvedLeaveIntervals: [{ from: '08:00', to: '12:00' }],
+                gracePeriodMinutes: 0,
+              },
+            },
+            'AttendanceDay',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, employeeId: uId, eventType: 'CHECK_IN', workDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: 'CHECK_IN',
+              workDate: dateStr,
+              recordedAt: inTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
+              isFallback: false,
+            },
+            'AttendanceEvent',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, employeeId: uId, eventType: 'CHECK_OUT', workDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: 'CHECK_OUT',
+              workDate: dateStr,
+              recordedAt: outTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
+              isFallback: false,
+            },
+            'AttendanceEvent',
+          );
+
+          continue;
+        }
+
+        // Scenario 5: NV-KD-002 Late arrival on Sep 8 & Sep 16, Early departure on Sep 22
         let lateMin = 0;
         let earlyMin = 0;
         let inTimeStr = '07:55:00';

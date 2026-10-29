@@ -21,7 +21,7 @@ Hướng dẫn sử dụng dữ liệu mẫu (demo tenant) phục vụ thuyết 
 | `quan.ly.kinh-doanh@anphat.local` | Trần Văn Quản Lý KD | `QL-KD-001` | `DEPARTMENT_MANAGER` | Kinh doanh (KD) | Duyệt bảng công phòng KD, duyệt đơn xin nghỉ, duyệt giải trình chấm công |
 | `quan.ly.ky.thuat@anphat.local` | Nguyễn Văn Quản Lý KT | `QL-KT-001` | `DEPARTMENT_MANAGER` | Kỹ thuật (KT) | Duyệt bảng công phòng KT, có 2 ngày làm thêm (OT) cuối tuần 200% |
 | `nv.kinh-doanh.1@anphat.local` | Phạm Hoàng Nam | `NV-KD-001` | `EMPLOYEE` | Kinh doanh (KD) | Nhân viên tiêu chuẩn, chấm công đúng giờ, đủ công |
-| `nv.kinh-doanh.2@anphat.local` | Vũ Thị Mai | `NV-KD-002` | `EMPLOYEE` | Kinh doanh (KD) | Đi muộn (Sep 10) & về sớm (Sep 24) có ghi nhận chênh lệch phút |
+| `nv.kinh-doanh.2@anphat.local` | Vũ Thị Mai | `NV-KD-002` | `EMPLOYEE` | Kinh doanh (KD) | Đi muộn (Sep 8, 16), về sớm (Sep 22); **Đặc biệt Sep 23**: Làm nửa ngày (nghỉ phép sáng `MORNING_HALF` 08:00 - 12:00) + Đi muộn ca chiều (13:25) & Về sớm (16:30) |
 | `nv.kinh-doanh.3@anphat.local` | Đặng Văn Khoa | `NV-KD-003` | `EMPLOYEE` | Kinh doanh (KD) | **Chặn chốt công**: Quên chấm công vào (Sep 15), đang có đơn giải trình `PENDING` |
 | `nv.ky.thuat.1@anphat.local` | Lê Quốc Bảo | `NV-KT-001` | `EMPLOYEE` | Kỹ thuật (KT) | Đã được duyệt nghỉ phép năm 1 ngày (Sep 21) |
 | `nv.ky.thuat.2@anphat.local` | Hoàng Minh Tuấn | `NV-KT-002` | `EMPLOYEE` | Kỹ thuật (KT) | Có đơn xin nghỉ phép ngày Sep 25 trạng thái `PENDING` (chờ demo duyệt) |
@@ -46,6 +46,7 @@ Hướng dẫn sử dụng dữ liệu mẫu (demo tenant) phục vụ thuyết 
      - 1 đơn giải trình đang chờ Quản lý/HR duyệt.
      - 1 đơn xin nghỉ phép đang chờ duyệt.
      - Làm thêm giờ cuối tuần (QL-KT-001 làm ngày thứ Bảy, hệ số 2.0).
+     - **Trường hợp đặc biệt (Tính năng mới)**: Làm nửa ngày kết hợp đi muộn & về sớm (NV-KD-002 ngày 23/09/2026: Nghỉ phép sáng `MORNING_HALF` 240 phút; Ca chiều từ 13:00 - 17:00 đi muộn lúc 13:25 [muộn 25 phút], về sớm lúc 16:30 [sớm 30 phút], thời gian làm thực tế 185 phút).
 
 3. **Kỳ Hiện tại (`2026-10`)**:
    - Trạng thái kỳ: `OPEN`.

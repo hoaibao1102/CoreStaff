@@ -92,6 +92,14 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
   - Nhân viên `Đặng Văn Khoa` đã gửi đơn giải trình: *"Quên chấm công vào do vào ca gấp tiếp khách hàng"*.
 - Quản lý nhấn **"Duyệt đơn"** (Approve).
 - Quay lại màn hình rà soát kỳ công: Điểm nghẽn được gỡ bỏ hoàn toàn, công phòng Kinh doanh chuyển sang trạng thái sẵn sàng.
+
+#### Bước 2.4: Trình diễn Tính năng mới — Phân loại Làm nửa ngày, Đi muộn & Về sớm
+- Xem chi tiết bảng công của nhân viên `Vũ Thị Mai` (`NV-KD-002`) ngày **23/09/2026**:
+  - Đã có đơn nghỉ phép nửa ngày sáng (`MORNING_HALF` 08:00 - 12:00, 240 phút) được HR duyệt.
+  - Ca làm việc buổi chiều bắt đầu từ 13:00 đến 17:00 (chuẩn 240 phút).
+  - Nhân viên vào ca chiều lúc **13:25** (hệ thống tự động ghi nhận **Đi muộn 25 phút** so với mốc 13:00).
+  - Nhân viên tan ca lúc **16:30** (hệ thống tự động ghi nhận **Về sớm 30 phút** so với mốc 17:00).
+  - Tổng thời gian làm việc thực tế: **185 phút**, nghỉ phép hưởng lương: **240 phút**.
 - Quản lý nhấn **"Xác nhận bảng công phòng Kinh doanh"**.
 
 ---
