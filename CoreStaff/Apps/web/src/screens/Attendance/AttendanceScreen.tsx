@@ -355,6 +355,10 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             } as any)
           : null,
         totalWorkingMinutes: todayData.workingMinutes ?? undefined,
+        lateMinutes: todayData.lateMinutes,
+        earlyMinutes: todayData.earlyMinutes,
+        attendanceRequirements: todayData.attendanceRequirements,
+        pendingLeave: todayData.pendingLeave,
       }));
     } catch {
       setLoadError('Không thể tải trạng thái chấm công hôm nay. Vui lòng thử lại.');
@@ -690,6 +694,8 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
               comment={attendanceRecord.approvalComment}
               reviewedAt={attendanceRecord.approvalReviewedAt}
             />
+            {attendanceRecord.attendanceRequirements&&<div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 text-sm text-blue-950 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0"/><div><p className="font-semibold">Nghỉ phép đã được HR áp dụng vào chấm công</p><p className="mt-1">Đã duyệt nghỉ: {attendanceRecord.attendanceRequirements.approvedLeaveIntervals.map(item=>`${item.from}–${item.to}`).join(', ')||'Cả ngày'}</p><p>Thời gian còn phải làm: {attendanceRecord.attendanceRequirements.requiredWorkingIntervals.map(item=>`${item.from}–${item.to}`).join(', ')||'Không yêu cầu chấm công'}</p><p className="mt-1 font-medium">Giờ Check-in dự kiến: {attendanceRecord.attendanceRequirements.effectiveCheckInTime||'Không áp dụng'} · Giờ Check-out dự kiến: {attendanceRecord.attendanceRequirements.effectiveCheckOutTime||'Không áp dụng'}</p>{attendanceRecord.checkIn&&attendanceRecord.lateMinutes!==undefined&&<p>Check-in thực tế: {new Date(attendanceRecord.checkIn.recordedAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} · {attendanceRecord.lateMinutes>0?`Đi trễ ${attendanceRecord.lateMinutes} phút`:'Không đi trễ'}</p>}{attendanceRecord.checkOut&&attendanceRecord.earlyMinutes!==undefined&&<p>Check-out thực tế: {new Date(attendanceRecord.checkOut.recordedAt).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})} · {attendanceRecord.earlyMinutes>0?`Về sớm ${attendanceRecord.earlyMinutes} phút`:'Không về sớm'}</p>}</div></div></div>}
+            {!attendanceRecord.attendanceRequirements&&attendanceRecord.pendingLeave&&<div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><div className="flex gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0"/><div><p className="font-semibold">Đơn xin nghỉ đang chờ phê duyệt</p><p>Đã ghi nhận đơn {attendanceRecord.pendingLeave.durationType==='MORNING_HALF'?'nghỉ buổi sáng':attendanceRecord.pendingLeave.durationType==='AFTERNOON_HALF'?'nghỉ buổi chiều':'xin nghỉ'}{attendanceRecord.pendingLeave.requestedStart&&attendanceRecord.pendingLeave.requestedEnd?` (${attendanceRecord.pendingLeave.requestedStart}–${attendanceRecord.pendingLeave.requestedEnd})`:''}. Hiện tại hệ thống vẫn áp dụng ca làm gốc; kết quả chấm công sẽ được cập nhật sau khi đơn được duyệt và HR áp dụng.</p></div></div></div>}
 
             {/* Workplace Info & Mode Card */}
             <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-xs">

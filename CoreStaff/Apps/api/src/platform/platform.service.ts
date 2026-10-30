@@ -1,10 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OrganizationDocument } from '../database/schemas/organization.schema';
 import { UserDocument } from '../database/schemas/user.schema';
 import { UserSessionDocument } from '../database/schemas/user-session.schema';
-import { OrganizationStatus, Role, normalizeEmail } from '../database/schemas/enums';
+import { EmployeeProfileDocument } from '../database/schemas/employee-profile.schema';
+import { EmploymentStatus, OrganizationStatus, Role, normalizeEmail } from '../database/schemas/enums';
 import { hashPassword } from '../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../auth/strategies/password-policy';
 import { userFields } from '../database/seed/provision';
@@ -13,7 +14,7 @@ import { CreateOrganizationDto, CreateInitialHrDto } from './dto/platform.dto';
 const DUPLICATE_KEY_ERROR = 11000;
 
 /**
- * FR-SYS-01/02 — platform-local tenant lifecycle. Every route here is
+ * FR-SYS-01/02/03 — platform-local tenant lifecycle and tracking. Every route here is
  * `@PlatformOnly()`, so an HR or manager can never reach it, and the
  * organizationId it acts on comes from the URL, never from a session (the admin
  * session has none by design).
@@ -24,14 +25,42 @@ export class PlatformService {
 		@InjectModel('Organization') private readonly orgModel: Model<OrganizationDocument>,
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('UserSession') private readonly sessionModel: Model<UserSessionDocument>,
+		@Optional() @InjectModel('EmployeeProfile') private readonly profileModel?: Model<EmployeeProfileDocument>,
 	) {}
 
 	/**
-	 * Plain list. FR-SYS-03's per-tenant user counts / storage monitoring are not
-	 * built, and an untested $aggregate for them would be speculative.
+	 * FR-SYS-03: List every tenant with aggregated employee counts.
 	 */
 	async listOrganizations() {
-		return this.orgModel.find().sort({ code: 1 }).lean();
+		const orgs = await this.orgModel.find().sort({ code: 1 }).lean();
+		if (!this.profileModel) return orgs;
+		try {
+			const counts = await this.profileModel.aggregate([
+				{
+					$group: {
+						_id: '$organizationId',
+						totalEmployees: { $sum: 1 },
+						activeEmployees: {
+							$sum: { $cond: [{ $eq: ['$employmentStatus', EmploymentStatus.ACTIVE] }, 1, 0] },
+						},
+					},
+				},
+			]);
+			const map = new Map<string, { totalEmployees: number; activeEmployees: number }>();
+			for (const c of counts) {
+				if (c._id) map.set(String(c._id), c);
+			}
+			return orgs.map((org) => {
+				const stats = map.get(String(org._id));
+				return {
+					...org,
+					employeeCount: stats?.totalEmployees ?? 0,
+					activeEmployeeCount: stats?.activeEmployees ?? 0,
+				};
+			});
+		} catch {
+			return orgs;
+		}
 	}
 
 	async createOrganization(dto: CreateOrganizationDto, createdBy: string) {

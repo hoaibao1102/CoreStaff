@@ -294,6 +294,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
               FORFEITED: 'Mất ngày công',
               DAY_OFF: 'Nghỉ phép / Lễ',
               LATE: `Đi trễ${(day?.lateMinutes ?? 0) > 0 ? ` · ${day?.lateMinutes} phút` : ''}`,
+              EARLY_LEAVE: `Về sớm${(day?.earlyMinutes ?? 0) > 0 ? ` · ${day?.earlyMinutes} phút` : ''}`,
               ATTENDED: 'Đã chấm công',
               NONE: 'Chưa chấm công',
             }[historyStatus];
@@ -302,6 +303,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
               FORFEITED: 'bg-red-400 shadow-[0_0_6px_#f87171]',
               DAY_OFF: 'bg-slate-400',
               LATE: 'bg-orange-400 shadow-[0_0_6px_#fb923c]',
+              EARLY_LEAVE: 'bg-rose-400 shadow-[0_0_6px_#fb7185]',
               ATTENDED: 'bg-[#3ae39f] shadow-[0_0_6px_#3ae39f]',
               NONE: '',
             }[historyStatus];
@@ -311,6 +313,8 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
                 ? 'bg-[#48252e] hover:bg-[#5a2b36] ring-1 ring-inset ring-red-400/60'
                 : historyStatus === 'LATE'
                   ? 'bg-[#483020] hover:bg-[#5b3b26] ring-1 ring-inset ring-orange-400/60'
+                  : historyStatus === 'EARLY_LEAVE'
+                    ? 'bg-[#482631] hover:bg-[#5a2d3b] ring-1 ring-inset ring-rose-400/60'
                   : 'bg-[#1c223a] hover:bg-[#252c4a]';
             const hasOvertime = Boolean(day?.overtime);
 
@@ -338,6 +342,12 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
                       title={statusLabel}
                     />
                   )}
+                  {(day?.earlyMinutes ?? 0) > 0 && historyStatus !== 'EARLY_LEAVE' && (
+                    <span
+                      className="size-1.5 rounded-full bg-rose-400 shadow-[0_0_6px_#fb7185] sm:size-2"
+                      title={`Về sớm · ${day?.earlyMinutes} phút`}
+                    />
+                  )}
 
                   {/* Overtime indicator dot */}
                   {hasOvertime && (
@@ -362,6 +372,10 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         <span className="flex items-center gap-1.5 bg-[#483020] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-orange-400/60">
           <span className="size-1.5 sm:size-2 rounded-full bg-orange-400" />
           Đi trễ
+        </span>
+        <span className="flex items-center gap-1.5 bg-[#482631] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-rose-400/60">
+          <span className="size-1.5 sm:size-2 rounded-full bg-rose-400" />
+          Về sớm
         </span>
         <span className="flex items-center gap-1.5 bg-[#45351f] text-white text-[10px] sm:text-xs font-medium px-3.5 py-1.5 rounded-full shadow-xs ring-1 ring-inset ring-amber-400/60">
           <span className="size-1.5 sm:size-2 rounded-full bg-amber-400" />
