@@ -123,20 +123,54 @@ export function SectionNumber({ value }: { value: number | '=' }) {
 /**
  * Khung chung của mọi mục phiếu lương: vỏ xám, bảng trắng bên trong.
  * Dùng chung cho dialog HR và trang chi tiết để hai nơi không lệch nhau.
+ *
+ * `variant="card"` (mặc định) — mục là một card xám riêng, dùng cho dialog HR.
+ * `variant="sheet"` — mục là một khối phẳng nối tiếp trong cùng tờ phiếu,
+ *   ngăn bằng đường kẻ ngang, dùng cho trang phiếu lương của nhân viên.
  */
 export function PayslipSection({
   index,
   title,
   subtitle,
   action,
+  variant = 'card',
   children,
 }: {
   index?: number;
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  variant?: 'card' | 'sheet';
   children: ReactNode;
 }) {
+  const inner = (
+    <>
+      {/* Dải màu ở hàng tiêu đề bảng, theo thói quen các bảng khác trong dự án
+          (TimesheetReviewScreen, ManagerDepartmentScreen) để hàng tiêu đề tách khỏi dữ liệu. */}
+      <div className="overflow-hidden rounded-lg border border-border bg-card [&_thead]:bg-muted/60 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+        {children}
+      </div>
+    </>
+  );
+
+  if (variant === 'sheet') {
+    return (
+      <section className="border-t border-border first:border-t-0">
+        <div className="flex items-start justify-between gap-3 px-6 pt-5">
+          <div className="flex items-start gap-3">
+            {typeof index === 'number' && <SectionNumber value={index} />}
+            <div>
+              <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-foreground">{title}</h2>
+              {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+            </div>
+          </div>
+          {action}
+        </div>
+        <div className="px-6 py-4">{inner}</div>
+      </section>
+    );
+  }
+
   return (
     <Card className="gap-0 bg-muted/50 py-0">
       <CardHeader className="flex-row items-start justify-between gap-3 border-b border-border py-4">
@@ -149,13 +183,7 @@ export function PayslipSection({
         </div>
         {action}
       </CardHeader>
-      <CardContent className="py-4">
-        {/* Dải màu ở hàng tiêu đề bảng, theo thói quen các bảng khác trong dự án
-            (TimesheetReviewScreen, ManagerDepartmentScreen) để hàng tiêu đề tách khỏi dữ liệu. */}
-        <div className="overflow-hidden rounded-lg border border-border bg-card [&_thead]:bg-muted/60 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
-          {children}
-        </div>
-      </CardContent>
+      <CardContent className="py-4">{inner}</CardContent>
     </Card>
   );
 }
@@ -175,7 +203,14 @@ export function getStatusBadgeVariant(status: string): BadgeVariant {
   }
 }
 
-export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
+export function GrossEarningsCard({
+  payslip,
+  variant,
+}: {
+  payslip: PayslipRow;
+  /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
+  variant?: 'card' | 'sheet';
+}) {
   const totalEarnings = payslip.grossEarnings || 0;
   const allowances = payslip.allowanceBreakdown ?? [];
   // Giữ nguyên thứ tự backend trả về, kể cả dòng ALLOWANCE — nó là dòng cha của các phụ cấp.
@@ -337,6 +372,7 @@ export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
       index={1}
       title="Tổng thu nhập (Gross)"
       subtitle="Các khoản thu nhập cấu thành lương gross của kỳ."
+      variant={variant}
     >
       {body}
     </PayslipSection>
@@ -344,7 +380,14 @@ export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
 }
 
 /** §2 — Các khoản giảm trừ khỏi thu nhập chịu thuế, ra Thu nhập tính thuế. */
-export function TaxDeductionsCard({ payslip }: { payslip: PayslipRow }) {
+export function TaxDeductionsCard({
+  payslip,
+  variant,
+}: {
+  payslip: PayslipRow;
+  /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
+  variant?: 'card' | 'sheet';
+}) {
   const totalInsurance =
     (payslip.socialInsurance || 0) +
     (payslip.healthInsurance || 0) +
@@ -449,14 +492,21 @@ export function TaxDeductionsCard({ payslip }: { payslip: PayslipRow }) {
   );
 
   return (
-    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh.">
+    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh." variant={variant}>
       {body}
     </PayslipSection>
   );
 }
 
 /** §3 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
-export function PitTaxDetails({ payslip }: { payslip: PayslipRow }) {
+export function PitTaxDetails({
+  payslip,
+  variant,
+}: {
+  payslip: PayslipRow;
+  /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
+  variant?: 'card' | 'sheet';
+}) {
   const brackets = payslip.pitBreakdown ?? [];
 
   const body = (
@@ -504,7 +554,7 @@ export function PitTaxDetails({ payslip }: { payslip: PayslipRow }) {
   );
 
   return (
-    <PayslipSection index={3} title="Thuế TNCN (PIT)">
+    <PayslipSection index={3} title="Thuế TNCN (PIT)" variant={variant}>
       {body}
     </PayslipSection>
   );

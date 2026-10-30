@@ -82,13 +82,26 @@ test('phiếu lương mở dạng trang: đủ 4 mục, sơ đồ công thức v
   // Mỗi mục là một bảng thật, không còn dropdown chi tiết.
   expect(container.querySelectorAll('table').length).toBeGreaterThanOrEqual(4);
   expect(html).toContain('ngày công chuẩn');
-  expect(html).toContain('Thực nhận (Net)');
+  expect(html).toContain('Số tiền thực nhận (Net)');
   expect(html).toContain('27.000.000');
   expect(html).toContain('25.072.500');
   // 1.680.000 bảo hiểm + 247.500 thuế = 1.927.500 tổng khấu trừ
   expect(html).toContain('1.927.500');
   // Đối soát khớp: 27.000.000 − 1.927.500 = 25.072.500
   expect(html).toContain('Khớp');
+});
+
+test('phiếu lương là một khung duy nhất, các mục xếp dọc ngăn bằng đường kẻ', async () => {
+  await render();
+
+  // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 4 mục bên trong.
+  expect(container.querySelectorAll('div.ring-1')).toHaveLength(1);
+  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(4);
+  for (const index of ['1', '2', '3']) {
+    expect(container.querySelector(`.ring-1 > section:nth-child(${Number(index) + 1})`)?.textContent).toBeTruthy();
+  }
+  // Không còn sơ đồ công thức 5 khối ở đầu trang.
+  expect(container.innerHTML).not.toContain('Tổng Gross');
 });
 
 test('đối soát lệch thì không khoe "Khớp"', async () => {
