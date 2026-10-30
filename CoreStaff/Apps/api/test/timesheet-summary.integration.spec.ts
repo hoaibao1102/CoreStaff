@@ -15,7 +15,7 @@ import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { Types } from 'mongoose';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, vn, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, resolveAndAcknowledgePeriod, vn, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -69,6 +69,12 @@ async function createPeriod(): Promise<string> {
  * not enough to produce them. Close the period to generate them.
  */
 async function closePeriod(periodId: string): Promise<void> {
+  const period = await connection().model('TimesheetPeriod').findById(periodId).lean() as any;
+  await resolveAndAcknowledgePeriod(
+    http, fixture, periodId,
+    period.startDate.toISOString().slice(0, 10),
+    period.endDate.toISOString().slice(0, 10),
+  );
   const confirmed = await http
     .post(`/api/hr/timesheet-periods/${periodId}/department-confirmations`)
     .set('Cookie', managerCookie)
@@ -78,6 +84,18 @@ async function closePeriod(periodId: string): Promise<void> {
   const closed = await http.post(`/api/hr/timesheet-periods/${periodId}/close`)
     .set('Cookie', hrCookie);
   expect(closed.status).toBe(201);
+}
+
+function summaryFixture(periodId: string, overrides: Record<string, unknown> = {}) {
+  return {
+    periodId: new Types.ObjectId(periodId), employeeProfileId: new Types.ObjectId(fixture.profileId),
+    userId: new Types.ObjectId(fixture.employeeId), organizationId: new Types.ObjectId(fixture.organizationId),
+    periodKey: vnToday().slice(0, 7), totalDays: 31, workingDays: 0,
+    paidLeaveDays: 0, unpaidLeaveDays: 0, holidayDays: 0, absentDays: 0,
+    presentDays: 0, incompleteDays: 0, totalWorkingMinutes: 0,
+    totalLateMinutes: 0, totalEarlyMinutes: 0, totalOvertimeMinutes: 0,
+    sourceHash: 'fixture-hash', version: 1, generatedAt: new Date(), ...overrides,
+  };
 }
 
 // Get the actual employee profile id from fixture
@@ -100,14 +118,14 @@ describe('TASK-077 — Summary Generation', () => {
     periodId = await createPeriod();
   });
 
-  it('should generate summary with zero attendance days', async () => {
-    await closePeriod(periodId);
-
-    const summaryModel = await connection().model('TimesheetSummary');
-    const summaries = await summaryModel.find({ periodId: new Types.ObjectId(periodId) }).lean();
-
-    // Should have at least one summary for the seeded employee
-    expect(summaries.length).toBeGreaterThan(0);
+  it('should block confirmation with zero attendance days', async () => {
+    const confirmed = await http
+      .post(`/api/hr/timesheet-periods/${periodId}/department-confirmations`)
+      .set('Cookie', managerCookie)
+      .send({ departmentId: fixture.departmentId, expectedPeriodVersion: 1 });
+    expect(confirmed.status).toBe(409);
+    expect(confirmed.body.error.code).toBe('MISSING_ATTENDANCE_DAY');
+    expect(await connection().model('TimesheetSummary').countDocuments({ periodId })).toBe(0);
   });
 
   it('should aggregate working days correctly', async () => {
@@ -133,7 +151,9 @@ describe('TASK-077 — Summary Generation', () => {
 
     expect(summaries.length).toBeGreaterThan(0);
     const summary = summaries[0];
-    expect(summary.workingDays).toBeGreaterThanOrEqual(1);
+    expect(summary.calculationContract).toBe('VERSIONED_WORK_CREDIT_V2');
+    expect(summary.standardWorkUnits).toBeGreaterThanOrEqual(1);
+    expect(summary.payableWorkUnits).toBeGreaterThanOrEqual(1);
   });
 
   it('should calculate OT minutes by type', async () => {
@@ -142,7 +162,7 @@ describe('TASK-077 — Summary Generation', () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
     // Create a minimal summary manually to verify structure
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -170,7 +190,7 @@ describe('TASK-077 — Summary Generation', () => {
       sourceHash: 'test-hash',
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     const summaries = await summaryModel.find({ periodId: new Types.ObjectId(periodId) }).lean();
     expect(summaries.length).toBe(1);
@@ -184,7 +204,7 @@ describe('TASK-077 — Summary Generation', () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
     const expectedHash = 'sha256-test-aggregation-data';
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -194,7 +214,7 @@ describe('TASK-077 — Summary Generation', () => {
       sourceHash: expectedHash,
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     const summary = (await summaryModel.findOne({ periodId: new Types.ObjectId(periodId) }).lean()) as any;
     expect(summary.sourceHash).toBe(expectedHash);
@@ -204,7 +224,7 @@ describe('TASK-077 — Summary Generation', () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
     // Create initial summary
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -214,7 +234,7 @@ describe('TASK-077 — Summary Generation', () => {
       sourceHash: 'hash-v1',
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     // Simulate re-aggregation (in real code, this would be called by generateSummaries)
     await summaryModel.updateOne(
@@ -240,7 +260,7 @@ describe('TASK-077 — Leave Breakdown Aggregation', () => {
   it('should aggregate sick leave days', async () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -256,7 +276,7 @@ describe('TASK-077 — Leave Breakdown Aggregation', () => {
       sourceHash: 'leave-test',
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     const summary = (await summaryModel.findOne({ periodId: new Types.ObjectId(periodId) }).lean()) as any;
     expect(summary.sickLeaveDays).toBe(2);
@@ -267,7 +287,7 @@ describe('TASK-077 — Leave Breakdown Aggregation', () => {
   it('should track unpaid leave separately', async () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -279,7 +299,7 @@ describe('TASK-077 — Leave Breakdown Aggregation', () => {
       sourceHash: 'unpaid-test',
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     const summary = (await summaryModel.findOne({ periodId: new Types.ObjectId(periodId) }).lean()) as any;
     expect(summary.unpaidLeaveDays).toBe(2);
@@ -300,7 +320,7 @@ describe('TASK-077 — Minute Aggregations', () => {
     const summaryModel = await connection().model('TimesheetSummary');
     
     // 22 working days * 8 hours * 60 minutes = 10560 minutes
-    await summaryModel.create({
+    await summaryModel.create(summaryFixture(periodId, {
       periodId: new Types.ObjectId(periodId),
       employeeProfileId: new Types.ObjectId(fixture.profileId),
       userId: new Types.ObjectId(),
@@ -314,7 +334,7 @@ describe('TASK-077 — Minute Aggregations', () => {
       sourceHash: 'minutes-test',
       version: 1,
       generatedAt: new Date(),
-    });
+    }));
 
     const summary = (await summaryModel.findOne({ periodId: new Types.ObjectId(periodId) }).lean()) as any;
     expect(summary.totalWorkingMinutes).toBe(10560);

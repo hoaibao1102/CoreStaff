@@ -18,11 +18,10 @@ export class ManagerRequestService {
     @InjectModel('AttendanceDay') private readonly attendanceDays: Model<any>,
     @InjectModel('AttendanceEvent') private readonly attendanceEvents: Model<any>,
     private readonly scope: ManagerScopeService,
+    private readonly periodVersion: PeriodVersionService,
     @Optional() private readonly eventsGateway?: EventsGateway,
     // TASK-068/070 — last so the existing spec's five positional args keep working.
     @Optional() private readonly ot?: OvertimeService,
-    // TASK-073 — appended last for the same reason; optional so specs keep compiling.
-    @Optional() private readonly periodVersion?: PeriodVersionService,
     // Optional and last so older unit-test constructors remain compatible.
     @Optional() @InjectModel('Assignment') private readonly employeeAssignments?: Model<EmployeeAssignmentDocument>,
   ) {}
@@ -224,11 +223,7 @@ export class ManagerRequestService {
     // here. A failure must not un-approve the request: the upsert is idempotent and
     // `POST /api/hr/overtime-results/recalculate` recovers it.
     if (asOt) {
-      try {
-        await this.ot!.onApproved(org, { ...asOt, _id: id, status: 'APPROVED', reviewedBy: managerId });
-      } catch (otErr) {
-        console.warn('[ManagerRequestService] overtime result write failed:', otErr);
-      }
+      await this.ot!.onApproved(org, { ...asOt, _id: id, status: 'APPROVED', reviewedBy: managerId });
     }
 
     // §30B.2 — a WARNING never blocks, so it has to be loud instead: on the
@@ -268,21 +263,15 @@ export class ManagerRequestService {
       } catch (syncErr) {
         console.warn('[ManagerRequestService] Syncing attendance approval status failed:', syncErr);
       }
-      // TASK-073 — an approval decision changes in-period attendance: bump the period version.
-      try {
-        await this.periodVersion?.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
-      } catch (verErr) {
-        console.warn('[ManagerRequestService] Period version bump failed:', verErr);
-      }
     }
 
     if (current.type === 'ATTENDANCE' && current.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
       await this.applyAttendanceAdjustment(org, current);
-      try {
-        await this.periodVersion?.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
-      } catch (verErr) {
-        console.warn('[ManagerRequestService] Period version bump failed for attendance adjustment:', verErr);
-      }
+    }
+
+    const changesProjection = current.type === 'ATTENDANCE' || (current.type === 'OVERTIME' && status === 'APPROVED');
+    if (changesProjection) {
+      await this.periodVersion.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
     }
 
     // Bắn sự kiện realtime qua Socket.io tới Nhân viên và Quản lý phòng ban

@@ -44,6 +44,7 @@ function build(options: {
     {} as any,
     storage as any,
     { resolveForEmployeeDate: jest.fn(async () => null) } as any,
+    { bump: jest.fn(async () => true) } as any, // periodVersion
     undefined, // eventsGateway
     undefined, // overtime
   );

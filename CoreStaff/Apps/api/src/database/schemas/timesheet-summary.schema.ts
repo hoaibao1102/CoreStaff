@@ -142,11 +142,55 @@ export class TimesheetSummary {
   @Prop({ required: true, min: 0, default: 0 })
   otherUnpaidLeaveDays: number;
 
+  @Prop({ required: false, min: 0 })
+  standardWorkUnits?: number;
+
+  @Prop({ required: false, min: 0 })
+  standardWorkMinutes?: number;
+
+  @Prop({ required: false, min: 0 })
+  payableWorkUnits?: number;
+
+  @Prop({ type: [], required: false, default: undefined })
+  dailyWorkCredits?: Array<Record<string, unknown>>;
+
+  @Prop({ type: [], required: false, default: undefined })
+  workCreditPolicySnapshots?: Array<Record<string, unknown>>;
+
   // ───────── DATA INTEGRITY ─────────
 
   /** Fingerprint of source data at aggregation time. Mismatch = recompute needed. */
   @Prop({ required: true })
   sourceHash: string;
+
+  /** Persistence contract version. Version 1 rows use the legacy working-day contract. */
+  @Prop({ required: true, min: 1, default: 1 })
+  schemaVersion: number;
+
+  /** Exact TimesheetPeriod.version from which this immutable row was generated. */
+  @Prop({ required: true, min: 1, default: 1 })
+  sourcePeriodVersion: number;
+
+  /** SHA-256 of the stored frozen payload; unlike sourceHash this is not a staleness check. */
+  @Prop({ required: false })
+  canonicalPayloadHash?: string;
+
+  /** Explicit compatibility label; legacy rows must not be interpreted as work-credit rows. */
+  @Prop({
+    required: true,
+    enum: ['LEGACY_WORKING_DAYS_V1', 'VERSIONED_WORK_CREDIT_V2'],
+    default: 'LEGACY_WORKING_DAYS_V1',
+  })
+  calculationContract: string;
+
+  @Prop({ type: 'ObjectId', ref: 'TimesheetSummary', required: false })
+  supersededBySummaryId?: string;
+
+  @Prop({ type: Date, required: false })
+  supersededAt?: Date;
+
+  @Prop({ required: false, minlength: 10, maxlength: 500 })
+  supersessionReason?: string;
 
   /** Version of the summary — increments if re-aggregated for same period/employee. */
   @Prop({ required: true, min: 1, default: 1 })
@@ -161,9 +205,9 @@ export const TimesheetSummarySchema = SchemaFactory.createForClass(TimesheetSumm
 
 // ───────── INDEXES ─────────
 
-// Unique: one summary per (period, employee) combination
+// Append-only identity: one summary per source period version and employee.
 TimesheetSummarySchema.index(
-  { periodId: 1, employeeProfileId: 1 },
+  { organizationId: 1, periodId: 1, sourcePeriodVersion: 1, employeeProfileId: 1 },
   { unique: true }
 );
 

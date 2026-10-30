@@ -2,7 +2,7 @@
 import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, collection, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, collection, resolveAndAcknowledgePeriod, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -43,7 +43,15 @@ async function createCurrentPeriod(): Promise<string> {
   return response.body.data._id;
 }
 
-async function confirm(periodId: string, expectedPeriodVersion = 1) {
+async function confirm(periodId: string, expectedPeriodVersion = 1, prepareReview = true) {
+  if (prepareReview) {
+    const period = await collection('TimesheetPeriod').findById(periodId).lean() as any;
+    await resolveAndAcknowledgePeriod(
+      http, fixture, periodId,
+      period.startDate.toISOString().slice(0, 10),
+      period.endDate.toISOString().slice(0, 10),
+    );
+  }
   return http
     .post(`${API_PREFIX}/${periodId}/department-confirmations`)
     .set('Cookie', managerCookie)
@@ -138,7 +146,7 @@ describe('TASK-075 — department confirmation', () => {
       employeeSnapshot: { departmentId: fixture.departmentId },
     });
 
-    const response = await confirm(periodId);
+    const response = await confirm(periodId, 1, false);
 
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('DEPARTMENT_NOT_READY');
@@ -147,7 +155,7 @@ describe('TASK-075 — department confirmation', () => {
 
   it('rejects a stale expected period version', async () => {
     const periodId = await createCurrentPeriod();
-    const response = await confirm(periodId, 99);
+    const response = await confirm(periodId, 99, false);
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('PERIOD_VERSION_CONFLICT');
   });
@@ -192,6 +200,12 @@ describe('TASK-075 — department confirmation', () => {
 
   it('keeps the legacy close-snapshot route without generating payroll data', async () => {
     const periodId = await createCurrentPeriod();
+    const period = await collection('TimesheetPeriod').findById(periodId).lean() as any;
+    await resolveAndAcknowledgePeriod(
+      http, fixture, periodId,
+      period.startDate.toISOString().slice(0, 10),
+      period.endDate.toISOString().slice(0, 10),
+    );
     const response = await http
       .post(`${API_PREFIX}/${periodId}/close-snapshot`)
       .set('Cookie', managerCookie)

@@ -16,6 +16,7 @@ import { InsurancePolicyScreen } from '../screens/InsurancePolicy/InsurancePolic
 import { EnterpriseInsuranceScreen } from '../screens/EnterpriseInsurance/EnterpriseInsuranceScreen';
 import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
+import { WorkCreditPolicyScreen } from '../screens/WorkCreditPolicy/WorkCreditPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { SysAdminOverviewScreen } from '../screens/SysAdminOverview/SysAdminOverviewScreen';
 import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
@@ -32,6 +33,7 @@ import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
+import { EmployeeTimesheetReviewScreen } from '../screens/Employee/EmployeeTimesheetReviewScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -112,6 +114,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
     route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay' ||
+    route === '/hr/policies/work-credit' ||
     route === '/hr/insurance-profiles' || route === '/hr/policies/insurance' ||
     route === '/hr/calendar' || route === '/hr/leave-requests' ||
     route === '/hr/tax-policies';
@@ -201,7 +204,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (user.role === 'HR') {
     // HR accounts carry no personal workspace: the employee self-service routes
     // are closed here even on a direct URL (backend returns 403 for the same).
-    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips'];
+    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips', '/app/timesheet-review'];
     if (hrPersonalRoutes.includes(route)) return <EmployeeDataState status="forbidden" />;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
@@ -238,6 +241,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
             <OvertimePayPolicyScreen apiBase={apiBase} />
+          ) : route === '/hr/policies/work-credit' ? (
+            <WorkCreditPolicyScreen apiBase={apiBase} />
           ) : route === '/hr/tax-policies' && apiBase ? (
             <TaxPolicyList apiBase={apiBase} />
           ) : route === '/hr/calendar' && apiBase ? (
@@ -316,6 +321,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/ot') {
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
+  }
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/timesheet-review' && apiBase) {
+    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><EmployeeTimesheetReviewScreen apiBase={apiBase} /></WorkspaceShell>;
   }
 
   // Personal payslips are shared by employees and department managers.

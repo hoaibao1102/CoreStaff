@@ -46,6 +46,32 @@ export class ManagerScopeService {
     return [...new Set([...assignedIds, ...(profileDepartmentId ? [profileDepartmentId] : [])])];
   }
 
+  /** New review authorization deliberately excludes profile-department fallback. */
+  async getAuthorizedReviewDepartmentIds(
+    organizationId: string,
+    managerUserId: string,
+    now = new Date(),
+  ): Promise<string[]> {
+    const rows = await this.assignments
+      .find({ organizationId, managerUserId, active: true })
+      .sort({ effectiveFrom: 1 })
+      .lean();
+    return [...new Set(rows
+      .filter(row => new Date(row.effectiveFrom) <= now
+        && (!row.effectiveTo || new Date(row.effectiveTo) >= now))
+      .map(row => String(row.departmentId)))];
+  }
+
+  async requireReviewDepartment(
+    organizationId: string,
+    managerUserId: string,
+    departmentId: string,
+    now = new Date(),
+  ): Promise<void> {
+    const ids = await this.getAuthorizedReviewDepartmentIds(organizationId, managerUserId, now);
+    if (!ids.includes(String(departmentId))) throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');
+  }
+
   async isEmployeeInManagedScope(organizationId: string, managerUserId: string, employeeUserId: string, departmentId?: string): Promise<boolean> {
     const managed = await this.getManagedDepartmentIds(organizationId, managerUserId);
     const scope = departmentId ? managed.filter(id => id === String(departmentId)) : managed;

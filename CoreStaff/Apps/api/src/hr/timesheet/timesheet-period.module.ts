@@ -17,6 +17,11 @@ import { AttendanceEvent, AttendanceEventSchema } from '../../database/schemas/a
 import { ManagerRequest, ManagerRequestSchema } from '../../database/schemas/manager-request.schema';
 import { DepartmentTimesheetConfirmation, DepartmentTimesheetConfirmationSchema } from '../../database/schemas/department-timesheet-confirmation.schema';
 import { PeriodVersionModule } from './period-version.module';
+import { OvertimeModule } from '../overtime/overtime.module';
+import { EmployeeTimesheetAcknowledgementSchema } from '../../database/schemas/employee-timesheet-acknowledgement.schema';
+import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
+import { PoliciesModule } from '../policies/policies.module';
+import { TimesheetReviewController } from './timesheet-review.controller';
 
 @Module({
 	imports: [
@@ -31,6 +36,7 @@ import { PeriodVersionModule } from './period-version.module';
 			{ name: AttendanceEvent.name, schema: AttendanceEventSchema },
 			{ name: ManagerRequest.name, schema: ManagerRequestSchema },
 			{ name: DepartmentTimesheetConfirmation.name, schema: DepartmentTimesheetConfirmationSchema },
+			{ name: 'EmployeeTimesheetAcknowledgement', schema: EmployeeTimesheetAcknowledgementSchema },
 			// Required for AuthGuard dependency injection
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },
@@ -39,9 +45,11 @@ import { PeriodVersionModule } from './period-version.module';
 		PayrollSnapshotModule,
 		PeriodVersionModule,
 		ManagerModule,
+		OvertimeModule,
+		PoliciesModule,
 	],
-	controllers: [TimesheetPeriodController],
-	providers: [TimesheetPeriodService],
+	controllers: [TimesheetPeriodController, TimesheetReviewController],
+	providers: [TimesheetPeriodService, EmployeeTimesheetReviewService],
 	exports: [TimesheetPeriodService],
 })
 export class TimesheetPeriodModule {}

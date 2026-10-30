@@ -29,6 +29,7 @@ import {
   PeriodBlockerType,
   TimesheetPeriod,
   confirmDepartmentTimesheet,
+  TimesheetAcknowledgementProgress,
 } from '@/services/hrService';
 import { getManagerContext, ManagerContext } from '@/services/manager.service';
 import { toast } from '@/components/toast';
@@ -98,7 +99,7 @@ export function TimesheetReviewScreen({
   const [departmentBlockers, setDepartmentBlockers] = useState<Record<string, { total: number; items: PeriodBlockerRow[] }>>({});
   const [closeSuccess, setCloseSuccess] = useState(false);
   const [managerContext, setManagerContext] = useState<ManagerContext | null>(null);
-  const [previewData, setPreviewData] = useState<{ summaries: any[] } | null>(null);
+  const [previewData, setPreviewData] = useState<{ summaries: any[]; acknowledgementProgress?: TimesheetAcknowledgementProgress } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDepartmentId, setPreviewDepartmentId] = useState<string | null>(null);
   // TASK-074 — blocker drill-down
@@ -645,7 +646,7 @@ export function TimesheetReviewScreen({
                                 <Button
                                   size="sm"
                                   onClick={() => handleManagerCloseSnapshot(dept.id)}
-                                  disabled={!!confirmingDepartmentId || loading || selectedPeriod.status === 'READY_TO_CLOSE'}
+                                  disabled={!!confirmingDepartmentId || loading || selectedPeriod.status === 'READY_TO_CLOSE' || (previewDepartmentId === dept.id && !!previewData?.acknowledgementProgress && (previewData.acknowledgementProgress.pendingEmployees > 0 || previewData.acknowledgementProgress.disputedEmployees > 0))}
                                 >
                                   {confirmingDepartmentId === dept.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -670,8 +671,11 @@ export function TimesheetReviewScreen({
                               <p className="mt-2 text-xs text-muted-foreground">Bấm vào bản ghi để xem chi tiết. Xử lý lỗi rồi xác nhận lại riêng phòng ban này.</p>
                             </div>
                           )}
-                          {previewDepartmentId === dept.id && previewData && (
-                            <ManagerSnapshotPreview
+                          {previewDepartmentId === dept.id && previewData?.acknowledgementProgress && (
+                                                      <p role="status" className="text-sm text-blue-900">Đã xác nhận {previewData.acknowledgementProgress.acknowledgedEmployees}/{previewData.acknowledgementProgress.eligibleEmployees} · Chờ {previewData.acknowledgementProgress.pendingEmployees} · Tranh chấp {previewData.acknowledgementProgress.disputedEmployees}</p>
+                                                    )}
+                                                    {previewDepartmentId === dept.id && previewData && (
+                                                      <ManagerSnapshotPreview
                               summaries={previewData.summaries}
                               departmentId={dept.id}
                             />

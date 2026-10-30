@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { PayrollRun, PayrollRunDocument, PayrollRunStatus } from '../../database/schemas/payroll-run.schema';
@@ -8,8 +8,11 @@ import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas
 import { InsuranceService } from './insurance.service';
 import { PitService } from './pit.service';
 import { PayslipService } from './payslip.service';
-import { TimesheetSummaryService } from '../timesheet/timesheet-summary.service';
-import { PayrollSnapshotService } from '../timesheet/payroll-snapshot.service';
+import {
+  buildPayrollRunTransitionCas,
+  buildPeriodPayrollClaimCas,
+  canonicalPayloadHash,
+} from './payroll-artifact-foundation';
 
 /**
  * TASK-085/086/087/088/089 — PayrollRun service.
@@ -27,8 +30,6 @@ export class PayrollRunService {
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
     private readonly payslipService: PayslipService,
-    @Optional() private readonly timesheetSummaryService?: TimesheetSummaryService,
-    @Optional() private readonly payrollSnapshotService?: PayrollSnapshotService,
   ) {}
 
   /**
@@ -52,33 +53,17 @@ export class PayrollRunService {
       throw new NotFoundException('PERIOD_NOT_FOUND');
     }
 
-    // ponytail: manager-snapshot closing is optional; HR can close the period directly.
-    // Auto-close the period if it is ready, otherwise accept an already closed period.
-    if (period.status === TimesheetPeriodStatus.READY_TO_CLOSE) {
-      await this.periodModel.findByIdAndUpdate(
-        timesheetPeriodId,
-        {
-          $set: {
-            status: TimesheetPeriodStatus.CLOSED,
-            closedBy: userId,
-            closedAt: new Date(),
-          },
-        },
-        { new: true, runValidators: true },
-      );
-    } else if (period.status !== TimesheetPeriodStatus.CLOSED) {
-      throw new BadRequestException('Kỳ công chưa sẵn sàng — cần ở trạng thái READY_TO_CLOSE hoặc CLOSED.');
+    if (period.status !== TimesheetPeriodStatus.CLOSED) {
+      throw new BadRequestException('PAYROLL_REQUIRES_CLOSED_PERIOD');
     }
 
-    await this.refreshPayrollInputs(organizationId, timesheetPeriodId, period.period);
-
-    // Defensive: ensure snapshots exist for the period
-    const snapshotCount = await this.snapshotModel.countDocuments({
+    const snapshots: any[] = await this.snapshotModel.find({
       organizationId: new Types.ObjectId(organizationId),
       periodId: new Types.ObjectId(timesheetPeriodId),
-    });
-
-    if (snapshotCount === 0) {
+      sourcePeriodVersion: period.version,
+      status: 'GENERATED',
+    }).lean();
+    if (!snapshots.length || snapshots.some((row) => !row.canonicalPayloadHash)) {
       throw new BadRequestException('NO_PAYROLL_SNAPSHOTS_FOR_PERIOD');
     }
 
@@ -93,15 +78,35 @@ export class PayrollRunService {
       throw new BadRequestException('PAYROLL_RUN_ALREADY_EXISTS');
     }
 
-    // Get total employee count from snapshots
-    const totalEmployeeCount = await this.snapshotModel.countDocuments({
-      organizationId: new Types.ObjectId(organizationId),
-      periodId: new Types.ObjectId(timesheetPeriodId),
-    });
+    const orderedSnapshots = [...snapshots].sort((a, b) => String(a._id).localeCompare(String(b._id)));
+    const sourceSnapshotIds = orderedSnapshots.map((row) => row._id);
+    const sourceSnapshotSetHash = canonicalPayloadHash(
+      orderedSnapshots.map((row) => ({ id: String(row._id), hash: row.canonicalPayloadHash })),
+    );
+    const totalEmployeeCount = orderedSnapshots.length;
 
     const periodLabel = period.period || `${(period.startDate as Date)?.toISOString().slice(0, 7)}`;
 
+    const runId = new Types.ObjectId();
+    const claim = buildPeriodPayrollClaimCas({
+      periodId: timesheetPeriodId,
+      organizationId,
+      expectedPeriodVersion: period.version,
+      runId: String(runId),
+    });
+    const claimed = await this.periodModel.findOneAndUpdate(
+      claim.filter,
+      claim.update,
+      { new: true, runValidators: true },
+    );
+    if (!claimed) throw new ConflictException('PAYROLL_PERIOD_CLAIM_CONFLICT');
+
+    const runSequence = await this.payrollRunModel.countDocuments({
+      organizationId: new Types.ObjectId(organizationId),
+      timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
+    }) + 1;
     const payrollRun = await this.payrollRunModel.create({
+      _id: runId,
       organizationId: new Types.ObjectId(organizationId),
       timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
       periodLabel,
@@ -112,6 +117,11 @@ export class PayrollRunService {
       totalEmployerCost: 0,
       processedEmployeeCount: 0,
       totalEmployeeCount,
+      schemaVersion: 1,
+      sourcePeriodVersion: period.version,
+      sourceSnapshotIds,
+      sourceSnapshotSetHash,
+      runSequence,
       notes,
       version: 1,
       active: true,
@@ -186,28 +196,24 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_CALCULATE_NON_DRAFT');
     }
 
-    // A draft may have been created before missing employees were repaired.
-    // Refresh its inputs on the first calculation as well as on recalculation.
-    if (this.timesheetSummaryService && this.payrollSnapshotService) {
-      const period = await this.periodModel.findById(payrollRun.timesheetPeriodId).lean();
-      if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
-      await this.refreshPayrollInputs(
-        String(payrollRun.organizationId),
-        String(payrollRun.timesheetPeriodId),
-        period.period,
-      );
-    }
-
-    // Get snapshots for this payroll run's period
     const snapshots = await this.snapshotModel
       .find({
-        periodId: payrollRun.timesheetPeriodId,
+        _id: { $in: payrollRun.sourceSnapshotIds },
         organizationId: payrollRun.organizationId,
+        periodId: payrollRun.timesheetPeriodId,
+        sourcePeriodVersion: payrollRun.sourcePeriodVersion,
       })
       .lean();
 
-    if (!snapshots.length) {
-      throw new BadRequestException('NO_SNAPSHOTS_FOUND');
+    if (!snapshots.length || snapshots.length !== payrollRun.sourceSnapshotIds.length) {
+      throw new BadRequestException('BOUND_SNAPSHOT_SET_INCOMPLETE');
+    }
+    const orderedSnapshots = [...snapshots].sort((a, b) => String(a._id).localeCompare(String(b._id)));
+    const actualSetHash = canonicalPayloadHash(
+      orderedSnapshots.map((row: any) => ({ id: String(row._id), hash: row.canonicalPayloadHash })),
+    );
+    if (actualSetHash !== payrollRun.sourceSnapshotSetHash) {
+      throw new BadRequestException('BOUND_SNAPSHOT_SET_HASH_MISMATCH');
     }
 
     // Get insurance policy for calculations
@@ -220,42 +226,54 @@ export class PayrollRunService {
     let processedCount = 0;
 
     // Process each employee
-    for (const snapshot of snapshots) {
-      try {
-        const result = await this.calculateEmployee(
-          snapshot,
-          insurancePolicy,
-          String(payrollRun.organizationId)
-        );
-
-        totalGross += result.grossEarnings;
-        totalNet += result.netSalary;
-        processedCount++;
-      } catch (error) {
-        // Log error but continue processing other employees
-        console.error(`Failed to calculate for employee ${snapshot.employeeProfileId}:`, error);
-      }
+    for (const snapshot of orderedSnapshots) {
+      const result = await this.calculateEmployee(snapshot, insurancePolicy, String(payrollRun.organizationId));
+      totalGross += result.grossEarnings;
+      totalNet += result.netSalary;
+      processedCount++;
     }
-
-    // Update payroll run totals
-    await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
-      $set: {
-        status: PayrollRunStatus.CALCULATED,
-        totalGross,
-        totalNet,
-        processedEmployeeCount: processedCount,
-        version: payrollRun.version + 1,
-      },
-    });
-
-    // Generate payslips for all employees after calculation
+    let payslipCount: number;
     try {
-      const payslipCount = await this.payslipService.generateForPayrollRun(payrollRunId);
-      console.log(`✅ Generated ${payslipCount} payslips for payroll run ${payrollRunId}`);
+      payslipCount = await this.payslipService.generateForPayrollRun(payrollRunId);
     } catch (error) {
-      console.error('Failed to generate payslips:', error);
-      // Don't throw — payroll run is already CALCULATED, payslips can be generated later
+      await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
+      throw error;
     }
+    if (processedCount !== orderedSnapshots.length || payslipCount !== orderedSnapshots.length) {
+      await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
+      throw new Error('PAYROLL_OUTPUT_RECONCILIATION_FAILED');
+    }
+    const transition = buildPayrollRunTransitionCas({
+      runId: payrollRunId,
+      organizationId: String(payrollRun.organizationId),
+      expectedStatus: PayrollRunStatus.DRAFT,
+      expectedVersion: payrollRun.version,
+      nextStatus: PayrollRunStatus.CALCULATED,
+      at: new Date(),
+    });
+    transition.update.$set.totalGross = totalGross;
+    transition.update.$set.totalNet = totalNet;
+    transition.update.$set.processedEmployeeCount = processedCount;
+    const published = await this.payrollRunModel.findOneAndUpdate(
+      transition.filter,
+      transition.update,
+      { new: true },
+    );
+    if (!published) {
+      await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
+      throw new ConflictException('PAYROLL_RUN_CAS_CONFLICT');
+    }
+    const periodUpdated = await this.periodModel.findOneAndUpdate(
+      {
+        _id: payrollRun.timesheetPeriodId,
+        payrollRunId: payrollRun._id,
+        payrollState: PayrollRunStatus.DRAFT,
+        payrollSourceVersion: payrollRun.sourcePeriodVersion,
+      },
+      { $set: { payrollState: PayrollRunStatus.CALCULATED } },
+      { new: true },
+    );
+    if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
 
     return {
       payrollRun: await this.findOneRaw(payrollRunId),
@@ -284,51 +302,29 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_RECALCULATE_NON_CALCULATED');
     }
 
-    let refreshedEmployeeCount: number | undefined;
-    if (this.timesheetSummaryService && this.payrollSnapshotService) {
-      const period = await this.periodModel.findById(payrollRun.timesheetPeriodId).lean();
-      if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
-      await this.refreshPayrollInputs(
-        String(payrollRun.organizationId),
-        String(payrollRun.timesheetPeriodId),
-        period.period,
-      );
-      refreshedEmployeeCount = await this.snapshotModel.countDocuments({
-        organizationId: payrollRun.organizationId,
-        periodId: payrollRun.timesheetPeriodId,
-      });
-    }
-
     await this.payslipService.deleteGeneratedForRecalculation(payrollRunId);
-    await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
-      $set: {
-        status: PayrollRunStatus.DRAFT,
-        totalGross: 0,
-        totalNet: 0,
-        totalEmployerCost: 0,
-        processedEmployeeCount: 0,
-        ...(refreshedEmployeeCount !== undefined ? { totalEmployeeCount: refreshedEmployeeCount } : {}),
-        version: payrollRun.version + 1,
-      },
-      $unset: { lockedBy: 1, lockedAt: 1 },
+    const cas = buildPayrollRunTransitionCas({
+      runId: payrollRunId,
+      organizationId: String(payrollRun.organizationId),
+      expectedStatus: PayrollRunStatus.CALCULATED,
+      expectedVersion: payrollRun.version,
+      nextStatus: PayrollRunStatus.DRAFT,
+      at: new Date(),
     });
+    Object.assign(cas.update.$set, {
+      totalGross: 0, totalNet: 0, totalEmployerCost: 0, processedEmployeeCount: 0,
+    });
+    const reset = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true });
+    if (!reset) throw new ConflictException('PAYROLL_RUN_CAS_CONFLICT');
+    await this.periodModel.findOneAndUpdate(
+      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.CALCULATED },
+      { $set: { payrollState: PayrollRunStatus.DRAFT } },
+      { new: true },
+    );
 
     return this.calculate(payrollRunId, userId);
   }
 
-  /** Rebuild close-time artifacts so legacy/incomplete snapshots cannot omit employees. */
-  private async refreshPayrollInputs(organizationId: string, periodId: string, periodKey: string): Promise<void> {
-    if (!this.timesheetSummaryService || !this.payrollSnapshotService) return;
-    const session = await this.payrollRunModel.db.startSession();
-    try {
-      await session.withTransaction(async () => {
-        await this.timesheetSummaryService!.generateSummaries(periodId, periodKey, organizationId, session);
-        await this.payrollSnapshotService!.generateSnapshots(periodId, periodKey, organizationId, session);
-      });
-    } finally {
-      await session.endSession();
-    }
-  }
 
   /**
    * Lock a calculated payroll run (immutable).
@@ -344,20 +340,18 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_LOCK_NON_CALCULATED');
     }
 
-    const locked = await this.payrollRunModel.findByIdAndUpdate(
-      payrollRunId,
-      {
-        $set: {
-          status: PayrollRunStatus.LOCKED,
-          lockedBy: new Types.ObjectId(userId),
-          lockedAt: new Date(),
-          version: payrollRun.version + 1,
-        },
-      },
-      { new: true }
-    );
+    const cas = buildPayrollRunTransitionCas({ runId: payrollRunId, organizationId: String(payrollRun.organizationId), expectedStatus: PayrollRunStatus.CALCULATED, expectedVersion: payrollRun.version, nextStatus: PayrollRunStatus.LOCKED, at: new Date() });
+    cas.update.$set.lockedBy = new Types.ObjectId(userId);
+    cas.update.$set.lockedAt = new Date();
+    const locked = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true });
 
     if (!locked) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+    const periodUpdated = await this.periodModel.findOneAndUpdate(
+      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.CALCULATED },
+      { $set: { payrollState: PayrollRunStatus.LOCKED } },
+      { new: true },
+    );
+    if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
     return this.toResponse(locked.toObject());
   }
 
@@ -375,21 +369,19 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_RELEASE_NON_LOCKED');
     }
 
-    const released = await this.payrollRunModel.findByIdAndUpdate(
-      payrollRunId,
-      {
-        $set: {
-          status: PayrollRunStatus.RELEASED,
-          version: payrollRun.version + 1,
-        },
-      },
-      { new: true }
-    );
+    const cas = buildPayrollRunTransitionCas({ runId: payrollRunId, organizationId: String(payrollRun.organizationId), expectedStatus: PayrollRunStatus.LOCKED, expectedVersion: payrollRun.version, nextStatus: PayrollRunStatus.RELEASED, at: new Date() });
+    const released = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true });
 
     // TODO: Send notifications to employees
     // await this.notificationService.sendPayslipNotifications(payrollRunId);
 
     if (!released) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+    const periodUpdated = await this.periodModel.findOneAndUpdate(
+      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.LOCKED },
+      { $set: { payrollState: PayrollRunStatus.RELEASED } },
+      { new: true },
+    );
+    if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
     return this.toResponse(released.toObject());
   }
 

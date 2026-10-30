@@ -188,6 +188,9 @@ export class LeaveService {
           beforeData: { status: old.status },
           afterData: { status: next, reviewedBy: managerId, reviewedAt },
         }], { session });
+        if (approve) {
+          await this.periodVersion.bumpForWorkDates(org, enumerateDates(old.startDate, old.endDate), session);
+        }
         decided = row;
         employeeId = String(old.employeeId);
         departmentId = String(old.departmentId);

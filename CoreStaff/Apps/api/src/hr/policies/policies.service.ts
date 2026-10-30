@@ -1,11 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { ClientSession, Model } from 'mongoose';
 import {
   LaborCompliancePolicy,
   OvertimePayPolicy,
 } from '../../database/schemas/compensation.schema';
+import { WorkCreditPolicy } from '../../database/schemas/work-credit-policy.schema';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 import { assertNoEffectiveOverlap } from '../compensation/compensation-domain';
+import { validateWorkCreditPolicyRules } from './work-credit-domain';
 import {
   evaluateLaborLimits,
   laborLimitsFromPolicy,
@@ -15,8 +18,10 @@ import {
 import {
   CreateLaborPolicyDto,
   CreateOvertimePolicyDto,
+  CreateWorkCreditPolicyDto,
   UpdateLaborPolicyDto,
   UpdateOvertimePolicyDto,
+  UpdateWorkCreditPolicyDto,
 } from './dto/policies.dto';
 
 const date = (v: string | Date) => (v instanceof Date ? v : new Date(v));
@@ -39,6 +44,8 @@ export class PoliciesService {
   constructor(
     @InjectModel('LaborCompliancePolicy') private readonly laborPolicies: Model<LaborCompliancePolicy>,
     @InjectModel('OvertimePayPolicy') private readonly overtimePolicies: Model<OvertimePayPolicy>,
+    @InjectModel('WorkCreditPolicy') private readonly workCreditPolicies: Model<WorkCreditPolicy>,
+    private readonly periodVersion: PeriodVersionService,
   ) { }
 
   // ── effective window helpers ──────────────────────────────────────────────
@@ -55,30 +62,28 @@ export class PoliciesService {
     );
   }
 
-  private async effectiveLabor(org: string, at: Date) {
-    const row = await this.laborPolicies
-      .findOne({
-        organizationId: org,
-        active: true,
-        effectiveFrom: { $lte: at },
-        $or: [{ effectiveTo: null }, { effectiveTo: { $gt: at } }],
-      })
-      .sort({ effectiveFrom: -1 })
-      .lean();
+  private async effectiveLabor(org: string, at: Date, session?: ClientSession) {
+    let query: any = this.laborPolicies.findOne({
+      organizationId: org,
+      active: true,
+      effectiveFrom: { $lte: at },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: at } }],
+    }).sort({ effectiveFrom: -1 });
+    if (session) query = query.session(session);
+    const row = await query.lean();
     if (!row) throw new NotFoundException('LABOR_POLICY_NOT_FOUND');
     return row;
   }
 
-  private async effectiveOvertime(org: string, at: Date) {
-    const row = await this.overtimePolicies
-      .findOne({
+  private async effectiveOvertime(org: string, at: Date, session?: ClientSession) {
+    let query: any = this.overtimePolicies.findOne({
         organizationId: org,
         active: true,
         effectiveFrom: { $lte: at },
         $or: [{ effectiveTo: null }, { effectiveTo: { $gt: at } }],
-      })
-      .sort({ effectiveFrom: -1 })
-      .lean();
+      }).sort({ effectiveFrom: -1 });
+    if (session) query = query.session(session);
+    const row = await query.lean();
     if (!row) throw new NotFoundException('OVERTIME_POLICY_NOT_FOUND');
     return row;
   }
@@ -92,22 +97,28 @@ export class PoliciesService {
   async createLabor(org: string, dto: CreateLaborPolicyDto) {
     const effectiveFrom = date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
-    const existing = await this.laborPolicies.find({ organizationId: org }).lean();
-    await this.assertNoOverlap(existing, effectiveFrom, effectiveTo);
-    const latest = await this.laborPolicies.findOne({ organizationId: org }).sort({ version: -1 }).lean();
-    const row = await this.laborPolicies.create({
-      ...dto,
-      organizationId: org,
-      effectiveFrom,
-      effectiveTo,
-      version: (latest?.version ?? 0) + 1,
-      active: dto.active ?? true,
-    });
-    return row.toObject();
+    const session = await this.laborPolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const existing = await this.laborPolicies.find({ organizationId: org }).session(session).lean();
+        await this.assertNoOverlap(existing, effectiveFrom, effectiveTo);
+        const latest = await this.laborPolicies.findOne({ organizationId: org }).sort({ version: -1 }).session(session).lean();
+        const [row] = await this.laborPolicies.create([{
+          ...dto, organizationId: org, effectiveFrom, effectiveTo,
+          version: (latest?.version ?? 0) + 1, active: dto.active ?? true,
+        }], { session });
+        await this.periodVersion.bumpForEffectiveWindow(org, effectiveFrom, effectiveTo, session);
+        result = row.toObject();
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
-  laborAt(org: string, at: Date) {
-    return this.effectiveLabor(org, at);
+  laborAt(org: string, at: Date, session?: ClientSession) {
+    return this.effectiveLabor(org, at, session);
   }
 
   async updateLabor(org: string, id: string, dto: UpdateLaborPolicyDto) {
@@ -117,19 +128,28 @@ export class PoliciesService {
     const effectiveTo = dto.effectiveTo !== undefined
       ? dto.effectiveTo ? date(dto.effectiveTo) : undefined
       : old.effectiveTo;
-    const others = await this.laborPolicies.find({ organizationId: org, _id: { $ne: id } }).lean();
-    await this.assertNoOverlap(others, effectiveFrom, effectiveTo);
-    const update: Record<string, unknown> = {
-      $set: { ...dto, effectiveFrom },
-      $inc: { version: 1 },
-    };
-    if (effectiveTo) update.$set = { ...update.$set as Record<string, unknown>, effectiveTo };
-    else update.$unset = { effectiveTo: 1 };
-    const row = await this.laborPolicies
-      .findOneAndUpdate({ _id: id, organizationId: org }, update, { new: true, runValidators: true })
-      .lean();
-    if (!row) throw new NotFoundException('LABOR_POLICY_NOT_FOUND');
-    return row;
+    const unionFrom = old.effectiveFrom < effectiveFrom ? old.effectiveFrom : effectiveFrom;
+    const unionTo = !old.effectiveTo || !effectiveTo ? undefined : old.effectiveTo > effectiveTo ? old.effectiveTo : effectiveTo;
+    const session = await this.laborPolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const others = await this.laborPolicies.find({ organizationId: org, _id: { $ne: id } }).session(session).lean();
+        await this.assertNoOverlap(others, effectiveFrom, effectiveTo);
+        const update: Record<string, unknown> = { $set: { ...dto, effectiveFrom }, $inc: { version: 1 } };
+        if (effectiveTo) update.$set = { ...update.$set as Record<string, unknown>, effectiveTo };
+        else update.$unset = { effectiveTo: 1 };
+        const row = await this.laborPolicies.findOneAndUpdate(
+          { _id: id, organizationId: org }, update, { new: true, runValidators: true, session },
+        ).lean();
+        if (!row) throw new NotFoundException('LABOR_POLICY_NOT_FOUND');
+        await this.periodVersion.bumpForEffectiveWindow(org, unionFrom, unionTo, session);
+        result = row;
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
   /** AC-LABOR-01 enforcement preview against the effective policy at `at`. */
@@ -145,6 +165,113 @@ export class PoliciesService {
     );
   }
 
+  // ── Work credit policy ────────────────────────────────────────────────────
+
+  listWorkCredit(org: string) {
+    return this.workCreditPolicies.find({ organizationId: org }).sort({ effectiveFrom: -1 }).lean();
+  }
+
+  async workCreditAt(org: string, at: Date, session?: ClientSession) {
+    this.assertValidWorkCreditDate(at);
+    let query: any = this.workCreditPolicies.findOne({
+      organizationId: org,
+      active: true,
+      effectiveFrom: { $lte: at },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: at } }],
+    }).sort({ effectiveFrom: -1 });
+    if (session) query = query.session(session);
+    const row = await query.lean();
+    if (!row) throw new NotFoundException('WORK_CREDIT_POLICY_NOT_FOUND');
+    return row;
+  }
+
+  async createWorkCredit(org: string, dto: CreateWorkCreditPolicyDto) {
+    const effectiveFrom = date(dto.effectiveFrom);
+    const effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
+    this.assertValidWorkCreditDate(effectiveFrom);
+    if (effectiveTo) this.assertValidWorkCreditDate(effectiveTo);
+    this.assertValidWorkCreditRules(dto);
+    const session = await this.workCreditPolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const existing = await this.workCreditPolicies.find({ organizationId: org }).session(session).lean();
+        this.assertNoWorkCreditOverlap(existing, effectiveFrom, effectiveTo);
+        const latest = await this.workCreditPolicies.findOne({ organizationId: org }).sort({ version: -1 }).session(session).lean();
+        const [row] = await this.workCreditPolicies.create([{
+          ...dto,
+          organizationId: org,
+          effectiveFrom,
+          effectiveTo,
+          version: (latest?.version ?? 0) + 1,
+          active: dto.active ?? true,
+        }], { session });
+        await this.periodVersion.bumpForEffectiveWindow(org, effectiveFrom, effectiveTo, session);
+        result = row.toObject();
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  async updateWorkCredit(org: string, id: string, dto: UpdateWorkCreditPolicyDto) {
+    const old = await this.workCreditPolicies.findOne({ _id: id, organizationId: org }).lean();
+    if (!old) throw new NotFoundException('WORK_CREDIT_POLICY_NOT_FOUND');
+    const effectiveFrom = dto.effectiveFrom ? date(dto.effectiveFrom) : old.effectiveFrom;
+    const effectiveTo = dto.effectiveTo !== undefined
+      ? dto.effectiveTo ? date(dto.effectiveTo) : undefined
+      : old.effectiveTo;
+    this.assertValidWorkCreditDate(effectiveFrom);
+    if (effectiveTo) this.assertValidWorkCreditDate(effectiveTo);
+    this.assertValidWorkCreditRules({ ...old, ...dto });
+    const unionFrom = old.effectiveFrom < effectiveFrom ? old.effectiveFrom : effectiveFrom;
+    const unionTo = !old.effectiveTo || !effectiveTo
+      ? undefined
+      : old.effectiveTo > effectiveTo ? old.effectiveTo : effectiveTo;
+    const session = await this.workCreditPolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const others = await this.workCreditPolicies.find({ organizationId: org, _id: { $ne: id } }).session(session).lean();
+        this.assertNoWorkCreditOverlap(others, effectiveFrom, effectiveTo);
+        const update: Record<string, unknown> = { $set: { ...dto, effectiveFrom }, $inc: { version: 1 } };
+        if (effectiveTo) update.$set = { ...update.$set as object, effectiveTo };
+        else update.$unset = { effectiveTo: 1 };
+        const row = await this.workCreditPolicies
+          .findOneAndUpdate({ _id: id, organizationId: org }, update, { new: true, runValidators: true, session })
+          .lean();
+        if (!row) throw new NotFoundException('WORK_CREDIT_POLICY_NOT_FOUND');
+        await this.periodVersion.bumpForEffectiveWindow(org, unionFrom, unionTo, session);
+        result = row;
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  private assertValidWorkCreditDate(value: Date): void {
+    if (!Number.isFinite(value.getTime())) throw new BadRequestException('WORK_CREDIT_POLICY_DATE_INVALID');
+  }
+
+  private assertValidWorkCreditRules(rules: Pick<WorkCreditPolicy, 'halfDayMinimumRatio' | 'fullDayMinimumRatio' | 'paidLeaveCreditEnabled' | 'incompleteDayRule'>): void {
+    try {
+      validateWorkCreditPolicyRules(rules);
+    } catch {
+      throw new BadRequestException('WORK_CREDIT_POLICY_THRESHOLDS_INVALID');
+    }
+  }
+
+  private assertNoWorkCreditOverlap(existing: EffectiveWindow[], effectiveFrom: Date, effectiveTo?: Date): void {
+    try {
+      assertNoEffectiveOverlap(existing, effectiveFrom, effectiveTo);
+    } catch (error) {
+      if (error instanceof ConflictException) throw new ConflictException('WORK_CREDIT_POLICY_EFFECTIVE_DATE_OVERLAP');
+      throw new BadRequestException('WORK_CREDIT_POLICY_DATE_RANGE_INVALID');
+    }
+  }
+
   // ── Overtime pay policy ───────────────────────────────────────────────────
 
   listOvertime(org: string) {
@@ -154,22 +281,28 @@ export class PoliciesService {
   async createOvertime(org: string, dto: CreateOvertimePolicyDto) {
     const effectiveFrom = date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
-    const existing = await this.overtimePolicies.find({ organizationId: org }).lean();
-    await this.assertNoOverlap(existing, effectiveFrom, effectiveTo);
-    const latest = await this.overtimePolicies.findOne({ organizationId: org }).sort({ version: -1 }).lean();
-    const row = await this.overtimePolicies.create({
-      ...dto,
-      organizationId: org,
-      effectiveFrom,
-      effectiveTo,
-      version: (latest?.version ?? 0) + 1,
-      active: dto.active ?? true,
-    });
-    return row.toObject();
+    const session = await this.overtimePolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const existing = await this.overtimePolicies.find({ organizationId: org }).session(session).lean();
+        await this.assertNoOverlap(existing, effectiveFrom, effectiveTo);
+        const latest = await this.overtimePolicies.findOne({ organizationId: org }).sort({ version: -1 }).session(session).lean();
+        const [row] = await this.overtimePolicies.create([{
+          ...dto, organizationId: org, effectiveFrom, effectiveTo,
+          version: (latest?.version ?? 0) + 1, active: dto.active ?? true,
+        }], { session });
+        await this.periodVersion.bumpForEffectiveWindow(org, effectiveFrom, effectiveTo, session);
+        result = row.toObject();
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
-  overtimeAt(org: string, at: Date) {
-    return this.effectiveOvertime(org, at);
+  overtimeAt(org: string, at: Date, session?: ClientSession) {
+    return this.effectiveOvertime(org, at, session);
   }
 
   async updateOvertime(org: string, id: string, dto: UpdateOvertimePolicyDto) {
@@ -179,19 +312,28 @@ export class PoliciesService {
     const effectiveTo = dto.effectiveTo !== undefined
       ? dto.effectiveTo ? date(dto.effectiveTo) : undefined
       : old.effectiveTo;
-    const others = await this.overtimePolicies.find({ organizationId: org, _id: { $ne: id } }).lean();
-    await this.assertNoOverlap(others, effectiveFrom, effectiveTo);
-    const update: Record<string, unknown> = {
-      $set: { ...dto, effectiveFrom },
-      $inc: { version: 1 },
-    };
-    if (effectiveTo) update.$set = { ...update.$set as Record<string, unknown>, effectiveTo };
-    else update.$unset = { effectiveTo: 1 };
-    const row = await this.overtimePolicies
-      .findOneAndUpdate({ _id: id, organizationId: org }, update, { new: true, runValidators: true })
-      .lean();
-    if (!row) throw new NotFoundException('OVERTIME_POLICY_NOT_FOUND');
-    return row;
+    const unionFrom = old.effectiveFrom < effectiveFrom ? old.effectiveFrom : effectiveFrom;
+    const unionTo = !old.effectiveTo || !effectiveTo ? undefined : old.effectiveTo > effectiveTo ? old.effectiveTo : effectiveTo;
+    const session = await this.overtimePolicies.db.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const others = await this.overtimePolicies.find({ organizationId: org, _id: { $ne: id } }).session(session).lean();
+        await this.assertNoOverlap(others, effectiveFrom, effectiveTo);
+        const update: Record<string, unknown> = { $set: { ...dto, effectiveFrom }, $inc: { version: 1 } };
+        if (effectiveTo) update.$set = { ...update.$set as Record<string, unknown>, effectiveTo };
+        else update.$unset = { effectiveTo: 1 };
+        const row = await this.overtimePolicies.findOneAndUpdate(
+          { _id: id, organizationId: org }, update, { new: true, runValidators: true, session },
+        ).lean();
+        if (!row) throw new NotFoundException('OVERTIME_POLICY_NOT_FOUND');
+        await this.periodVersion.bumpForEffectiveWindow(org, unionFrom, unionTo, session);
+        result = row;
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
   /** AC-OT-PAY-01 rate resolution preview for a single date. */

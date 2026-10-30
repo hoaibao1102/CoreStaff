@@ -15,15 +15,16 @@ describe('PayrollRunService.recalculate', () => {
           version: 3,
         }),
       }),
-      findByIdAndUpdate: jest.fn().mockResolvedValue({}),
+      findOneAndUpdate: jest.fn().mockResolvedValue({}),
     };
+    const periodModel = { findOneAndUpdate: jest.fn().mockResolvedValue({}) };
     const payslipService = {
       deleteGeneratedForRecalculation: jest.fn().mockResolvedValue(6),
     };
     const service = new PayrollRunService(
       payrollRunModel as any,
       {} as any,
-      {} as any,
+      periodModel as any,
       {} as any,
       {} as any,
       {} as any,
@@ -44,17 +45,20 @@ describe('PayrollRunService.recalculate', () => {
     const result = await service.recalculate(runId, userId);
 
     expect(payslipService.deleteGeneratedForRecalculation).toHaveBeenCalledWith(runId);
-    expect(payrollRunModel.findByIdAndUpdate).toHaveBeenCalledWith(runId, {
-      $set: expect.objectContaining({
-        status: PayrollRunStatus.DRAFT,
-        totalGross: 0,
-        totalNet: 0,
-        totalEmployerCost: 0,
-        processedEmployeeCount: 0,
-        version: 4,
+    expect(payrollRunModel.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: runId, status: PayrollRunStatus.CALCULATED, version: 3 }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: PayrollRunStatus.DRAFT,
+          totalGross: 0,
+          totalNet: 0,
+          totalEmployerCost: 0,
+          processedEmployeeCount: 0,
+        }),
+        $inc: { version: 1 },
       }),
-      $unset: { lockedBy: 1, lockedAt: 1 },
-    });
+      { new: true },
+    );
     expect(service.calculate).toHaveBeenCalledWith(runId, userId);
     expect(result.employeesProcessed).toBe(6);
   });

@@ -452,6 +452,9 @@ export const HR_ERROR_CODES: Record<string, string> = {
     REVIEW_REASON_REQUIRED: 'Vui lòng nhập lý do (tối thiểu 10 ký tự) khi từ chối hoặc yêu cầu giải trình.',
     REQUEST_STATE_CHANGED: 'Yêu cầu đã được xử lý bởi người khác. Vui lòng tải lại danh sách.',
     PERIOD_VERSION_CONFLICT: 'Bảng công đã thay đổi sau lần rà soát. Dữ liệu sẽ được tải lại; vui lòng kiểm tra và xác nhận lại.',
+    TIMESHEET_REVIEW_CHANGED: 'Nội dung bảng công đã thay đổi. Vui lòng tải lại và kiểm tra lại.',
+    EMPLOYEE_ACKNOWLEDGEMENT_PENDING: 'Còn nhân viên chưa rà soát bảng công.',
+    EMPLOYEE_TIMESHEET_DISPUTED: 'Còn báo sai lệch bảng công chưa được xử lý.',
     DEPARTMENT_NOT_READY: 'Phòng ban còn lỗi chặn. Vui lòng xử lý trước khi xác nhận bảng công.',
     PERIOD_NOT_READY: 'Kỳ công chưa đủ điều kiện hoặc còn thiếu xác nhận phòng ban.',
 
@@ -851,6 +854,18 @@ export async function deactivatePosition(base: string, id: string): Promise<Posi
 // ── Timesheet Period (TASK-072) ───────────────────────────────────────
 
 export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
+
+export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
+export interface EmployeeTimesheetReview extends TimesheetReviewCard {
+    projectionHash: string; standardWorkUnits: number; standardWorkMinutes: number; payableWorkUnits: number;
+    days: Array<{ workDate: string; checkInAt?: string | null; checkOutAt?: string | null; scheduledObligationMinutes: number; workedScheduledMinutes: number; payableLeaveMinutes: number; unpaidLeaveMinutes: number; lateMinutes?: number; earlyMinutes?: number; overtimeMinutes: number; attendanceState?: string | null; workCredit: number; reasonCode: string; calendarClassification?: string }>;
+    history: Array<{ action: string; actedAt: string; disputeReason?: string; disputedWorkDates?: string[]; transitionReason?: string }>;
+}
+export interface TimesheetAcknowledgementProgress { eligibleEmployees: number; acknowledgedEmployees: number; disputedEmployees: number; pendingEmployees: number; employees: Array<{ userId: string; employeeProfileId: string; state: string; projectionHash: string; disputeReason?: string }> }
+export function listMyTimesheetReviews(base: string): Promise<TimesheetReviewCard[]> { return hrRequest(base, '/api/hr/timesheet-reviews/my'); }
+export function getMyTimesheetReview(base: string, periodId: string): Promise<EmployeeTimesheetReview> { return hrRequest(base, `/api/hr/timesheet-periods/${encodeURIComponent(periodId)}/my-review`); }
+export function acknowledgeMyTimesheetReview(base: string, periodId: string, expectedPeriodVersion: number, projectionHash: string): Promise<EmployeeTimesheetReview> { return hrRequest(base, `/api/hr/timesheet-periods/${encodeURIComponent(periodId)}/my-review/acknowledge`, { method: 'POST', body: JSON.stringify({ expectedPeriodVersion, projectionHash }) }); }
+export function disputeMyTimesheetReview(base: string, periodId: string, expectedPeriodVersion: number, projectionHash: string, reason: string, disputedWorkDates?: string[]): Promise<EmployeeTimesheetReview> { return hrRequest(base, `/api/hr/timesheet-periods/${encodeURIComponent(periodId)}/my-review/dispute`, { method: 'POST', body: JSON.stringify({ expectedPeriodVersion, projectionHash, reason, disputedWorkDates }) }); }
 
 export interface DepartmentTimesheetConfirmation {
     _id: string;

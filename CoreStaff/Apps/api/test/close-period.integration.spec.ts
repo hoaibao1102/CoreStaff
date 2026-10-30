@@ -13,7 +13,7 @@ import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { Types } from 'mongoose';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, resolveAndAcknowledgePeriod, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -68,8 +68,16 @@ async function confirmDepartment(periodId: string, expectedPeriodVersion = 1) {
 
 async function createAndClosePeriod() {
   const periodId = await createCurrentPeriod();
+  const period = await connection().model('TimesheetPeriod').findById(periodId).lean() as any;
+  await resolveAndAcknowledgePeriod(
+    http,
+    fixture,
+    periodId,
+    period.startDate.toISOString().slice(0, 10),
+    period.endDate.toISOString().slice(0, 10),
+  );
   const confirmed = await confirmDepartment(periodId);
-  expect(confirmed.status).toBe(201);
+  if (confirmed.status !== 201) throw new Error(`confirmation prerequisite failed: ${confirmed.status} ${JSON.stringify(confirmed.body)}`);
   expect(confirmed.body.data.period.status).toBe('READY_TO_CLOSE');
   return periodId;
 }
@@ -83,7 +91,7 @@ describe('TASK-078 — Close Period Transaction', () => {
     const res = await http.post(`/api/hr/timesheet-periods/${periodId}/close`)
       .set('Cookie', hrCookie);
 
-    expect(res.status).toBe(201);
+    if (res.status !== 201) throw new Error(`close failed: ${res.status} ${JSON.stringify(res.body)}`);
     expect(res.body.data.period.status).toBe('CLOSED');
     expect(res.body.data.period.closedBy).toBeDefined();
     expect(res.body.data.period.closedAt).toBeDefined();
@@ -115,6 +123,21 @@ describe('TASK-078 — Close Period Transaction', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('CANNOT_CLOSE_PERIOD');
+  });
+
+  it('allows exactly one winner when two close requests race', async () => {
+    const periodId = await createAndClosePeriod();
+
+    const [first, second] = await Promise.all([
+      http.post(`/api/hr/timesheet-periods/${periodId}/close`).set('Cookie', hrCookie),
+      http.post(`/api/hr/timesheet-periods/${periodId}/close`).set('Cookie', hrCookie),
+    ]);
+
+    expect([first.status, second.status].filter(status => status === 201)).toHaveLength(1);
+    expect([first.status, second.status].filter(status => status !== 201)).toHaveLength(1);
+    expect(await connection().model('TimesheetPeriod').countDocuments({ _id: periodId, status: 'CLOSED' })).toBe(1);
+    expect(await connection().model('TimesheetSummary').countDocuments({ periodId })).toBe(1);
+    expect(await connection().model('PayrollInputSnapshot').countDocuments({ periodId })).toBe(1);
   });
 
   it('should generate TimesheetSummary documents during close', async () => {

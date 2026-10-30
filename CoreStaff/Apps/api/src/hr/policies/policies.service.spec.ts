@@ -37,6 +37,20 @@ interface OvertimeRow {
   active: boolean;
 }
 
+interface WorkCreditRow {
+  _id: string;
+  organizationId: string;
+  effectiveFrom: Date;
+  effectiveTo?: Date;
+  halfDayMinimumRatio: number;
+  fullDayMinimumRatio: number;
+  paidLeaveCreditEnabled: boolean;
+  incompleteDayRule: 'BLOCK';
+  businessReference?: string;
+  version: number;
+  active: boolean;
+}
+
 const D = (s: string) => new Date(s);
 
 /** Convenience opts for seeded rows; `effectiveTo` accepts either form. */
@@ -134,8 +148,12 @@ function addPatch(row: { version: number }, patch: Record<string, unknown>): voi
 /** Fake Mongoose model over an in-memory LaborCompliancePolicy array. */
 function buildLaborModel(rows: LaborRow[]) {
   let next = rows.length + 1;
+  const session = { withTransaction: async (work: () => Promise<void>) => work(), endSession: async () => undefined };
   return {
-    async create(doc: Record<string, unknown>) {
+    db: { startSession: async () => session },
+    async create(input: Record<string, unknown> | Record<string, unknown>[]) {
+      const isArray = Array.isArray(input);
+      const doc = (isArray ? input[0] : input) as Record<string, unknown>;
       const row = seedLabor(`l${next++}`, String(doc.organizationId), '2026-01-01', {
         effectiveTo: doc.effectiveTo ? (doc.effectiveTo as Date).toISOString().slice(0, 10) : undefined,
         version: doc.version as number,
@@ -143,12 +161,14 @@ function buildLaborModel(rows: LaborRow[]) {
       });
       Object.assign(row, doc);
       rows.push(row);
-      return { toObject: () => row };
+      const result = { ...row, toObject: () => row };
+      return isArray ? [result] : result;
     },
     /** Fluent find(): the service calls it with or without an intermediate .sort(). */
     find(filter: Record<string, unknown>) {
       const chain = {
         sort: () => chain,
+        session: () => chain,
         lean: async () => rows.filter((r) => matchesFilter(r as unknown as Record<string, unknown>, filter)),
       };
       return chain;
@@ -157,6 +177,7 @@ function buildLaborModel(rows: LaborRow[]) {
     findOne(filter: Record<string, unknown>) {
       const chain = {
         sort: () => chain,
+        session: () => chain,
         lean: async () => latestMatch(rows, filter),
       };
       return chain;
@@ -184,8 +205,12 @@ function buildLaborModel(rows: LaborRow[]) {
 /** Fake Mongoose model over an in-memory OvertimePayPolicy array. */
 function buildOvertimeModel(rows: OvertimeRow[]) {
   let next = rows.length + 1;
+  const session = { withTransaction: async (work: () => Promise<void>) => work(), endSession: async () => undefined };
   return {
-    async create(doc: Record<string, unknown>) {
+    db: { startSession: async () => session },
+    async create(input: Record<string, unknown> | Record<string, unknown>[]) {
+      const isArray = Array.isArray(input);
+      const doc = (isArray ? input[0] : input) as Record<string, unknown>;
       const row = seedOvertime(`o${next++}`, String(doc.organizationId), '2026-01-01', {
         effectiveTo: doc.effectiveTo ? (doc.effectiveTo as Date).toISOString().slice(0, 10) : undefined,
         version: doc.version as number,
@@ -193,12 +218,14 @@ function buildOvertimeModel(rows: OvertimeRow[]) {
       });
       Object.assign(row, doc);
       rows.push(row);
-      return { toObject: () => row };
+      const result = { ...row, toObject: () => row };
+      return isArray ? [result] : result;
     },
     /** Fluent find(): the service calls it with or without an intermediate .sort(). */
     find(filter: Record<string, unknown>) {
       const chain = {
         sort: () => chain,
+        session: () => chain,
         lean: async () => rows.filter((r) => matchesFilter(r as unknown as Record<string, unknown>, filter)),
       };
       return chain;
@@ -207,6 +234,7 @@ function buildOvertimeModel(rows: OvertimeRow[]) {
     findOne(filter: Record<string, unknown>) {
       const chain = {
         sort: () => chain,
+        session: () => chain,
         lean: async () => latestMatch(rows, filter),
       };
       return chain;
@@ -231,8 +259,88 @@ function buildOvertimeModel(rows: OvertimeRow[]) {
   };
 }
 
-function buildService(labors: LaborRow[], overtimes: OvertimeRow[]) {
-  return new PoliciesService(buildLaborModel(labors) as never, buildOvertimeModel(overtimes) as never);
+function seedWorkCredit(
+  id: string,
+  org: string,
+  effectiveFrom: string,
+  opts: SeedOpts = {},
+): WorkCreditRow {
+  return {
+    _id: id,
+    organizationId: org,
+    effectiveFrom: D(effectiveFrom),
+    effectiveTo: opts.effectiveTo ? D(opts.effectiveTo) : undefined,
+    halfDayMinimumRatio: 0.5,
+    fullDayMinimumRatio: 0.9,
+    paidLeaveCreditEnabled: true,
+    incompleteDayRule: 'BLOCK',
+    version: opts.version ?? 1,
+    active: opts.active ?? true,
+  };
+}
+
+function buildWorkCreditModel(rows: WorkCreditRow[]) {
+  let next = rows.length + 1;
+  const session = {
+    withTransaction: async (work: () => Promise<void>) => work(),
+    endSession: async () => undefined,
+  };
+  return {
+    db: { startSession: async () => session },
+    async create(input: Record<string, unknown> | Record<string, unknown>[]) {
+      const isArray = Array.isArray(input);
+      const doc = (isArray ? input[0] : input) as Record<string, unknown>;
+      const row = seedWorkCredit(`w${next++}`, String(doc.organizationId), (doc.effectiveFrom as Date).toISOString(), {
+        effectiveTo: doc.effectiveTo ? (doc.effectiveTo as Date).toISOString() : undefined,
+        version: doc.version as number,
+        active: doc.active as boolean,
+      });
+      Object.assign(row, doc);
+      rows.push(row);
+      const result = { ...row, toObject: () => row };
+      return isArray ? [result] : result;
+    },
+    find(filter: Record<string, unknown>) {
+      const chain = {
+        sort: () => chain,
+        session: () => chain,
+        lean: async () => rows.filter((r) => matchesFilter(r as unknown as Record<string, unknown>, filter)),
+      };
+      return chain;
+    },
+    findOne(filter: Record<string, unknown>) {
+      const chain = { sort: () => chain, session: () => chain, lean: async () => latestMatch(rows, filter) };
+      return chain;
+    },
+    findOneAndUpdate(filter: Record<string, unknown>, update: Record<string, unknown>) {
+      return {
+        lean: async () => {
+          const row = latestMatch(rows, filter);
+          if (!row) return null;
+          const set = update.$set as Record<string, unknown> | undefined;
+          const inc = update.$inc as { version?: number } | undefined;
+          if (set) addPatch(row, set);
+          if (inc?.version) row.version += inc.version;
+          if (update.$unset) for (const key of Object.keys(update.$unset as object)) delete (row as unknown as Record<string, unknown>)[key];
+          return row;
+        },
+      };
+    },
+  };
+}
+
+function buildService(
+  labors: LaborRow[],
+  overtimes: OvertimeRow[],
+  workCredits: WorkCreditRow[] = [],
+  periodVersion = { bumpForEffectiveWindow: jest.fn().mockResolvedValue(0) },
+) {
+  return new PoliciesService(
+    buildLaborModel(labors) as never,
+    buildOvertimeModel(overtimes) as never,
+    buildWorkCreditModel(workCredits) as never,
+    periodVersion as never,
+  );
 }
 
 describe('PoliciesService — LaborCompliancePolicy (TASK-036)', () => {
@@ -252,6 +360,20 @@ describe('PoliciesService — LaborCompliancePolicy (TASK-036)', () => {
     } as never);
     expect(result.organizationId).toBe('org1');
     expect(result.version).toBe(1);
+  });
+
+  it('atomically invalidates intersecting open periods on create and propagates invalidation failure', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockRejectedValue(new Error('period invalidation unavailable')) };
+    const svc = buildService([], [], [], periodVersion);
+    await expect(svc.createLabor('org1', {
+      effectiveFrom: '2026-01-01', effectiveTo: '2026-07-01', normalDailyMinutes: 480,
+      normalWeeklyMinutes: 2880, maxCombinedDailyMinutes: 720, maxMonthlyOvertimeMinutes: 2400,
+      maxAnnualOvertimeMinutes: 20000, exceptionalAnnualOvertimeMinutes: 24000,
+      warningThresholdPercent: 80, probationMinimumRate: 0.85, legalReference: 'BLLĐ 45/2019/QH14',
+    } as never)).rejects.toThrow('period invalidation unavailable');
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-07-01'), expect.anything(),
+    );
   });
 
   it('rejects an overlapping effective window on create', async () => {
@@ -314,12 +436,79 @@ describe('PoliciesService — LaborCompliancePolicy (TASK-036)', () => {
     await expect(svc.updateLabor('org2', 'l1', { warningThresholdPercent: 90 } as never)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('invalidates the union of old and new labor windows in the write transaction', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockResolvedValue(2) };
+    const svc = buildService([seedLabor('l1', 'org1', '2026-02-01', { effectiveTo: '2026-07-01' })], [], [], periodVersion);
+    await svc.updateLabor('org1', 'l1', { effectiveFrom: '2026-01-01', effectiveTo: '2026-08-01' } as never);
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-08-01'), expect.anything(),
+    );
+  });
+
   it('previews enforcement against the effective policy', async () => {
     const svc = buildService([seedLabor('l1', 'org1', '2026-01-01')], []);
     const result = await svc.previewLabor('org1', D('2026-06-01'), { combinedDailyMinutes: 800 });
     expect(result.approvable).toBe(false);
     expect(result.policyVersion).toBe(1);
     expect(result.violations[0].code).toBe('OVERTIME_DAILY_LIMIT_EXCEEDED');
+  });
+});
+
+describe('PoliciesService — WorkCreditPolicy', () => {
+  const dto = {
+    effectiveFrom: '2026-01-01',
+    halfDayMinimumRatio: 0.5,
+    fullDayMinimumRatio: 0.9,
+    paidLeaveCreditEnabled: true,
+    incompleteDayRule: 'BLOCK' as const,
+    businessReference: 'HR-2026-01',
+  };
+
+  it('creates and lists organization-scoped policies with an auto version', async () => {
+    const svc = buildService([], []);
+    const created = await svc.createWorkCredit('org1', dto);
+    expect(created).toMatchObject({ organizationId: 'org1', version: 1, incompleteDayRule: 'BLOCK' });
+    expect(await svc.listWorkCredit('org1')).toHaveLength(1);
+    expect(await svc.listWorkCredit('org2')).toHaveLength(0);
+  });
+
+  it('resolves only the tenant effective policy and returns a stable missing error', async () => {
+    const svc = buildService([], [], [seedWorkCredit('w1', 'org1', '2026-01-01')]);
+    await expect(svc.workCreditAt('org1', D('2026-06-01'))).resolves.toMatchObject({ _id: 'w1' });
+    await expect(svc.workCreditAt('org2', D('2026-06-01'))).rejects.toThrow('WORK_CREDIT_POLICY_NOT_FOUND');
+  });
+
+  it('rejects invalid dates, thresholds, and overlapping windows with stable errors', async () => {
+    const svc = buildService([], [], [seedWorkCredit('w1', 'org1', '2026-01-01', { effectiveTo: '2026-07-01' })]);
+    await expect(svc.createWorkCredit('org1', { ...dto, effectiveFrom: 'not-a-date' })).rejects.toThrow('WORK_CREDIT_POLICY_DATE_INVALID');
+    await expect(svc.createWorkCredit('org1', { ...dto, effectiveFrom: '2027-01-01', halfDayMinimumRatio: 0.9, fullDayMinimumRatio: 0.5 })).rejects.toThrow('WORK_CREDIT_POLICY_THRESHOLDS_INVALID');
+    await expect(svc.createWorkCredit('org1', { ...dto, effectiveFrom: '2026-03-01' })).rejects.toThrow('WORK_CREDIT_POLICY_EFFECTIVE_DATE_OVERLAP');
+  });
+
+  it('updates within the tenant and increments the version', async () => {
+    const svc = buildService([], [], [seedWorkCredit('w1', 'org1', '2026-01-01')]);
+    await expect(svc.updateWorkCredit('org1', 'w1', { fullDayMinimumRatio: 0.95 })).resolves.toMatchObject({ version: 2, fullDayMinimumRatio: 0.95 });
+    await expect(svc.updateWorkCredit('org2', 'w1', { fullDayMinimumRatio: 0.95 })).rejects.toThrow('WORK_CREDIT_POLICY_NOT_FOUND');
+  });
+
+  it('invalidates every intersecting open period after a work-credit policy create', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockResolvedValue(1) };
+    const svc = buildService([], [], [], periodVersion);
+    await svc.createWorkCredit('org1', { ...dto, effectiveTo: '2026-07-01' });
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-07-01'), expect.anything(),
+    );
+  });
+
+  it('invalidates the union of old and new effective windows after update and propagates failure', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockRejectedValue(new Error('period invalidation unavailable')) };
+    const svc = buildService([], [], [seedWorkCredit('w1', 'org1', '2026-01-01', { effectiveTo: '2026-07-01' })], periodVersion);
+    await expect(svc.updateWorkCredit('org1', 'w1', {
+      effectiveFrom: '2026-02-01', effectiveTo: '2026-08-01', fullDayMinimumRatio: 0.95,
+    })).rejects.toThrow('period invalidation unavailable');
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-08-01'), expect.anything(),
+    );
   });
 });
 
@@ -335,6 +524,18 @@ describe('PoliciesService — OvertimePayPolicy (TASK-037)', () => {
     } as never);
     expect(result.organizationId).toBe('org1');
     expect(result.workingDayRate).toBe(1.5);
+  });
+
+  it('atomically invalidates intersecting periods on overtime policy create and fails closed', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockRejectedValue(new Error('period invalidation unavailable')) };
+    const svc = buildService([], [], [], periodVersion);
+    await expect(svc.createOvertime('org1', {
+      effectiveFrom: '2026-01-01', effectiveTo: '2026-07-01', workingDayRate: 1.5,
+      weeklyOffRate: 2, publicHolidayRate: 3, legalReference: 'BLLĐ 45/2019/QH14',
+    } as never)).rejects.toThrow('period invalidation unavailable');
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-07-01'), expect.anything(),
+    );
   });
 
   it('rejects overlapping effective windows on create', async () => {
@@ -360,6 +561,17 @@ describe('PoliciesService — OvertimePayPolicy (TASK-037)', () => {
     expect(updated.version).toBe(2);
     expect(updated.weeklyOffRate).toBe(2.5);
     await expect(svc.updateOvertime('org2', 'o1', { weeklyOffRate: 2.5 } as never)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('invalidates the union of old and new overtime windows and propagates failure', async () => {
+    const periodVersion = { bumpForEffectiveWindow: jest.fn().mockRejectedValue(new Error('period invalidation unavailable')) };
+    const svc = buildService([], [seedOvertime('o1', 'org1', '2026-02-01', { effectiveTo: '2026-07-01' })], [], periodVersion);
+    await expect(svc.updateOvertime('org1', 'o1', {
+      effectiveFrom: '2026-01-01', effectiveTo: '2026-08-01', weeklyOffRate: 2.5,
+    } as never)).rejects.toThrow('period invalidation unavailable');
+    expect(periodVersion.bumpForEffectiveWindow).toHaveBeenCalledWith(
+      'org1', D('2026-01-01'), D('2026-08-01'), expect.anything(),
+    );
   });
 
   it('previews rate resolution with the no-double-count rule', async () => {

@@ -90,6 +90,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                     { label: 'Chính sách & bảo hiểm', icon: ShieldCheck, children: [
                         { href: '/hr/policies/labor-compliance', label: 'Tuân thủ lao động', icon: ShieldAlert },
                         { href: '/hr/policies/overtime-pay', label: 'Chính sách lương tăng ca', icon: Clock3 },
+                        { href: '/hr/policies/work-credit', label: 'Quy đổi ngày công', icon: ClipboardCheck },
                         { href: '/hr/tax-policies', label: 'Biểu thuế TNCN', icon: FileText },
                         { href: '/hr/insurance-profiles', label: 'Hồ sơ bảo hiểm', icon: ShieldCheck },
                         { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
@@ -116,6 +117,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
     const personalItems: NavItem[] = [
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
+        { href: '/app/timesheet-review', label: 'Rà soát bảng công', icon: ClipboardCheck },
         { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
         { href: '/app/ot', label: 'Tăng ca & điều chỉnh công', icon: Clock3 },
         { href: '/app/payslips', label: 'Bảng lương của tôi', icon: WalletCards },
