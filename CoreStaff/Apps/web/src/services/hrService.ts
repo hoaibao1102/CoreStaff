@@ -858,6 +858,7 @@ export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'C
 export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
 export interface EmployeeTimesheetReview extends TimesheetReviewCard {
     projectionHash: string; standardWorkUnits: number; standardWorkMinutes: number; payableWorkUnits: number;
+    hasUnresolvedDays: boolean; canAcknowledge: boolean;
     days: Array<{ workDate: string; checkInAt?: string | null; checkOutAt?: string | null; scheduledObligationMinutes: number; workedScheduledMinutes: number; payableLeaveMinutes: number; unpaidLeaveMinutes: number; lateMinutes?: number; earlyMinutes?: number; overtimeMinutes: number; attendanceState?: string | null; workCredit: number; reasonCode: string; calendarClassification?: string }>;
     history: Array<{ action: string; actedAt: string; disputeReason?: string; disputedWorkDates?: string[]; transitionReason?: string }>;
 }

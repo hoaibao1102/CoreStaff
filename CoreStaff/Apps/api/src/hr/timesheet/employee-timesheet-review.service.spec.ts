@@ -110,6 +110,29 @@ describe('employee timesheet review', () => {
     expect(obligations.loadPeriod).toHaveBeenCalledWith(expect.objectContaining({ overtimeStatus: 'REVIEWABLE' }));
   });
 
+  it('returns an unresolved attendance day for employee review instead of failing the whole timesheet', async () => {
+    const periods = { findOne: jest.fn(() => ({ lean: jest.fn().mockResolvedValue({ _id: 'period', period: '2026-09', version: 1, startDate: '2026-09-01', endDate: '2026-10-01' }) })) };
+    const profiles = { findOne: jest.fn(() => ({ lean: jest.fn().mockResolvedValue({ _id: 'profile' }) })) };
+    const actions = { find: jest.fn(() => ({ sort: jest.fn(() => ({ lean: jest.fn().mockResolvedValue([]) })) })) };
+    const obligations = { loadPeriod: jest.fn().mockResolvedValue({ days: [{
+      employeeProfileId: 'profile', userId: 'user', departmentId: 'dept', workDate: '2026-09-15',
+      calendarType: 'REGULAR', scheduledObligationMinutes: 480, workedScheduledMinutes: 0,
+      payableLeaveMinutes: 0, unpaidLeaveMinutes: 0, standardWorkUnits: 1, standardWorkMinutes: 480,
+      overtimeMinutes: 0, lateMinutes: 0, earlyMinutes: 0, unresolvedIncomplete: true, blockers: [],
+      source: { assignmentId: 'assignment', leaveRequestIds: [], overtimeResultIds: [] },
+    }] }) };
+    const policies = { workCreditAt: jest.fn().mockResolvedValue({
+      _id: 'policy', version: 1, effectiveFrom: new Date('2026-01-01'), active: true,
+      halfDayMinimumRatio: 0.5, fullDayMinimumRatio: 1, paidLeaveCreditEnabled: true, incompleteDayRule: 'BLOCK',
+    }) };
+    const service = new EmployeeTimesheetReviewService(periods as any, actions as any, profiles as any, obligations as any, policies as any);
+
+    const result = await service.getOwnReview('org', 'period', 'user');
+
+    expect(result).toEqual(expect.objectContaining({ hasUnresolvedDays: true, canAcknowledge: false }));
+    expect(result.days[0]).toEqual(expect.objectContaining({ workDate: '2026-09-15', workCredit: 0, reasonCode: 'INCOMPLETE_DAY_BLOCKED' }));
+  });
+
   it('uses the previous action identity so a later opposite transition is appendable and retries stay idempotent', async () => {
     const actions = { create: jest.fn().mockResolvedValue({}) };
     const service = new EmployeeTimesheetReviewService({} as any, actions as any, {} as any, {} as any, {} as any);

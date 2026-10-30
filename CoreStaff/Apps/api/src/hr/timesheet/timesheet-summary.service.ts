@@ -31,11 +31,14 @@ function toDateOnly(value: string | Date): string {
 export async function buildWorkCreditSummaryProjection(
   days: Array<PeriodObligationDay & { unresolvedIncomplete?: boolean; forfeitedMissingPunch?: boolean }>,
   resolvePolicy: (workDate: string) => Promise<ResolvedWorkCreditPolicy | null>,
+  options: { allowUnresolved?: boolean } = {},
 ) {
   const dailyWorkCredits: any[] = [];
   const policySnapshots = new Map<string, any>();
+  let hasUnresolvedDays = false;
   for (const day of [...days].sort((left, right) => left.workDate.localeCompare(right.workDate))) {
-    if (day.blockers.includes('MISSING_ATTENDANCE_DAY')) throw new ConflictException('MISSING_ATTENDANCE_DAY');
+    const missingAttendanceDay = day.blockers.includes('MISSING_ATTENDANCE_DAY');
+    if (missingAttendanceDay && !options.allowUnresolved) throw new ConflictException('MISSING_ATTENDANCE_DAY');
     const policy = await resolvePolicy(day.workDate);
     if (!policy) throw new NotFoundException('WORK_CREDIT_POLICY_MISSING');
     const evaluated = evaluateWorkCreditDay(policy, {
@@ -46,11 +49,14 @@ export async function buildWorkCreditSummaryProjection(
       dayType: day.calendarType === 'REGULAR' || day.calendarType === 'SPECIAL_WORKING_DAY'
         ? 'SCHEDULED'
         : day.calendarType,
-      incompleteState: day.unresolvedIncomplete
+      incompleteState: day.unresolvedIncomplete || missingAttendanceDay
         ? 'UNRESOLVED'
         : day.forfeitedMissingPunch ? 'FORFEITED_MISSING_PUNCH' : 'COMPLETE',
     });
-    if (evaluated.blocking) throw new ConflictException('WORK_CREDIT_DAY_UNRESOLVED');
+    if (evaluated.blocking) {
+      hasUnresolvedDays = true;
+      if (!options.allowUnresolved) throw new ConflictException('WORK_CREDIT_DAY_UNRESOLVED');
+    }
     const policyId = String(policy._id);
     policySnapshots.set(`${policyId}:${policy.version}`, {
       policyId, version: policy.version, effectiveFrom: policy.effectiveFrom,
@@ -88,6 +94,7 @@ export async function buildWorkCreditSummaryProjection(
     standardWorkUnits: days.reduce((sum, day) => sum + day.standardWorkUnits, 0),
     standardWorkMinutes: days.reduce((sum, day) => sum + day.standardWorkMinutes, 0),
     payableWorkUnits: dailyWorkCredits.reduce((sum, day) => sum + day.workCredit, 0),
+    hasUnresolvedDays,
     dailyWorkCredits,
     workCreditPolicySnapshots: [...policySnapshots.values()],
   };

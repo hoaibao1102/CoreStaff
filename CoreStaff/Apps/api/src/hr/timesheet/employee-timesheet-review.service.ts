@@ -53,6 +53,7 @@ export class EmployeeTimesheetReviewService {
   async acknowledge(organizationId: string, periodId: string, userId: string, dto: AcknowledgeTimesheetDto) {
     const review: any = await this.buildOwnReview(organizationId, periodId, userId);
     this.assertCurrent(review, dto.expectedPeriodVersion, dto.projectionHash);
+    if (review.hasUnresolvedDays) throw new ConflictException('TIMESHEET_HAS_UNRESOLVED_DAYS');
     if (review.state === 'ACKNOWLEDGED') return mapEmployeeTimesheetReview(review);
     await this.appendAction(organizationId, review, userId, 'ACKNOWLEDGED');
     return this.getOwnReview(organizationId, periodId, userId);
@@ -122,7 +123,7 @@ export class EmployeeTimesheetReviewService {
     const evaluated = await buildWorkCreditSummaryProjection(days, async workDate => {
       try { return await this.policies.workCreditAt(organizationId, new Date(`${workDate}T12:00:00.000Z`), session) as ResolvedWorkCreditPolicy; }
       catch (error) { if (error instanceof NotFoundException) return null; throw error; }
-    });
+    }, { allowUnresolved: true });
     const historyQuery = this.actions.find({
       organizationId,
       periodId: period._id,
@@ -133,7 +134,8 @@ export class EmployeeTimesheetReviewService {
     const history: any[] = session ? await historyQuery.session(session).lean() : await historyQuery.lean();
     return { periodId: String(period._id), periodKey: period.period, periodVersion: period.version, projectionHash: evaluated.sourceHash,
       state: this.stateOf(history.at(-1)), standardWorkUnits: evaluated.standardWorkUnits, standardWorkMinutes: evaluated.standardWorkMinutes,
-      payableWorkUnits: evaluated.payableWorkUnits, days: evaluated.dailyWorkCredits, history, profileId: String(profile._id), userId,
+      payableWorkUnits: evaluated.payableWorkUnits, hasUnresolvedDays: evaluated.hasUnresolvedDays,
+      days: evaluated.dailyWorkCredits, history, profileId: String(profile._id), userId,
       departmentId: days[0].departmentId };
   }
 
