@@ -28,7 +28,11 @@ export class EmployeeTimesheetReviewService {
   async discoverMine(organizationId: string, userId: string) {
     const profile: any = await this.profiles.findOne({ organizationId, userId, employmentStatus: { $in: ['ACTIVE', 'PROBATION'] } }).select('_id').lean();
     if (!profile) return [];
-    const periods: any[] = await this.periods.find({ organizationId, active: true, status: { $in: ['OPEN', 'REVIEWING', 'READY_TO_CLOSE'] } }).sort({ period: -1 }).lean();
+    // An OPEN period is still collecting attendance and can legitimately have
+    // missing future days. Employees only review a period after HR moves it to
+    // the review workflow; exposing OPEN here made the UI request an incomplete
+    // projection and surface MISSING_ATTENDANCE_DAY as a bad request.
+    const periods: any[] = await this.periods.find({ organizationId, active: true, status: { $in: ['REVIEWING', 'READY_TO_CLOSE'] } }).sort({ period: -1 }).lean();
     const result = [];
     for (const period of periods) {
       const latest: any = await this.actions.findOne({
@@ -49,6 +53,7 @@ export class EmployeeTimesheetReviewService {
   async acknowledge(organizationId: string, periodId: string, userId: string, dto: AcknowledgeTimesheetDto) {
     const review: any = await this.buildOwnReview(organizationId, periodId, userId);
     this.assertCurrent(review, dto.expectedPeriodVersion, dto.projectionHash);
+    if (review.hasUnresolvedDays) throw new ConflictException('TIMESHEET_HAS_UNRESOLVED_DAYS');
     if (review.state === 'ACKNOWLEDGED') return mapEmployeeTimesheetReview(review);
     await this.appendAction(organizationId, review, userId, 'ACKNOWLEDGED');
     return this.getOwnReview(organizationId, periodId, userId);
@@ -57,6 +62,7 @@ export class EmployeeTimesheetReviewService {
   async dispute(organizationId: string, periodId: string, userId: string, dto: DisputeTimesheetDto) {
     const review: any = await this.buildOwnReview(organizationId, periodId, userId);
     this.assertCurrent(review, dto.expectedPeriodVersion, dto.projectionHash);
+    if (review.state === 'ACKNOWLEDGED') throw new ConflictException('TIMESHEET_ALREADY_ACKNOWLEDGED');
     if (review.state === 'DISPUTED' && review.history.at(-1)?.disputeReason === dto.reason.trim()) return mapEmployeeTimesheetReview(review);
     await this.appendAction(organizationId, review, userId, 'DISPUTED', {
       disputeReason: dto.reason.trim(), disputedWorkDates: dto.disputedWorkDates,
@@ -70,9 +76,21 @@ export class EmployeeTimesheetReviewService {
     const employees = [...new Map(projection.days.filter(day => day.departmentId === departmentId).map(day => [day.userId, day])).values()];
     const rows = [];
     for (const employee of employees) {
-      const review: any = await this.buildOwnReview(organizationId, String(period._id), employee.userId, session);
-      rows.push({ userId: employee.userId, employeeProfileId: employee.employeeProfileId, state: review.state, projectionHash: review.projectionHash,
-        disputeReason: review.state === 'DISPUTED' ? review.history.at(-1)?.disputeReason : undefined });
+      try {
+        const review: any = await this.buildOwnReview(organizationId, String(period._id), employee.userId, session);
+        rows.push({ userId: employee.userId, employeeProfileId: employee.employeeProfileId, state: review.state, projectionHash: review.projectionHash,
+          disputeReason: review.state === 'DISPUTED' ? review.history.at(-1)?.disputeReason : undefined });
+      } catch (error) {
+        // A manager must still be able to preview the department precisely when
+        // an employee has an unresolved attendance day. Keep that employee in
+        // acknowledgement progress as pending; period blockers remain the
+        // authoritative reason the department cannot be confirmed yet.
+        if (error instanceof ConflictException && error.message === 'WORK_CREDIT_DAY_UNRESOLVED') {
+          rows.push({ userId: employee.userId, employeeProfileId: employee.employeeProfileId, state: 'PENDING', projectionHash: '' });
+          continue;
+        }
+        throw error;
+      }
     }
     const progress = {
       eligibleEmployees: rows.length,
@@ -105,18 +123,19 @@ export class EmployeeTimesheetReviewService {
     const evaluated = await buildWorkCreditSummaryProjection(days, async workDate => {
       try { return await this.policies.workCreditAt(organizationId, new Date(`${workDate}T12:00:00.000Z`), session) as ResolvedWorkCreditPolicy; }
       catch (error) { if (error instanceof NotFoundException) return null; throw error; }
-    });
+    }, { allowUnresolved: true });
     const historyQuery = this.actions.find({
-      organizationId: new Types.ObjectId(organizationId),
+      organizationId,
       periodId: period._id,
       periodVersion: period.version,
-      userId: new Types.ObjectId(userId),
+      userId,
       projectionHash: evaluated.sourceHash,
     }).sort({ actedAt: 1 });
     const history: any[] = session ? await historyQuery.session(session).lean() : await historyQuery.lean();
     return { periodId: String(period._id), periodKey: period.period, periodVersion: period.version, projectionHash: evaluated.sourceHash,
       state: this.stateOf(history.at(-1)), standardWorkUnits: evaluated.standardWorkUnits, standardWorkMinutes: evaluated.standardWorkMinutes,
-      payableWorkUnits: evaluated.payableWorkUnits, days: evaluated.dailyWorkCredits, history, profileId: String(profile._id), userId,
+      payableWorkUnits: evaluated.payableWorkUnits, hasUnresolvedDays: evaluated.hasUnresolvedDays,
+      days: evaluated.dailyWorkCredits, history, profileId: String(profile._id), userId,
       departmentId: days[0].departmentId };
   }
 

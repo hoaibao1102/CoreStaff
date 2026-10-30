@@ -2,6 +2,7 @@ export interface EmployeeTimesheetReviewDto {
   periodId: string; periodKey: string; periodVersion: number; projectionHash: string;
   state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED';
   standardWorkUnits: number; standardWorkMinutes?: number; payableWorkUnits: number;
+  hasUnresolvedDays: boolean; canAcknowledge: boolean;
   days: Array<Record<string, unknown>>;
   history: Array<Record<string, unknown>>;
 }
@@ -14,6 +15,8 @@ export function mapEmployeeTimesheetReview(input: any): EmployeeTimesheetReviewD
     standardWorkUnits: Number(input.standardWorkUnits ?? 0),
     standardWorkMinutes: Number(input.standardWorkMinutes ?? 0),
     payableWorkUnits: Number(input.payableWorkUnits ?? 0),
+    hasUnresolvedDays: Boolean(input.hasUnresolvedDays),
+    canAcknowledge: !input.hasUnresolvedDays,
     days: (input.days ?? []).map((day: any) => ({
       workDate: day.workDate,
       checkInAt: day.checkInAt ?? null,

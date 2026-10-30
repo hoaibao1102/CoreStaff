@@ -18,6 +18,8 @@ import { DepartmentTimesheetConfirmationDocument, DepartmentTimesheetSummarySnap
 import { PeriodVersionService } from './period-version.service';
 import { OvertimeService } from '../overtime/overtime.service';
 import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
+import { UserDocument } from '../../database/schemas/user.schema';
+import { PoliciesService } from '../policies/policies.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -67,6 +69,7 @@ export class TimesheetPeriodService {
 		@InjectModel('TimesheetPeriod') private readonly periodModel: Model<TimesheetPeriodDocument>,
 		@InjectModel('Department') private readonly departmentModel: Model<DepartmentDocument>,
 		@InjectModel('EmployeeProfile') private readonly employeeProfileModel: Model<EmployeeProfileDocument>,
+		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('PayrollInputSnapshot') private readonly snapshotModel: Model<any>,
 		@InjectModel('PayrollRun') private readonly payrollRunModel: Model<any>,
 		private readonly summaryService: TimesheetSummaryService,
@@ -79,6 +82,7 @@ export class TimesheetPeriodService {
 		private readonly periodVersionService: PeriodVersionService,
 		private readonly employeeReviews: EmployeeTimesheetReviewService,
 		@Optional() private readonly overtimeService?: OvertimeService,
+		@Optional() private readonly policies?: PoliciesService,
 	) {}
 
 	/**
@@ -573,43 +577,45 @@ export class TimesheetPeriodService {
 	): Promise<void> {
 		const orgObjectId = new Types.ObjectId(organizationId);
 
-		const departmentIds = new Set<string>();
 		const employeeIds = new Set<string>();
 		for (const row of rows) {
-			if (!row.employee.department && row.employee.departmentId) departmentIds.add(row.employee.departmentId);
-			if (!row.employee.name || !row.employee.code) employeeIds.add(row.employeeId);
+			if (!row.employee.name || !row.employee.code || !row.employee.department) employeeIds.add(row.employeeId);
 		}
-		if (!departmentIds.size && !employeeIds.size) return;
+		if (!employeeIds.size) return;
 
-		const [departments, profiles] = await Promise.all([
-			departmentIds.size
-				? this.departmentModel
-						.find({ organizationId: orgObjectId, _id: { $in: [...departmentIds].map((d) => new Types.ObjectId(d)) } })
-						.select('_id name')
-						.lean()
-				: Promise.resolve([] as any[]),
-			employeeIds.size
-				? this.employeeProfileModel
+		const [profiles, users] = await Promise.all([
+			this.employeeProfileModel
 						.find({ organizationId: orgObjectId, userId: { $in: [...employeeIds].map((e) => new Types.ObjectId(e)) } })
-						.select('userId employeeCode fullName')
-						.lean()
-				: Promise.resolve([] as any[]),
+						.select('userId employeeCode departmentId')
+						.lean(),
+			this.userModel
+						.find({ organizationId: orgObjectId, _id: { $in: [...employeeIds].map((e) => new Types.ObjectId(e)) } })
+						.select('_id fullName')
+						.lean(),
 		]);
 
+		const profileByUser = new Map(profiles.map((profile: any) => [String(profile.userId), profile]));
+		const userNames = new Map(users.map((user: any) => [String(user._id), user.fullName]));
+		const departmentIds = new Set<string>();
+		for (const row of rows) {
+			const profile: any = profileByUser.get(row.employeeId);
+			const departmentId = row.employee.departmentId ?? (profile?.departmentId ? String(profile.departmentId) : undefined);
+			if (departmentId) departmentIds.add(departmentId);
+		}
+		const departments = departmentIds.size
+			? await this.departmentModel
+					.find({ organizationId: orgObjectId, _id: { $in: [...departmentIds].map((id) => new Types.ObjectId(id)) } })
+					.select('_id name')
+					.lean()
+			: [];
 		const departmentNames = new Map(departments.map((d: any) => [String(d._id), d.name]));
-		const profileByUser = new Map(profiles.map((p: any) => [String(p.userId), p]));
 
 		for (const row of rows) {
-			if (!row.employee.department && row.employee.departmentId) {
-				row.employee.department = departmentNames.get(row.employee.departmentId);
-			}
-			if (!row.employee.name || !row.employee.code) {
-				const profile = profileByUser.get(row.employeeId);
-				if (profile) {
-					row.employee.name = row.employee.name ?? profile.fullName;
-					row.employee.code = row.employee.code ?? profile.employeeCode;
-				}
-			}
+			const profile: any = profileByUser.get(row.employeeId);
+			row.employee.name = row.employee.name ?? userNames.get(row.employeeId);
+			row.employee.code = row.employee.code ?? profile?.employeeCode;
+			row.employee.departmentId = row.employee.departmentId ?? (profile?.departmentId ? String(profile.departmentId) : undefined);
+			row.employee.department = row.employee.department ?? (row.employee.departmentId ? departmentNames.get(row.employee.departmentId) : undefined);
 		}
 	}
 
@@ -662,6 +668,16 @@ export class TimesheetPeriodService {
 		if (!allowed?.includes(newStatus)) {
 			throw new BadRequestException(
 				`INVALID_TRANSITION: Cannot transition from ${period.status} to ${newStatus}`,
+			);
+		}
+
+		// Employees and managers can only load a reviewed timesheet when a
+		// work-credit policy covers the period, so verify it before sending.
+		if (newStatus === TimesheetPeriodStatus.REVIEWING) {
+			await this.policies?.ensureWorkCreditCoverage(
+				organizationId,
+				new Date(period.startDate),
+				new Date(period.endDate),
 			);
 		}
 

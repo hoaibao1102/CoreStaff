@@ -331,6 +331,7 @@ export interface EmployeeDocument {
  * Tuyệt đối không hiển thị thông báo kỹ thuật cho người dùng cuối.
  */
 export const HR_ERROR_CODES: Record<string, string> = {
+    WORK_CREDIT_POLICY_MISSING: 'Chưa có chính sách quy đổi ngày công áp dụng cho kỳ này. Vui lòng cấu hình chính sách trước.',
     // Assignment errors
     AT_LEAST_ONE_FILTER_REQUIRED: 'Vui lòng chọn trạng thái hoặc nơi làm việc để lọc dữ liệu.',
     USER_NOT_FOUND_IN_TENANT: 'Không tìm thấy nhân viên trong tổ chức hiện tại.',
@@ -858,6 +859,7 @@ export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'C
 export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
 export interface EmployeeTimesheetReview extends TimesheetReviewCard {
     projectionHash: string; standardWorkUnits: number; standardWorkMinutes: number; payableWorkUnits: number;
+    hasUnresolvedDays: boolean; canAcknowledge: boolean;
     days: Array<{ workDate: string; checkInAt?: string | null; checkOutAt?: string | null; scheduledObligationMinutes: number; workedScheduledMinutes: number; payableLeaveMinutes: number; unpaidLeaveMinutes: number; lateMinutes?: number; earlyMinutes?: number; overtimeMinutes: number; attendanceState?: string | null; workCredit: number; reasonCode: string; calendarClassification?: string }>;
     history: Array<{ action: string; actedAt: string; disputeReason?: string; disputedWorkDates?: string[]; transitionReason?: string }>;
 }

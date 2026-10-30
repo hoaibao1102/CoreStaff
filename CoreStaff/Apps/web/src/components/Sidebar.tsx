@@ -117,10 +117,9 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
     const personalItems: NavItem[] = [
         { href: '/app/attendance', label: 'Chấm công hôm nay', icon: Clock3 },
         { href: '/app/attendance/history', label: 'Lịch sử công', icon: CalendarDays },
-        { href: '/app/timesheet-review', label: 'Rà soát bảng công', icon: ClipboardCheck },
+        { href: '/app/compensation', label: 'Công & Lương của tôi', icon: WalletCards },
         { href: '/app/leave', label: 'Nghỉ phép của tôi', icon: FileText },
         { href: '/app/ot', label: 'Tăng ca & điều chỉnh công', icon: Clock3 },
-        { href: '/app/payslips', label: 'Bảng lương của tôi', icon: WalletCards },
     ];
 
     if (role === 'DEPARTMENT_MANAGER') {

@@ -185,6 +185,37 @@ export class PoliciesService {
     return row;
   }
 
+  /**
+   * Guarantee a work-credit policy covers [from, to] before a period is sent
+   * for review. An organization that has never configured one gets the default
+   * policy; an organization whose policies leave a gap gets an explicit error
+   * instead of employees/managers hitting a 404 when they open the timesheet.
+   */
+  async ensureWorkCreditCoverage(org: string, from: Date, to: Date) {
+    if (!(await this.workCreditPolicies.exists({ organizationId: org }))) {
+      await this.workCreditPolicies.create({
+        organizationId: org,
+        effectiveFrom: new Date(Date.UTC(from.getUTCFullYear(), 0, 1)),
+        halfDayMinimumRatio: 0.5,
+        fullDayMinimumRatio: 1,
+        paidLeaveCreditEnabled: true,
+        incompleteDayRule: 'BLOCK',
+        businessReference: 'Chính sách quy đổi ngày công mặc định',
+        version: 1,
+        active: true,
+      });
+      return;
+    }
+    for (const at of [from, to]) {
+      try {
+        await this.workCreditAt(org, at);
+      } catch (error) {
+        if (error instanceof NotFoundException) throw new ConflictException('WORK_CREDIT_POLICY_MISSING');
+        throw error;
+      }
+    }
+  }
+
   async createWorkCredit(org: string, dto: CreateWorkCreditPolicyDto) {
     const effectiveFrom = date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
