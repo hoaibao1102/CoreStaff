@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus, VALID_TRANSITIONS } from '../../database/schemas/timesheet-period.schema';
@@ -16,11 +16,17 @@ import { classifyDayBlockers, summarizeBlockers, PeriodBlockerRow, PeriodBlocker
 import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
 import { DepartmentTimesheetConfirmationDocument, DepartmentTimesheetSummarySnapshot } from '../../database/schemas/department-timesheet-confirmation.schema';
 import { PeriodVersionService } from './period-version.service';
+import { OvertimeService } from '../overtime/overtime.service';
+import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
 const MAX_PERIOD_DAYS = 31;
 const REASON_MIN_LENGTH = 10;
+
+function toDateOnly(value: string | Date): string {
+	return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
 
 /**
  * Manager-facing projection for department snapshot review.
@@ -71,6 +77,8 @@ export class TimesheetPeriodService {
 		@InjectModel('ManagerRequest') private readonly managerRequestModel: Model<ManagerRequestDocument>,
 		@InjectModel('DepartmentTimesheetConfirmation') private readonly confirmationModel: Model<DepartmentTimesheetConfirmationDocument>,
 		private readonly periodVersionService: PeriodVersionService,
+		private readonly employeeReviews: EmployeeTimesheetReviewService,
+		@Optional() private readonly overtimeService?: OvertimeService,
 	) {}
 
 	/**
@@ -153,7 +161,8 @@ export class TimesheetPeriodService {
 	async findAll(organizationId: string, status?: TimesheetPeriodStatus): Promise<any[]> {
 		const filter: Record<string, unknown> = { organizationId, active: true };
 		if (status) filter.status = status;
-		return this.periodModel.find(filter).sort({ period: -1 }).lean();
+		const periods: any[] = await this.periodModel.find(filter).sort({ period: -1 }).lean();
+		return periods.map((period) => this.withPayrollMetadata(period));
 	}
 
 	/**
@@ -168,7 +177,7 @@ export class TimesheetPeriodService {
 		if (doc.status === TimesheetPeriodStatus.OPEN || doc.status === TimesheetPeriodStatus.REVIEWING) {
 			doc = await this.reconcileDepartmentConfirmationStatus(organizationId, doc) ?? doc;
 		}
-		return this.withCurrentConfirmations(organizationId, doc);
+		return this.withPayrollMetadata(await this.withCurrentConfirmations(organizationId, doc));
 	}
 
 	/** TASK-075 — confirm a manager's department for exactly one period version. */
@@ -187,7 +196,7 @@ export class TimesheetPeriodService {
 				periodVersion: period.version,
 			}).lean();
 			if (existing) {
-				await this.managerScopeService.requireDepartment(
+				await this.managerScopeService.requireReviewDepartment(
 					organizationId,
 					managerUserId,
 					dto.departmentId,
@@ -203,7 +212,7 @@ export class TimesheetPeriodService {
 			throw new ConflictException('PERIOD_VERSION_CONFLICT');
 		}
 
-		await this.managerScopeService.requireDepartment(
+		await this.managerScopeService.requireReviewDepartment(
 			organizationId,
 			managerUserId,
 			dto.departmentId,
@@ -233,6 +242,8 @@ export class TimesheetPeriodService {
 
 				const blockers = await this.collectBlockers(organizationId, id, new Set(employeeIds));
 				if (blockers.length) throw new ConflictException('DEPARTMENT_NOT_READY');
+				const acknowledgementProgress = await this.employeeReviews.getDepartmentProgress(organizationId, current, dto.departmentId, session);
+				EmployeeTimesheetReviewService.requireCompleteCoverage(acknowledgementProgress);
 
 				const summaries = await this.summaryService.previewSummariesForDepartment(
 					id,
@@ -743,6 +754,15 @@ export class TimesheetPeriodService {
 				}).session(session).lean();
 				if (!current) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 
+				if (!this.overtimeService) throw new ConflictException('OVERTIME_FINALIZATION_UNAVAILABLE');
+				await this.overtimeService.recompute(
+					organizationId,
+					toDateOnly(current.startDate),
+					toDateOnly(current.endDate),
+					{ targetStatus: 'FINAL' },
+					session,
+				);
+
 				const blockers = await this.collectBlockers(organizationId, id);
 				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
 
@@ -773,8 +793,14 @@ export class TimesheetPeriodService {
 					session,
 				);
 
-				doc = await this.periodModel.findByIdAndUpdate(
-					id,
+				doc = await this.periodModel.findOneAndUpdate(
+					{
+						_id: id,
+						organizationId,
+						status: TimesheetPeriodStatus.READY_TO_CLOSE,
+						version: current.version,
+						payrollRunId: { $exists: false },
+					},
 					{
 						$set: {
 							status: TimesheetPeriodStatus.CLOSED,
@@ -785,7 +811,7 @@ export class TimesheetPeriodService {
 					{ new: true, runValidators: true, session },
 				).lean();
 
-				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+				if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 			});
 		} finally {
 			await session.endSession();
@@ -818,12 +844,14 @@ export class TimesheetPeriodService {
 		let updated: any;
 		try {
 			await session.withTransaction(async () => {
-				// Increment version
-				// Invalidate confirmations (handled by TASK-076 caller)
-				// Mark snapshots STALE (handled by TASK-083 caller)
-
-				const doc = await this.periodModel.findByIdAndUpdate(
-					id,
+				const doc = await this.periodModel.findOneAndUpdate(
+					{
+						_id: id,
+						organizationId,
+						status: TimesheetPeriodStatus.CLOSED,
+						version: period.version,
+						payrollRunId: { $exists: false },
+					},
 					{
 						$inc: { version: 1 },
 						$set: {
@@ -840,18 +868,7 @@ export class TimesheetPeriodService {
 					{ new: true, runValidators: true, session },
 				).lean();
 
-				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
-
-				await this.snapshotModel.updateMany(
-					{ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
-					{ $set: { status: 'STALE' } },
-					{ session },
-				);
-				await this.payrollRunModel.updateMany(
-					{ organizationId: new Types.ObjectId(organizationId), timesheetPeriodId: new Types.ObjectId(id), active: true },
-					{ $set: { status: 'STALE' } },
-					{ session },
-				);
+				if (!doc) throw new ConflictException('TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL');
 				updated = doc;
 			});
 		} finally {
@@ -859,6 +876,16 @@ export class TimesheetPeriodService {
 		}
 
 		return this.toResponse(updated);
+	}
+
+	private withPayrollMetadata(period: any): any {
+		const payrollStatus = period.payrollState ?? null;
+		return {
+			...period,
+			canReopen: period.status === TimesheetPeriodStatus.CLOSED && !period.payrollRunId,
+			payrollStatus,
+			reopenBlockedReason: period.payrollRunId ? 'TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL' : null,
+		};
 	}
 
 	/**
@@ -871,7 +898,7 @@ export class TimesheetPeriodService {
 		id: string,
 		managerUserId: string,
 		departmentId: string,
-	): Promise<{ summaries: any[] }> {
+	): Promise<{ summaries: any[]; acknowledgementProgress: any }> {
 		const period = await this.findById(organizationId, id);
 
 		if (
@@ -884,7 +911,7 @@ export class TimesheetPeriodService {
 		}
 
 		// Verify manager has scope over this department
-		const managedDepartments = await this.managerScopeService.getManagedDepartmentIds(organizationId, managerUserId);
+		const managedDepartments = await this.managerScopeService.getAuthorizedReviewDepartmentIds(organizationId, managerUserId, new Date(period.endDate));
 		if (!managedDepartments.includes(departmentId)) {
 			throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');
 		}
@@ -897,7 +924,7 @@ export class TimesheetPeriodService {
 			departmentId,
 		);
 
-		return buildManagerSnapshotReview(summaries);
+		return { ...buildManagerSnapshotReview(summaries), acknowledgementProgress: await this.employeeReviews.getDepartmentProgress(organizationId, period, departmentId) };
 	}
 
 	/** Departments with active/probation employees are required to confirm. */

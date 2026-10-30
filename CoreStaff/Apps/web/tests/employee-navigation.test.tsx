@@ -127,13 +127,14 @@ test('HR login opens directory without a personal profile link', async () => {
   await open('/');
   await signIn();
 
-  expect(container.querySelector('#workspace a[href="/hr/employees"]')).not.toBeNull();
+  await click('#desktop-sidebar button[aria-label="Nhân sự"]');
+  expect(container.querySelector('#desktop-sidebar a[href="/hr/employees"]')).not.toBeNull();
   // HR accounts are tenant admin identities — no personal profile workspace.
-  expect(container.querySelector('#workspace a[href="/app/profile"]')).toBeNull();
+  expect(container.querySelector('#desktop-sidebar a[href="/app/profile"]')).toBeNull();
 
   const authRequests = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/auth/')).length;
   const requests = authRequests();
-  await click('#workspace a[href="/hr/employees"]');
+  await click('#desktop-sidebar a[href="/hr/employees"]');
   expect(window.location.pathname).toBe('/hr/employees');
   expect(container.querySelector('table[aria-label]')).not.toBeNull();
 
@@ -142,7 +143,8 @@ test('HR login opens directory without a personal profile link', async () => {
   expect(authRequests()).toBe(requests);
 
   await click('#desktop-sidebar nav a[href="/overview"]');
-  expect(container.querySelector('#workspace')).not.toBeNull();
+  expect(window.location.pathname).toBe('/overview');
+  expect(container.textContent).toContain('Tổng quan');
 });
 
 test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER'] as const)('%s login has profile but cannot open HR directory', async role => {

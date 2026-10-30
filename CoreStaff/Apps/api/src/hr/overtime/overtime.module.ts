@@ -7,6 +7,7 @@ import { ManagerRequestSchema } from '../../database/schemas/manager-request.sch
 import { OvertimeResultSchema } from '../../database/schemas/overtime-result.schema';
 import { PoliciesModule } from '../policies/policies.module';
 import { ShiftTemplateModule } from '../shift-template/shift-template.module';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 import { OvertimeService } from './overtime.service';
 
 /**
@@ -22,6 +23,7 @@ import { OvertimeService } from './overtime.service';
   imports: [
     PoliciesModule,
     ShiftTemplateModule,
+    PeriodVersionModule,
     MongooseModule.forFeature([
       { name: 'ManagerRequest', schema: ManagerRequestSchema },
       { name: 'OvertimeResult', schema: OvertimeResultSchema },

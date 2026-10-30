@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { ClientSession, Model } from 'mongoose';
 import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
 import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
@@ -10,6 +10,7 @@ import { CreateShiftTemplateDto } from './dto/create-shift-template.dto';
 import { UpdateShiftTemplateDto } from './dto/update-shift-template.dto';
 import { PoliciesService } from '../policies/policies.service';
 import { evaluateLaborLimits } from '../policies/policies-domain';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 
 const shiftMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 
@@ -21,6 +22,7 @@ export class ShiftTemplateService {
     @InjectModel('Assignment') private readonly assignments: Model<EmployeeAssignmentDocument>,
     @InjectModel('AttendanceDay') private readonly attendanceDays: Model<AttendanceDayDocument>,
     private readonly policies: PoliciesService,
+    private readonly periodVersion: PeriodVersionService,
   ) {}
 
   async create(organizationId: string, dto: CreateShiftTemplateDto) {
@@ -33,7 +35,11 @@ export class ShiftTemplateService {
     }
     await this.noOverlap(organizationId, data);
     const code = await this.generateCode(organizationId, data.name);
-    return (await this.shifts.create({ ...data, code, organizationId })).toObject();
+    return this.transaction(async session => {
+      const [row] = await this.shifts.create([{ ...data, code, organizationId }], { session });
+      await this.invalidate(organizationId, data.effectiveFrom, data.effectiveTo, session);
+      return row.toObject();
+    });
   }
 
   async findAll(organizationId: string, scope?: ShiftScope, departmentId?: string, active?: boolean) {
@@ -75,24 +81,61 @@ export class ShiftTemplateService {
     }
     if (old.active) await this.noOverlap(organizationId, data, id);
     const update = data.scope === ShiftScope.ORGANIZATION ? { $set: data, $unset: { departmentId: 1 } } : { $set: data };
-    return this.shifts.findOneAndUpdate({ _id: id, organizationId }, update, { new: true, runValidators: true }).lean();
+    return this.transaction(async session => {
+      const row = await this.shifts.findOneAndUpdate(
+        { _id: id, organizationId }, update, { new: true, runValidators: true, session },
+      ).lean();
+      if (!row) throw new NotFoundException('SHIFT_TEMPLATE_NOT_FOUND');
+      const window = unionWindow(old.effectiveFrom, old.effectiveTo, data.effectiveFrom, data.effectiveTo);
+      await this.invalidate(organizationId, window.from, window.to, session);
+      return row;
+    });
   }
 
   async setActive(organizationId: string, id: string, active: boolean) {
     const row = await this.findOne(organizationId, id);
+    if (row.active === active) return row;
     if (active) await this.validateLaborPolicy(organizationId, row);
     if (active) await this.noOverlap(organizationId, row, id);
-    return this.shifts.findOneAndUpdate({ _id: id, organizationId }, { $set: { active } }, { new: true }).lean();
+    return this.transaction(async session => {
+      const updated = await this.shifts.findOneAndUpdate(
+        { _id: id, organizationId }, { $set: { active } }, { new: true, session },
+      ).lean();
+      if (!updated) throw new NotFoundException('SHIFT_TEMPLATE_NOT_FOUND');
+      await this.invalidate(organizationId, row.effectiveFrom, row.effectiveTo, session);
+      return updated;
+    });
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
+    const row = await this.findOne(organizationId, id);
     const [assigned, recorded] = await Promise.all([
       this.assignments.exists({ organizationId, shiftTemplateId: id }),
       this.attendanceDays.exists({ organizationId, shiftTemplateId: id }),
     ]);
     if (assigned || recorded) throw new ConflictException('SHIFT_TEMPLATE_IN_USE');
-    await this.shifts.deleteOne({ _id: id, organizationId });
+    await this.transaction(async session => {
+      const result = await this.shifts.deleteOne({ _id: id, organizationId }, { session });
+      if (!result.deletedCount) throw new NotFoundException('SHIFT_TEMPLATE_NOT_FOUND');
+      await this.invalidate(organizationId, row.effectiveFrom, row.effectiveTo, session);
+    });
+  }
+
+  private async transaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
+    const session = await this.shifts.db.startSession();
+    try {
+      let result!: T;
+      await session.withTransaction(async () => { result = await work(session); });
+      return result;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  private invalidate(organizationId: string, from: string, to: string | undefined, session: ClientSession) {
+    return this.periodVersion.bumpForEffectiveWindow(
+      organizationId, effectiveStart(from), to ? dayAfter(to) : undefined, session,
+    );
   }
 
   private async normalize(organizationId: string, dto: CreateShiftTemplateDto) {
@@ -186,4 +229,19 @@ function dateOnly(value: string) {
   const match = value.match(/^\d{4}-\d{2}-\d{2}/);
   if (!match || Number.isNaN(Date.parse(`${match[0]}T00:00:00Z`))) throw new BadRequestException('INVALID_DATE');
   return match[0];
+}
+
+function effectiveStart(value: string) {
+  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+}
+
+function dayAfter(value: string) {
+  return new Date(effectiveStart(value).getTime() + 86400000);
+}
+
+function unionWindow(oldFrom: string, oldTo: string | undefined, nextFrom: string, nextTo: string | undefined) {
+  return {
+    from: oldFrom < nextFrom ? oldFrom : nextFrom,
+    to: !oldTo || !nextTo ? undefined : oldTo > nextTo ? oldTo : nextTo,
+  };
 }

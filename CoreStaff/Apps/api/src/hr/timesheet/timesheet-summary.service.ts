@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, ClientSession } from 'mongoose';
 import { TimesheetSummary, TimesheetSummaryDocument } from '../../database/schemas/timesheet-summary.schema';
@@ -9,6 +9,91 @@ import { EmployeeAssignment, EmployeeAssignmentDocument } from '../../database/s
 import { User } from '../../database/schemas/user.schema';
 import { DayResult, Role, WorkdayType } from '../../database/schemas/enums';
 import { OvertimeType } from '../policies/policies-domain';
+import { canonicalPayloadHash } from '../payroll/payroll-artifact-foundation';
+import { evaluateWorkCreditDay, WorkCreditPolicyRules } from '../policies/work-credit-domain';
+import { PeriodObligationDay } from './period-obligation.service';
+import { PeriodObligationService } from './period-obligation.service';
+import { PoliciesService } from '../policies/policies.service';
+
+export interface ResolvedWorkCreditPolicy extends WorkCreditPolicyRules {
+  _id: unknown;
+  version: number;
+  effectiveFrom: Date;
+  effectiveTo?: Date;
+  active: boolean;
+  businessReference?: string;
+}
+
+function toDateOnly(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
+
+export async function buildWorkCreditSummaryProjection(
+  days: Array<PeriodObligationDay & { unresolvedIncomplete?: boolean; forfeitedMissingPunch?: boolean }>,
+  resolvePolicy: (workDate: string) => Promise<ResolvedWorkCreditPolicy | null>,
+) {
+  const dailyWorkCredits: any[] = [];
+  const policySnapshots = new Map<string, any>();
+  for (const day of [...days].sort((left, right) => left.workDate.localeCompare(right.workDate))) {
+    if (day.blockers.includes('MISSING_ATTENDANCE_DAY')) throw new ConflictException('MISSING_ATTENDANCE_DAY');
+    const policy = await resolvePolicy(day.workDate);
+    if (!policy) throw new NotFoundException('WORK_CREDIT_POLICY_MISSING');
+    const evaluated = evaluateWorkCreditDay(policy, {
+      scheduledObligationMinutes: day.scheduledObligationMinutes,
+      workedScheduledMinutes: day.workedScheduledMinutes,
+      payableLeaveMinutes: day.payableLeaveMinutes,
+      unpaidLeaveMinutes: day.unpaidLeaveMinutes,
+      dayType: day.calendarType === 'REGULAR' || day.calendarType === 'SPECIAL_WORKING_DAY'
+        ? 'SCHEDULED'
+        : day.calendarType,
+      incompleteState: day.unresolvedIncomplete
+        ? 'UNRESOLVED'
+        : day.forfeitedMissingPunch ? 'FORFEITED_MISSING_PUNCH' : 'COMPLETE',
+    });
+    if (evaluated.blocking) throw new ConflictException('WORK_CREDIT_DAY_UNRESOLVED');
+    const policyId = String(policy._id);
+    policySnapshots.set(`${policyId}:${policy.version}`, {
+      policyId, version: policy.version, effectiveFrom: policy.effectiveFrom,
+      effectiveTo: policy.effectiveTo, halfDayMinimumRatio: policy.halfDayMinimumRatio,
+      fullDayMinimumRatio: policy.fullDayMinimumRatio, paidLeaveCreditEnabled: policy.paidLeaveCreditEnabled,
+      incompleteDayRule: policy.incompleteDayRule, businessReference: policy.businessReference,
+    });
+    dailyWorkCredits.push({
+      workDate: day.workDate,
+      scheduledObligationMinutes: day.scheduledObligationMinutes,
+      workedScheduledMinutes: day.workedScheduledMinutes,
+      payableLeaveMinutes: day.payableLeaveMinutes,
+      unpaidLeaveMinutes: day.unpaidLeaveMinutes,
+      creditedMinutes: evaluated.creditedMinutes,
+      workCredit: evaluated.workCredit,
+      reasonCode: evaluated.reasonCode,
+      overtimeMinutes: day.overtimeMinutes,
+      checkInAt: day.checkInAt,
+      checkOutAt: day.checkOutAt,
+      lateMinutes: day.lateMinutes,
+      earlyMinutes: day.earlyMinutes,
+      attendanceState: day.attendanceState,
+      policyId,
+      policyVersion: policy.version,
+      resolvedShiftSnapshot: {
+        shiftTemplateId: day.source.shiftTemplateId,
+        shiftVersion: day.source.shiftVersion,
+        scheduledObligationMinutes: day.scheduledObligationMinutes,
+      },
+      calendarClassification: day.calendarType,
+      sourceReferences: day.source,
+    });
+  }
+  const result: any = {
+    standardWorkUnits: days.reduce((sum, day) => sum + day.standardWorkUnits, 0),
+    standardWorkMinutes: days.reduce((sum, day) => sum + day.standardWorkMinutes, 0),
+    payableWorkUnits: dailyWorkCredits.reduce((sum, day) => sum + day.workCredit, 0),
+    dailyWorkCredits,
+    workCreditPolicySnapshots: [...policySnapshots.values()],
+  };
+  result.sourceHash = canonicalPayloadHash(result);
+  return result;
+}
 
 /**
  * TASK-077 / SRS §7.4 — Aggregate attendance & overtime data into immutable summaries.
@@ -33,8 +118,10 @@ export class TimesheetSummaryService {
     private readonly employeeProfileModel: Model<EmployeeProfile>,
     @InjectModel('User')
     private readonly userModel: Model<User>,
-    @InjectModel('EmployeeAssignment')
+    @InjectModel('Assignment')
     private readonly employeeAssignmentModel: Model<EmployeeAssignmentDocument>,
+    private readonly periodObligationService?: PeriodObligationService,
+    private readonly policiesService?: PoliciesService,
   ) {}
 
   /**
@@ -65,6 +152,9 @@ export class TimesheetSummaryService {
     departmentId: string | undefined,
     session: ClientSession,
   ): Promise<number> {
+    if (this.periodObligationService && this.policiesService) {
+      return this.generateWorkCreditSummaries(periodId, periodKey, organizationId, departmentId, session);
+    }
     const year = parseInt(periodKey.slice(0, 4));
     const month = parseInt(periodKey.slice(5, 7));
     const totalDays = new Date(year, month, 0).getDate();
@@ -135,13 +225,6 @@ export class TimesheetSummaryService {
       ));
     }
 
-    // Re-generation also repairs legacy periods that were created before HR
-    // accounts were excluded from the attendance/payroll population.
-    await this.summaryModel.deleteMany({
-      periodId: new Types.ObjectId(periodId),
-      organizationId: new Types.ObjectId(organizationId),
-      userId: { $nin: [...allowedEmployeeIds].map((id) => new Types.ObjectId(id)) },
-    }).session(session);
 
     // Step 5: Generate one summary for every eligible employee. Empty
     // attendance is represented by a zero-valued summary, not by omission.
@@ -160,6 +243,53 @@ export class TimesheetSummaryService {
       count++;
     }
 
+    return count;
+  }
+
+  private async generateWorkCreditSummaries(
+    periodId: string,
+    periodKey: string,
+    organizationId: string,
+    departmentId: string | undefined,
+    session: ClientSession,
+  ): Promise<number> {
+    const period: any = await this.summaryModel.db.model('TimesheetPeriod').findOne({
+      _id: new Types.ObjectId(periodId), organizationId: new Types.ObjectId(organizationId),
+    }).session(session).lean();
+    if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
+    const projection = await this.periodObligationService!.loadPeriod({
+      organizationId, periodKey, startDate: toDateOnly(period.startDate),
+      endDate: toDateOnly(period.endDate), overtimeStatus: 'FINAL', session,
+    });
+    const grouped = new Map<string, PeriodObligationDay[]>();
+    for (const day of projection.days) {
+      if (departmentId && day.departmentId !== departmentId) continue;
+      const rows = grouped.get(day.employeeProfileId) ?? [];
+      rows.push(day);
+      grouped.set(day.employeeProfileId, rows);
+    }
+    let count = 0;
+    for (const [profileId, days] of grouped) {
+      const profile: any = await this.employeeProfileModel.findById(profileId).session(session).lean();
+      if (!profile) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
+      const legacy = await this.buildSummaryForEmployee(periodId, periodKey, organizationId, String(profile.userId),
+        projection.days.length, [], [], session);
+      const workCredit = await buildWorkCreditSummaryProjection(days, async workDate => {
+        try {
+          return await this.policiesService!.workCreditAt(organizationId, new Date(`${workDate}T12:00:00.000Z`), session) as ResolvedWorkCreditPolicy;
+        } catch (error) {
+          if (error instanceof NotFoundException) return null;
+          throw error;
+        }
+      });
+      const immutablePayload: any = {
+        ...legacy, ...workCredit, sourceHash: workCredit.sourceHash, schemaVersion: 2,
+        sourcePeriodVersion: period.version, calculationContract: 'VERSIONED_WORK_CREDIT_V2',
+      };
+      immutablePayload.canonicalPayloadHash = canonicalPayloadHash(immutablePayload);
+      await this.summaryModel.create([immutablePayload], { session });
+      count++;
+    }
     return count;
   }
 
@@ -324,11 +454,20 @@ export class TimesheetSummaryService {
     const summaryData = await this.buildSummaryForEmployee(
       periodId, periodKey, organizationId, employeeId, totalDays, days, overtimeRecords, session,
     );
-    await this.summaryModel.findOneAndUpdate(
-      { periodId: new Types.ObjectId(periodId), employeeProfileId: new Types.ObjectId(summaryData.employeeProfileId) },
-      { $set: summaryData },
-      { upsert: true, session, new: true },
-    );
+    const periodModel = this.summaryModel.db.model('TimesheetPeriod');
+    const period: any = await periodModel.findOne({
+      _id: new Types.ObjectId(periodId),
+      organizationId: new Types.ObjectId(organizationId),
+    }).session(session).lean();
+    if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
+    const immutablePayload: any = {
+      ...summaryData,
+      schemaVersion: 1,
+      sourcePeriodVersion: period.version,
+      calculationContract: 'LEGACY_WORKING_DAYS_V1',
+    };
+    immutablePayload.canonicalPayloadHash = canonicalPayloadHash(immutablePayload);
+    await this.summaryModel.create([immutablePayload], { session });
   }
 
   /**

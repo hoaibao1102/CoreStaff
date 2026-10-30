@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { ClientSession, Model } from 'mongoose';
 import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
 import { CalendarExceptionDocument } from '../../database/schemas/calendar-exception.schema';
 import { EmployeeDayOverrideDocument } from '../../database/schemas/employee-day-override.schema';
@@ -12,6 +12,7 @@ import { parseWindowInstant, vnDayBounds } from '../../common/vietnam-time';
 import { PoliciesService } from '../policies/policies.service';
 import { evaluateLaborLimits, LaborUsage, laborLimitsFromPolicy, OvertimeType } from '../policies/policies-domain';
 import { ShiftResolverService } from '../shift-template/shift-resolver.service';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 import {
   computeOvertime,
   inputHashOf,
@@ -36,6 +37,10 @@ export const CLIENT_TRUSTED_OT_FIELDS = ['overtimeType', 'actualMinutes', 'eligi
  * report by the end of the day after the work date and nothing extra is asked.
  */
 export const RETROACTIVE_GRACE_DAYS = 1;
+
+function inSession<T>(query: T, session?: ClientSession): T {
+  return session ? (query as T & { session(value: ClientSession): T }).session(session) : query;
+}
 
 /**
  * D39 — the *ceiling* beyond which a late report is refused outright rather than
@@ -119,6 +124,7 @@ export class OvertimeService {
     @InjectModel('OvertimeResult') private readonly results: Model<OvertimeResultDocument>,
     private readonly shifts: ShiftResolverService,
     private readonly policies: PoliciesService,
+    private readonly periodVersion: PeriodVersionService,
   ) {}
 
   /** BR-OT-01/AC-OT-01 — refuse a client that tried to choose its own OT type or minutes. */
@@ -253,13 +259,13 @@ export class OvertimeService {
   }
 
   /** The four inputs classification and the interval math need for one day. */
-  async dayContext(org: string, userId: string, workDateValue: string | Date): Promise<DayContext> {
+  async dayContext(org: string, userId: string, workDateValue: string | Date, session?: ClientSession): Promise<DayContext> {
     const workDate = normalizeWorkDate(workDateValue);
     const [exception, override, shift, day] = await Promise.all([
-      this.calendar.findOne({ organizationId: org, date: workDate }).lean(),
-      this.overrides.findOne({ organizationId: org, employeeId: userId, date: workDate }).lean(),
-      this.shifts.resolveForEmployeeDate(org, userId, workDate),
-      this.attendanceDays.findOne({ organizationId: org, employeeId: userId, workDate }).lean(),
+      inSession(this.calendar.findOne({ organizationId: org, date: workDate }), session).lean(),
+      inSession(this.overrides.findOne({ organizationId: org, employeeId: userId, date: workDate }), session).lean(),
+      this.shifts.resolveForEmployeeDate(org, userId, workDate, session),
+      inSession(this.attendanceDays.findOne({ organizationId: org, employeeId: userId, workDate }), session).lean(),
     ]);
     return {
       workDate,
@@ -285,13 +291,13 @@ export class OvertimeService {
   }
 
   /** TASK-069 — one approved request, reduced to the four §15.11 minute figures. */
-  async computeForRequest(org: string, request: OtRequestLike): Promise<{
+  async computeForRequest(org: string, request: OtRequestLike, session?: ClientSession): Promise<{
     context: DayContext;
     overtimeType: OvertimeType;
     computation: OtComputation;
     window: Interval;
   }> {
-    const context = await this.dayContext(org, otEmployeeUserId(request), request.workDate);
+    const context = await this.dayContext(org, otEmployeeUserId(request), request.workDate, session);
     const requested = this.windowOf(request.requestedStart, request.requestedEnd, context.workDate, 'OVERTIME_REQUEST_WINDOW_INVALID');
     const approved = request.approvedStart && request.approvedEnd
       ? this.windowOf(request.approvedStart, request.approvedEnd, context.workDate, 'OVERTIME_WINDOW_INVALID')
@@ -434,6 +440,7 @@ export class OvertimeService {
     computation: OtComputation,
     labor: { policyVersion: number; legalReference: string },
     status: 'PROVISIONAL' | 'FINAL' = 'PROVISIONAL',
+    session?: ClientSession,
   ): Promise<OvertimeResult> {
     const overtimeRequestId = String(request._id);
     const departmentId = idOf(request.departmentId) || (context.departmentId ?? '');
@@ -481,8 +488,8 @@ export class OvertimeService {
     };
     // One document per request, upserted: idempotent, so a lost write is fixed
     // by `recalculate` rather than needing a multi-document transaction.
-    await this.results.updateOne({ organizationId: org, overtimeRequestId }, { $set: document }, { upsert: true });
-    const row = await this.results.findOne({ organizationId: org, overtimeRequestId }).lean();
+    await this.results.updateOne({ organizationId: org, overtimeRequestId }, { $set: document }, { upsert: true, session });
+    const row = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId }), session).lean();
     if (!row) throw new NotFoundException('OVERTIME_RESULT_NOT_FOUND');
     return row as OvertimeResult;
   }
@@ -537,6 +544,8 @@ export class OvertimeService {
     from: string,
     to: string,
     options: { employeeId?: string; targetStatus?: 'PROVISIONAL' | 'FINAL' } = {},
+    session?: ClientSession,
+    behavior: { bumpPeriodVersion?: boolean } = {},
   ): Promise<{ scanned: number; changed: number }> {
     const dates = enumerateDates(dateOnly(from), dateOnly(to));
     if (!dates.length) throw new BadRequestException('OVERTIME_DATE_RANGE_INVALID');
@@ -549,31 +558,40 @@ export class OvertimeService {
       workDate: { $gte: dayAsDate(dates[0]), $lte: dayAsDate(dates[dates.length - 1]) },
     };
     if (options.employeeId) query.employeeUserId = options.employeeId;
-    const rows = await this.requests.find(query).lean();
+    const rows = await inSession(this.requests.find(query), session).lean();
     let changed = 0;
     for (const request of rows) {
-      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike);
-      const laborPolicy = await this.laborPolicyFor(org, context.workDate);
+      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike, session);
+      const laborPolicy = await this.laborPolicyFor(org, context.workDate, session);
       const labor = { policyVersion: laborPolicy.version, legalReference: laborPolicy.legalReference };
-      const before = await this.results.findOne({ organizationId: org, overtimeRequestId: String(request._id) }).lean();
-      const moved = !before
+      const before = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId: String(request._id) }), session).lean();
+      const targetStatus = options.targetStatus ?? 'PROVISIONAL';
+      const projectionChanged = !before
         || before.overtimeType !== overtimeType
         || before.approvedMinutes !== computation.approvedMinutes
         || before.actualMinutes !== computation.actualMinutes
         || before.eligibleMinutes !== computation.eligibleMinutes
         || this.hashOf(context, overtimeType, labor) !== before.inputHash;
+      const moved = projectionChanged || before.classificationStatus !== targetStatus;
       if (!moved) continue;
-      await this.persistResult(org, request as OtRequestLike, context, overtimeType, computation, labor, options.targetStatus ?? 'PROVISIONAL');
-      changed += 1;
+      await this.persistResult(org, request as OtRequestLike, context, overtimeType, computation, labor, targetStatus, session);
+      if (projectionChanged) changed += 1;
+    }
+    // A PROVISIONAL → FINAL promotion freezes the already-reviewed values but
+    // does not change the employee projection. Only value changes invalidate
+    // the current period version and its acknowledgements.
+    if (changed > 0 && behavior.bumpPeriodVersion !== false) {
+      if (session) await this.periodVersion.bumpForWorkDates(org, dates, session);
+      else await this.periodVersion.bumpForWorkDates(org, dates);
     }
     return { scanned: rows.length, changed };
   }
 
   /** A calendar/schedule edit for one date: refresh whatever results depended on it. */
-  async invalidate(org: string, dates: string[]): Promise<{ scanned: number; changed: number }> {
+  async invalidate(org: string, dates: string[], session?: ClientSession, behavior: { bumpPeriodVersion?: boolean } = {}): Promise<{ scanned: number; changed: number }> {
     const sorted = [...dates].filter(Boolean).sort();
     if (!sorted.length) return { scanned: 0, changed: 0 };
-    return this.recompute(org, sorted[0], sorted[sorted.length - 1]);
+    return this.recompute(org, sorted[0], sorted[sorted.length - 1], {}, session, behavior);
   }
 
   /** Check-out hook — keeps an already-approved day's figures current. */
@@ -717,8 +735,8 @@ export class OvertimeService {
    * day, whose last instant is 17:00 UTC, so a UTC-noon probe would read a policy
    * dated the following morning.
    */
-  private async laborPolicyFor(org: string, workDate: string) {
-    return this.policies.laborAt(org, new Date(vnDayBounds(workDate).from + 12 * 3600_000));
+  private async laborPolicyFor(org: string, workDate: string, session?: ClientSession) {
+    return this.policies.laborAt(org, new Date(vnDayBounds(workDate).from + 12 * 3600_000), session);
   }
 
   private windowOf(start: string | Date | undefined, end: string | Date | undefined, workDate: string, code: string): Interval {

@@ -147,6 +147,22 @@ export async function seedTenant(overrides: Record<string, unknown> = {}): Promi
     ...overrides,
   });
 
+  // Integration fixtures opt into deterministic business rules. This is not a
+  // production default policy and is never created outside the disposable DB.
+  await model('WorkCreditPolicy').create({
+    organizationId,
+    effectiveFrom: new Date('2026-01-01'),
+    halfDayMinimumRatio: 0.5,
+    fullDayMinimumRatio: 1,
+    paidLeaveCreditEnabled: true,
+    incompleteDayRule: 'BLOCK',
+    businessReference: 'INTEGRATION_FIXTURE_ONLY',
+    version: 1,
+    active: true,
+    createdBy: hr._id,
+  });
+
+
   return {
     organizationId: String(organizationId), departmentId: String(departmentId),
     employeeId: String(employee._id), profileId: String(profile._id),
@@ -188,6 +204,92 @@ export async function addCalendarException(fixture: Fixture, date: string, type:
 /** A registered model by name, for direct assertions on stored documents. */
 export function collection(name: string) {
   return model(name);
+}
+
+/**
+ * Resolve every scheduled weekday in a disposable period, then acknowledge the
+ * exact employee projection through the public API. This seeds prerequisites,
+ * not a final review row: hash/version validation and append-only action logic
+ * are exercised by the real endpoint.
+ */
+export async function resolveAndAcknowledgePeriod(
+  http: any,
+  fixture: Fixture,
+  periodId: string,
+  startDate: string,
+  endDate: string,
+): Promise<void> {
+  await ensurePayrollPrerequisites(fixture);
+  for (let cursor = new Date(`${startDate}T00:00:00.000Z`); cursor <= new Date(`${endDate}T00:00:00.000Z`); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const weekday = cursor.getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+    const workDate = cursor.toISOString().slice(0, 10);
+    await model('AttendanceDay').updateOne(
+      { organizationId: fixture.organizationId, employeeId: fixture.employeeId, workDate },
+      { $setOnInsert: {
+        periodId, attendanceStatus: 'COMPLETED', dayResult: 'PRESENT',
+        checkInAt: vn(workDate, '08:00'), checkOutAt: vn(workDate, '17:00'),
+        workingMinutes: 480, lateMinutes: 0, earlyMinutes: 0,
+        overallApprovalStatus: 'NOT_REQUIRED',
+        shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 5 },
+        employeeSnapshot: { departmentId: fixture.departmentId },
+      } },
+      { upsert: true },
+    );
+  }
+
+  const employeeCookie = await cookieFor(fixture.employeeId, fixture.organizationId);
+  const review = await http
+    .get(`/api/hr/timesheet-periods/${periodId}/my-review`)
+    .set('Cookie', employeeCookie);
+  if (review.status !== 200) throw new Error(`review prerequisite failed: ${review.status} ${JSON.stringify(review.body)}`);
+  const acknowledged = await http
+    .post(`/api/hr/timesheet-periods/${periodId}/my-review/acknowledge`)
+    .set('Cookie', employeeCookie)
+    .send({
+      expectedPeriodVersion: review.body.data.periodVersion,
+      projectionHash: review.body.data.projectionHash,
+    });
+  const storedActions = await model('EmployeeTimesheetAcknowledgement').find({
+    periodId: new mongoose.Types.ObjectId(periodId),
+    userId: new mongoose.Types.ObjectId(fixture.employeeId),
+  }).lean();
+  if (acknowledged.status !== 201 || acknowledged.body?.data?.state !== 'ACKNOWLEDGED') {
+    throw new Error(`acknowledgement prerequisite failed: ${acknowledged.status} ${JSON.stringify(acknowledged.body)}`);
+  }
+  const reread = await http
+    .get(`/api/hr/timesheet-periods/${periodId}/my-review`)
+    .set('Cookie', employeeCookie);
+  if (storedActions.length !== 1 || reread.body?.data?.state !== 'ACKNOWLEDGED') {
+    throw new Error(`acknowledgement did not persist: actions=${JSON.stringify(storedActions)} review=${JSON.stringify(reread.body)}`);
+  }
+}
+
+
+async function ensurePayrollPrerequisites(fixture: Fixture): Promise<void> {
+  const organizationId = new mongoose.Types.ObjectId(fixture.organizationId);
+  const employeeProfileId = new mongoose.Types.ObjectId(fixture.profileId);
+  const insuranceTypes = ['SOCIAL_INSURANCE', 'HEALTH_INSURANCE', 'UNEMPLOYMENT_INSURANCE'];
+  if (!await model('InsurancePolicy').exists({ organizationId })) await model('InsurancePolicy').create({
+    organizationId, effectiveFrom: new Date('2026-01-01'), version: 1,
+    legalReference: 'INTEGRATION_FIXTURE_ONLY', socialInsuranceEmployeeRate: 0.08,
+    healthInsuranceEmployeeRate: 0.015, unemploymentInsuranceEmployeeRate: 0.01,
+    salaryBaseRules: insuranceTypes.map(type => ({ type, floorAmount: null })),
+    capRules: insuranceTypes.map(type => ({ type, capAmount: null })),
+    employerContributionRates: insuranceTypes.map(type => ({ type, rate: 0 })), createdBy: fixture.hrId,
+  });
+  if (!await model('TaxPolicy').exists({ organizationId })) await model('TaxPolicy').create({
+    organizationId, effectiveFrom: new Date('2026-01-01'), standardDeduction: 0,
+    personalDeduction: 0, dependentDeduction: 0,
+    progressiveBrackets: [{ upperLimit: null, rate: 0 }], roundingRule: 'ROUND_HALF_UP_TO_VND',
+    legalReference: 'INTEGRATION_FIXTURE_ONLY', overtimeTaxable: false, version: 1, active: true,
+  });
+  if (!await model('SalaryProfile').exists({ organizationId, employeeProfileId })) await model('SalaryProfile').create({
+    organizationId, employeeProfileId, effectiveFrom: new Date('2026-01-01'),
+    baseSalary: 10_000_000, insuranceSalary: 10_000_000,
+    organizationAllowanceIds: [], allowances: [], currency: 'VND',
+    roundingRule: 'ROUND_HALF_UP_TO_VND', version: 1, active: true,
+  });
 }
 
 /**

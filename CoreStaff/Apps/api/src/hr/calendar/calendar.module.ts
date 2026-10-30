@@ -9,9 +9,10 @@ import { UserSchema } from '../../database/schemas/user.schema';
 import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { PoliciesModule } from '../policies/policies.module';
 import { OvertimeModule } from '../overtime/overtime.module';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 @Module({
-  imports: [AuthModule, PoliciesModule, OvertimeModule, MongooseModule.forFeature([
+  imports: [AuthModule, PoliciesModule, OvertimeModule, PeriodVersionModule, MongooseModule.forFeature([
     { name: 'CalendarException', schema: CalendarExceptionSchema },
     { name: 'User', schema: UserSchema },
     { name: 'UserSession', schema: UserSessionSchema },

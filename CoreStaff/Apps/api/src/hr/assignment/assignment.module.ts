@@ -11,10 +11,12 @@ import { EmployeeAssignmentSchema } from '../../database/schemas/assignment.sche
 import { EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
 import { AssignmentController } from './assignment.controller';
 import { AssignmentService } from './assignment.service';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 @Module({
 	imports: [
 		AuthModule,
+		PeriodVersionModule,
 		MongooseModule.forFeature([
 			{ name: 'Assignment', schema: EmployeeAssignmentSchema },
 			{ name: 'Department', schema: DepartmentSchema },

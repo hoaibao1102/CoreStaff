@@ -120,6 +120,42 @@ export function updateOvertimePolicy(base: string, id: string, payload: UpdateOv
   });
 }
 
+export interface WorkCreditPolicy {
+  _id: string;
+  organizationId: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  halfDayMinimumRatio: number;
+  fullDayMinimumRatio: number;
+  paidLeaveCreditEnabled: boolean;
+  incompleteDayRule: 'BLOCK';
+  businessReference?: string;
+  version: number;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateWorkCreditPolicyPayload {
+  effectiveFrom: string;
+  effectiveTo?: string;
+  halfDayMinimumRatio: number;
+  fullDayMinimumRatio: number;
+  paidLeaveCreditEnabled: boolean;
+  incompleteDayRule: 'BLOCK';
+  businessReference?: string;
+  active?: boolean;
+}
+export type UpdateWorkCreditPolicyPayload = Partial<CreateWorkCreditPolicyPayload>;
+
+const workCreditPath = (id: string) => `/api/hr/policies/work-credit/${encodeURIComponent(id)}`;
+export const listWorkCreditPolicies = (base: string) =>
+  hrRequest<WorkCreditPolicy[]>(base, '/api/hr/policies/work-credit', { method: 'GET' });
+export const createWorkCreditPolicy = (base: string, payload: CreateWorkCreditPolicyPayload) =>
+  hrRequest<WorkCreditPolicy>(base, '/api/hr/policies/work-credit', { method: 'POST', body: JSON.stringify(payload) });
+export const updateWorkCreditPolicy = (base: string, id: string, payload: UpdateWorkCreditPolicyPayload) =>
+  hrRequest<WorkCreditPolicy>(base, workCreditPath(id), { method: 'PATCH', body: JSON.stringify(payload) });
+
 /* ─────────────────────────────────────────────────────────────────────────
    Error mapping — backend codes surfaced to the end user in Vietnamese.
    ───────────────────────────────────────────────────────────────────────── */
@@ -131,6 +167,9 @@ export function policiesErrorMessage(error: unknown) {
     EFFECTIVE_DATE_RANGE_INVALID: 'Ngày hết hiệu lực phải sau ngày hiệu lực.',
     LABOR_POLICY_NOT_FOUND: 'Không tìm thấy chính sách tuân thủ lao động.',
     OVERTIME_POLICY_NOT_FOUND: 'Không tìm thấy chính sách lương tăng ca.',
+    WORK_CREDIT_POLICY_NOT_FOUND: 'Không tìm thấy chính sách quy đổi ngày công.',
+    WORK_CREDIT_POLICY_THRESHOLDS_INVALID: 'Ngưỡng nửa ngày phải nhỏ hơn ngưỡng đủ ngày và cả hai phải nằm trong khoảng 0–100%.',
+    WORK_CREDIT_POLICY_OVERLAP: 'Chính sách quy đổi ngày công bị trùng khoảng thời gian hiệu lực.',
   };
   return (code && messages[code]) || mapHrError(code, 'Không thể thực hiện thao tác với chính sách. Vui lòng thử lại.');
 }
