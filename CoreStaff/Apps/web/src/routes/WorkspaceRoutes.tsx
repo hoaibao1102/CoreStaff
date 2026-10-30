@@ -32,8 +32,7 @@ import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
-import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
-import { EmployeeTimesheetReviewScreen } from '../screens/Employee/EmployeeTimesheetReviewScreen';
+import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -204,7 +203,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (user.role === 'HR') {
     // HR accounts carry no personal workspace: the employee self-service routes
     // are closed here even on a direct URL (backend returns 403 for the same).
-    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips', '/app/timesheet-review'];
+    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/compensation', '/app/payslips', '/app/timesheet-review'];
     if (hrPersonalRoutes.includes(route)) return <EmployeeDataState status="forbidden" />;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
@@ -323,17 +322,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/timesheet-review' && apiBase) {
-    return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><EmployeeTimesheetReviewScreen apiBase={apiBase} /></WorkspaceShell>;
-  }
-
-  // Personal payslips are shared by employees and department managers.
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/payslips' && apiBase) {
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && ['/app/compensation', '/app/timesheet-review', '/app/payslips'].includes(route) && apiBase) {
     return (
-      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <MyPayslipsScreen apiBase={apiBase} />
-        </section>
+      <WorkspaceShell user={user} currentPath="/app/compensation" onLogout={onLogout} apiBase={apiBase}>
+        <MyCompensationScreen apiBase={apiBase} initialTab={route === '/app/payslips' ? 'payslip' : 'timesheet'} />
       </WorkspaceShell>
     );
   }
