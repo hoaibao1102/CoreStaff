@@ -13,9 +13,10 @@ import {
   TableRow,
 } from '@/components/table';
 import { employeeRequest } from '@/services/employeeService';
-import { PayslipPreviewDialog, type PayslipRow } from '@/screens/hr/PayslipPreviewDialog';
+import { type PayslipRow } from '@/screens/hr/PayslipPreviewDialog';
 import { FileText, RefreshCw, Eye } from 'lucide-react';
 import { getSocket } from '@/services/socket';
+import { AppLink } from '@/components/AppLink';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -80,7 +81,6 @@ function EmptyState() {
 
 export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
-  const [expandedSlipId, setExpandedSlipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,19 +116,6 @@ export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
     }
   };
 
-  const handleViewed = async (slipId: string, keepOpen?: boolean) => {
-    try {
-      await employeeRequest.post<void>(`/payslips/me/${slipId}/viewed`);
-      if (!keepOpen) {
-        setExpandedSlipId(null);
-      }
-      const res = await employeeRequest.get<Payslip[]>('/payslips/me');
-      setPayslips(res || []);
-    } catch (error) {
-      console.error('Failed to mark as viewed:', error);
-    }
-  };
-
   useEffect(() => {
     if (!hasLoaded) {
       loadMyPayslips();
@@ -144,7 +131,6 @@ export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
   }, [apiBase]);
 
   const totalNet = payslips.reduce((sum, s) => sum + s.netSalary, 0);
-  const selectedPayslip = payslips.find((slip) => slip._id === expandedSlipId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -259,16 +245,12 @@ export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
+                          {/* Điều hướng thật (không phải state) để mở được tab mới và giữ nút Back của trình duyệt. */}
                           <Button
                             size="sm"
                             variant="ghost"
                             className="min-h-10 text-primary"
-                            onClick={() => {
-                              setExpandedSlipId(slip._id);
-                              if (slip.status === 'RELEASED') {
-                                handleViewed(slip._id, true);
-                              }
-                            }}
+                            render={<AppLink href={`/app/payslips/${slip._id}`} />}
                           >
                             <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                             Xem chi tiết
@@ -282,13 +264,6 @@ export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
             </CardContent>
           </Card>
 
-          {/* Reuse the HR payslip preview so both roles always share the same layout. */}
-          <PayslipPreviewDialog
-            open={expandedSlipId !== null}
-            onClose={() => setExpandedSlipId(null)}
-            payslip={selectedPayslip}
-            periodLabel={selectedPayslip?.periodLabel ?? ''}
-          />
         </>
       )}
     </div>

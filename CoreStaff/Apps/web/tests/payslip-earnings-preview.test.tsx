@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactNode } from 'react';
-import { GrossEarningsCard, TaxableIncomeCard, TaxDeductionsCard, PitTaxDetails, PayslipPreviewDialog } from '../src/screens/hr/PayslipPreviewDialog';
+import { GrossEarningsCard, TaxDeductionsCard, PitTaxDetails, PayslipPreviewDialog } from '../src/screens/hr/PayslipPreviewDialog';
 
 jest.mock('@/components/tooltip', () => ({
   Tooltip: ({ children, content }: { children: ReactNode; content: ReactNode }) => <>{children}<span>{content}</span></>,
@@ -33,6 +33,11 @@ const basePayslip = {
   standardWorkingDays: 25,
   payableWorkingDays: 20,
   hourlyRate: 100_000,
+  // 1.280.000 = 8% × 16.000.000; 240.000 = 1,5%; 160.000 = 1%.
+  contributionBase: 16_000_000,
+  socialInsuranceRate: 0.08,
+  healthInsuranceRate: 0.015,
+  unemploymentInsuranceRate: 0.01,
   socialInsurance: 1_280_000,
   healthInsurance: 240_000,
   unemploymentInsurance: 160_000,
@@ -72,25 +77,34 @@ test('§1 GROSS — itemizes every earning component, no OT tax-split block', ()
   for (const label of ['Lương cơ bản theo công', 'Phụ cấp ăn trưa', 'Phụ cấp điện thoại', 'Phụ cấp trách nhiệm', 'Phụ cấp đi lại', 'Thưởng chuyên cần', 'Thưởng KPI', 'Tiền làm thêm giờ']) {
     expect(html).toContain(label);
   }
-  expect(html).toContain('Tổng Gross');
-  expect(html).toContain('27.230.000');
+  // Tổng gross chỉ in ở footer bảng, không lặp ở tiêu đề mục.
+  // (Số 27.230.000 xuất hiện lần hai ở dòng "Thu nhập chịu thuế" khi cờ OT bật —
+  //  ở đây cờ tắt nên tổng chịu thuế là con số khác.)
+  expect(html.match(/Tổng cộng Gross/g)).toHaveLength(1);
+  expect(html.match(/27\.230\.000/g)).toHaveLength(1);
+  // Dòng gộp "Tổng phụ cấp" bị thay bằng 4 dòng phụ cấp riêng — không đếm trùng.
+  expect(html).not.toContain('Tổng phụ cấp');
   // Khối "Chi tiết làm thêm giờ" (bảng thuế OT) đã bỏ khỏi Gross.
   expect(html).not.toContain('Chi tiết làm thêm giờ');
   expect(html).not.toContain('Miễn thuế TNCN');
-  expect(html).not.toContain('Chịu thuế TNCN');
 });
 
-test('§1 GROSS — lương cơ bản và OT có nút Chi tiết, chi tiết ẩn tới khi bấm', () => {
+test('§1 GROSS — chi tiết lương công và OT in thẳng thành dòng phụ, không cần bấm', () => {
   const html = renderToStaticMarkup(<GrossEarningsCard payslip={basePayslip} />);
 
-  // Nút "Chi tiết" xuất hiện cho dòng lương cơ bản và dòng OT.
-  expect(html).toContain('Chi tiết');
-  // Nút là <button> nên nội dung chi tiết chưa render ở server markup.
-  expect(html).not.toContain('Ngày công chuẩn');
-  expect(html).not.toContain('Tiền công 1 ngày');
+  expect(html).not.toContain('Chi tiết</button>');
+  // 20.000.000 ÷ 25 ngày = 800.000/ngày × 20 ngày.
+  expect(html).toContain('ngày công chuẩn');
+  expect(html).toContain('800.000');
+  expect(html).toContain('ngày công thực tế');
+  // 120 phút = 2 giờ × (100.000 × 1.5) và 960 phút = 16 giờ × (100.000 × 3).
+  expect(html).toContain('2 giờ');
+  expect(html).toContain('16 giờ');
+  expect(html).toContain('300.000');
+  expect(html).toContain('4.800.000');
 });
 
-test('§1 GROSS — không đủ dữ liệu ngày công thì ẩn nút Chi tiết lương cơ bản', () => {
+test('§1 GROSS — thiếu dữ liệu ngày công thì bỏ dòng phụ lương cơ bản', () => {
   const withBase = renderToStaticMarkup(<GrossEarningsCard payslip={basePayslip} />);
   const withoutBase = renderToStaticMarkup(
     <GrossEarningsCard
@@ -98,20 +112,18 @@ test('§1 GROSS — không đủ dữ liệu ngày công thì ẩn nút Chi ti�
     />,
   );
 
-  // Còn 2 nút khi đủ dữ liệu (lương cơ bản + OT), rụng còn 1 khi thiếu ngày công.
-  // Khớp `Chi tiết</button>` để không đếm nhầm nhãn tĩnh "Chi tiết phụ cấp".
-  expect(withBase.match(/Chi tiết<\/button>/g)).toHaveLength(2);
-  expect(withoutBase.match(/Chi tiết<\/button>/g)).toHaveLength(1);
+  expect(withBase).toContain('ngày công chuẩn');
+  expect(withoutBase).not.toContain('ngày công chuẩn');
+  // Dòng chính của lương cơ bản vẫn còn.
+  expect(withoutBase).toContain('Lương cơ bản theo công');
 });
 
-test('§2 TAXABLE INCOME — shows backend taxableIncome and OT tax policy marker', () => {
-  const html = renderToStaticMarkup(<TaxableIncomeCard payslip={basePayslip} />);
+test('§1 — cột chịu thuế TNCN và tổng thu nhập chịu thuế nằm ngay trong bảng gross', () => {
+  const html = renderToStaticMarkup(<GrossEarningsCard payslip={basePayslip} />);
 
-  for (const label of ['Thu nhập chịu thuế trước giảm trừ', 'Lương cơ bản theo công', 'Thưởng chuyên cần', 'Thưởng KPI', 'Tổng phụ cấp', 'Tiền làm thêm giờ chịu thuế']) {
-    expect(html).toContain(label);
-  }
-  // Cờ tắt → Taxable OT = 0, và tổng lấy thẳng từ backend.
-  expect(html).toContain('Tổng thu nhập chịu thuế');
+  expect(html).toContain('Chịu thuế TNCN');
+  expect(html).toContain('Thu nhập chịu thuế trước giảm trừ');
+  // Cờ OT tắt → OT không vào thu nhập chịu thuế: lấy số backend.
   expect(html).toContain('22.130.000');
   // Dấu * mở tooltip chính sách thuế OT.
   expect(html).toContain('aria-label="Chính sách thuế TNCN cho tiền tăng ca"');
@@ -120,9 +132,15 @@ test('§2 TAXABLE INCOME — shows backend taxableIncome and OT tax policy marke
   expect(html).not.toContain('>Miễn thuế<');
 });
 
-test('§2 — bật cờ OT thì tooltip nói toàn bộ tiền tăng ca chịu thuế', () => {
+/** Ô của dòng "Tiền làm thêm giờ" (dòng cha, không tính dòng phụ bên dưới). */
+function overtimeRowCells(html: string) {
+  const row = html.slice(html.indexOf('Tiền làm thêm giờ'));
+  return row.slice(0, row.indexOf('</tr>')).replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ');
+}
+
+test('§1 — bật cờ OT thì tiền tăng ca vào thẳng thu nhập chịu thuế', () => {
   const html = renderToStaticMarkup(
-    <TaxableIncomeCard
+    <GrossEarningsCard
       payslip={{
         ...basePayslip,
         taxableIncome: 27_230_000,
@@ -132,10 +150,47 @@ test('§2 — bật cờ OT thì tooltip nói toàn bộ tiền tăng ca chịu 
   );
 
   expect(html).toContain('toàn bộ tiền tăng ca chịu thuế');
-  expect(html).toContain('5.100.000');
+  // Toàn bộ OT vào thu nhập chịu thuế → tổng chịu thuế = gross, in ở 2 chỗ
+  // (dòng tổng gross và dòng thu nhập chịu thuế) — không lặp ở từng dòng.
+  expect(html.match(/27\.230\.000/g)).toHaveLength(2);
+  // Cột số tiền luôn là tổng OT; cột chịu thuế bằng đúng tổng đó khi công ty đánh thuế OT.
+  expect(overtimeRowCells(html)).toMatch(/5\.100\.000 ₫<\/td>.*5\.100\.000 ₫<\/td>/);
 });
 
-test('§3 TAX DEDUCTIONS — insurance + family deductions yield taxable earnings', () => {
+test('§1 — dòng tiền làm thêm giờ luôn hiện, kèm số giờ và cột chịu thuế bằng 0 khi miễn thuế', () => {
+  const html = renderToStaticMarkup(<GrossEarningsCard payslip={basePayslip} />);
+
+  // 1080 phút = 18 giờ làm thêm trong kỳ, in thành dòng nhỏ dưới tên khoản mục.
+  expect(html).toContain('Làm thêm 18 giờ trong kỳ');
+  // Cột số tiền vẫn là tổng tiền OT; chỉ cột chịu thuế phụ thuộc chính sách công ty.
+  expect(overtimeRowCells(html)).toMatch(/5\.100\.000 ₫<\/td>.*>\s*0 ₫\s*<\/td>/);
+});
+
+test('§1 — backend cắt dòng OVERTIME khỏi earningBreakdown thì card 1 vẫn dựng lại khoản mục', () => {
+  const html = renderToStaticMarkup(
+    <GrossEarningsCard
+      payslip={{
+        ...basePayslip,
+        earningBreakdown: basePayslip.earningBreakdown.filter((item) => item.type !== 'OVERTIME'),
+        otBreakdown: undefined,
+      }}
+    />,
+  );
+
+  expect(html).toContain('Tiền làm thêm giờ');
+  expect(html).toContain('aria-label="Chính sách thuế TNCN cho tiền tăng ca"');
+});
+
+test('§1 — thiếu taxableIncome thì tự cộng từ các dòng chịu thuế', () => {
+  const html = renderToStaticMarkup(
+    <GrossEarningsCard payslip={{ ...basePayslip, taxableIncome: undefined }} />,
+  );
+
+  // 16.000.000 + 3.130.000 + 1.000.000 + 2.000.000 = 22.130.000; OT miễn thuế.
+  expect(html).toContain('22.130.000');
+});
+
+test('§2 TAX DEDUCTIONS — insurance + family deductions yield taxable earnings', () => {
   const html = renderToStaticMarkup(<TaxDeductionsCard payslip={basePayslip} />);
 
   for (const label of ['Các khoản giảm trừ thuế', 'Bảo hiểm (BHXH + BHYT + BHTN)', 'Giảm trừ bản thân', 'Thu nhập tính thuế']) {
@@ -143,11 +198,20 @@ test('§3 TAX DEDUCTIONS — insurance + family deductions yield taxable earning
   }
   expect(html).toContain('15.500.000');
   expect(html).toContain('4.950.000');
-  // Không phụ thuộc nào → dòng giảm trừ người phụ thuộc ẩn.
-  expect(html).not.toContain('Giảm trừ người phụ thuộc');
+  // Căn cứ trích in ở dòng phụ của mục bảo hiểm, không lặp thành dòng riêng.
+  expect(html).toContain('Trích trên lương đóng bảo hiểm');
+  expect(html).not.toContain('Lương đóng BHXH (căn cứ trích)');
 });
 
-test('§3 — hiển thị giảm trừ người phụ thuộc khi có', () => {
+test('§2 — ba khoản giảm trừ luôn là mục cố định, dòng người phụ thuộc không bị ẩn', () => {
+  const html = renderToStaticMarkup(<TaxDeductionsCard payslip={basePayslip} />);
+
+  // Không có người phụ thuộc → vẫn in dòng, số tiền bằng 0.
+  expect(html).toContain('Giảm trừ người phụ thuộc');
+  expect(html).toContain('Chưa đăng ký người phụ thuộc');
+});
+
+test('§2 — hiển thị giảm trừ người phụ thuộc khi có', () => {
   const html = renderToStaticMarkup(
     <TaxDeductionsCard
       payslip={{
@@ -161,20 +225,26 @@ test('§3 — hiển thị giảm trừ người phụ thuộc khi có', () => {
     />,
   );
 
-  expect(html).toContain('Giảm trừ người phụ thuộc (2 người)');
+  expect(html).toContain('Giảm trừ người phụ thuộc');
+  expect(html).toContain('2 người phụ thuộc đã đăng ký');
   expect(html).toContain('12.400.000');
 });
 
-test('§4 PIT — progressive brackets and total tax', () => {
+test('§3 PIT — biểu thuế lũy tiến từng phần dạng bảng', () => {
   const html = renderToStaticMarkup(<PitTaxDetails payslip={basePayslip} />);
 
   expect(html).toContain('Thuế TNCN (PIT)');
-  expect(html.replaceAll(' ', ' ')).toContain('4.950.000 ₫ × 5%');
+  for (const head of ['Bậc thuế', 'Thu nhập tính thuế', 'Thuế suất', 'Thuế phát sinh']) {
+    expect(html).toContain(head);
+  }
+  expect(html).toContain('Bậc 1');
+  expect(html).toContain('4.950.000');
+  expect(html).toContain('5%');
   expect(html).toContain('Thuế TNCN phải nộp');
   expect(html).toContain('247.500');
 });
 
-test('§4 — không phát sinh thuế thì nói rõ thay vì bảng rỗng', () => {
+test('§3 — không phát sinh thuế thì nói rõ thay vì bảng rỗng', () => {
   const html = renderToStaticMarkup(
     <PitTaxDetails payslip={{ ...basePayslip, pitAmount: 0, pitBreakdown: [] }} />,
   );

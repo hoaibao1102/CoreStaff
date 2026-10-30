@@ -1,12 +1,19 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/dialog";
 import { Badge } from '@/components/badge';
-import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
 import { Separator } from '@/components/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/table';
 import { Tooltip } from '@/components/tooltip';
-import { ChevronDown, ChevronRight, Calendar, User, Building2, Wallet } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronUp, User, Building2, Wallet } from 'lucide-react';
 
 export type PayslipRow = {
   _id: string;
@@ -42,6 +49,7 @@ export type PayslipRow = {
   allowanceBreakdown?: Array<{ type: string; label: string; amount: number; taxable?: boolean }>;
   otBreakdown?: {
     totalMinutes: number;
+    totalHours?: number;
     workingDayMinutes: number;
     weeklyOffMinutes: number;
     publicHolidayMinutes: number;
@@ -72,10 +80,14 @@ interface Props {
   periodLabel: string;
 }
 
-const formatCurrency = (value: number) =>
+export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
-const formatDate = (dateStr?: string) => {
+/** Số giờ làm thêm: tối đa 2 chữ số thập phân, không hiện đuôi ".00". */
+const formatHours = (value: number) =>
+  `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value)} giờ`;
+
+export const formatDate = (dateStr?: string) => {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('vi-VN', {
     hour: '2-digit',
@@ -83,15 +95,74 @@ const formatDate = (dateStr?: string) => {
   });
 };
 
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   GENERATED: 'Đã Tạo',
   RELEASED: 'Đã Phát Hành',
   VIEWED: 'Đã Xem',
 };
 
+/** `0.08 * 100` ra 8.000000000000002 — làm tròn để không in số rác lên phiếu lương. */
+const formatRate = (rate?: number) => Number(((rate || 0) * 100).toFixed(2));
+
+/** Ô số thứ tự mục — ô vuông navy như mẫu phiếu lương giấy. */
+export function SectionNumber({ value }: { value: number | '=' }) {
+  return (
+    <span
+      className={
+        value === '='
+          ? 'grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-600 text-sm font-bold text-white'
+          : 'grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground'
+      }
+      aria-hidden="true"
+    >
+      {value}
+    </span>
+  );
+}
+
+/**
+ * Khung chung của mọi mục phiếu lương: vỏ xám, bảng trắng bên trong.
+ * Dùng chung cho dialog HR và trang chi tiết để hai nơi không lệch nhau.
+ */
+export function PayslipSection({
+  index,
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  index?: number;
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Card className="gap-0 bg-muted/50 py-0">
+      <CardHeader className="flex-row items-start justify-between gap-3 border-b border-border py-4">
+        <div className="flex items-start gap-3">
+          {typeof index === 'number' && <SectionNumber value={index} />}
+          <div>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wide">{title}</CardTitle>
+            {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+        </div>
+        {action}
+      </CardHeader>
+      <CardContent className="py-4">
+        {/* Dải màu ở hàng tiêu đề bảng, theo thói quen các bảng khác trong dự án
+            (TimesheetReviewScreen, ManagerDepartmentScreen) để hàng tiêu đề tách khỏi dữ liệu. */}
+        <div className="overflow-hidden rounded-lg border border-border bg-card [&_thead]:bg-muted/60 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+          {children}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive' | 'ghost' | 'link' | 'success';
 
-function getStatusBadgeVariant(status: string): BadgeVariant {
+export function getStatusBadgeVariant(status: string): BadgeVariant {
   switch (status) {
     case 'VIEWED':
       return 'secondary';
@@ -105,11 +176,10 @@ function getStatusBadgeVariant(status: string): BadgeVariant {
 }
 
 export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
-  const [showBaseDetail, setShowBaseDetail] = useState(false);
-  const [showOtDetail, setShowOtDetail] = useState(false);
   const totalEarnings = payslip.grossEarnings || 0;
   const allowances = payslip.allowanceBreakdown ?? [];
-  const summaryRows = (payslip.earningBreakdown ?? []).filter((item) => item.type !== 'ALLOWANCE');
+  // Giữ nguyên thứ tự backend trả về, kể cả dòng ALLOWANCE — nó là dòng cha của các phụ cấp.
+  const summaryRows = payslip.earningBreakdown ?? [];
 
   // Chi tiết lương công: lương tháng ÷ ngày công chuẩn = tiền công 1 ngày, × ngày công thực tế.
   const monthlyBaseSalary = payslip.monthlyBaseSalary || 0;
@@ -122,283 +192,321 @@ export function GrossEarningsCard({ payslip }: { payslip: PayslipRow }) {
   const otBreakdown = payslip.otBreakdown;
   const otLines = (otBreakdown?.breakdown ?? []).filter((line) => line.amount > 0);
 
-  const detailToggle = (open: boolean, onToggle: () => void): ReactNode => (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="h-6 px-2 text-xs"
-      onClick={onToggle}
-    >
-      {open ? (
-        <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
-      ) : (
-        <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
-      )}
-      Chi tiết
-    </Button>
-  );
+  // Dòng phụ giải thích cách ra số tiền, in ngay dưới tên khoản mục.
+  const baseDetail = hasBaseDetail
+    ? `${formatCurrency(monthlyBaseSalary)} ÷ ${standardWorkingDays} ngày công chuẩn = ${formatCurrency(dailyRate)}/ngày × ${payableWorkingDays} ngày công thực tế`
+    : undefined;
+  // Chính sách thuế công ty: bật → cả tiền OT vào thu nhập chịu thuế, tắt → miễn hết.
+  // Khớp `nonTaxableOt` của PitService — không chia nhỏ tiền OT.
+  const overtimeTaxable = otBreakdown?.overtimeTaxable === true;
+  const taxableOt = overtimeTaxable ? (otBreakdown?.otPay ?? 0) : 0;
+  // Số giờ làm thêm cả kỳ — luôn in thành dòng nhỏ dưới tên khoản mục OT.
+  const otHours = otBreakdown ? (otBreakdown.totalHours ?? otBreakdown.totalMinutes / 60) : 0;
+  const otDetail = otHours > 0 ? `Làm thêm ${formatHours(otHours)} trong kỳ` : undefined;
 
-  return (
-    <Card>
-      <CardHeader><CardTitle>Tổng thu nhập (Gross)</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          {summaryRows.map((item, idx) => {
-            const isBase = item.type === 'BASE_SALARY';
-            const isOt = item.type === 'OVERTIME';
-            const detail = isBase ? hasBaseDetail : isOt ? otLines.length > 0 : false;
-            const open = isBase ? showBaseDetail : showOtDetail;
-            return (
-              <div key={`${item.type}-${idx}`}>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="flex items-center gap-2 text-foreground">
-                    {item.label}
-                    {detail && detailToggle(open, () => (isBase ? setShowBaseDetail(!showBaseDetail) : setShowOtDetail(!showOtDetail)))}
-                  </span>
-                  <span className="font-mono">{formatCurrency(item.amount)}</span>
-                </div>
-                {isBase && showBaseDetail && (
-                  <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Lương cơ bản tháng</span>
-                      <span className="font-mono">{formatCurrency(monthlyBaseSalary)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ngày công chuẩn</span>
-                      <span className="font-mono">{standardWorkingDays} ngày</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ngày công thực tế</span>
-                      <span className="font-mono">{payableWorkingDays} ngày</span>
-                    </div>
-                    <div className="flex justify-between border-t border-border pt-2">
-                      <span className="text-muted-foreground">Tiền công 1 ngày</span>
-                      <span className="font-mono">{formatCurrency(dailyRate)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        {formatCurrency(dailyRate)} × {payableWorkingDays} ngày
-                      </span>
-                      <span className="font-mono font-semibold">{formatCurrency(item.amount)}</span>
-                    </div>
-                  </div>
+  type GrossRow = {
+    key: string;
+    label: string;
+    amount: number;
+    /** Phần vào thu nhập chịu thuế TNCN. */
+    taxable: number;
+    detail?: string;
+    /** Gắn dấu * giải thích chính sách thuế — chỉ dòng tiền làm thêm giờ. */
+    taxMarker?: boolean;
+    subRows?: Array<{ key: string; label: string; amount: number; taxable: number }>;
+  };
+  const rows: GrossRow[] = summaryRows.flatMap((item, idx): GrossRow[] => {
+    // Có breakdown từng loại phụ cấp thì in từng loại, bỏ dòng gộp "Tổng phụ cấp"
+    // (in cả hai là đếm trùng). Không có thì giữ dòng gộp.
+    // R1: mọi phụ cấp đều chịu thuế nên phần chịu thuế = nguyên số tiền.
+    if (item.type === 'ALLOWANCE' && allowances.length > 0) {
+      return allowances.map((allowance, allowanceIdx) => ({
+        key: `ALLOWANCE-${allowance.type}-${allowanceIdx}`,
+        label: allowance.label,
+        amount: allowance.amount,
+        taxable: allowance.amount,
+      }));
+    }
+    const isOvertime = item.type === 'OVERTIME';
+    return [
+      {
+        key: `${item.type}-${idx}`,
+        label: item.label,
+        amount: item.amount,
+        taxable: isOvertime ? taxableOt : item.amount,
+        detail: item.type === 'BASE_SALARY' ? baseDetail : isOvertime ? otDetail : undefined,
+        taxMarker: isOvertime,
+        subRows: isOvertime
+          ? otLines.map((line, lineIdx) => ({
+              key: `${line.type}-${lineIdx}`,
+              label: `${line.label} — ${line.minutes / 60} giờ × (${formatCurrency(otBreakdown?.hourlyRate || 0)} × ${line.coefficient})`,
+              amount: line.amount,
+              taxable: overtimeTaxable ? line.amount : 0,
+            }))
+          : undefined,
+      },
+    ];
+  });
+
+  // Tiền làm thêm giờ là khoản mục cố định của card 1 — backend cắt dòng này khỏi
+  // earningBreakdown khi otPay = 0 (và phiếu cũ chưa từng có), nên thiếu thì dựng lại.
+  if (!rows.some((row) => row.key.startsWith('OVERTIME'))) {
+    rows.push({
+      key: 'OVERTIME-fallback',
+      label: 'Tiền làm thêm giờ',
+      amount: otBreakdown?.otPay ?? 0,
+      taxable: taxableOt,
+      detail: otDetail,
+      taxMarker: true,
+    });
+  }
+
+  const taxableIncome = payslip.taxableIncome ?? rows.reduce((sum, row) => sum + row.taxable, 0);
+
+  const body = (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Khoản mục thu nhập</TableHead>
+          <TableHead className="text-right">Số tiền (VND)</TableHead>
+          <TableHead className="text-right">Chịu thuế TNCN</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <Fragment key={row.key}>
+            <TableRow>
+              <TableCell>
+                <span className="font-medium text-foreground">{row.label}</span>
+                {row.taxMarker && (
+                  <Tooltip
+                    content={
+                      overtimeTaxable
+                        ? 'Chính sách thuế TNCN của công ty: toàn bộ tiền tăng ca chịu thuế.'
+                        : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập chịu thuế.'
+                    }
+                  >
+                    <span className="ml-1 cursor-help font-semibold text-primary" aria-label="Chính sách thuế TNCN cho tiền tăng ca">*</span>
+                  </Tooltip>
                 )}
-                {isOt && showOtDetail && (
-                  <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
-                    {otLines.map((line, lineIdx) => (
-                      <div key={`${line.type}-${lineIdx}`} className="flex justify-between gap-4">
-                        <span className="text-muted-foreground">
-                          {line.label} — {line.minutes / 60} giờ × ({formatCurrency(otBreakdown?.hourlyRate || 0)} × {line.coefficient})
-                        </span>
-                        <span className="font-mono font-semibold">{formatCurrency(line.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
+                {row.detail && (
+                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{row.detail}</span>
                 )}
-              </div>
-            );
-          })}
-        </div>
-        {allowances.length > 0 && (
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <div className="mb-2 flex items-center justify-between text-sm font-medium">
-              <span>Chi tiết phụ cấp</span><span className="font-mono">{formatCurrency(allowances.reduce((sum, item) => sum + item.amount, 0))}</span>
-            </div>
-            <div className="space-y-2 border-t border-border pt-2">
-              {allowances.map((item, idx) => (
-                <div key={`${item.type}-${idx}`} className="flex items-center justify-between gap-4 text-xs">
-                  <span className="text-muted-foreground">{item.label}</span>
-                  <span className="font-mono">{formatCurrency(item.amount)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <Separator />
-        <div className="flex justify-between font-semibold text-foreground"><span>Tổng Gross</span><span className="font-mono text-lg">{formatCurrency(totalEarnings)}</span></div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** §2 — Thu nhập chịu thuế TRƯỚC giảm trừ (chưa trừ bảo hiểm và giảm trừ gia cảnh). */
-export function TaxableIncomeCard({ payslip }: { payslip: PayslipRow }) {
-  const earningRows = (payslip.earningBreakdown ?? []).filter(
-    (item) => item.type !== 'ALLOWANCE' && item.type !== 'OVERTIME' && item.amount > 0,
-  );
-  const aggregateAllowance = (payslip.earningBreakdown ?? []).find((item) => item.type === 'ALLOWANCE');
-  const totalAllowances =
-    (payslip.allowanceBreakdown ?? []).reduce((sum, item) => sum + item.amount, 0) ||
-    aggregateAllowance?.amount ||
-    0;
-  const overtimeTaxable = payslip.otBreakdown?.overtimeTaxable === true;
-  // Cờ bật → cả tiền OT chịu thuế; tắt → miễn hết. Không chia tiền OT.
-  const taxableOt = overtimeTaxable ? (payslip.otBreakdown?.otPay ?? 0) : 0;
-  // `taxableIncome` là số backend đã tính; công thức dưới chỉ là fallback cho
-  // payslip sinh trước khi field này tồn tại.
-  const taxableIncome =
-    payslip.taxableIncome ??
-    earningRows.reduce((sum, item) => sum + item.amount, 0) + totalAllowances + taxableOt;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Thu nhập chịu thuế trước giảm trừ</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {earningRows.map((item, idx) => (
-          <div key={`${item.type}-${idx}`} className="flex justify-between gap-4 text-sm">
-            <span className="text-muted-foreground">{item.label}</span>
-            <span className="font-mono">{formatCurrency(item.amount)}</span>
-          </div>
+              </TableCell>
+              <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
+              <TableCell className="text-right font-mono text-muted-foreground">
+                {formatCurrency(row.taxable)}
+              </TableCell>
+            </TableRow>
+            {row.subRows?.map((subRow) => (
+              <TableRow key={subRow.key} className="bg-muted/30 hover:bg-muted/30">
+                <TableCell className="pl-6 text-xs font-normal text-muted-foreground">{subRow.label}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{formatCurrency(subRow.amount)}</TableCell>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                  {formatCurrency(subRow.taxable)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </Fragment>
         ))}
-        {totalAllowances > 0 && (
-          <div className="flex justify-between gap-4 text-sm">
-            <span className="text-muted-foreground">Tổng phụ cấp</span>
-            <span className="font-mono">{formatCurrency(totalAllowances)}</span>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-4 text-sm">
-          <span className="flex items-center gap-1 text-muted-foreground">
-            Tiền làm thêm giờ chịu thuế
-            <Tooltip
-              content={
-                overtimeTaxable
-                  ? 'Chính sách thuế TNCN của công ty: toàn bộ tiền tăng ca chịu thuế.'
-                  : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập tính thuế.'
-              }
-            >
-              <span className="cursor-help font-semibold text-primary" aria-label="Chính sách thuế TNCN cho tiền tăng ca">*</span>
-            </Tooltip>
-          </span>
-          <span className="font-mono">{formatCurrency(taxableOt)}</span>
-        </div>
-        <Separator />
-        <div className="flex justify-between font-semibold text-foreground">
-          <span>Tổng thu nhập chịu thuế</span>
-          <span className="font-mono">{formatCurrency(taxableIncome)}</span>
-        </div>
-      </CardContent>
-    </Card>
+      </TableBody>
+      <TableFooter>
+        <TableRow className="hover:bg-muted/50">
+          <TableCell className="py-3 text-sm font-semibold uppercase tracking-wide text-foreground">
+            Tổng cộng Gross
+          </TableCell>
+          <TableCell className="py-3 text-right font-mono text-lg font-bold text-foreground">
+            {formatCurrency(totalEarnings)}
+          </TableCell>
+          <TableCell />
+        </TableRow>
+        <TableRow className="hover:bg-muted/50">
+          <TableCell className="pb-3 text-xs font-medium text-muted-foreground">
+            Thu nhập chịu thuế trước giảm trừ
+          </TableCell>
+          <TableCell className="pb-3 text-right font-mono text-sm text-muted-foreground" colSpan={2}>
+            {formatCurrency(taxableIncome)}
+          </TableCell>
+        </TableRow>
+      </TableFooter>
+    </Table>
+  );
+
+  return (
+    <PayslipSection
+      index={1}
+      title="Tổng thu nhập (Gross)"
+      subtitle="Các khoản thu nhập cấu thành lương gross của kỳ."
+    >
+      {body}
+    </PayslipSection>
   );
 }
 
-/** §3 — Các khoản giảm trừ khỏi thu nhập chịu thuế, ra Thu nhập tính thuế. */
+/** §2 — Các khoản giảm trừ khỏi thu nhập chịu thuế, ra Thu nhập tính thuế. */
 export function TaxDeductionsCard({ payslip }: { payslip: PayslipRow }) {
-  const [showInsuranceDetail, setShowInsuranceDetail] = useState(false);
   const totalInsurance =
     (payslip.socialInsurance || 0) +
     (payslip.healthInsurance || 0) +
     (payslip.unemploymentInsurance || 0);
+  const dependents = payslip.dependents?.length || 0;
+  const insuranceDetail =
+    payslip.contributionBase && payslip.contributionBase > 0
+      ? `Trích trên lương đóng bảo hiểm ${formatCurrency(payslip.contributionBase)}`
+      : undefined;
+  /** "BHXH (8%)" — chỉ kèm tỷ lệ khi phiếu có lưu tỷ lệ, tránh in "(0%)" sai nghĩa. */
+  const insuranceLabel = (name: string, rate?: number) =>
+    rate ? `${name} (${formatRate(rate)}%)` : name;
+
+  // Ba khoản giảm trừ luôn là 3 hàng cố định của card; bảo hiểm gập sẵn,
+  // bấm mới xổ ra phần trích BHXH/BHYT/BHTN.
+  const [showInsuranceParts, setShowInsuranceParts] = useState(false);
+  const insuranceParts = (
+    [
+      { name: 'BHXH', rate: payslip.socialInsuranceRate, amount: payslip.socialInsurance || 0 },
+      { name: 'BHYT', rate: payslip.healthInsuranceRate, amount: payslip.healthInsurance || 0 },
+      { name: 'BHTN', rate: payslip.unemploymentInsuranceRate, amount: payslip.unemploymentInsurance || 0 },
+    ] as const
+  ).filter((part) => part.amount > 0);
+
+  /** Khoản giảm trừ in dấu trừ khi có tiền; khoản 0 thì không in "−0 ₫". */
+  const formatDeduction = (value?: number) => (value ? `-${formatCurrency(value)}` : formatCurrency(0));
+
+  const body = (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Khoản giảm trừ</TableHead>
+          <TableHead className="text-right">Số tiền</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>
+            {insuranceParts.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowInsuranceParts((open) => !open)}
+                aria-expanded={showInsuranceParts}
+                className="-mx-1 flex w-full items-start gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
+              >
+                <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">
+                  {showInsuranceParts ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </span>
+                <span>
+                  <span className="font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
+                  {insuranceDetail && (
+                    <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{insuranceDetail}</span>
+                  )}
+                </span>
+              </button>
+            ) : (
+              <>
+                <span className="font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Kỳ này không trích bảo hiểm</span>
+              </>
+            )}
+          </TableCell>
+          <TableCell className="text-right font-mono text-destructive">{formatDeduction(totalInsurance)}</TableCell>
+        </TableRow>
+        {showInsuranceParts &&
+          insuranceParts.map((part) => (
+            <TableRow key={part.name} className="bg-muted/30 hover:bg-muted/30">
+              <TableCell className="pl-8 text-xs text-muted-foreground">{insuranceLabel(part.name, part.rate)}</TableCell>
+              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                {formatCurrency(part.amount)}
+              </TableCell>
+            </TableRow>
+          ))}
+        <TableRow>
+          <TableCell>
+            <span className="font-medium text-foreground">Giảm trừ bản thân</span>
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              Mức giảm trừ gia cảnh cho người nộp thuế
+            </span>
+          </TableCell>
+          <TableCell className="text-right font-mono text-destructive">{formatDeduction(payslip.personalDeduction)}</TableCell>
+        </TableRow>
+        <TableRow>
+          <TableCell>
+            <span className="font-medium text-foreground">Giảm trừ người phụ thuộc</span>
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              {dependents > 0 ? `${dependents} người phụ thuộc đã đăng ký` : 'Chưa đăng ký người phụ thuộc'}
+            </span>
+          </TableCell>
+          <TableCell className="text-right font-mono text-destructive">{formatDeduction(payslip.dependentDeduction)}</TableCell>
+        </TableRow>
+      </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableCell className="font-semibold text-foreground">Thu nhập tính thuế</TableCell>
+          <TableCell className="text-right font-mono font-semibold text-foreground">
+            {formatCurrency(payslip.taxableEarnings || 0)}
+          </TableCell>
+        </TableRow>
+      </TableFooter>
+    </Table>
+  );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Các khoản giảm trừ thuế</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="rounded-lg border border-border p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
-              {totalInsurance > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => setShowInsuranceDetail(!showInsuranceDetail)}
-                >
-                  {showInsuranceDetail ? (
-                    <ChevronDown className="mr-1 h-3 w-3" aria-hidden="true" />
-                  ) : (
-                    <ChevronRight className="mr-1 h-3 w-3" aria-hidden="true" />
-                  )}
-                  Chi tiết
-                </Button>
-              )}
-            </div>
-            <span className="font-mono text-sm text-destructive">-{formatCurrency(totalInsurance)}</span>
-          </div>
-          {showInsuranceDetail && totalInsurance > 0 && (
-            <div className="mt-3 space-y-2 border-t pt-3">
-              {payslip.contributionBase && payslip.contributionBase > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Lương đóng BHXH</span>
-                  <span className="font-mono">{formatCurrency(payslip.contributionBase)}</span>
-                </div>
-              )}
-              {(payslip.socialInsurance || 0) > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">BHXH ({(payslip.socialInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono">-{formatCurrency(payslip.socialInsurance || 0)}</span>
-                </div>
-              )}
-              {(payslip.healthInsurance || 0) > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">BHYT ({(payslip.healthInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono">-{formatCurrency(payslip.healthInsurance || 0)}</span>
-                </div>
-              )}
-              {(payslip.unemploymentInsurance || 0) > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">BHTN ({(payslip.unemploymentInsuranceRate || 0) * 100}%)</span>
-                  <span className="font-mono">-{formatCurrency(payslip.unemploymentInsurance || 0)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Giảm trừ bản thân</span>
-          <span className="font-mono text-destructive">-{formatCurrency(payslip.personalDeduction || 0)}</span>
-        </div>
-        {(payslip.dependentDeduction || 0) > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">
-              Giảm trừ người phụ thuộc ({payslip.dependents?.length || 0} người)
-            </span>
-            <span className="font-mono text-destructive">-{formatCurrency(payslip.dependentDeduction || 0)}</span>
-          </div>
-        )}
-
-        <Separator />
-        <div className="flex justify-between font-semibold text-foreground">
-          <span>Thu nhập tính thuế</span>
-          <span className="font-mono">{formatCurrency(payslip.taxableEarnings || 0)}</span>
-        </div>
-      </CardContent>
-    </Card>
+    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh.">
+      {body}
+    </PayslipSection>
   );
 }
 
-/** §4 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
+/** §3 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
 export function PitTaxDetails({ payslip }: { payslip: PayslipRow }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Thuế TNCN (PIT)</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {payslip.pitBreakdown && payslip.pitBreakdown.length > 0 ? (
-          payslip.pitBreakdown.map((bracket, idx) => (
-            <div key={idx} className="flex justify-between gap-4 text-sm">
-              <span className="text-muted-foreground">
-                Bậc {bracket.bracket}: {formatCurrency(bracket.income)} × {bracket.rate}%
-              </span>
-              <span className="font-mono">{formatCurrency(bracket.tax)}</span>
-            </div>
-          ))
-        ) : (
+  const brackets = payslip.pitBreakdown ?? [];
+
+  const body = (
+    <>
+      {brackets.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Bậc thuế</TableHead>
+              <TableHead>Thu nhập tính thuế</TableHead>
+              <TableHead className="text-right">Thuế suất</TableHead>
+              <TableHead className="text-right">Thuế phát sinh</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {brackets.map((bracket, idx) => (
+              <TableRow key={idx}>
+                <TableCell className="text-muted-foreground">Bậc {bracket.bracket}</TableCell>
+                <TableCell className="font-mono">{formatCurrency(bracket.income)}</TableCell>
+                <TableCell className="text-right font-mono">{bracket.rate}%</TableCell>
+                <TableCell className="text-right font-mono">{formatCurrency(bracket.tax)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={3} className="font-semibold text-foreground">Thuế TNCN phải nộp</TableCell>
+              <TableCell className="text-right font-mono font-semibold text-destructive">
+                -{formatCurrency(payslip.pitAmount || 0)}
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      ) : (
+        <>
           <p className="text-sm text-muted-foreground">Không phát sinh thuế TNCN.</p>
-        )}
-        <Separator />
-        <div className="flex justify-between font-semibold text-foreground">
-          <span>Thuế TNCN phải nộp</span>
-          <span className="font-mono text-destructive">-{formatCurrency(payslip.pitAmount || 0)}</span>
-        </div>
-      </CardContent>
-    </Card>
+          <Separator />
+          <div className="flex justify-between font-semibold text-foreground">
+            <span>Thuế TNCN phải nộp</span>
+            <span className="font-mono text-destructive">-{formatCurrency(payslip.pitAmount || 0)}</span>
+          </div>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <PayslipSection index={3} title="Thuế TNCN (PIT)">
+      {body}
+    </PayslipSection>
   );
 }
 
@@ -457,20 +565,17 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
             </CardContent>
           </Card>
 
-          {/* 1. GROSS */}
+          {/* 1. GROSS + thu nhập chịu thuế */}
           <GrossEarningsCard payslip={payslip} />
 
-          {/* 2. TAXABLE INCOME */}
-          <TaxableIncomeCard payslip={payslip} />
-
-          {/* 3. TAX DEDUCTIONS */}
+          {/* 2. TAX DEDUCTIONS */}
           <TaxDeductionsCard payslip={payslip} />
 
-          {/* 4. PIT + tổng khấu trừ */}
+          {/* 3. PIT + tổng khấu trừ */}
           <PitTaxDetails payslip={payslip} />
 
-          <Card>
-            <CardContent className="pt-6">
+          <PayslipSection title="Tổng kết &amp; đối soát thực nhận">
+            <div className="p-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Bảo hiểm</span>
@@ -492,22 +597,21 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
                   <span className="font-mono text-lg text-destructive">-{formatCurrency(totalDeductions)}</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Net Salary */}
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
-                <span className="font-semibold text-foreground">Lương thực nhận (Net)</span>
+              <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
+                    <span className="font-semibold text-foreground">Lương thực nhận (Net)</span>
+                  </div>
+                  <span className="font-mono text-2xl font-bold text-primary">{formatCurrency(netSalary)}</span>
+                </div>
+                <p className="mt-2 border-t border-primary/20 pt-2 text-xs text-muted-foreground">
+                  {formatCurrency(payslip.grossEarnings || 0)} − {formatCurrency(totalDeductions)} = {formatCurrency(netSalary)}
+                </p>
               </div>
-              <span className="font-mono text-2xl font-bold text-primary">{formatCurrency(netSalary)}</span>
             </div>
-            <p className="mt-2 border-t border-primary/20 pt-2 text-xs text-muted-foreground">
-              {formatCurrency(payslip.grossEarnings || 0)} − {formatCurrency(totalDeductions)} = {formatCurrency(netSalary)}
-            </p>
-          </div>
+          </PayslipSection>
 
           {/* Timestamps */}
           <div className="text-xs text-muted-foreground">

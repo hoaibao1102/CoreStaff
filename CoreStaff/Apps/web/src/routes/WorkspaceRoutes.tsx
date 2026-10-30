@@ -32,6 +32,7 @@ import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
+import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -202,7 +203,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     // HR accounts carry no personal workspace: the employee self-service routes
     // are closed here even on a direct URL (backend returns 403 for the same).
     const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips'];
-    if (hrPersonalRoutes.includes(route)) return <EmployeeDataState status="forbidden" />;
+    if (hrPersonalRoutes.some((path) => route === path || route.startsWith(`${path}/`))) {
+      return <EmployeeDataState status="forbidden" />;
+    }
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -319,11 +322,13 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   // Personal payslips are shared by employees and department managers.
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && route === '/app/payslips' && apiBase) {
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && (route === '/app/payslips' || route.startsWith('/app/payslips/')) && apiBase) {
+    const payslipId = route.startsWith('/app/payslips/') ? route.split('/').pop() : undefined;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <MyPayslipsScreen apiBase={apiBase} />
+          {/* currentPath giữ nguyên route để mục "Bảng lương của tôi" trên sidebar vẫn sáng. */}
+          {payslipId ? <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} /> : <MyPayslipsScreen apiBase={apiBase} />}
         </section>
       </WorkspaceShell>
     );
