@@ -40,7 +40,7 @@ export async function buildWorkCreditSummaryProjection(
     const missingAttendanceDay = day.blockers.includes('MISSING_ATTENDANCE_DAY');
     if (missingAttendanceDay && !options.allowUnresolved) throw new ConflictException('MISSING_ATTENDANCE_DAY');
     const policy = await resolvePolicy(day.workDate);
-    if (!policy) throw new NotFoundException('WORK_CREDIT_POLICY_MISSING');
+    if (!policy) throw new ConflictException('WORK_CREDIT_POLICY_MISSING');
     const evaluated = evaluateWorkCreditDay(policy, {
       scheduledObligationMinutes: day.scheduledObligationMinutes,
       workedScheduledMinutes: day.workedScheduledMinutes,

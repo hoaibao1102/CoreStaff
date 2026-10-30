@@ -41,7 +41,7 @@ describe('buildWorkCreditSummaryProjection', () => {
 
   it('blocks missing policy, missing attendance facts and unresolved days', async () => {
     await expect(buildWorkCreditSummaryProjection([day('2026-10-01', 480, 0)] as any, async () => null as any))
-      .rejects.toThrow(new NotFoundException('WORK_CREDIT_POLICY_MISSING'));
+      .rejects.toThrow(new ConflictException('WORK_CREDIT_POLICY_MISSING'));
     await expect(buildWorkCreditSummaryProjection([day('2026-10-01', 480, 0, { blockers: ['MISSING_ATTENDANCE_DAY'] })] as any, async () => policy('p1', 1)))
       .rejects.toThrow(new ConflictException('MISSING_ATTENDANCE_DAY'));
     await expect(buildWorkCreditSummaryProjection([day('2026-10-01', 480, 0, { unresolvedIncomplete: true })] as any, async () => policy('p1', 1)))

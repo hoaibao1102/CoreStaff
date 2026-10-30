@@ -19,6 +19,7 @@ import { PeriodVersionService } from './period-version.service';
 import { OvertimeService } from '../overtime/overtime.service';
 import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
 import { UserDocument } from '../../database/schemas/user.schema';
+import { PoliciesService } from '../policies/policies.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -81,6 +82,7 @@ export class TimesheetPeriodService {
 		private readonly periodVersionService: PeriodVersionService,
 		private readonly employeeReviews: EmployeeTimesheetReviewService,
 		@Optional() private readonly overtimeService?: OvertimeService,
+		@Optional() private readonly policies?: PoliciesService,
 	) {}
 
 	/**
@@ -666,6 +668,16 @@ export class TimesheetPeriodService {
 		if (!allowed?.includes(newStatus)) {
 			throw new BadRequestException(
 				`INVALID_TRANSITION: Cannot transition from ${period.status} to ${newStatus}`,
+			);
+		}
+
+		// Employees and managers can only load a reviewed timesheet when a
+		// work-credit policy covers the period, so verify it before sending.
+		if (newStatus === TimesheetPeriodStatus.REVIEWING) {
+			await this.policies?.ensureWorkCreditCoverage(
+				organizationId,
+				new Date(period.startDate),
+				new Date(period.endDate),
 			);
 		}
 
