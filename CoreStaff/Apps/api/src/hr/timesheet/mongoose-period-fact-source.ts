@@ -51,8 +51,18 @@ export class MongoosePeriodFactSource implements PeriodFactSource {
         checkInAt: row.checkInAt instanceof Date ? row.checkInAt.toISOString() : row.checkInAt,
         checkOutAt: row.checkOutAt instanceof Date ? row.checkOutAt.toISOString() : row.checkOutAt,
         lateMinutes: row.lateMinutes, earlyMinutes: row.earlyMinutes,
+        checkInProvenance: row.checkInProvenance ? JSON.parse(JSON.stringify(row.checkInProvenance)) : undefined,
+        checkOutProvenance: row.checkOutProvenance ? JSON.parse(JSON.stringify(row.checkOutProvenance)) : undefined,
+        overallApprovalStatus: row.overallApprovalStatus,
       })),
-      overtimeResults: overtimeResults.map((row: any) => ({ id: String(row._id), userId: String(row.employeeId), workDate: row.workDate, periodKey: row.periodKey, classificationStatus: row.classificationStatus, eligibleMinutes: row.eligibleMinutes })),
+      overtimeResults: overtimeResults.map((row: any) => ({ id: String(row._id), userId: String(row.employeeId), workDate: row.workDate, periodKey: row.periodKey, classificationStatus: row.classificationStatus, eligibleMinutes: row.eligibleMinutes,
+        calculationContract: row.calculationContract, rawEligibleMinutes: row.rawEligibleMinutes,
+        payableMinutes: row.payableMinutes, roundingDroppedMinutes: row.roundingDroppedMinutes,
+        minimumThresholdApplied: row.minimumThresholdApplied, reasons: row.reasons,
+        policySnapshot: row.policySnapshot ? JSON.parse(JSON.stringify(row.policySnapshot)) : undefined,
+        provenanceSnapshot: row.provenanceSnapshot ? JSON.parse(JSON.stringify(row.provenanceSnapshot)) : undefined,
+        inputHash: row.inputHash,
+      })),
     };
   }
 }

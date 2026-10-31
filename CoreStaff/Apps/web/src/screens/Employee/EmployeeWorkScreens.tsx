@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { OvertimeSuggestions } from '../../components/overtime/OvertimeSuggestions';
+import { AttendanceConfirmationForm } from './AttendanceConfirmationForm';
+import { confirmationSource, getOvertimePreview, type OvertimePreview, managerRequestLabel } from '../../services/manager.service';
 import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../../components/alert';
 import { Input } from '../../components/input';
@@ -73,10 +76,15 @@ export function LeaveOvertimeScreen() {
   const [end, setEnd] = useState('20:00');
   const [workDescription, setWorkDescription] = useState('');
   const [retroReason, setRetroReason] = useState('');
+  const [otResult, setOtResult] = useState<{ key: string; preview?: OvertimePreview; error?: string } | null>(null);
+  const otKey = JSON.stringify([workDate, start, end]);
+  const otReady = otResult?.key === otKey && otResult.preview?.workDate === workDate && (otResult.preview?.calculationContract === 'OVERTIME_V2' || otResult.preview?.calculationContract === 'LEGACY_V1') && otResult.preview?.canFile === true && !otResult.preview.blockedReasons.length;
   const [schedule, setSchedule] = useState<EmployeeSchedule | null>(null);
   const [compliance, setCompliance] = useState<LaborEvaluation | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [rev, setRev] = useState(0);
 
   useEffect(() => {
@@ -136,13 +144,28 @@ export function LeaveOvertimeScreen() {
       return;
     }
     let live = true;
+    setSchedule(null);
+    setScheduleLoading(true);
     getMyScheduleForDate(apiBase, workDate)
       .then((s) => live && setSchedule(s))
-      .catch(() => live && setSchedule(null));
+      .catch(() => live && setSchedule(null))
+      .finally(() => live && setScheduleLoading(false));
     return () => {
       live = false;
     };
   }, [apiBase, type, workDate]);
+
+  useEffect(() => {
+    if (!apiBase || type !== 'OVERTIME' || !showForm || busy) return;
+    let live = true;
+    setOtResult(null);
+    const timer = window.setTimeout(() => {
+    getOvertimePreview(apiBase, { workDate, requestedStart: `${workDate}T${start}:00+07:00`, requestedEnd: `${workDate}T${end}:00+07:00` })
+      .then(preview => { if (live) setOtResult({key:otKey,preview}); })
+      .catch(e => { if (live) setOtResult({key:otKey,error:hrErrorMessage(e)}); });
+    }, 300);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [apiBase, type, showForm, workDate, start, end, otKey, busy]);
 
   // Past the 1-day grace window (`RETROACTIVE_GRACE_DAYS`, D38) the server
   // requires `retroactiveReason`, so surface the field before the 409 does:
@@ -161,8 +184,10 @@ export function LeaveOvertimeScreen() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     if (!apiBase || reason.trim().length < 10) return setError('Lý do phải có ít nhất 10 ký tự.');
     if (type === 'OVERTIME') {
+      if (!otReady) return setError('Chưa có xem trước OT hợp lệ. Vui lòng liên hệ HR xác minh giờ thực tế.');
       if (toMinutes(start) >= toMinutes(end)) return setError('Giờ kết thúc phải sau giờ bắt đầu.');
       if (workDescription.trim() && workDescription.trim().length < 3) {
         return setError('Mô tả công việc cần ít nhất 3 ký tự (hoặc để trống).');
@@ -174,6 +199,7 @@ export function LeaveOvertimeScreen() {
         return setError('Yêu cầu gửi trễ hạn, vui lòng nhập lý do bổ sung (ít nhất 10 ký tự).');
       }
     }
+    submitting.current = true;
     setBusy(true);
     setError('');
     setCompliance(null);
@@ -181,11 +207,12 @@ export function LeaveOvertimeScreen() {
       if (type === 'OVERTIME') {
         const created = await createOvertimeRequest(apiBase, {
           workDate,
-          requestedStart: `${workDate}T${start}:00`,
-          requestedEnd: `${workDate}T${end}:00`,
+          requestedStart: `${workDate}T${start}:00+07:00`,
+          requestedEnd: `${workDate}T${end}:00+07:00`,
           reason: reason.trim(),
           workDescription: workDescription.trim() || undefined,
           retroactiveReason: retroReason.trim() || undefined,
+          previewHash: otResult?.preview?.contextHash,
         });
         // §30B.2 at filing is projection-only: a warning is shown, never a block.
         setCompliance(created.compliance ?? null);
@@ -201,7 +228,7 @@ export function LeaveOvertimeScreen() {
       }
       toast.success(
         'Gửi yêu cầu thành công',
-        `Yêu cầu ${type === 'OVERTIME' ? 'làm thêm giờ (OT)' : 'điều chỉnh công'} đã được gửi tới Quản lý phòng ban.`
+        `Yêu cầu ${type === 'OVERTIME' ? 'làm thêm giờ (OT)' : 'xác nhận công'} đã được gửi tới Quản lý phòng ban.`
       );
       setShowForm(false);
       setReason('');
@@ -213,6 +240,7 @@ export function LeaveOvertimeScreen() {
       setError(msg);
       toast.error('Gửi yêu cầu thất bại', msg);
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
@@ -223,9 +251,9 @@ export function LeaveOvertimeScreen() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Nghỉ phép & OT</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Tăng ca & Xác nhận công</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Gửi yêu cầu điều chỉnh công hoặc OT và theo dõi quyết định từ Quản lý phòng ban.
+            Gửi yêu cầu xác nhận công hoặc OT và theo dõi quyết định từ Quản lý phòng ban.
           </p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -241,83 +269,125 @@ export function LeaveOvertimeScreen() {
 
       {showForm && (
         <Dialog open onOpenChange={(next) => !busy && !next && setShowForm(false)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader className="border-b pr-16">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="border-b pr-16 pb-4">
               <DialogTitle>Tạo yêu cầu mới</DialogTitle>
               <DialogDescription>Yêu cầu được gửi đến quản lý phòng ban theo dữ liệu phân công của bạn.</DialogDescription>
             </DialogHeader>
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
-                {error && (
-                  <div className="sm:col-span-2">
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
+            {type === 'ATTENDANCE' && (
+              <button
+                type="button"
+                className="sr-only"
+                onClick={() => setType('OVERTIME')}
+              >
+                Chuyển sang OT
+              </button>
+            )}
+
+            <div className="p-6 pb-2">
+              <span className="text-sm font-medium">Chọn loại yêu cầu</span>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setType('OVERTIME')}
+                  className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
+                    type === 'OVERTIME'
+                      ? 'border-indigo-600 bg-indigo-50/70 font-semibold text-indigo-950 ring-2 ring-indigo-500/40'
+                      : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <Clock3 className={`size-5 shrink-0 mt-0.5 ${type === 'OVERTIME' ? 'text-indigo-600' : 'text-muted-foreground'}`} />
+                  <div>
+                    <p className="font-semibold text-sm">Làm thêm giờ (OT)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Đăng ký ca làm thêm giờ ngoài ca làm việc</p>
                   </div>
-                )}
-              <div className="grid gap-2 sm:col-span-2">
-                <span className="text-sm font-medium">Chọn loại yêu cầu</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setType('OVERTIME')}
-                    className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
-                      type === 'OVERTIME'
-                        ? 'border-indigo-600 bg-indigo-50/70 font-semibold text-indigo-950 ring-2 ring-indigo-500/40'
-                        : 'border-border bg-card hover:bg-muted/50 text-foreground'
-                    }`}
-                  >
-                    <Clock3 className={`size-5 shrink-0 mt-0.5 ${type === 'OVERTIME' ? 'text-indigo-600' : 'text-muted-foreground'}`} />
-                    <div>
-                      <p className="font-semibold text-sm">Làm thêm giờ (OT)</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Đăng ký ca làm thêm giờ ngoài ca làm việc</p>
-                    </div>
-                  </button>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setType('ATTENDANCE')}
-                    className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
-                      type === 'ATTENDANCE'
-                        ? 'border-blue-600 bg-blue-50/70 font-semibold text-blue-950 ring-2 ring-blue-500/40'
-                        : 'border-border bg-card hover:bg-muted/50 text-foreground'
-                    }`}
-                  >
-                    <CalendarDays className={`size-5 shrink-0 mt-0.5 ${type === 'ATTENDANCE' ? 'text-blue-600' : 'text-muted-foreground'}`} />
-                    <div>
-                      <p className="font-semibold text-sm">Điều chỉnh / Giải trình công</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Báo quên chấm công, sự cố thiết bị hoặc giải trình</p>
-                    </div>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setType('ATTENDANCE')}
+                  className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-left text-sm transition-all cursor-pointer ${
+                    type === 'ATTENDANCE'
+                      ? 'border-blue-600 bg-blue-50/70 font-semibold text-blue-950 ring-2 ring-blue-500/40'
+                      : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <CalendarDays className={`size-5 shrink-0 mt-0.5 ${type === 'ATTENDANCE' ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                  <div>
+                    <p className="font-semibold text-sm">Xác nhận công</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Báo quên chấm công theo ca (quản lý duyệt)</p>
+                  </div>
+                </button>
               </div>
+            </div>
 
-              <label className="grid gap-2 text-sm font-medium">
-                Ngày
-                <Input type="date" max={type === 'ATTENDANCE' ? shiftDay(vnToday(), -1) : undefined} value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-              </label>
+            {type === 'ATTENDANCE' ? (
+              !apiBase ? (
+                <p className="p-6 text-sm text-muted-foreground">Đang kết nối…</p>
+              ) : (
+                <AttendanceConfirmationForm
+                  apiBase={apiBase ?? ''}
+                  workDate={workDate}
+                  onDateChange={setWorkDate}
+                  onCreated={() => { setShowForm(false); setRev(r => r + 1); }}
+                  onCancel={() => setShowForm(false)}
+                  legacy={
+                    <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+                      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
+                        {error && (
+                          <div className="sm:col-span-2">
+                            <Alert variant="destructive">
+                              <AlertDescription>{error}</AlertDescription>
+                            </Alert>
+                          </div>
+                        )}
+                        <label className="grid gap-2 text-sm font-medium">
+                          Ngày
+                          <Input type="date" max={shiftDay(vnToday(), -1)} value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+                        </label>
+                        <label className="grid gap-2 text-sm font-medium">
+                          Mốc công cần bổ sung
+                          <select className="min-h-11 rounded-lg border bg-background px-3" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as 'CHECK_IN' | 'CHECK_OUT')}>
+                            <option value="CHECK_IN">Thiếu check-in</option>
+                            <option value="CHECK_OUT">Thiếu check-out</option>
+                          </select>
+                        </label>
+                        <label className="grid gap-2 text-sm font-medium">
+                          Giờ đề nghị
+                          <Input type="time" value={adjustmentTime} onChange={(e) => setAdjustmentTime(e.target.value)} required />
+                        </label>
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                          Quản lý sẽ kiểm tra và mốc giờ này chỉ được ghi vào bảng công sau khi duyệt.
+                        </p>
+                        <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                          Lý do
+                          <textarea className="min-h-24 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập chi tiết lý do (ít nhất 10 ký tự)..." required />
+                        </label>
+                      </div>
+                      <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
+                        <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>Hủy</Button>
+                        <Button disabled={busy} type="submit">{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button>
+                      </div>
+                    </form>
+                  }
+                />
+              )
+            ) : (
+              <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+                <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
+                  {error && (
+                    <div className="sm:col-span-2">
+                      <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
 
-              {type === 'ATTENDANCE' && (
-                <>
-                  <label className="grid gap-2 text-sm font-medium">
-                    Mốc công cần bổ sung
-                    <select className="min-h-11 rounded-lg border bg-background px-3" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as 'CHECK_IN' | 'CHECK_OUT')}>
-                      <option value="CHECK_IN">Thiếu check-in</option>
-                      <option value="CHECK_OUT">Thiếu check-out</option>
-                    </select>
+                  <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                    Ngày
+                    <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
                   </label>
-                  <label className="grid gap-2 text-sm font-medium">
-                    Giờ đề nghị
-                    <Input type="time" value={adjustmentTime} onChange={(e) => setAdjustmentTime(e.target.value)} required />
-                  </label>
-                  <p className="text-xs text-muted-foreground sm:col-span-2">
-                    Quản lý sẽ kiểm tra và mốc giờ này chỉ được ghi vào bảng công sau khi duyệt.
-                  </p>
-                </>
-              )}
 
-              {type === 'OVERTIME' && (
-                <>
                   <label className="grid gap-2 text-sm font-medium">
                     Bắt đầu
                     <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
@@ -326,40 +396,42 @@ export function LeaveOvertimeScreen() {
                     Kết thúc
                     <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
                   </label>
-                </>
-              )}
 
-              {type === 'OVERTIME' && (
-                <div className="sm:col-span-2 grid gap-2 text-sm">
-                  <p className="text-muted-foreground">
-                    {!schedule
-                      ? 'Đang tải ca được phân công…'
-                      : schedule.scheduled
-                        ? `Ca được phân công: ${schedule.scheduled.startTime}–${schedule.scheduled.endTime} (nghỉ ${schedule.scheduled.breakMinutes} phút). Giờ OT phải ngoài khung này.`
-                        : 'Ngày này không có ca được phân công — khung giờ đăng ký không bị giới hạn.'}
-                  </p>
-                  {encroaches && schedule?.scheduled ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        Khung giờ bạn nhập lấn vào ca {schedule.scheduled.startTime}–{schedule.scheduled.endTime}.
-                      </AlertDescription>
-                    </Alert>
-                  ) : null}
-                </div>
-              )}
+                  <div className="sm:col-span-2 grid gap-2 text-sm">
+                    <p className="text-muted-foreground">
+                      {!schedule
+                        ? 'Đang tải ca được phân công…'
+                        : schedule.scheduled
+                          ? `Ca được phân công: ${schedule.scheduled.startTime}–${schedule.scheduled.endTime} (nghỉ ${schedule.scheduled.breakMinutes} phút). Giờ OT phải ngoài khung này.`
+                          : 'Ngày này không có ca được phân công — khung giờ đăng ký không bị giới hạn.'}
+                    </p>
+                    <OvertimeSuggestions workDate={workDate} schedule={schedule} loading={scheduleLoading} submitting={busy}
+                      onSelect={suggestion => {
+                        if (submitting.current) return;
+                        const vnTime = (instant: string) => new Date(instant).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' });
+                        setStart(vnTime(suggestion.from));
+                        setEnd(vnTime(suggestion.to));
+                      }} />
+                    {encroaches && schedule?.scheduled ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          Khung giờ làm thêm đang lấn vào ca làm việc chính (${schedule.scheduled.startTime}–${schedule.scheduled.endTime}). Vui lòng điều chỉnh giờ bắt đầu hoặc kết thúc.
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                  </div>
 
-              <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                Lý do
-                <textarea
-                  className="min-h-24 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Nhập chi tiết lý do (ít nhất 10 ký tự)..."
-                />
-              </label>
+                  <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+                    Lý do làm thêm giờ
+                    <textarea
+                      className="min-h-24 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Mô tả lý do cần làm thêm giờ (ít nhất 10 ký tự)..."
+                      required
+                    />
+                  </label>
 
-              {type === 'OVERTIME' && (
-                <>
                   <label className="grid gap-2 text-sm font-medium sm:col-span-2">
                     Mô tả công việc làm thêm giờ
                     <textarea
@@ -381,31 +453,49 @@ export function LeaveOvertimeScreen() {
                       />
                     </label>
                   )}
-                </>
-              )}
 
-              {compliance?.violations?.length ? (
-                <div className="sm:col-span-2 grid gap-2">
-                  {compliance.violations.map((v) => (
-                    <Alert key={v.code} className={v.severity === 'WARNING' ? 'border-amber-500/60 text-amber-700' : undefined}>
-                      <AlertDescription>
-                        {v.message} ({formatMinutes(v.usedMinutes)} / hạn mức {formatMinutes(v.limitMinutes)})
-                      </AlertDescription>
-                    </Alert>
-                  ))}
+                  {otResult?.preview && (
+                    <div aria-label="Xem trước OT" className="sm:col-span-2 rounded-lg border p-3 text-xs space-y-1.5 bg-muted/20">
+                      <p className="font-semibold text-foreground">Dự tính OT</p>
+                      <p>Thời gian thực tế đủ điều kiện: {otResult.preview.rawEligibleMinutes ?? 0} phút · Tính OT: {otResult.preview.payableMinutes ?? 0} phút · Không được tính theo ngưỡng/làm tròn: {otResult.preview.roundingDroppedMinutes ?? 0} phút</p>
+                      {otResult.preview.policy && (
+                        <p className="text-muted-foreground">Chính sách: tối thiểu {otResult.preview.policy.minimumOvertimeMinutes} phút mỗi đơn; {otResult.preview.policy.overtimeRoundingMinutes === 0 ? 'tính từng phút' : `làm tròn theo ${otResult.preview.policy.overtimeRoundingMinutes} phút`}.</p>
+                      )}
+                      {(typeof otResult.preview.provenance?.checkIn === 'string' ? otResult.preview.provenance.checkIn : otResult.preview.provenance?.checkIn?.source) && (
+                        <p className="text-muted-foreground">Nguồn vào: {confirmationSource(otResult.preview.provenance?.checkIn)} · Nguồn ra: {(typeof otResult.preview.provenance?.checkOut === 'string' ? otResult.preview.provenance.checkOut : otResult.preview.provenance?.checkOut?.source) ?? '—'}</p>
+                      )}
+                      {otResult.preview.blockedReasons?.map(code => (
+                        <p key={code} role="alert" className="text-destructive font-medium">
+                          {code === 'OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED'
+                            ? 'Mốc công nguồn CONFIRMED_SCHEDULE không đủ điều kiện tính OT. Vui lòng liên hệ HR xác minh giờ thực tế.'
+                            : code}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {compliance?.violations?.length ? (
+                    <div className="sm:col-span-2 grid gap-2">
+                      {compliance.violations.map((v) => (
+                        <Alert key={v.code} className={v.severity === 'WARNING' ? 'border-amber-500/60 text-amber-700' : undefined}>
+                          <AlertDescription>
+                            {v.message} ({formatMinutes(v.usedMinutes)} / hạn mức {formatMinutes(v.limitMinutes)})
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-
-              </div>
-              <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
-                <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>
-                  Hủy
-                </Button>
-                <Button disabled={busy} type="submit">
-                  {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
-                </Button>
-              </div>
-            </form>
+                <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>
+                    Hủy
+                  </Button>
+                  <Button disabled={busy || !otReady} type="submit">
+                    {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
+                  </Button>
+                </div>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       )}
@@ -462,7 +552,7 @@ export function LeaveOvertimeScreen() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold text-sm text-foreground">
-                        {row.type === 'OVERTIME' ? 'Làm thêm giờ (OT)' : 'Chấm công Selfie / Điều chỉnh'}
+                        {managerRequestLabel(row)}
                       </p>
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${

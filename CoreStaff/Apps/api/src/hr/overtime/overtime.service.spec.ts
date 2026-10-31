@@ -111,6 +111,8 @@ function build(options: {
     overrides: collection(options.overrides ?? []),
     results: collection(options.results ?? []),
   };
+  // FINAL results without a uniquely resolved owning period stay immutable.
+  (models.results as any).db = { model: () => collection([]) };
   const shifts = { resolveForEmployeeDate: jest.fn(async () => options.shift === null ? null : (options.shift ?? { _id: 's1', startTime: '08:00', endTime: '17:00', breakMinutes: 120 })) };
   const policies = { laborAt: jest.fn(async (_org: string, _at: Date) => options.laborPolicy ?? LABOR_POLICY), overtimeAt: jest.fn(async (_org: string, _at: Date) => ({ version: 2, legalReference: 'x' })) };
   const periodVersion = { bumpForWorkDates: jest.fn(async () => 1) };
@@ -142,6 +144,128 @@ function request(overrides: Doc = {}): any {
 }
 
 describe('OvertimeService', () => {
+  it('propagates the precheck session through all compliance reads', async () => {
+    const { service, models, shifts, policies } = build();
+    const session = {};
+    Object.values(models).forEach(model => {
+      for (const method of ['find', 'findOne']) {
+        const fn = (model as any)[method]; const original = fn.getMockImplementation();
+        fn.mockImplementation((...args: any[]) => { const q = original(...args); q.session = jest.fn(() => q); return q; });
+      }
+    });
+    await service.precheckApproval(ORG, request(), session as any);
+    expect(shifts.resolveForEmployeeDate).toHaveBeenCalledWith(ORG, USER, WORK_DATE, session);
+    expect(policies.laborAt).toHaveBeenCalledWith(ORG, expect.any(Date), session);
+    for (const model of [models.attendanceDays, models.results]) {
+      for (const call of model.find.mock.results) expect(call.value.session).toHaveBeenCalledWith(session);
+    }
+  });
+  it('retains full-day actual span while unsupported evidence zeros payable OT', async () => {
+    const { service } = build({ laborPolicy: { ...LABOR_POLICY, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 } });
+    const result = await service.computeForRequest(ORG, request({ metadata: { calculationContract: 'OVERTIME_V2' } }), undefined, true);
+    expect(result.computation).toMatchObject({ actualMinutes: 720, eligibleMinutes: 0, payableMinutes: 0 });
+  });
+  it('does not warn about unreported V2 overtime from unsupported punches', async () => {
+    const { service } = build();
+    jest.spyOn(service, 'isV2Enabled').mockResolvedValue(true);
+    await expect(service.unreportedOvertimeMinutes(ORG, USER, WORK_DATE)).resolves.toBeNull();
+  });
+  it('pre-cutover preview explicitly stays LEGACY_V1 without V2 policy defaults', async () => {
+    const { service } = build();
+    const result = await service.preview(ORG, USER, WORK_DATE, { from: Date.parse('2026-09-22T10:00:00Z'), to: Date.parse('2026-09-22T10:45:00Z') });
+    expect(result).toMatchObject({ calculationContract: 'LEGACY_V1', eligibleMinutes: 45, canFile: true });
+  });
+  it('passes an approval session through computation, policy and result writes', async () => {
+    const { service, models, shifts, policies } = build();
+    const session = {};
+    Object.values(models).forEach(model => {
+      for (const method of ['find', 'findOne']) {
+        const fn = (model as any)[method]; const original = fn.getMockImplementation();
+        fn.mockImplementation((...args: any[]) => { const q = original(...args); q.session = jest.fn(() => q); return q; });
+      }
+    });
+    await (service.onApproved as any)(ORG, request(), session);
+    expect(shifts.resolveForEmployeeDate).toHaveBeenCalledWith(ORG, USER, WORK_DATE, session);
+    expect(policies.laborAt).toHaveBeenCalledWith(ORG, expect.any(Date), session);
+  });
+  it('recomputes a V2 request to zero with a reason after evidence becomes unsupported', async () => {
+    const { service, models } = build({ laborPolicy: { ...LABOR_POLICY, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 }, requests: [request({ metadata: { calculationContract: 'OVERTIME_V2' } })] });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+    await service.recompute(ORG, WORK_DATE, WORK_DATE);
+    models.attendanceDays.rows[0].checkOutProvenance = { source: 'CONFIRMED_SCHEDULE' };
+    await service.recompute(ORG, WORK_DATE, WORK_DATE);
+    expect(models.results.rows[0]).toMatchObject({ eligibleMinutes: 0, reasons: ['OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED'] });
+    await expect(service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' })).rejects.toThrow('OVERTIME_UNRESOLVED');
+    expect(models.results.rows[0].classificationStatus).toBe('PROVISIONAL');
+  });
+  it('hashes V2 policy values and provenance, not just the policy version', async () => {
+    const policy = { ...LABOR_POLICY, _id: 'policy', minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 };
+    const { service, models } = build({ laborPolicy: policy });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+    await service.onApproved(ORG, request({ metadata: { calculationContract: 'OVERTIME_V2' } }));
+    expect((await service.listResults(ORG))[0].recalculationRequired).toBe(false);
+    policy.overtimeRoundingMinutes = 0;
+    expect((await service.listResults(ORG))[0].recalculationRequired).toBe(true);
+  });
+  it('V2 compliance counts observed unrequested minutes once rather than rounded results', async () => {
+    const { service, models } = build({ results: [{ organizationId: ORG, employeeId: USER, workDate: WORK_DATE, periodKey: '2026-09', yearKey: '2026', calculationContract: 'OVERTIME_V2', rawEligibleMinutes: 95, eligibleMinutes: 90 }] });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+    const usage = await (service.usageFor as any)(ORG, USER, WORK_DATE, 60, true);
+    expect(usage.overtimeMonthlyMinutes).toBe(180);
+    expect(usage.overtimeAnnualMinutes).toBe(180);
+  });
+  it('V2 filing requires a transaction and claims the shared period and attendance day', async () => {
+    const { service, models, periodVersion } = build({ laborPolicy: { ...LABOR_POLICY, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 } });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+    const window = { from: Date.parse('2026-09-22T10:00:00Z'), to: Date.parse('2026-09-22T12:00:00Z') };
+    await expect((service.assertFilingAllowed as any)(ORG, USER, window, WORK_DATE, new Date('2026-09-22T14:00:00Z'), undefined, { v2Enabled: true })).rejects.toThrow('OVERTIME_TRANSACTION_REQUIRED');
+    const claim = jest.fn(async () => ({ periodId: 'p1', version: 2 }));
+    Object.assign(periodVersion, { claimForWorkDate: claim });
+    const session = { inTransaction: () => true };
+    Object.values(models).forEach(model => {
+      for (const method of ['find', 'findOne']) {
+        const fn = (model as any)[method];
+        const original = fn.getMockImplementation();
+        fn.mockImplementation((...args: any[]) => { const q = original(...args); q.session = () => q; return q; });
+      }
+    });
+    await expect((service.assertFilingAllowed as any)(ORG, USER, window, WORK_DATE, new Date('2026-09-22T14:00:00Z'), undefined, { v2Enabled: true, session })).resolves.toMatchObject({ calculationContract: 'OVERTIME_V2' });
+    expect(claim).toHaveBeenCalledWith(ORG, WORK_DATE, session);
+  });
+  it('suggests unclaimed observed intervals with raw and payable minutes', async () => {
+    const { service, models } = build({ laborPolicy: { ...LABOR_POLICY, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 }, requests: [request({ status: 'PENDING' })] });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+    const result = await (service as any).scheduleSuggestions(ORG, USER, WORK_DATE);
+    expect(result.suggestedOvertimeIntervals).toMatchObject([{ from: '2026-09-22T10:00:00.000Z', to: '2026-09-22T11:00:00.000Z', rawEligibleMinutes: 60, payableMinutes: 60 }]);
+  });
+  it('never rewrites an existing FINAL result during recompute', async () => {
+    const { service, models } = build({ requests: [request()] });
+    await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+    const before = JSON.stringify(models.results.rows[0]);
+    models.calendar.rows.push({ organizationId: ORG, date: WORK_DATE, type: 'PUBLIC_HOLIDAY' });
+    await service.recompute(ORG, WORK_DATE, WORK_DATE);
+    expect(JSON.stringify(models.results.rows[0])).toBe(before);
+  });
+  it('shared filing guard requires V2 verification only after explicit tenant cutover', async () => {
+    const { service } = build();
+    const window = { from: Date.parse('2026-09-22T10:00:00Z'), to: Date.parse('2026-09-22T12:00:00Z') };
+    await expect((service.assertFilingAllowed as any)(ORG, USER, window, WORK_DATE, new Date('2026-09-22T14:00:00Z'), undefined, { v2Enabled: true })).rejects.toThrow('OVERTIME_ATTENDANCE_NOT_VERIFIED');
+    await expect(service.assertFilingAllowed(ORG, USER, window, WORK_DATE, new Date('2026-09-22T14:00:00Z'))).resolves.toEqual({ isRetroactive: false });
+  });
+  it('V2 rejects unsupported endpoint provenance while V1 remains legacy', async () => {
+    const { service } = build();
+    const context = await service.dayContext(ORG, USER, WORK_DATE);
+    expect(() => service.assertVerifiedAttendance({ ...context, overallApprovalStatus: 'NOT_REQUIRED' })).toThrow('OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED');
+    await expect(service.computeForRequest(ORG, request({ metadata: { calculationContract: 'OVERTIME_V2' } }))).rejects.toThrow('OVERTIME_ATTENDANCE_NOT_VERIFIED');
+    expect((await service.computeForRequest(ORG, request())).computation.eligibleMinutes).toBe(120);
+  });
+  it('V2 stores raw/payable and explicit policy evidence', async () => {
+    const { service, models } = build({ laborPolicy: { ...LABOR_POLICY, _id: 'policy', minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 } });
+    Object.assign(models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED', eventId: 'in' }, checkOutProvenance: { source: 'OBSERVED', eventId: 'out' }, overallApprovalStatus: 'NOT_REQUIRED' });
+    const r = request({ metadata: { calculationContract: 'OVERTIME_V2' }, approvedEnd: '2026-09-22T12:35:00Z' });
+    const row = await service.onApproved(ORG, r) as any;
+    expect(row).toMatchObject({ calculationContract: 'OVERTIME_V2', rawEligibleMinutes: 95, payableMinutes: 90, eligibleMinutes: 90, roundingDroppedMinutes: 5, policySnapshot: { id: 'policy', minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 } });
+  });
   describe('trust boundary (§17, BR-OT-01)', () => {
     it('refuses a client that sent its own overtime type', () => {
       const { service } = build();
@@ -386,6 +510,68 @@ describe('OvertimeService', () => {
       const { service } = build({ attendance: [{ _id: 'ad1', organizationId: ORG, employeeId: USER, workDate: WORK_DATE, checkInAt: new Date(PUNCH_IN), checkOutAt: new Date(PUNCH_OUT), workingMinutes: 600 }] });
       await expect(service.onApproved(ORG, request({ departmentId: undefined })))
         .rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe.each(['LEGACY_V1', 'OVERTIME_V2'])('FINAL lifecycle (%s)', (contract) => {
+    function fixture() {
+      const req = request({ metadata: { calculationContract: contract } });
+      const setup = build({ requests: [req], laborPolicy: { ...LABOR_POLICY, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 } });
+      Object.assign(setup.models.attendanceDays.rows[0], { checkInProvenance: { source: 'OBSERVED' }, checkOutProvenance: { source: 'OBSERVED' }, overallApprovalStatus: 'APPROVED' });
+      const period = { organizationId: ORG, active: true, startDate: WORK_DATE, endDate: WORK_DATE, status: 'READY_TO_CLOSE', version: 1 } as Doc;
+      const periods = collection([period]);
+      (setup.models.results as any).db = { model: jest.fn((name: string) => { if (name !== 'TimesheetPeriod') throw new Error(name); return periods; }) };
+      return { ...setup, req, period, periods };
+    }
+
+    it('refreshes FINAL after authorized reopen and reclose without changing historical artifacts', async () => {
+      const { service, models, period } = fixture();
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      period.status = 'CLOSED';
+      const historicalSnapshot = structuredClone(models.results.rows[0]);
+      period.status = 'REVIEWING';
+      period.version += 1;
+      models.attendanceDays.rows[0].checkOutAt = new Date('2026-09-22T12:00:00.000Z');
+      expect(await service.isStale(ORG, models.results.rows[0] as any)).toBe(true);
+      expect(await service.recompute(ORG, WORK_DATE, WORK_DATE)).toEqual({ scanned: 1, changed: 1 });
+      expect(models.results.rows[0]).toMatchObject({ classificationStatus: 'PROVISIONAL', eligibleMinutes: 60 });
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      expect(models.results.rows[0]).toMatchObject({ classificationStatus: 'FINAL', eligibleMinutes: 60 });
+      expect(historicalSnapshot).toMatchObject({ classificationStatus: 'FINAL', eligibleMinutes: 120 });
+    });
+
+    it('refreshes FINAL directly at reclose even without an intermediate PROVISIONAL refresh', async () => {
+      const { service, models, period } = fixture();
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      period.status = 'REVIEWING';
+      period.version += 1;
+      models.attendanceDays.rows[0].checkOutAt = new Date('2026-09-22T12:00:00.000Z');
+      period.status = 'READY_TO_CLOSE';
+      expect(await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' })).toEqual({ scanned: 1, changed: 1 });
+      expect(models.results.rows[0]).toMatchObject({ classificationStatus: 'FINAL', eligibleMinutes: 60 });
+    });
+
+    it.each(['CLOSED', 'PAYROLL_CLAIMED'])('preserves %s results across recompute and direct persistence', async (state) => {
+      const { service, models, period, req } = fixture();
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      if (state === 'CLOSED') period.status = 'CLOSED';
+      else { period.status = 'REVIEWING'; period.payrollRunId = 'run-1'; }
+      const frozen = structuredClone(models.results.rows[0]);
+      models.attendanceDays.rows[0].checkOutAt = new Date('2026-09-22T12:00:00.000Z');
+      expect(await service.isStale(ORG, models.results.rows[0] as any)).toBe(false);
+      expect(await service.recompute(ORG, WORK_DATE, WORK_DATE)).toEqual({ scanned: 1, changed: 0 });
+      await service.onApproved(ORG, req);
+      expect(models.results.rows[0]).toEqual(frozen);
+    });
+
+    it('allows direct persistence to refresh a reopened FINAL', async () => {
+      const { service, models, period, req } = fixture();
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      period.status = 'REVIEWING';
+      period.version += 1;
+      models.attendanceDays.rows[0].checkOutAt = new Date('2026-09-22T12:00:00.000Z');
+      await service.onApproved(ORG, req);
+      expect(models.results.rows[0]).toMatchObject({ classificationStatus: 'PROVISIONAL', eligibleMinutes: 60 });
     });
   });
 

@@ -119,6 +119,27 @@ describe('TASK-077 — Summary Generation', () => {
   });
 
   it('should block confirmation with zero attendance days', async () => {
+    // Exercise a completed Monday covered by seedTenant's Mon–Fri shift, not
+    // today's possibly non-working day or the period's future attendance days.
+    // Seed the historical range directly: the create API rejects past starts.
+    const workDate = '2026-10-26';
+    await connection().model('TimesheetPeriod').updateOne({ _id: periodId }, {
+      $set: { period: '2026-10', startDate: new Date(`${workDate}T00:00:00.000Z`), endDate: new Date(`${workDate}T00:00:00.000Z`) },
+    });
+    expect(await connection().model('AttendanceDay').countDocuments({
+      organizationId: fixture.organizationId, employeeId: fixture.employeeId,
+    })).toBe(0);
+
+    const employeeCookie = await cookieFor(fixture.employeeId, fixture.organizationId);
+    const review = await http
+      .get(`/api/hr/timesheet-periods/${periodId}/my-review`)
+      .set('Cookie', employeeCookie);
+    expect(review.status).toBe(200);
+    expect(review.body.data.hasUnresolvedDays).toBe(true);
+    expect(review.body.data.days).toEqual([expect.objectContaining({
+      workDate, scheduledObligationMinutes: 480, workedScheduledMinutes: 0,
+    })]);
+
     const confirmed = await http
       .post(`/api/hr/timesheet-periods/${periodId}/department-confirmations`)
       .set('Cookie', managerCookie)

@@ -10,6 +10,27 @@ import {
 
 export type AttendanceDayDocument = AttendanceDay & Document;
 
+export enum AttendanceEndpointSource {
+  OBSERVED = 'OBSERVED',
+  CONFIRMED_SCHEDULE = 'CONFIRMED_SCHEDULE',
+  MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+  LEGACY_UNKNOWN = 'LEGACY_UNKNOWN',
+}
+
+@Schema({ _id: false })
+export class AttendanceEndpointProvenance {
+  @Prop({ type: String, enum: Object.values(AttendanceEndpointSource), required: true })
+  source: AttendanceEndpointSource;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'AttendanceEvent', required: false })
+  eventId?: Types.ObjectId;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'ManagerRequest', required: false })
+  requestId?: Types.ObjectId;
+}
+
+export const AttendanceEndpointProvenanceSchema = SchemaFactory.createForClass(AttendanceEndpointProvenance);
+
 @Schema({ _id: false })
 export class AttendanceDayResolution {
   @Prop({ type: String, enum: ['FORFEITED_MISSING_PUNCH'], required: true })
@@ -72,6 +93,13 @@ export class AttendanceDay {
 
   @Prop({ type: Date, required: false })
   checkOutAt?: Date;
+
+  // No default: old timestamps do not prove the source of an endpoint.
+  @Prop({ type: AttendanceEndpointProvenanceSchema, required: false })
+  checkInProvenance?: AttendanceEndpointProvenance;
+
+  @Prop({ type: AttendanceEndpointProvenanceSchema, required: false })
+  checkOutProvenance?: AttendanceEndpointProvenance;
 
   @Prop({ type: Number, required: false })
   workingMinutes?: number;

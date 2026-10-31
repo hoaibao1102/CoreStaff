@@ -20,6 +20,7 @@ import { OvertimeService } from '../overtime/overtime.service';
 import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { PoliciesService } from '../policies/policies.service';
+import { PeriodObligationService } from './period-obligation.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -83,6 +84,7 @@ export class TimesheetPeriodService {
 		private readonly employeeReviews: EmployeeTimesheetReviewService,
 		@Optional() private readonly overtimeService?: OvertimeService,
 		@Optional() private readonly policies?: PoliciesService,
+		@Optional() private readonly obligations?: PeriodObligationService,
 	) {}
 
 	/**
@@ -246,15 +248,27 @@ export class TimesheetPeriodService {
 
 				const blockers = await this.collectBlockers(organizationId, id, new Set(employeeIds));
 				if (blockers.length) throw new ConflictException('DEPARTMENT_NOT_READY');
-				const acknowledgementProgress = await this.employeeReviews.getDepartmentProgress(organizationId, current, dto.departmentId, session);
-				EmployeeTimesheetReviewService.requireCompleteCoverage(acknowledgementProgress);
-
+				// Legacy previews only contain persisted attendance rows. Check the
+				// canonical schedule before requiring employee acknowledgement.
+				if (this.obligations) {
+					const projection = await this.obligations.loadPeriod({
+						organizationId, periodKey: current.period,
+						startDate: toDateOnly(current.startDate), endDate: toDateOnly(current.endDate),
+						overtimeStatus: 'REVIEWABLE', session,
+					});
+					if (projection.days.some(day => day.departmentId === dto.departmentId
+						&& day.blockers.includes('MISSING_ATTENDANCE_DAY'))) {
+						throw new ConflictException('MISSING_ATTENDANCE_DAY');
+					}
+				}
 				const summaries = await this.summaryService.previewSummariesForDepartment(
 					id,
 					current.period,
 					organizationId,
 					dto.departmentId,
 				);
+				const acknowledgementProgress = await this.employeeReviews.getDepartmentProgress(organizationId, current, dto.departmentId, session);
+				EmployeeTimesheetReviewService.requireCompleteCoverage(acknowledgementProgress);
 				const summarySnapshot = this.buildDepartmentSummarySnapshot(summaries, employeeIds.length);
 
 				confirmation = await this.confirmationModel.findOneAndUpdate(

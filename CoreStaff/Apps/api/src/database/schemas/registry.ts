@@ -17,6 +17,7 @@ import { InsurancePolicySchema } from './insurance-policy.schema';
 import { EnterpriseInsurancePolicySchema } from './enterprise-insurance-policy.schema';
 import { ManagerAssignmentSchema } from './manager-assignment.schema';
 import { ManagerRequestSchema } from './manager-request.schema';
+import { AttendanceConfirmationQuotaSchema } from './attendance-confirmation-quota.schema';
 import { OvertimeResultSchema } from './overtime-result.schema';
 import {
   SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
@@ -66,6 +67,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'EnterpriseInsurancePolicy', schema: EnterpriseInsurancePolicySchema },
   { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
   { name: 'ManagerRequest', schema: ManagerRequestSchema },
+  { name: 'AttendanceConfirmationQuota', schema: AttendanceConfirmationQuotaSchema },
   { name: 'OvertimeResult', schema: OvertimeResultSchema },
   { name: 'SalaryProfile', schema: SalaryProfileSchema },
   { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },

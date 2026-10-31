@@ -1,8 +1,31 @@
 import { Types } from 'mongoose';
 import { AttendanceStatus, DayResult, WorkdayType } from '../../database/schemas/enums';
-import { TimesheetSummaryService } from './timesheet-summary.service';
+import { buildWorkCreditSummaryProjection, TimesheetSummaryService } from './timesheet-summary.service';
+
+const evidenceDay = (extra: any = {}) => ({
+  employeeProfileId: 'p', userId: 'u', departmentId: 'd', workDate: '2026-09-01',
+  calendarType: 'REGULAR', scheduledObligationMinutes: 480, workedScheduledMinutes: 480,
+  payableLeaveMinutes: 0, unpaidLeaveMinutes: 0, standardWorkUnits: 1, standardWorkMinutes: 480,
+  overtimeMinutes: 60, blockers: [], source: { assignmentId: 'a', leaveRequestIds: [], overtimeResultIds: ['ot'], ...extra },
+});
+const workCreditPolicy = async () => ({ _id: 'wc', version: 1, effectiveFrom: new Date('2026-01-01'), active: true,
+  halfDayMinimumRatio: 0.5, fullDayMinimumRatio: 1, paidLeaveCreditEnabled: true, incompleteDayRule: 'BLOCK' as const });
 
 describe('TimesheetSummaryService work count aggregation', () => {
+  it('keeps V2 policy and provenance in the review and frozen daily source hash', async () => {
+    const first = await buildWorkCreditSummaryProjection([evidenceDay({ overtimeEvidence: [{ id: 'ot', calculationContract: 'OVERTIME_V2', policySnapshot: { version: 1 } }] })] as any, workCreditPolicy);
+    const second = await buildWorkCreditSummaryProjection([evidenceDay({ overtimeEvidence: [{ id: 'ot', calculationContract: 'OVERTIME_V2', policySnapshot: { version: 2 } }] })] as any, workCreditPolicy);
+    expect(first.sourceHash).not.toBe(second.sourceHash);
+    expect(second.dailyWorkCredits[0].sourceReferences.overtimeEvidence[0].policySnapshot.version).toBe(2);
+  });
+
+  it('blocks unresolved V2 evidence at close but exposes unresolved review without inventing status fields', async () => {
+    const day = evidenceDay({ overtimeEvidence: [{ id: 'ot', calculationContract: 'OVERTIME_V2',
+      reasons: ['OVERTIME_ATTENDANCE_NOT_VERIFIED'] }] });
+    await expect(buildWorkCreditSummaryProjection([day] as any, workCreditPolicy)).rejects.toThrow('OVERTIME_V2_UNRESOLVED');
+    const review = await buildWorkCreditSummaryProjection([day] as any, workCreditPolicy, { allowUnresolved: true });
+    expect(review.hasUnresolvedDays).toBe(true);
+  });
   it('excludes HR accounts from the attendance and payroll population', async () => {
     const employeeId = new Types.ObjectId();
     const hrId = new Types.ObjectId();

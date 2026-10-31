@@ -6,6 +6,9 @@ import { hrRequest, mapHrError } from './hrService';
    ───────────────────────────────────────────────────────────────────────── */
 
 export interface LaborCompliancePolicy {
+  minimumOvertimeMinutes?: number;
+  overtimeRoundingMinutes?: number;
+  maxMonthlyAttendanceConfirmations?: number;
   _id: string;
   organizationId: string;
   effectiveFrom: string;
@@ -26,6 +29,9 @@ export interface LaborCompliancePolicy {
 }
 
 export interface CreateLaborPolicyPayload {
+  minimumOvertimeMinutes?: number;
+  overtimeRoundingMinutes?: number;
+  maxMonthlyAttendanceConfirmations?: number;
   effectiveFrom: string;
   effectiveTo?: string;
   normalDailyMinutes: number;

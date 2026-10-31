@@ -24,6 +24,10 @@ export class Organization {
   @Prop({ required: true, default: false })
   payrollSeparationOfDuties: boolean;
 
+  /** Explicit operational cutover only. Missing is disabled; no migration default. */
+  @Prop({ type: Boolean, required: false })
+  attendanceOvertimeV2Enabled?: boolean;
+
   @Prop({ type: 'ObjectId', ref: 'User', required: false })
   createdBy?: string;
 

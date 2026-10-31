@@ -1,10 +1,11 @@
 import {ConflictException,ForbiddenException,Injectable,NotFoundException,Optional} from '@nestjs/common';
-import {InjectModel} from '@nestjs/mongoose';import {Model} from 'mongoose';
+import {InjectModel} from '@nestjs/mongoose';import {ClientSession,Model} from 'mongoose';
 import {ManagerRequestDocument} from '../../database/schemas/manager-request.schema';
 import {EmployeeProfileDocument} from '../../database/schemas/employee-profile.schema';
 import {CreateManagerRequestDto} from './dto/manager-request.dto';import {ManagerScopeService} from './manager-scope.service';
 import {EventsGateway} from '../../events/events.gateway';
 import {dateOnly} from '../../common/date-only';
+import {AttendanceConfirmationService} from './attendance-confirmation.service';
 import {parseWindowInstant} from '../../common/vietnam-time';
 import {OvertimeService} from '../overtime/overtime.service';
 import {PeriodVersionService} from '../timesheet/period-version.service';
@@ -24,9 +25,20 @@ export class ManagerRequestService {
     @Optional() private readonly ot?: OvertimeService,
     // Optional and last so older unit-test constructors remain compatible.
     @Optional() @InjectModel('Assignment') private readonly employeeAssignments?: Model<EmployeeAssignmentDocument>,
+    @Optional() private readonly confirmation?: AttendanceConfirmationService,
   ) {}
 
-  async createMine(org: string, userId: string, dto: CreateManagerRequestDto) {
+  async attendanceConfirmationPreview(org:string,userId:string,date:string) {
+    if(!this.confirmation) return {enabled:false,workDate:date,canSubmit:false,blockedReasons:['ATTENDANCE_CONFIRMATION_DISABLED']};
+    try { const {snapshot,...safe}=await this.confirmation.preview(org,userId,date); return {...safe,enabled:true}; }
+    catch(error:any){if(error.message==='ATTENDANCE_CONFIRMATION_DISABLED') return {enabled:false,workDate:date,canSubmit:false,blockedReasons:['ATTENDANCE_CONFIRMATION_DISABLED']}; throw error;}
+  }
+
+  async createMine(org: string, userId: string, dto: CreateManagerRequestDto, idempotencyKey?: string) {
+    if ((dto as any).requestKind === 'ATTENDANCE_CONFIRMATION') {
+      if (!this.confirmation) throw new ConflictException('ATTENDANCE_CONFIRMATION_DISABLED');
+      return this.confirmation.create(org,userId,dto,idempotencyKey);
+    }
     const emp = await this.employees.findOne({ organizationId: org, userId }).lean();
     if (!emp) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
     const workDate = dateOnly(dto.workDate);
@@ -44,6 +56,7 @@ export class ManagerRequestService {
     const departmentId = effectiveAssignment?.departmentId ?? emp.departmentId;
     if (!departmentId) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
     if (dto.type === 'ATTENDANCE') {
+      await this.confirmation?.assertLegacyCreateAllowed(org);
       if (!dto.adjustmentType || !dto.requestedStart) throw new ConflictException('ATTENDANCE_ADJUSTMENT_DETAILS_REQUIRED');
       const requestedAt = new Date(dto.requestedStart);
       const requestedWorkDate = requestedAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
@@ -62,20 +75,26 @@ export class ManagerRequestService {
     ) {
       throw new ConflictException('OVERTIME_WINDOW_INVALID');
     }
-    const retro = dto.type === 'OVERTIME' ? await this.otGuards(org, userId, dto) : {};
     const { adjustmentType, ...requestData } = dto;
-    const row = await this.requests.create({
+    const create = async (session?: ClientSession) => {
+      const retro = dto.type === 'OVERTIME' ? await this.otGuards(org, userId, dto, session) : {};
+      const { calculationContract, ...filing } = retro as { calculationContract?: string; isRetroactive?: boolean; retroactiveReason?: string };
+      const document = {
       organizationId: org,
       employeeId: emp._id,
       employeeUserId: userId,
       departmentId,
       ...requestData,
-      ...retro,
-      metadata: adjustmentType ? { actionType: adjustmentType, adjustmentSource: 'MANUAL_ADJUSTMENT' } : undefined,
+      ...filing,
+      metadata: calculationContract ? { calculationContract } : adjustmentType ? { actionType: adjustmentType, adjustmentSource: 'MANUAL_ADJUSTMENT' } : undefined,
       workDate: new Date(dto.workDate),
       requestedStart: dto.requestedStart ? new Date(dto.requestedStart) : undefined,
       requestedEnd: dto.requestedEnd ? new Date(dto.requestedEnd) : undefined,
-    });
+      };
+      return session ? (await this.requests.create([document], { session }))[0] : this.requests.create(document);
+    };
+    const row = dto.type === 'OVERTIME' && this.requests.db
+      ? await this.inOtTransaction(create) : await create();
 
     try {
       this.eventsGateway?.notifyNewRequest(String(departmentId), {
@@ -106,7 +125,7 @@ export class ManagerRequestService {
    * naive `2026-09-22T18:00:00` means 18:00 Vietnam on the work date for the
    * schedule guard too — the same reading the payable calculation uses.
    */
-  private async otGuards(org: string, userId: string, dto: CreateManagerRequestDto) {
+  private async otGuards(org: string, userId: string, dto: CreateManagerRequestDto, session?: ClientSession) {
     if (!this.ot) return {};
     this.ot.assertNoClientType(dto as unknown as Record<string, unknown>);
     const workDate = dateOnly(dto.workDate);
@@ -115,7 +134,16 @@ export class ManagerRequestService {
       from: parseWindowInstant(dto.requestedStart!, workDate),
       to: parseWindowInstant(dto.requestedEnd!, workDate),
     };
-    return this.ot.assertFilingAllowed(org, userId, window, workDate, new Date(), (dto as any).retroactiveReason);
+    return this.ot.assertFilingAllowed(org, userId, window, workDate, new Date(), (dto as any).retroactiveReason, { session, previewHash: dto.previewHash });
+  }
+
+  private async inOtTransaction<T>(run: (session: ClientSession) => Promise<T>): Promise<T> {
+    const session = await this.requests.db.startSession();
+    try {
+      let result!: T;
+      await session.withTransaction(async () => { result = await run(session); });
+      return result;
+    } finally { await session.endSession(); }
   }
 
   async listMine(org: string, userId: string) {
@@ -139,21 +167,36 @@ export class ManagerRequestService {
     };
     if (filter.type && filter.type !== 'ALL') query.type = filter.type;
     if (filter.status && filter.status !== 'ALL') query.status = filter.status;
-    return this.requests.find(query)
+    const rows = await this.requests.find(query)
       .populate('evidenceId')
       .populate('employeeId', 'employeeCode')
       .populate('employeeUserId', 'fullName email avatarUrl')
       .sort({ createdAt: -1 })
       .lean();
+    const reviewDepartments=await this.scope.getAuthorizedReviewDepartmentIds(org,managerId);
+    return rows.filter(row=>row.source!=='ATTENDANCE_CONFIRMATION'||(reviewDepartments.includes(String(row.departmentId))&&String((row.employeeUserId as any)?._id??row.employeeUserId)!==managerId));
   }
 
-  async detail(org: string, managerId: string, id: string) {
+  async detail(org: string, managerId: string, id: string): Promise<any> {
     const row = await this.requests.findOne({ _id: id, organizationId: org })
       .populate('evidenceId')
       .populate('employeeId', 'employeeCode')
       .populate('employeeUserId', 'fullName email avatarUrl')
       .lean();
     if (!row) throw new NotFoundException('REQUEST_NOT_FOUND');
+    if(row.source==='ATTENDANCE_CONFIRMATION') {
+      const employee=String((row.employeeUserId as any)?._id??row.employeeUserId);
+      if(employee===managerId)throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
+      await this.scope.requireReviewDepartment(org,managerId,String(row.departmentId));
+      if(!this.confirmation)return {...row,canApprove:false,contextValidity:{valid:false}};
+      try {
+        const {snapshot,...confirmation}=await this.confirmation.preview(org,employee,new Date(row.workDate).toISOString().slice(0,10));
+        const valid=confirmation.contextHash===row.confirmationContextHash;
+        const blockers=confirmation.blockedReasons.filter(code=>code!=='MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
+        return {...row,confirmation:{...confirmation,enabled:true},canApprove:row.status==='PENDING'&&valid&&blockers.length===0&&confirmation.period?.canMutate===true,contextValidity:{valid}};
+      }catch(error:any){return {...row,canApprove:false,contextValidity:{valid:false},confirmation:{enabled:false,canSubmit:false,blockedReasons:[error.message]}};}
+
+    }
     try {
       await this.scope.requireDepartment(org, managerId, String(row.departmentId));
     } catch (error) {
@@ -173,8 +216,14 @@ export class ManagerRequestService {
     reason?: string,
     approvedStart?: string,
     approvedEnd?: string,
+    operationId?: string,
   ) {
     const current: any = await this.detail(org, managerId, id);
+    if (current.source === 'ATTENDANCE_CONFIRMATION') {
+      if (approvedStart !== undefined || approvedEnd !== undefined) throw new ConflictException('ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID');
+      if (!this.confirmation) throw new ConflictException('ATTENDANCE_CONFIRMATION_DISABLED');
+      return this.confirmation.decide(org,managerId,id,status,expectedVersion,operationId,reason);
+    }
     const currentEmpUserId = String(
       (current.employeeUserId?._id ?? current.employeeUserId) ||
       (current.employeeId?._id ?? current.employeeId)
@@ -186,6 +235,9 @@ export class ManagerRequestService {
     if (current.type === 'OVERTIME' && status === 'APPROVED' && approvedStart && approvedEnd && new Date(approvedStart) >= new Date(approvedEnd)) {
       throw new ConflictException('OVERTIME_WINDOW_INVALID');
     }
+    if (current.type === 'ATTENDANCE' && this.requests.db) {
+      return this.decideAttendance(org, managerId, id, status, expectedVersion, reason, current);
+    }
     // TASK-069/070 — the decision the calculator will see, before it is written.
     const asOt = current.type === 'OVERTIME' && status === 'APPROVED' && this.ot
       // `detail()` populates employeeUserId, so the id has to be unwrapped the same
@@ -195,11 +247,29 @@ export class ManagerRequestService {
     // §30B.2 BLOCK lands here, deliberately *before* the update: a rejected
     // approval must leave status and version untouched so the manager's queue
     // does not show a decision that never happened.
-    const precheck = asOt ? await this.ot!.precheckApproval(org, asOt) : undefined;
+    let otRow: any;
+    let precheck: Awaited<ReturnType<OvertimeService['precheckApproval']>> | undefined;
+    if (asOt && this.requests.db) {
+      otRow = await this.inOtTransaction(async session => {
+        const fresh = await this.requests.findOne({ _id: id, organizationId: org }).session(session).lean();
+        if (!fresh || fresh.status !== 'PENDING' || fresh.version !== expectedVersion) throw new ConflictException('REQUEST_STATE_CHANGED');
+        const candidate = { ...fresh, approvedStart: asOt.approvedStart, approvedEnd: asOt.approvedEnd };
+        await this.ot!.claimApproval(org, candidate, session);
+        precheck = await this.ot!.precheckApproval(org, candidate, session);
+        const updated = await this.requests.findOneAndUpdate(
+          { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
+          { $set: { status, reviewedBy: managerId, reviewComment: reason, reviewedAt: new Date(), approvedStart: candidate.approvedStart, approvedEnd: candidate.approvedEnd }, $inc: { version: 1 } },
+          { new: true, session },
+        ).lean();
+        if (!updated) throw new ConflictException('REQUEST_STATE_CHANGED');
+        await this.ot!.onApproved(org, candidate, session);
+        return updated;
+      });
+    } else if (asOt) precheck = await this.ot!.precheckApproval(org, asOt);
     if (current.type === 'ATTENDANCE' && current.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
       await this.assertAttendanceAdjustmentCanApply(org, current);
     }
-    const row: any = await this.requests
+    const row: any = otRow ?? await this.requests
       .findOneAndUpdate(
         { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
         {
@@ -218,11 +288,10 @@ export class ManagerRequestService {
       .lean();
     if (!row) throw new ConflictException('REQUEST_STATE_CHANGED');
 
-    // §7.7 — approval creates the PROVISIONAL overtime result. After the write, so
-    // a concurrent second approver loses the version filter above and never gets
-    // here. A failure must not un-approve the request: the upsert is idempotent and
-    // `POST /api/hr/overtime-results/recalculate` recovers it.
-    if (asOt) {
+    // Real model-backed OT approvals already committed decision, shared claims
+    // and result atomically above. The fallback supports isolated legacy fakes
+    // without a Mongoose connection; it is never the production write path.
+    if (asOt && !otRow) {
       await this.ot!.onApproved(org, { ...asOt, _id: id, status: 'APPROVED', reviewedBy: managerId });
     }
 
@@ -270,7 +339,7 @@ export class ManagerRequestService {
     }
 
     const changesProjection = current.type === 'ATTENDANCE' || (current.type === 'OVERTIME' && status === 'APPROVED');
-    if (changesProjection) {
+    if (changesProjection && !otRow) {
       await this.periodVersion.bumpForWorkDates(org, [dateOnly(new Date(current.workDate).toISOString())]);
     }
 
@@ -304,29 +373,113 @@ export class ManagerRequestService {
     return row;
   }
 
-  private async applyAttendanceAdjustment(org: string, request: any) {
+  private async syncSelfieDecision(org: string, request: any, status: string, session: ClientSession) {
+    const action = request.metadata?.actionType;
+    if (!request.attendanceDayId || !['CHECK_IN', 'CHECK_OUT'].includes(action)) throw new ConflictException('ATTENDANCE_EVIDENCE_INVALID');
+    const event: any = await this.attendanceEvents.findOne({ organizationId: org, attendanceDayId: request.attendanceDayId, employeeId: request.employeeUserId, eventType: action, method: 'SELFIE', evidenceId: request.evidenceId }).session(session).lean();
+    if (!event || !request.evidenceId || event.provenance?.source === 'OBSERVED') throw new ConflictException('ATTENDANCE_EVIDENCE_INVALID');
+    const day: any = await this.attendanceDays.findOne({ _id: request.attendanceDayId, organizationId: org }).session(session).lean();
+    const endpoint = action === 'CHECK_IN' ? 'checkIn' : 'checkOut';
+    if (!day || !day[`${endpoint}At`] || new Date(day[`${endpoint}At`]).getTime() !== new Date(event.recordedAt).getTime()
+      || (day[`${endpoint}Provenance`]?.eventId && String(day[`${endpoint}Provenance`].eventId) !== String(event._id))
+      || ['OBSERVED', 'CONFIRMED_SCHEDULE', 'MANUAL_ADJUSTMENT'].includes(day[`${endpoint}Provenance`]?.source)) throw new ConflictException('ATTENDANCE_EVIDENCE_INVALID');
+    const set: any = { approvalStatus: status };
+    const daySet: any = { overallApprovalStatus: status };
+    if (status === 'APPROVED') {
+      const evidence: any = await this.requests.db.model('Evidence').findOne({ _id: request.evidenceId, organizationId: org, ownerUserId: request.employeeUserId }).session(session).lean();
+      if (!evidence?.storageKey || !['image/jpeg','image/png','image/webp'].includes(evidence.mimeType) || !(evidence.sizeBytes > 0)) throw new ConflictException('ATTENDANCE_EVIDENCE_INVALID');
+      set.provenance = { source: 'OBSERVED', eventId: event._id, requestId: request._id };
+      daySet[`${endpoint}Provenance`] = set.provenance;
+    }
+    await this.attendanceEvents.updateOne({ _id: event._id, organizationId: org, method: 'SELFIE', 'provenance.source': { $ne: 'OBSERVED' } }, { $set: set }, { session });
+    await this.attendanceDays.updateOne({ _id: day._id, organizationId: org, [`${endpoint}At`]: event.recordedAt }, { $set: daySet }, { session });
+  }
+
+  private async decideAttendance(org: string, managerId: string, id: string, status: string, expectedVersion: number, reason: string | undefined, current: any) {
+    const session = await this.requests.db.startSession();
+    try {
+      const row = await session.withTransaction(async () => {
+        try {
+          await this.periodVersion.claimForWorkDate(org, dateOnly(new Date(current.workDate).toISOString()), session);
+        } catch (error: any) {
+          if (error?.message !== 'PERIOD_REQUIRED') throw error;
+          const organization: any = await this.requests.db.model('Organization').findById(org).session(session).lean();
+          if (organization?.attendanceOvertimeV2Enabled === true) throw error;
+          // Legacy requests without a covering period remain decidable. A covering
+          // locked/payroll-claimed period is never bypassed by this exception.
+        }
+        const fresh: any = await this.requests.findOne({ _id: id, organizationId: org }).session(session).lean();
+        if (!fresh || fresh.status !== 'PENDING' || fresh.version !== expectedVersion) throw new ConflictException('REQUEST_STATE_CHANGED');
+        if (fresh.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
+          await this.applyAttendanceAdjustment(org, fresh, session);
+        } else if (fresh.metadata?.adjustmentSource !== 'MANUAL_ADJUSTMENT') {
+          const hasSelfieIdentity = fresh.attendanceDayId && fresh.evidenceId && ['CHECK_IN', 'CHECK_OUT'].includes(fresh.metadata?.actionType);
+          if (fresh.source === 'SELFIE' || hasSelfieIdentity) {
+            await this.syncSelfieDecision(org, fresh, status, session);
+          } else if (fresh.attendanceDayId) {
+            // Old pending requests did not require endpoint/evidence metadata.
+            // Preserve their approval-only contract, never infer OBSERVED from it.
+            await this.attendanceDays.updateOne(
+              { _id: fresh.attendanceDayId, organizationId: org },
+              { $set: { overallApprovalStatus: status } }, { session },
+            );
+            await this.attendanceEvents.updateMany(
+              { attendanceDayId: fresh.attendanceDayId, organizationId: org, method: 'SELFIE' },
+              { $set: { approvalStatus: status } }, { session },
+            );
+          }
+        }
+        const row = await this.requests.findOneAndUpdate(
+          { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
+          { $set: { status, reviewedBy: managerId, reviewedAt: new Date(), reviewComment: reason }, $inc: { version: 1 } },
+          { new: true, session },
+        ).lean();
+        if (!row) throw new ConflictException('REQUEST_STATE_CHANGED');
+        return row;
+      });
+      // Emit once, outside the retriable transaction and only after commit.
+      try {
+        await this.eventsGateway?.notifyApprovalDecision(String(row.employeeUserId), {
+          requestId: id, type: 'ATTENDANCE', status, organizationId: org,
+          reviewedBy: managerId, reviewComment: reason,
+          departmentId: String(row.departmentId),
+          attendanceDayId: row.attendanceDayId ? String(row.attendanceDayId) : undefined,
+          workDate: row.workDate,
+        });
+      } catch (wsErr) {
+        console.warn('[ManagerRequestService] notifyApprovalDecision error:', wsErr);
+      }
+      return row;
+    } finally { await session.endSession(); }
+  }
+
+  private async applyAttendanceAdjustment(org: string, request: any, session?: ClientSession) {
     const action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT';
     const recordedAt = new Date(request.requestedStart);
     const workDate = dateOnly(new Date(request.workDate).toISOString());
     const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
-    let day: any = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate });
+    const query = this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate });
+    let day: any = await (session ? query.session(session) : query);
     if (!day) {
-      day = await this.attendanceDays.create({
+      const value = {
         organizationId: org,
         employeeId: employeeUserId,
         workDate,
         attendanceStatus: AttendanceStatus.NOT_CHECKED_IN,
         overallApprovalStatus: AttendanceApprovalStatus.APPROVED,
-      });
+      };
+      day = session ? (await this.attendanceDays.create([value], { session }))[0] : await this.attendanceDays.create(value);
     }
     if (action === 'CHECK_IN') {
       if (day.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
       if (day.checkOutAt && recordedAt >= new Date(day.checkOutAt)) throw new ConflictException('CHECK_IN_MUST_BE_BEFORE_CHECK_OUT');
       day.checkInAt = recordedAt;
+      day.checkInProvenance = { source: 'MANUAL_ADJUSTMENT', requestId: String(request._id) };
     } else {
       if (day.checkOutAt) throw new ConflictException('CHECK_OUT_ALREADY_EXISTS');
       if (day.checkInAt && recordedAt <= new Date(day.checkInAt)) throw new ConflictException('CHECK_OUT_MUST_BE_AFTER_CHECK_IN');
       day.checkOutAt = recordedAt;
+      day.checkOutProvenance = { source: 'MANUAL_ADJUSTMENT', requestId: String(request._id) };
     }
     if (day.checkInAt && day.checkOutAt) {
       const breakMinutes = Number(day.shiftSnapshot?.breakMinutes ?? 0);
@@ -341,18 +494,21 @@ export class ManagerRequestService {
       day.dayResult = DayResult.INCOMPLETE;
     }
     day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
-    await day.save();
-    await this.attendanceEvents.create({
+    await day.save(session ? { session } : undefined);
+    const event = {
       organizationId: org,
       attendanceDayId: day._id,
       employeeId: employeeUserId,
       eventType: action === 'CHECK_IN' ? AttendanceEventType.CHECK_IN : AttendanceEventType.CHECK_OUT,
       method: AttendanceMethod.MANUAL,
+      provenance: {source:'MANUAL_ADJUSTMENT',requestId:request._id},
       recordedAt,
       approvalStatus: AttendanceApprovalStatus.APPROVED,
       validationStatus: 'VALID',
       note: request.reason,
-    });
+    };
+    if (session) await this.attendanceEvents.create([event], { session });
+    else await this.attendanceEvents.create(event);
   }
 
   private async assertAttendanceAdjustmentCanApply(org: string, request: any) {

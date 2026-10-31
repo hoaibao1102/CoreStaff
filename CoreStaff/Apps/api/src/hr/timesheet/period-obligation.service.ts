@@ -10,6 +10,20 @@ export interface PeriodAssignment { id: string; userId: string; departmentId: st
 export interface PeriodShift { id: string; version?: number; scope: 'ORGANIZATION' | 'DEPARTMENT'; departmentId?: string; weekdays: number[]; effectiveFrom: string; effectiveTo?: string; startTime: string; endTime: string; breakMinutes: number; active: boolean }
 export interface PeriodCalendarException { id: string; version?: number; date: string; type: CalendarType }
 export interface PeriodLeave { id: string; userId: string; startDate: string; endDate: string; leaveType: 'PAID_LEAVE' | 'UNPAID_LEAVE'; status: string; calculatedMinutes?: number; approvedLeaveIntervals?: Array<{ from: string; to: string }> }
+export interface PeriodEndpointProvenance { source: string; eventId?: string; requestId?: string }
+export interface PeriodOvertimeEvidence {
+  id: string;
+  calculationContract: string;
+  rawEligibleMinutes?: number;
+  payableMinutes?: number;
+  roundingDroppedMinutes?: number;
+  minimumThresholdApplied?: boolean;
+  reasons?: string[];
+  policySnapshot?: Record<string, unknown>;
+  provenanceSnapshot?: Record<string, unknown>;
+  inputHash?: string;
+}
+
 export interface PeriodAttendance {
   id: string;
   userId: string;
@@ -22,8 +36,11 @@ export interface PeriodAttendance {
   checkOutAt?: string;
   lateMinutes?: number;
   earlyMinutes?: number;
+  checkInProvenance?: PeriodEndpointProvenance;
+  checkOutProvenance?: PeriodEndpointProvenance;
+  overallApprovalStatus?: string;
 }
-export interface PeriodOvertime { id: string; userId: string; workDate: string; periodKey: string; classificationStatus: OvertimeClassificationStatus; eligibleMinutes: number }
+export interface PeriodOvertime extends Omit<PeriodOvertimeEvidence, 'calculationContract'> { calculationContract?: string; id: string; userId: string; workDate: string; periodKey: string; classificationStatus: OvertimeClassificationStatus; eligibleMinutes: number }
 
 export interface PeriodFactInput {
   organizationId: string;
@@ -69,6 +86,12 @@ export interface PeriodObligationDay {
     attendanceDayId?: string;
     leaveRequestIds: string[];
     overtimeResultIds: string[];
+    overtimeEvidence?: PeriodOvertimeEvidence[];
+    attendanceProvenance?: {
+      checkInProvenance?: PeriodEndpointProvenance;
+      checkOutProvenance?: PeriodEndpointProvenance;
+      overallApprovalStatus?: string;
+    };
   };
 }
 
@@ -214,6 +237,24 @@ export function buildPeriodObligationProjection(
           attendanceDayId: attendance?.id,
           leaveRequestIds: leaves.map(row => row.id),
           overtimeResultIds: overtime.map(row => row.id),
+          ...(overtime.some(row => row.calculationContract === 'OVERTIME_V2') ? {
+            overtimeEvidence: overtime.filter(row => row.calculationContract === 'OVERTIME_V2').map(row => ({
+              id: row.id, calculationContract: row.calculationContract!,
+              rawEligibleMinutes: row.rawEligibleMinutes, payableMinutes: row.payableMinutes,
+              roundingDroppedMinutes: row.roundingDroppedMinutes, minimumThresholdApplied: row.minimumThresholdApplied,
+              reasons: row.reasons ? [...row.reasons].sort() : undefined,
+              policySnapshot: row.policySnapshot ? JSON.parse(JSON.stringify(row.policySnapshot)) : undefined,
+              provenanceSnapshot: row.provenanceSnapshot ? JSON.parse(JSON.stringify(row.provenanceSnapshot)) : undefined,
+              inputHash: row.inputHash,
+            })),
+          } : {}),
+          ...(attendance?.checkInProvenance || attendance?.checkOutProvenance ? {
+            attendanceProvenance: {
+              checkInProvenance: attendance.checkInProvenance ? { ...attendance.checkInProvenance } : undefined,
+              checkOutProvenance: attendance.checkOutProvenance ? { ...attendance.checkOutProvenance } : undefined,
+              overallApprovalStatus: attendance.overallApprovalStatus,
+            },
+          } : {}),
         },
       });
     }
