@@ -10,7 +10,14 @@ import { IsDateString, IsInt, IsMongoId, IsOptional, IsString, Length, Min } fro
  * derives the type from the calendar and schedule (BR-OT-01). Declaring it is
  * what turns a silent strip into the explicit 400 the SRS asks for.
  */
+export class PreviewOvertimeDto {
+  @IsDateString() workDate: string;
+  @IsDateString() requestedStart: string;
+  @IsDateString() requestedEnd: string;
+}
+
 export class CreateOvertimeRequestDto {
+  @IsOptional() @IsString() @Length(64, 64) previewHash?: string;
   @ApiProperty({ description: 'YYYY-MM-DD' }) @IsDateString() workDate: string;
   @ApiProperty() @IsDateString() requestedStart: string;
   @ApiProperty() @IsDateString() requestedEnd: string;

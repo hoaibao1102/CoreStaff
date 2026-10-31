@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Schema as MongooseSchema, type Document, Types } from 'mongoose';
+import { AttendanceEndpointProvenance, AttendanceEndpointProvenanceSchema } from './attendance-day.schema';
 import {
   AttendanceApprovalStatus,
   AttendanceEventType,
@@ -24,6 +25,9 @@ export class AttendanceEvent {
 
   @Prop({ type: String, enum: Object.values(AttendanceMethod), required: true })
   method: AttendanceMethod;
+
+  @Prop({ type: AttendanceEndpointProvenanceSchema, required: false })
+  provenance?: AttendanceEndpointProvenance;
 
   /** Server timestamp chính thức */
   @Prop({ type: Date, required: true })

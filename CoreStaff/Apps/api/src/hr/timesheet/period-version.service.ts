@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../../database/schemas/timesheet-period.schema';
@@ -18,6 +18,51 @@ export class PeriodVersionService {
   constructor(
     @InjectModel('TimesheetPeriod') private readonly periods: Model<TimesheetPeriodDocument>,
   ) {}
+
+  /**
+   * Serialize a source mutation against close/payroll on the same period row.
+   * This is a guard AND an invalidation: callers must not bump a second time.
+   * All source writes must use this transaction's session and follow this claim.
+   */
+  async claimForWorkDate(
+    organizationId: string,
+    workDate: string,
+    session: ClientSession,
+  ): Promise<{ periodId: string; version: number }> {
+    if (!session?.inTransaction()) throw new ConflictException('TRANSACTION_REQUIRED');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) throw new BadRequestException('INVALID_WORK_DATE');
+    const date = new Date(`${workDate}T00:00:00.000Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== workDate) {
+      throw new BadRequestException('INVALID_WORK_DATE');
+    }
+    const organization = new Types.ObjectId(organizationId);
+    const periods = await this.periods.find({
+      organizationId: organization,
+      active: true,
+      startDate: { $lte: date },
+      endDate: { $gte: date },
+    }).session(session).lean();
+    if (!periods.length) throw new ConflictException('PERIOD_REQUIRED');
+    if (periods.length !== 1) throw new ConflictException('CONTEXT_REQUIRES_REVIEW');
+    const period = periods[0];
+    if (period.status === TimesheetPeriodStatus.CLOSED || period.payrollRunId != null) {
+      throw new ConflictException('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+    }
+    const result = await this.periods.updateOne({
+      _id: period._id,
+      organizationId: organization,
+      active: true,
+      status: period.status,
+      version: period.version,
+      payrollRunId: { $exists: false },
+    }, {
+      $inc: { version: 1 },
+      $set: { status: TimesheetPeriodStatus.REVIEWING, managerSnapshotClosed: false, departmentSnapshots: [] },
+      $unset: { managerSnapshotClosedBy: 1, managerSnapshotClosedAt: 1 },
+    }, { session });
+    if (result.modifiedCount !== 1) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+    return { periodId: String(period._id), version: period.version + 1 };
+  }
 
   /**
    * Bump the version of one period. No-op when no period is resolved.

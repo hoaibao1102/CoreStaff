@@ -35,6 +35,10 @@ export class LaborCompliancePolicy {
    * constant, so §30B.1's rule that limits live in policy config holds.
    */
   @Prop({ min: 0, max: 365 }) maxRetroactiveFilingDays?: number;
+  /** Explicit V2 configuration only; missing means legacy, never implicit defaults. */
+  @Prop({ type: Number, min: 0, max: 1440, validate: Number.isInteger }) minimumOvertimeMinutes?: number;
+  @Prop({ type: Number, enum: [0, 15, 30, 60] }) overtimeRoundingMinutes?: number;
+  @Prop({ type: Number, min: 0, max: 31, validate: Number.isInteger }) maxMonthlyAttendanceConfirmations?: number;
   @Prop({ required: true, min: 0.01, max: 1 }) probationMinimumRate: number;
   @Prop({ required: true, trim: true }) legalReference: string;
   @Prop({ required: true, min: 1, default: 1 }) version: number;

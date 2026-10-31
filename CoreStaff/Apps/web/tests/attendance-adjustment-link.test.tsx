@@ -28,7 +28,8 @@ beforeEach(() => {
   submitted = null;
   globalThis.fetch = jest.fn(async (_url: string | URL | Request, options?: RequestInit) => {
     if (options?.method === 'POST') submitted = JSON.parse(String(options.body));
-    const data = options?.method === 'POST' ? { _id: 'request-1' } : [];
+    const data = options?.method === 'POST' ? { _id: 'request-1' }
+      : String(_url).includes('attendance-confirmation-preview') ? { enabled: false } : [];
     return {
       ok: true, status: 200,
       text: async () => JSON.stringify({ success: true, data }),

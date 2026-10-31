@@ -32,6 +32,7 @@ import { CameraCapture, SelfiePreview } from './components/CameraComponents';
 import { GpsAttendanceFlow } from './components/GpsAttendanceFlow';import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
 import { PolicyModal } from './components/PolicyModal';
 import { CheckInSuccessModal } from './components/CheckInSuccessModal';
+import { CheckOutConfirmModal } from './components/CheckOutConfirmModal';
 import { ResultBanner, type ResultBannerProps } from './components/ResultBanner';
 import {
   getTodayAttendance,
@@ -236,6 +237,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
   // Modals & Camera
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isCheckOutConfirmOpen, setIsCheckOutConfirmOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
@@ -477,6 +479,12 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     const action = attendanceRecord.availableAction;
     const mode: 'CHECK_IN' | 'CHECK_OUT' = action === 'CHECK_IN' ? 'CHECK_IN' : 'CHECK_OUT';
 
+    // Nếu là CHECK_OUT: Mở popup xác nhận để tránh bấm nhầm
+    if (mode === 'CHECK_OUT') {
+      setIsCheckOutConfirmOpen(true);
+      return;
+    }
+
     // SELFIE: Open camera first
     if (selectedMethod === 'SELFIE') {
       setCameraMode(mode);
@@ -489,6 +497,20 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     executeAttendanceSubmission(mode);
+  };
+
+  const handleConfirmCheckOut = async () => {
+    setIsCheckOutConfirmOpen(false);
+
+    if (selectedMethod === 'SELFIE') {
+      setCameraMode('CHECK_OUT');
+      setIsCameraOpen(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await executeAttendanceSubmission('CHECK_OUT');
   };
 
   const executeAttendanceSubmission = async (mode: 'CHECK_IN' | 'CHECK_OUT', photoUrl?: string) => {
@@ -858,6 +880,16 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
 
       {/* Policy Modal */}
       <PolicyModal isOpen={isPolicyOpen} onClose={() => setIsPolicyOpen(false)} />
+
+      {/* Check-out Confirmation Modal */}
+      <CheckOutConfirmModal
+        isOpen={isCheckOutConfirmOpen}
+        onClose={() => setIsCheckOutConfirmOpen(false)}
+        onConfirm={handleConfirmCheckOut}
+        submitting={isSubmitting}
+        today={attendanceRecord}
+        currentAddress={currentAddress || attendanceRecord.workplaceAddress}
+      />
 
       {/* Success Modal / Bottom Sheet */}
       <CheckInSuccessModal

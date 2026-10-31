@@ -37,6 +37,13 @@ export async function buildWorkCreditSummaryProjection(
   const policySnapshots = new Map<string, any>();
   let hasUnresolvedDays = false;
   for (const day of [...days].sort((left, right) => left.workDate.localeCompare(right.workDate))) {
+    const unresolvedOvertime = day.source.overtimeEvidence?.some(row => row.calculationContract === 'OVERTIME_V2'
+      && row.reasons?.some(reason => ['OVERTIME_ATTENDANCE_INCOMPLETE', 'OVERTIME_ATTENDANCE_NOT_VERIFIED',
+        'OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED', 'POLICY_CONFIGURATION_REQUIRED'].includes(reason)));
+    if (unresolvedOvertime) {
+      hasUnresolvedDays = true;
+      if (!options.allowUnresolved) throw new ConflictException('OVERTIME_V2_UNRESOLVED');
+    }
     const missingAttendanceDay = day.blockers.includes('MISSING_ATTENDANCE_DAY');
     if (missingAttendanceDay && !options.allowUnresolved) throw new ConflictException('MISSING_ATTENDANCE_DAY');
     const policy = await resolvePolicy(day.workDate);

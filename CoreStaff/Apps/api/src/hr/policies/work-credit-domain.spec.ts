@@ -68,6 +68,46 @@ describe('evaluateWorkCreditDay', () => {
   });
 });
 
+describe('explicit 50–85 and 50–100 policy regression contracts (existing evaluator)', () => {
+  const run = (full: number, worked: number, scheduled = 480, extra: any = {}, policyExtra: any = {}) =>
+    evaluateWorkCreditDay({ ...rules, fullDayMinimumRatio: full, ...policyExtra }, {
+      scheduledObligationMinutes: scheduled, workedScheduledMinutes: worked,
+      payableLeaveMinutes: 0, unpaidLeaveMinutes: 0, dayType: 'SCHEDULED', incompleteState: 'COMPLETE', ...extra,
+    });
+
+  it.each([
+    [475, 1, 0.5], [420, 1, 0.5], [408, 1, 0.5], [407, 0.5, 0.5],
+    [240, 0.5, 0.5], [239, 0, 0], [480, 1, 1], [0, 0, 0],
+  ])('W=%s keeps independent 85%%=%s and 100%%=%s outcomes', (worked, at85, at100) => {
+    expect(run(0.85, worked).workCredit).toBe(at85);
+    expect(run(1, worked).workCredit).toBe(at100);
+  });
+
+  it('does not round 382/450 up to 85%; the first full minute is 383', () => {
+    expect(run(0.85, 382, 450)).toMatchObject({ workCredit: 0.5, creditedMinutes: 382, creditRatio: 382 / 450 });
+    expect(run(0.85, 383, 450)).toMatchObject({ workCredit: 1, creditedMinutes: 383, creditRatio: 383 / 450 });
+  });
+
+  it.each([0.85, 1])('preserves the pre-leave denominator at full=%s', full => {
+    expect(run(full, 240, 480, { payableLeaveMinutes: 240 })).toMatchObject({ workCredit: 1, creditedMinutes: 480, creditRatio: 1 });
+    expect(run(full, 240, 480, { payableLeaveMinutes: 240 }, { paidLeaveCreditEnabled: false })).toMatchObject({ workCredit: 0.5, creditedMinutes: 240, creditRatio: 0.5 });
+    expect(run(full, 240, 480, { unpaidLeaveMinutes: 240 })).toMatchObject({ workCredit: 0.5, creditedMinutes: 240, creditRatio: 0.5 });
+  });
+
+  it('accepts half=0 without silently clamping it', () => {
+    expect(run(0.85, 0, 480, {}, { halfDayMinimumRatio: 0 })).toMatchObject({ workCredit: 0.5, reasonCode: 'HALF_CREDIT' });
+  });
+
+  it('keeps special-case precedence ahead of threshold evaluation', () => {
+    expect(run(0.85, 480, 480, { incompleteState: 'UNRESOLVED' })).toMatchObject({ blocking: true, workCredit: 0 });
+    expect(run(0.85, 480, 480, { incompleteState: 'FORFEITED_MISSING_PUNCH' })).toMatchObject({ blocking: false, workCredit: 0, reasonCode: 'FORFEITED_MISSING_PUNCH' });
+    for (const dayType of ['WEEKLY_OFF', 'PUBLIC_HOLIDAY']) {
+      expect(run(0.85, 480, 480, { dayType, incompleteState: 'UNRESOLVED' })).toMatchObject({ blocking: false, creditedMinutes: 0, workCredit: 0, reasonCode: dayType });
+    }
+    expect(run(0.85, 0, 0, {}, { halfDayMinimumRatio: 0 })).toMatchObject({ workCredit: 0, creditRatio: 0, reasonCode: 'NO_SCHEDULED_OBLIGATION' });
+  });
+});
+
 describe('validateWorkCreditPolicyRules', () => {
   it.each([
     { ...rules, halfDayMinimumRatio: -0.1 },
