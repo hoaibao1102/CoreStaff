@@ -46,6 +46,7 @@ import { InsuranceService } from '../src/hr/payroll/insurance.service';
 import { PitService } from '../src/hr/payroll/pit.service';
 import { PayslipService } from '../src/hr/payroll/payslip.service';
 import { PayrollRunService } from '../src/hr/payroll/payroll-run.service';
+import { canonicalPayloadHash } from '../src/hr/payroll/payroll-artifact-foundation';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -102,6 +103,86 @@ const PROGRESSIVE_BRACKETS = [
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+function vnDate(dateStr: string, timeStr = '00:00:00'): Date {
+  return new Date(`${dateStr}T${timeStr}+07:00`);
+}
+
+function deterministicHash(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
+interface NaturalPunch {
+  inTimeStr: string;
+  outTimeStr: string | null;
+  lateMinutes: number;
+  earlyMinutes: number;
+  workingMinutes: number;
+  method: AttendanceMethod;
+  latitude?: number;
+  longitude?: number;
+  accuracyMeters?: number;
+  distanceFromWorkplaceMeters?: number;
+  address?: string;
+  wifiBssid?: string;
+  wifiSsid?: string;
+}
+
+function getNaturalPunch(employeeCode: string, dateStr: string, isToday = false): NaturalPunch {
+  const seed = `${employeeCode}-${dateStr}`;
+  const hIn = deterministicHash(`${seed}-in`);
+  const hOut = deterministicHash(`${seed}-out`);
+  const hMethod = deterministicHash(`${seed}-method`);
+
+  // Phân bố phương thức: 60% Wi-Fi, 25% GPS, 15% Selfie
+  let method: AttendanceMethod = AttendanceMethod.NETWORK;
+  if (hMethod < 0.25) {
+    method = AttendanceMethod.GPS;
+  } else if (hMethod < 0.40) {
+    method = AttendanceMethod.SELFIE;
+  }
+
+  // Giờ check-in thông thường: 07:42:00 -> 08:08:59 (dao động 26 phút quanh 07:55)
+  const inTotalSeconds = Math.floor(7 * 3600 + 42 * 60 + hIn * (26 * 60));
+  const inHours = Math.floor(inTotalSeconds / 3600);
+  const inMins = Math.floor((inTotalSeconds % 3600) / 60);
+  const inSecs = inTotalSeconds % 60;
+  const inTimeStr = `${String(inHours).padStart(2, '0')}:${String(inMins).padStart(2, '0')}:${String(inSecs).padStart(2, '0')}`;
+
+  // Giờ check-out thông thường: 17:02:00 -> 17:35:59 (dao động 33 phút sau 17:00)
+  const outTotalSeconds = Math.floor(17 * 3600 + 2 * 60 + hOut * (33 * 60));
+  const outHours = Math.floor(outTotalSeconds / 3600);
+  const outMins = Math.floor((outTotalSeconds % 3600) / 60);
+  const outSecs = outTotalSeconds % 60;
+  const outTimeStr = isToday ? null : `${String(outHours).padStart(2, '0')}:${String(outMins).padStart(2, '0')}:${String(outSecs).padStart(2, '0')}`;
+
+  const latDelta = (deterministicHash(`${seed}-lat`) - 0.5) * 0.0004;
+  const lngDelta = (deterministicHash(`${seed}-lng`) - 0.5) * 0.0004;
+  const latitude = Number((10.7769 + latDelta).toFixed(6));
+  const longitude = Number((106.7009 + lngDelta).toFixed(6));
+  const accuracyMeters = Math.floor(12 + deterministicHash(`${seed}-acc`) * 16);
+  const distanceFromWorkplaceMeters = Math.floor(15 + deterministicHash(`${seed}-dist`) * 60);
+
+  return {
+    inTimeStr,
+    outTimeStr,
+    lateMinutes: 0,
+    earlyMinutes: 0,
+    workingMinutes: isToday ? 240 : 480,
+    method,
+    latitude,
+    longitude,
+    accuracyMeters,
+    distanceFromWorkplaceMeters,
+    address: 'Tầng 5, Tòa nhà An Phát, Quận 1, TP. Hồ Chí Minh',
+    wifiBssid: method === AttendanceMethod.NETWORK ? '00:11:22:33:44:55' : undefined,
+    wifiSsid: method === AttendanceMethod.NETWORK ? 'AnPhat_Office' : undefined,
+  };
 }
 
 function getPeriodDates(periodKey: string): { start: Date; end: Date; allDates: string[]; workdays: string[]; weekends: string[] } {
@@ -967,25 +1048,12 @@ async function main() {
         const isWeekend = historyInfo.weekends.includes(dateStr);
 
         if (isWeekend) {
-          await upsertDoc(
-            AttendanceDay,
-            { organizationId: orgId, employeeId: uId, workDate: dateStr },
-            {
-              organizationId: orgId,
-              employeeId: uId,
-              periodId: historyPeriodId,
-              workDate: dateStr,
-              workdayType: WorkdayType.WEEKLY_OFF,
-              dayResult: DayResult.PRESENT,
-              attendanceStatus: AttendanceStatus.COMPLETED,
-              workingMinutes: 0,
-            },
-            'AttendanceDay',
-          );
-        } else {
-          const inTime = new Date(`${dateStr}T07:55:00.000Z`);
-          const outTime = new Date(`${dateStr}T17:05:00.000Z`);
-          const dayId = await upsertDoc(
+          continue;
+        }
+
+        const inTime = vnDate(dateStr, '07:55:00');
+        const outTime = vnDate(dateStr, '17:05:00');
+        const dayId = await upsertDoc(
             AttendanceDay,
             { organizationId: orgId, employeeId: uId, workDate: dateStr },
             {
@@ -1044,7 +1112,6 @@ async function main() {
             },
             'AttendanceEvent',
           );
-        }
       }
     }
 
@@ -1115,21 +1182,47 @@ async function main() {
       const summaries = await timesheetSummaryService.previewSummariesForDepartment(
         String(historyPeriodId), HISTORY_PERIOD, String(orgId),
       );
+      const savedSummaries: any[] = [];
       for (const s of summaries) {
-        await TimesheetSummary.findOneAndUpdate(
+        const payload: any = {
+          ...s,
+          schemaVersion: 1,
+          sourcePeriodVersion: 1,
+          calculationContract: 'LEGACY_WORKING_DAYS_V1',
+        };
+        payload.canonicalPayloadHash = canonicalPayloadHash(payload);
+        const doc = await TimesheetSummary.findOneAndUpdate(
           { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
-          { $set: s },
-          { upsert: true },
-        );
+          { $set: payload },
+          { upsert: true, new: true },
+        ).lean();
+        savedSummaries.push(doc);
       }
 
       const snapshots = await payrollSnapshotService.previewSnapshotsForDepartment(
-        String(historyPeriodId), HISTORY_PERIOD, String(orgId), summaries,
+        String(historyPeriodId), HISTORY_PERIOD, String(orgId), savedSummaries,
       );
-      for (const s of snapshots) {
+      for (let i = 0; i < snapshots.length; i++) {
+        const s = snapshots[i];
+        const summary = savedSummaries.find(
+          (sum) => String(sum.employeeProfileId) === String(s.employeeProfileId),
+        ) ?? savedSummaries[i];
+
+        const immutablePayload: any = {
+          ...s,
+          status: 'GENERATED',
+          schemaVersion: 1,
+          sourcePeriodVersion: 1,
+          sourceSummaryId: summary?._id,
+          sourceSummaryVersion: summary?.version ?? 1,
+          sourceSummaryHash: summary?.canonicalPayloadHash ?? summary?.sourceHash ?? 'seeded_hash',
+          calculationContract: summary?.calculationContract ?? 'LEGACY_WORKING_DAYS_V1',
+        };
+        immutablePayload.canonicalPayloadHash = canonicalPayloadHash(immutablePayload);
+
         await PayrollInputSnapshot.findOneAndUpdate(
           { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
-          { $set: s },
+          { $set: immutablePayload },
           { upsert: true },
         );
       }
@@ -1188,6 +1281,13 @@ async function main() {
         if (isWeekend) {
           // Weekend OT scenario for QL-KT-001 (Sep 12 & Sep 26)
           const isOtWeekend = acc.employeeCode === 'QL-KT-001' && (dayNumber === 12 || dayNumber === 26);
+          if (!isOtWeekend) {
+            continue;
+          }
+
+          const inTime = vnDate(dateStr, '08:00:00');
+          const outTime = vnDate(dateStr, '12:00:00');
+
           const dayId = await upsertDoc(
             AttendanceDay,
             { organizationId: orgId, employeeId: uId, workDate: dateStr },
@@ -1197,70 +1297,107 @@ async function main() {
               periodId: activePeriodId,
               workDate: dateStr,
               workdayType: WorkdayType.WEEKLY_OFF,
-              dayResult: isOtWeekend ? DayResult.PRESENT : undefined,
-              attendanceStatus: isOtWeekend ? AttendanceStatus.COMPLETED : AttendanceStatus.DAY_OFF,
-              workingMinutes: isOtWeekend ? 240 : 0,
+              dayResult: DayResult.PRESENT,
+              attendanceStatus: AttendanceStatus.COMPLETED,
+              checkInAt: inTime,
+              checkOutAt: outTime,
+              workingMinutes: 240,
             },
             'AttendanceDay',
           );
 
-          if (isOtWeekend) {
-            const otReqId = await upsertDoc(
-              ManagerRequest,
-              { organizationId: orgId, employeeUserId: uId, workDate: new Date(`${dateStr}T00:00:00.000Z`) },
-              {
-                organizationId: orgId,
-                employeeId: pId,
-                employeeUserId: uId,
-                departmentId: deptMap.get('KT')!,
-                type: 'OVERTIME',
-                workDate: new Date(`${dateStr}T00:00:00.000Z`),
-                requestedStart: new Date(`${dateStr}T08:00:00.000Z`),
-                requestedEnd: new Date(`${dateStr}T12:00:00.000Z`),
-                reason: 'Bảo trì hệ thống server cuối tuần',
-                status: 'APPROVED',
-                reviewedBy: userIdMap.get('HR-001')!,
-                reviewedAt: new Date(),
-                reviewComment: 'Đã duyệt OT cuối tuần',
-                workDescription: 'Bảo trì hệ thống server hạ tầng',
-                version: 1,
-              },
-              'ManagerRequest',
-            );
+          const otReqId = await upsertDoc(
+            ManagerRequest,
+            { organizationId: orgId, employeeUserId: uId, workDate: vnDate(dateStr, '00:00:00') },
+            {
+              organizationId: orgId,
+              employeeId: pId,
+              employeeUserId: uId,
+              departmentId: deptMap.get('KT')!,
+              type: 'OVERTIME',
+              workDate: vnDate(dateStr, '00:00:00'),
+              requestedStart: vnDate(dateStr, '08:00:00'),
+              requestedEnd: vnDate(dateStr, '12:00:00'),
+              reason: 'Bảo trì hệ thống server cuối tuần',
+              status: 'APPROVED',
+              reviewedBy: userIdMap.get('HR-001')!,
+              reviewedAt: vnDate(dateStr, '12:30:00'),
+              reviewComment: 'Đã duyệt OT cuối tuần',
+              workDescription: 'Bảo trì hệ thống server hạ tầng',
+              version: 1,
+            },
+            'ManagerRequest',
+          );
 
-            await upsertDoc(
-              OvertimeResult,
-              { organizationId: orgId, overtimeRequestId: otReqId },
-              {
-                organizationId: orgId,
-                overtimeRequestId: otReqId,
-                attendanceDayId: dayId,
-                employeeId: uId,
-                departmentId: deptMap.get('KT')!,
-                workDate: dateStr,
-                periodKey: ACTIVE_PERIOD,
-                yearKey: '2026',
-                overtimeType: 'OT_WEEKLY_OFF',
-                classificationStatus: 'FINAL',
-                requestedMinutes: 240,
-                approvedMinutes: 240,
-                actualMinutes: 240,
-                eligibleMinutes: 240,
-                scheduledMinutes: 0,
-                policyVersion: 1,
-                legalReference: 'BLLĐ 45/2019/QH14',
-                inputHash: `demo-ot-${otReqId}-${dateStr}`,
-                calculatedAt: new Date(),
-              },
-              'OvertimeResult',
-            );
-          }
+          await upsertDoc(
+            OvertimeResult,
+            { organizationId: orgId, overtimeRequestId: otReqId },
+            {
+              organizationId: orgId,
+              overtimeRequestId: otReqId,
+              attendanceDayId: dayId,
+              employeeId: uId,
+              departmentId: deptMap.get('KT')!,
+              workDate: dateStr,
+              periodKey: ACTIVE_PERIOD,
+              yearKey: '2026',
+              overtimeType: 'OT_WEEKLY_OFF',
+              classificationStatus: 'FINAL',
+              requestedMinutes: 240,
+              approvedMinutes: 240,
+              actualMinutes: 240,
+              eligibleMinutes: 240,
+              scheduledMinutes: 0,
+              policyVersion: 1,
+              legalReference: 'BLLĐ 45/2019/QH14',
+              inputHash: `demo-ot-${otReqId}-${dateStr}`,
+              calculatedAt: new Date(),
+            },
+            'OvertimeResult',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, attendanceDayId: dayId, eventType: AttendanceEventType.CHECK_IN },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: AttendanceEventType.CHECK_IN,
+              recordedAt: inTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
+              isFallback: false,
+            },
+            'AttendanceEvent',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, attendanceDayId: dayId, eventType: AttendanceEventType.CHECK_OUT },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: AttendanceEventType.CHECK_OUT,
+              recordedAt: outTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
+              isFallback: false,
+            },
+            'AttendanceEvent',
+          );
+
           continue;
         }
 
         // Scenario 1: NV-KD-003 missing check-in on Sep 15 (blocker)
         if (acc.employeeCode === 'NV-KD-003' && dayNumber === 15) {
-          const outTime = new Date(`${dateStr}T17:05:00.000Z`);
+          const outTime = vnDate(dateStr, '17:05:00');
           const dayId = await upsertDoc(
             AttendanceDay,
             { organizationId: orgId, employeeId: uId, workDate: dateStr },
@@ -1290,7 +1427,7 @@ async function main() {
               attendanceDayId: dayId,
               type: 'ATTENDANCE',
               status: 'PENDING',
-              workDate: new Date(`${dateStr}T00:00:00.000Z`),
+              workDate: vnDate(dateStr, '00:00:00'),
               reason: 'Quên chấm công vào do vào ca gấp tiếp khách hàng',
               metadata: { adjustmentSource: 'MANUAL_ADJUSTMENT' },
               version: 1,
@@ -1302,7 +1439,7 @@ async function main() {
 
         // Scenario 2: NV-KT-003 missing check-out on Sep 18 (blocker)
         if (acc.employeeCode === 'NV-KT-003' && dayNumber === 18) {
-          const inTime = new Date(`${dateStr}T07:58:00.000Z`);
+          const inTime = vnDate(dateStr, '07:58:00');
           const dayId = await upsertDoc(
             AttendanceDay,
             { organizationId: orgId, employeeId: uId, workDate: dateStr },
@@ -1361,6 +1498,51 @@ async function main() {
           continue;
         }
 
+        // Scenario 3b: NV-KT-001 Approved Paid Leave on Sep 21
+        if (acc.employeeCode === 'NV-KT-001' && dayNumber === 21) {
+          await upsertDoc(
+            LeaveRequest,
+            { organizationId: orgId, employeeId: uId, startDate: dateStr, endDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              departmentId: deptMap.get('KT')!,
+              startDate: dateStr,
+              endDate: dateStr,
+              leaveType: LeaveType.PAID_LEAVE,
+              durationType: LeaveDurationType.FULL_DAY,
+              calculatedMinutes: 480,
+              leaveEquivalent: 1,
+              reason: 'Nghỉ phép thường niên theo quy chế',
+              status: LeaveRequestStatus.HR_APPLIED,
+              reviewedBy: userIdMap.get('QL-KT-001')!,
+              reviewedAt: vnDate('2026-09-18', '14:00:00'),
+              reviewComment: 'Đã duyệt phép',
+              appliedBy: userIdMap.get('HR-001')!,
+              appliedAt: vnDate('2026-09-19', '09:00:00'),
+            },
+            'LeaveRequest',
+          );
+          await upsertDoc(
+            AttendanceDay,
+            { organizationId: orgId, employeeId: uId, workDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              periodId: activePeriodId,
+              workDate: dateStr,
+              workdayType: WorkdayType.PAID_LEAVE,
+              dayResult: DayResult.PRESENT,
+              attendanceStatus: AttendanceStatus.COMPLETED,
+              workingMinutes: 480,
+              shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 15 },
+              employeeSnapshot: { employeeCode: acc.employeeCode, fullName: acc.fullName, departmentId: String(deptMap.get(acc.deptCode!)) },
+            },
+            'AttendanceDay',
+          );
+          continue;
+        }
+
         // Scenario 4: NV-KD-002 Half-day leave (morning) + Late arrival & early departure (afternoon) on Sep 23
         if (acc.employeeCode === 'NV-KD-002' && dayNumber === 23) {
           const leaveReqId = await upsertDoc(
@@ -1383,10 +1565,10 @@ async function main() {
               reason: 'Nghỉ khám sức khỏe định kỳ buổi sáng',
               status: LeaveRequestStatus.HR_APPLIED,
               reviewedBy: userIdMap.get('QL-KD-001')!,
-              reviewedAt: new Date(`${dateStr}T06:00:00.000Z`),
+              reviewedAt: vnDate(dateStr, '06:00:00'),
               reviewComment: 'Đã duyệt nghỉ sáng',
               appliedBy: userIdMap.get('HR-001')!,
-              appliedAt: new Date(`${dateStr}T06:30:00.000Z`),
+              appliedAt: vnDate(dateStr, '06:30:00'),
             },
             'LeaveRequest',
           );
@@ -1413,8 +1595,8 @@ async function main() {
             'EmployeeDayOverride',
           );
 
-          const inTime = new Date(`${dateStr}T13:25:00.000Z`);
-          const outTime = new Date(`${dateStr}T16:30:00.000Z`);
+          const inTime = vnDate(dateStr, '13:25:00');
+          const outTime = vnDate(dateStr, '16:30:00');
 
           const dayId = await upsertDoc(
             AttendanceDay,
@@ -1492,11 +1674,13 @@ async function main() {
           continue;
         }
 
-        // Scenario 5: NV-KD-002 Late arrival on Sep 8 & Sep 16, Early departure on Sep 22
+        // Scenario 5: Realistic attendance variations & anomalies
+        const punch = getNaturalPunch(acc.employeeCode, dateStr);
         let lateMin = 0;
         let earlyMin = 0;
-        let inTimeStr = '07:55:00';
-        let outTimeStr = '17:05:00';
+        let inTimeStr = punch.inTimeStr;
+        let outTimeStr = punch.outTimeStr!;
+        let punchMethod = punch.method;
 
         if (acc.employeeCode === 'NV-KD-002') {
           if (dayNumber === 8) {
@@ -1509,11 +1693,16 @@ async function main() {
             outTimeStr = '16:30:00';
             earlyMin = 30;
           }
+        } else if (acc.employeeCode === 'NV-KT-002' && dayNumber === 4) {
+          outTimeStr = '16:45:00';
+          earlyMin = 15;
+        } else if (acc.employeeCode === 'NV-KD-001' && dayNumber === 11) {
+          outTimeStr = '17:48:30';
         }
 
-        const inTime = new Date(`${dateStr}T${inTimeStr}.000Z`);
-        const outTime = new Date(`${dateStr}T${outTimeStr}.000Z`);
-        const method = (dayNumber % 3 === 0) ? AttendanceMethod.GPS : (dayNumber % 3 === 1) ? AttendanceMethod.NETWORK : AttendanceMethod.SELFIE;
+        const inTime = vnDate(dateStr, inTimeStr);
+        const outTime = vnDate(dateStr, outTimeStr);
+        const method = punchMethod;
 
         const dayId = await upsertDoc(
           AttendanceDay,
@@ -1530,7 +1719,7 @@ async function main() {
             overallApprovalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
             checkInAt: inTime,
             checkOutAt: outTime,
-            workingMinutes: 480 - lateMin - earlyMin,
+            workingMinutes: Math.max(0, 480 - lateMin - earlyMin),
             lateMinutes: lateMin,
             earlyMinutes: earlyMin,
             shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 15 },
@@ -1549,9 +1738,13 @@ async function main() {
             eventType: AttendanceEventType.CHECK_IN,
             recordedAt: inTime,
             method,
-            wifiBssid: method === AttendanceMethod.NETWORK ? '00:11:22:33:44:55' : undefined,
-            latitude: method === AttendanceMethod.GPS ? 10.7769 : undefined,
-            longitude: method === AttendanceMethod.GPS ? 106.7009 : undefined,
+            wifiBssid: method === AttendanceMethod.NETWORK ? (punch.wifiBssid ?? '00:11:22:33:44:55') : undefined,
+            wifiSsid: method === AttendanceMethod.NETWORK ? (punch.wifiSsid ?? 'AnPhat_Office') : undefined,
+            latitude: method !== AttendanceMethod.NETWORK ? punch.latitude : undefined,
+            longitude: method !== AttendanceMethod.NETWORK ? punch.longitude : undefined,
+            accuracyMeters: method !== AttendanceMethod.NETWORK ? punch.accuracyMeters : undefined,
+            distanceFromWorkplaceMeters: method !== AttendanceMethod.NETWORK ? punch.distanceFromWorkplaceMeters : undefined,
+            address: method !== AttendanceMethod.NETWORK ? punch.address : undefined,
             validationStatus: 'VALID',
             approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
             isFallback: false,
@@ -1569,9 +1762,13 @@ async function main() {
             eventType: AttendanceEventType.CHECK_OUT,
             recordedAt: outTime,
             method,
-            wifiBssid: method === AttendanceMethod.NETWORK ? '00:11:22:33:44:55' : undefined,
-            latitude: method === AttendanceMethod.GPS ? 10.7769 : undefined,
-            longitude: method === AttendanceMethod.GPS ? 106.7009 : undefined,
+            wifiBssid: method === AttendanceMethod.NETWORK ? (punch.wifiBssid ?? '00:11:22:33:44:55') : undefined,
+            wifiSsid: method === AttendanceMethod.NETWORK ? (punch.wifiSsid ?? 'AnPhat_Office') : undefined,
+            latitude: method !== AttendanceMethod.NETWORK ? punch.latitude : undefined,
+            longitude: method !== AttendanceMethod.NETWORK ? punch.longitude : undefined,
+            accuracyMeters: method !== AttendanceMethod.NETWORK ? punch.accuracyMeters : undefined,
+            distanceFromWorkplaceMeters: method !== AttendanceMethod.NETWORK ? punch.distanceFromWorkplaceMeters : undefined,
+            address: method !== AttendanceMethod.NETWORK ? punch.address : undefined,
             validationStatus: 'VALID',
             approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
             isFallback: false,
@@ -1580,6 +1777,27 @@ async function main() {
         );
       }
     }
+
+    // Pending Leave Request for demo approval (Sep 25 - NV-KT-002)
+    const nvKt2UserId = userIdMap.get('NV-KT-002')!;
+    await upsertDoc(
+      LeaveRequest,
+      { organizationId: orgId, employeeId: nvKt2UserId, startDate: '2026-09-25', endDate: '2026-09-25' },
+      {
+        organizationId: orgId,
+        employeeId: nvKt2UserId,
+        departmentId: deptMap.get('KT')!,
+        leaveType: LeaveType.PAID_LEAVE,
+        durationType: LeaveDurationType.FULL_DAY,
+        calculatedMinutes: 480,
+        leaveEquivalent: 1,
+        startDate: '2026-09-25',
+        endDate: '2026-09-25',
+        reason: 'Nghỉ giải quyết việc gia đình cá nhân',
+        status: LeaveRequestStatus.PENDING_MANAGER,
+      },
+      'LeaveRequest',
+    );
 
     // Pending Leave Request for demo approval
     const nvKd2UserId = userIdMap.get('NV-KD-002')!;
@@ -1698,21 +1916,47 @@ async function main() {
       const summaries = await timesheetSummaryService.previewSummariesForDepartment(
         String(activePeriodId), ACTIVE_PERIOD, String(orgId),
       );
+      const savedSummaries: any[] = [];
       for (const s of summaries) {
-        await TimesheetSummary.findOneAndUpdate(
+        const payload: any = {
+          ...s,
+          schemaVersion: 1,
+          sourcePeriodVersion: 1,
+          calculationContract: 'LEGACY_WORKING_DAYS_V1',
+        };
+        payload.canonicalPayloadHash = canonicalPayloadHash(payload);
+        const doc = await TimesheetSummary.findOneAndUpdate(
           { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
-          { $set: s },
-          { upsert: true },
-        );
+          { $set: payload },
+          { upsert: true, new: true },
+        ).lean();
+        savedSummaries.push(doc);
       }
 
       const snapshots = await payrollSnapshotService.previewSnapshotsForDepartment(
-        String(activePeriodId), ACTIVE_PERIOD, String(orgId), summaries,
+        String(activePeriodId), ACTIVE_PERIOD, String(orgId), savedSummaries,
       );
-      for (const s of snapshots) {
+      for (let i = 0; i < snapshots.length; i++) {
+        const s = snapshots[i];
+        const summary = savedSummaries.find(
+          (sum) => String(sum.employeeProfileId) === String(s.employeeProfileId),
+        ) ?? savedSummaries[i];
+
+        const immutablePayload: any = {
+          ...s,
+          status: 'GENERATED',
+          schemaVersion: 1,
+          sourcePeriodVersion: 1,
+          sourceSummaryId: summary?._id,
+          sourceSummaryVersion: summary?.version ?? 1,
+          sourceSummaryHash: summary?.canonicalPayloadHash ?? summary?.sourceHash ?? 'seeded_hash',
+          calculationContract: summary?.calculationContract ?? 'LEGACY_WORKING_DAYS_V1',
+        };
+        immutablePayload.canonicalPayloadHash = canonicalPayloadHash(immutablePayload);
+
         await PayrollInputSnapshot.findOneAndUpdate(
           { periodId: s.periodId, employeeProfileId: s.employeeProfileId },
-          { $set: s },
+          { $set: immutablePayload },
           { upsert: true },
         );
       }
@@ -1766,11 +2010,41 @@ async function main() {
 
     for (const acc of nonHrAccounts) {
       const uId = userIdMap.get(acc.employeeCode)!;
+      const pId = profileIdMap.get(acc.employeeCode)!;
       for (const dateStr of datesThroughRef) {
         const isWeekend = currentInfo.weekends.includes(dateStr);
         const isToday = dateStr === refDateStr;
+        const dayNumber = Number(dateStr.slice(8, 10));
 
         if (isWeekend) {
+          continue;
+        }
+
+        // Scenario Oct-1: NV-KT-002 Approved Paid Leave on Oct 14
+        if (acc.employeeCode === 'NV-KT-002' && dayNumber === 14) {
+          await upsertDoc(
+            LeaveRequest,
+            { organizationId: orgId, employeeId: uId, startDate: dateStr, endDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              departmentId: deptMap.get('KT')!,
+              startDate: dateStr,
+              endDate: dateStr,
+              leaveType: LeaveType.PAID_LEAVE,
+              durationType: LeaveDurationType.FULL_DAY,
+              calculatedMinutes: 480,
+              leaveEquivalent: 1,
+              reason: 'Nghỉ giải quyết thủ tục giấy tờ hành chính',
+              status: LeaveRequestStatus.HR_APPLIED,
+              reviewedBy: userIdMap.get('QL-KT-001')!,
+              reviewedAt: vnDate('2026-10-12', '10:00:00'),
+              reviewComment: 'Đã duyệt phép',
+              appliedBy: userIdMap.get('HR-001')!,
+              appliedAt: vnDate('2026-10-13', '08:30:00'),
+            },
+            'LeaveRequest',
+          );
           await upsertDoc(
             AttendanceDay,
             { organizationId: orgId, employeeId: uId, workDate: dateStr },
@@ -1779,18 +2053,166 @@ async function main() {
               employeeId: uId,
               periodId: currentPeriodId,
               workDate: dateStr,
-              workdayType: WorkdayType.WEEKLY_OFF,
+              workdayType: WorkdayType.PAID_LEAVE,
               dayResult: DayResult.PRESENT,
               attendanceStatus: AttendanceStatus.COMPLETED,
-              workingMinutes: 0,
+              workingMinutes: 480,
+              shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 15 },
+              employeeSnapshot: { employeeCode: acc.employeeCode, fullName: acc.fullName, departmentId: String(deptMap.get(acc.deptCode!)) },
             },
             'AttendanceDay',
           );
           continue;
         }
 
-        const inTime = new Date(`${dateStr}T07:55:00.000Z`);
-        const outTime = isToday ? null : new Date(`${dateStr}T17:05:00.000Z`);
+        // Scenario Oct-2: NV-KT-003 Forgot check-in on Oct 12, submitted adjustment & Manager APPROVED
+        if (acc.employeeCode === 'NV-KT-003' && dayNumber === 12) {
+          const inTime = vnDate(dateStr, '07:55:00');
+          const outTime = vnDate(dateStr, '17:15:20');
+          const dayId = await upsertDoc(
+            AttendanceDay,
+            { organizationId: orgId, employeeId: uId, workDate: dateStr },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              periodId: currentPeriodId,
+              workDate: dateStr,
+              workMode: WorkMode.IN_OFFICE,
+              workdayType: WorkdayType.WORKING_DAY,
+              dayResult: DayResult.PRESENT,
+              attendanceStatus: AttendanceStatus.COMPLETED,
+              overallApprovalStatus: AttendanceApprovalStatus.APPROVED,
+              checkInAt: inTime,
+              checkOutAt: outTime,
+              workingMinutes: 480,
+              lateMinutes: 0,
+              earlyMinutes: 0,
+              shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 15 },
+              employeeSnapshot: { employeeCode: acc.employeeCode, fullName: acc.fullName, departmentId: String(deptMap.get(acc.deptCode!)) },
+            },
+            'AttendanceDay',
+          );
+
+          await upsertDoc(
+            ManagerRequest,
+            { organizationId: orgId, attendanceDayId: dayId },
+            {
+              organizationId: orgId,
+              employeeId: pId,
+              employeeUserId: uId,
+              departmentId: deptMap.get('KT')!,
+              attendanceDayId: dayId,
+              type: 'ATTENDANCE',
+              status: 'APPROVED',
+              workDate: vnDate(dateStr, '00:00:00'),
+              reason: 'Điện thoại cá nhân bị sập nguồn không kết nối được mạng buổi sáng, có anh Bảo KT xác nhận vào ca cùng',
+              reviewedBy: userIdMap.get('QL-KT-001')!,
+              reviewedAt: vnDate(dateStr, '17:30:00'),
+              reviewComment: 'Xác nhận vào ca đúng giờ, đồng ý bổ sung công',
+              metadata: { adjustmentSource: 'MANUAL_ADJUSTMENT' },
+              version: 1,
+            },
+            'ManagerRequest',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, attendanceDayId: dayId, eventType: AttendanceEventType.CHECK_IN },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: AttendanceEventType.CHECK_IN,
+              recordedAt: inTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              wifiSsid: 'AnPhat_Office',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.APPROVED,
+              isFallback: true,
+              note: 'Điều chỉnh theo phiếu giải trình đã được Quản lý duyệt',
+            },
+            'AttendanceEvent',
+          );
+
+          await upsertDoc(
+            AttendanceEvent,
+            { organizationId: orgId, attendanceDayId: dayId, eventType: AttendanceEventType.CHECK_OUT },
+            {
+              organizationId: orgId,
+              employeeId: uId,
+              attendanceDayId: dayId,
+              eventType: AttendanceEventType.CHECK_OUT,
+              recordedAt: outTime,
+              method: AttendanceMethod.NETWORK,
+              wifiBssid: '00:11:22:33:44:55',
+              wifiSsid: 'AnPhat_Office',
+              validationStatus: 'VALID',
+              approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
+              isFallback: false,
+            },
+            'AttendanceEvent',
+          );
+          continue;
+        }
+
+        // Scenario Oct-3: Realistic Variations in Oct
+        const punch = getNaturalPunch(acc.employeeCode, dateStr, isToday);
+        let lateMin = 0;
+        let earlyMin = 0;
+        let inTimeStr = punch.inTimeStr;
+        let outTimeStr = punch.outTimeStr;
+        let punchMethod = punch.method;
+
+        if (isToday) {
+          // Today (Oct 29): Everyone is CHECKED_IN with varied realistic check-in times & methods
+          if (acc.employeeCode === 'NV-KD-001') {
+            inTimeStr = '07:46:12';
+            punchMethod = AttendanceMethod.NETWORK;
+          } else if (acc.employeeCode === 'NV-KD-002') {
+            inTimeStr = '08:09:40';
+            punchMethod = AttendanceMethod.SELFIE;
+          } else if (acc.employeeCode === 'NV-KD-003') {
+            inTimeStr = '08:21:15';
+            lateMin = 21;
+            punchMethod = AttendanceMethod.GPS;
+          } else if (acc.employeeCode === 'QL-KD-001') {
+            inTimeStr = '07:51:30';
+            punchMethod = AttendanceMethod.NETWORK;
+          } else if (acc.employeeCode === 'NV-KT-001') {
+            inTimeStr = '07:48:50';
+            punchMethod = AttendanceMethod.NETWORK;
+          } else if (acc.employeeCode === 'NV-KT-002') {
+            inTimeStr = '08:02:10';
+            punchMethod = AttendanceMethod.GPS;
+          } else if (acc.employeeCode === 'NV-KT-003') {
+            inTimeStr = '07:56:45';
+            punchMethod = AttendanceMethod.SELFIE;
+          } else if (acc.employeeCode === 'QL-KT-001') {
+            inTimeStr = '08:05:20';
+            punchMethod = AttendanceMethod.NETWORK;
+          }
+          outTimeStr = null;
+        } else {
+          // Past days in Oct:
+          if (acc.employeeCode === 'NV-KD-001' && dayNumber === 6) {
+            inTimeStr = '08:19:30';
+            lateMin = 19;
+          } else if (acc.employeeCode === 'NV-KD-002' && dayNumber === 16) {
+            outTimeStr = '16:35:00';
+            earlyMin = 25;
+          } else if (acc.employeeCode === 'NV-KT-001' && dayNumber === 20) {
+            outTimeStr = '16:38:00';
+            earlyMin = 22;
+          } else if (acc.employeeCode === 'NV-KD-003' && dayNumber === 22) {
+            inTimeStr = '08:24:00';
+            lateMin = 24;
+          }
+        }
+
+        const inTime = vnDate(dateStr, inTimeStr);
+        const outTime = outTimeStr ? vnDate(dateStr, outTimeStr) : null;
+        const method = punchMethod;
 
         const dayId = await upsertDoc(
           AttendanceDay,
@@ -1807,9 +2229,9 @@ async function main() {
             overallApprovalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
             checkInAt: inTime,
             checkOutAt: outTime,
-            workingMinutes: isToday ? 240 : 480,
-            lateMinutes: 0,
-            earlyMinutes: 0,
+            workingMinutes: isToday ? 240 : Math.max(0, 480 - lateMin - earlyMin),
+            lateMinutes: lateMin,
+            earlyMinutes: earlyMin,
             shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 15 },
             employeeSnapshot: { employeeCode: acc.employeeCode, fullName: acc.fullName, departmentId: String(deptMap.get(acc.deptCode!)) },
           },
@@ -1825,8 +2247,14 @@ async function main() {
             attendanceDayId: dayId,
             eventType: AttendanceEventType.CHECK_IN,
             recordedAt: inTime,
-            method: AttendanceMethod.NETWORK,
-            wifiBssid: '00:11:22:33:44:55',
+            method,
+            wifiBssid: method === AttendanceMethod.NETWORK ? (punch.wifiBssid ?? '00:11:22:33:44:55') : undefined,
+            wifiSsid: method === AttendanceMethod.NETWORK ? (punch.wifiSsid ?? 'AnPhat_Office') : undefined,
+            latitude: method !== AttendanceMethod.NETWORK ? punch.latitude : undefined,
+            longitude: method !== AttendanceMethod.NETWORK ? punch.longitude : undefined,
+            accuracyMeters: method !== AttendanceMethod.NETWORK ? punch.accuracyMeters : undefined,
+            distanceFromWorkplaceMeters: method !== AttendanceMethod.NETWORK ? punch.distanceFromWorkplaceMeters : undefined,
+            address: method !== AttendanceMethod.NETWORK ? punch.address : undefined,
             validationStatus: 'VALID',
             approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
             isFallback: false,
@@ -1844,8 +2272,14 @@ async function main() {
               attendanceDayId: dayId,
               eventType: AttendanceEventType.CHECK_OUT,
               recordedAt: outTime,
-              method: AttendanceMethod.NETWORK,
-              wifiBssid: '00:11:22:33:44:55',
+              method,
+              wifiBssid: method === AttendanceMethod.NETWORK ? (punch.wifiBssid ?? '00:11:22:33:44:55') : undefined,
+              wifiSsid: method === AttendanceMethod.NETWORK ? (punch.wifiSsid ?? 'AnPhat_Office') : undefined,
+              latitude: method !== AttendanceMethod.NETWORK ? punch.latitude : undefined,
+              longitude: method !== AttendanceMethod.NETWORK ? punch.longitude : undefined,
+              accuracyMeters: method !== AttendanceMethod.NETWORK ? punch.accuracyMeters : undefined,
+              distanceFromWorkplaceMeters: method !== AttendanceMethod.NETWORK ? punch.distanceFromWorkplaceMeters : undefined,
+              address: method !== AttendanceMethod.NETWORK ? punch.address : undefined,
               validationStatus: 'VALID',
               approvalStatus: AttendanceApprovalStatus.NOT_REQUIRED,
               isFallback: false,

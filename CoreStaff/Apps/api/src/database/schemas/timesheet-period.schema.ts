@@ -75,6 +75,16 @@ export class TimesheetPeriod {
   @Prop({ type: Date })
   reopenedAt?: Date;
 
+  /** Shared CAS claim binding this closed source version to one active payroll run. */
+  @Prop({ type: 'ObjectId', ref: 'PayrollRun', required: false, index: true })
+  payrollRunId?: string;
+
+  @Prop({ required: false, enum: ['DRAFT', 'CALCULATED', 'LOCKED', 'RELEASED'] })
+  payrollState?: string;
+
+  @Prop({ required: false, min: 1 })
+  payrollSourceVersion?: number;
+
   /** True when all departments have closed their snapshots. */
   @Prop({ type: Boolean, default: false })
   managerSnapshotClosed: boolean;

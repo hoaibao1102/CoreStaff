@@ -12,6 +12,7 @@ import { EmploymentStatus, InsuranceContributionType } from '../../database/sche
 import { calculateInsuranceContributions } from '../insurance-policy/insurance-calculation';
 import { PitService } from '../payroll/pit.service';
 import { createHash } from 'node:crypto';
+import { canonicalPayloadHash } from '../payroll/payroll-artifact-foundation';
 
 /**
  * Hệ số tiền làm thêm giờ (SRS §30D.2). Một chỗ khai duy nhất — payslip import lại
@@ -26,7 +27,13 @@ export const OVERTIME_RATES = {
   publicHoliday: 3.0,
 } as const;
 
-export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingDays' | 'presentDays' | 'absentDays' | 'unpaidLeaveDays'>) {
+export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingDays' | 'presentDays' | 'absentDays' | 'unpaidLeaveDays'> & Partial<Pick<TimesheetSummary, 'calculationContract' | 'standardWorkUnits' | 'payableWorkUnits'>>) {
+  if (summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2') {
+    return {
+      standardWorkingDays: Math.max(0, summary.standardWorkUnits ?? 0),
+      payableWorkingDays: Math.max(0, summary.payableWorkUnits ?? 0),
+    };
+  }
   const standardWorkingDays = Math.max(0, summary.workingDays ?? 0);
   const nonPayableDays = Math.max(0, (summary.absentDays ?? 0) + (summary.unpaidLeaveDays ?? 0));
   return {
@@ -48,7 +55,10 @@ export function deriveInsuranceSalary(monthlyBaseSalary: number, totalAllowances
  * Tiền công 1 giờ dùng cho OT = lương tháng / (ngày công chuẩn × 8).
  * Một chỗ khai duy nhất — snapshot lưu lại, payslip đọc lại (B1).
  */
-export function hourlyRateFor(monthlyBaseSalary: number, standardWorkingDays: number): number {
+export function hourlyRateFor(monthlyBaseSalary: number, standardWorkingDays: number, standardWorkMinutes?: number): number {
+  if (standardWorkMinutes !== undefined) {
+    return standardWorkMinutes > 0 ? monthlyBaseSalary / (standardWorkMinutes / 60) : 0;
+  }
   return standardWorkingDays > 0 ? monthlyBaseSalary / (standardWorkingDays * 8) : 0;
 }
 
@@ -137,12 +147,6 @@ export class PayrollSnapshotService {
       .session(session)
       .lean();
 
-    const eligibleProfileIds = summaries.map((summary) => summary.employeeProfileId);
-    await this.snapshotModel.deleteMany({
-      periodId: new Types.ObjectId(periodId),
-      organizationId: new Types.ObjectId(organizationId),
-      employeeProfileId: { $nin: eligibleProfileIds },
-    }).session(session);
 
     if (!summaries.length) {
       return 0;
@@ -227,6 +231,8 @@ export class PayrollSnapshotService {
       .session(session ?? null)
       .lean();
 
+    if (!insurancePolicy) throw new NotFoundException('INSURANCE_POLICY_MISSING');
+    if (!taxPolicy) throw new NotFoundException('TAX_POLICY_MISSING');
     return { insurancePolicy, taxPolicy };
   }
 
@@ -250,11 +256,17 @@ export class PayrollSnapshotService {
       insurancePolicy,
       taxPolicy,
     );
-    await this.snapshotModel.findOneAndUpdate(
-      { periodId: new Types.ObjectId(periodId), employeeProfileId: new Types.ObjectId(summary.employeeProfileId) },
-      { $set: snapshotData },
-      { upsert: true, session, new: true },
-    );
+    const immutablePayload: any = {
+      ...snapshotData,
+      schemaVersion: 1,
+      sourcePeriodVersion: summary.sourcePeriodVersion,
+      sourceSummaryId: (summary as any)._id,
+      sourceSummaryVersion: summary.version,
+      sourceSummaryHash: summary.canonicalPayloadHash ?? summary.sourceHash,
+      calculationContract: summary.calculationContract ?? 'LEGACY_WORKING_DAYS_V1',
+    };
+    immutablePayload.canonicalPayloadHash = canonicalPayloadHash(immutablePayload);
+    await this.snapshotModel.create([immutablePayload], { session });
   }
 
   /**
@@ -346,7 +358,11 @@ export class PayrollSnapshotService {
     const kpiBonus = kpiInput?.amount ?? 0;
 
     // Calculate OT pay — hệ số dùng chung ở OVERTIME_RATES (SRS §30D.2)
-    const hourlyRate = hourlyRateFor(monthlyBaseSalary, standardWorkingDays);
+    const hourlyRate = hourlyRateFor(
+      monthlyBaseSalary,
+      standardWorkingDays,
+      summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2' ? summary.standardWorkMinutes : undefined,
+    );
 
     // Tiền OT = số giờ × tiền công 1 giờ × hệ số, cộng theo từng loại ngày.
     const otWorkingDayPay = computeOvertimePay(summary.otWorkingDayMinutes, hourlyRate, OVERTIME_RATES.workingDay);
@@ -419,6 +435,20 @@ export class PayrollSnapshotService {
       standardWorkingDays,
       payableWorkingDays,
       hourlyRate,
+      ...(summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2' ? {
+        standardWorkUnits: summary.standardWorkUnits,
+        standardWorkMinutes: summary.standardWorkMinutes,
+        payableWorkUnits: summary.payableWorkUnits,
+        dailyWorkCredits: summary.dailyWorkCredits,
+        workCreditPolicySnapshots: summary.workCreditPolicySnapshots,
+        overtimeRateEvidence: [{
+          contract: 'FROZEN_STATIC_RATES_V1',
+          workingDay: OVERTIME_RATES.workingDay,
+          weeklyOff: OVERTIME_RATES.weeklyOff,
+          publicHoliday: OVERTIME_RATES.publicHoliday,
+          standardWorkMinutes: summary.standardWorkMinutes,
+        }],
+      } : {}),
       totalAllowances,
       attendanceBonus,
       kpiBonus,

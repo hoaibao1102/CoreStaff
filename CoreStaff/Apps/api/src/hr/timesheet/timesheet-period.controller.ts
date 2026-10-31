@@ -10,12 +10,34 @@ import { ReopenTimesheetPeriodDto } from './dto/reopen-timesheet-period.dto';
 import { TimesheetPeriodStatus } from '../../database/schemas/timesheet-period.schema';
 import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
 import { ResolveMissingPunchDto } from './dto/resolve-missing-punch.dto';
+import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
+import { AcknowledgeTimesheetDto } from './dto/acknowledge-timesheet.dto';
+import { DisputeTimesheetDto } from './dto/dispute-timesheet.dto';
 
 @ApiTags('HR / Timesheet Periods')
 @UseGuards(AuthGuard, RolesGuard)
 @Controller('hr/timesheet-periods')
 export class TimesheetPeriodController {
-	constructor(private readonly service: TimesheetPeriodService) {}
+	constructor(private readonly service: TimesheetPeriodService, private readonly reviews: EmployeeTimesheetReviewService) {}
+
+
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
+	@Get(':id/my-review')
+	async getMyReview(@Tenant() organizationId: string | null, @Param('id') id: string, @CurrentUser() user: any) {
+		return { success: true, data: await this.reviews.getOwnReview(requireOrganizationId(organizationId), id, String(user._id ?? user.id)) };
+	}
+
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
+	@Post(':id/my-review/acknowledge')
+	async acknowledgeMyReview(@Tenant() organizationId: string | null, @Param('id') id: string, @CurrentUser() user: any, @Body() dto: AcknowledgeTimesheetDto) {
+		return { success: true, data: await this.reviews.acknowledge(requireOrganizationId(organizationId), id, String(user._id ?? user.id), dto) };
+	}
+
+	@Roles('EMPLOYEE', 'DEPARTMENT_MANAGER')
+	@Post(':id/my-review/dispute')
+	async disputeMyReview(@Tenant() organizationId: string | null, @Param('id') id: string, @CurrentUser() user: any, @Body() dto: DisputeTimesheetDto) {
+		return { success: true, data: await this.reviews.dispute(requireOrganizationId(organizationId), id, String(user._id ?? user.id), dto) };
+	}
 
 	@Roles('HR')
 	@Post()
@@ -288,13 +310,8 @@ export class TimesheetPeriodController {
 	) {
 		const orgId = requireOrganizationId(organizationId);
 		const managerUserId = String(user._id ?? user.id);
-		try {
-			const data = await this.service.managerCloseSnapshot(orgId, id, managerUserId, departmentId);
-			return { success: true, data };
-		} catch (error) {
-			console.error('[close-snapshot] controller error:', error);
-			throw error;
-		}
+		const data = await this.service.managerCloseSnapshot(orgId, id, managerUserId, departmentId);
+		return { success: true, data };
 	}
 
 	@Roles('HR')
@@ -309,7 +326,7 @@ export class TimesheetPeriodController {
 		@CurrentUser() user: any,
 	) {
 		const orgId = requireOrganizationId(organizationId);
-		const data = await this.service.hrClosePeriod(orgId, id, user.id);
+		const data = await this.service.hrClosePeriod(orgId, id, String(user._id ?? user.id));
 		return { success: true, data };
 	}
 }

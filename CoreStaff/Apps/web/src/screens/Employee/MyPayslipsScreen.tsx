@@ -78,7 +78,7 @@ function EmptyState() {
   );
 }
 
-export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
+export function MyPayslipsScreen({ apiBase, embedded = false }: { apiBase?: string; embedded?: boolean } = {}) {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [expandedSlipId, setExpandedSlipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -149,15 +149,15 @@ export function MyPayslipsScreen({ apiBase }: { apiBase?: string } = {}) {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className={`flex flex-wrap items-start gap-4 ${embedded ? 'justify-end' : 'justify-between'}`}>
+        {!embedded && <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Bảng Lương Của Tôi
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Xem chi tiết các kỳ lương và khấu trừ của bạn.
           </p>
-        </div>
+        </div>}
         <Button onClick={handleRefresh} variant="outline" disabled={loading}>
           <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Làm Mới

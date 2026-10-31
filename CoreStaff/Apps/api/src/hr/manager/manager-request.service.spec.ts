@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, UnprocessableEntityException } f
 import { ManagerRequestService } from './manager-request.service';
 
 type Row=Record<string,any>;
-function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any){
+function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, periodVersion:any={bumpForWorkDates:jest.fn().mockResolvedValue(1)}){
  const model={
   create:jest.fn(async(d:Row)=>({toObject:()=>({_id:'new',version:1,status:'PENDING',...d})})),
   find:jest.fn((f:Row)=>{
@@ -30,7 +30,8 @@ function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any){
   updateOne:jest.fn().mockResolvedValue({}),
  };
  const attendanceEvents={create:jest.fn(),updateMany:jest.fn().mockResolvedValue({})};
- return new ManagerRequestService(model as any,employees as any,attendanceDays as any,attendanceEvents as any,scope as any,undefined,ot,undefined,employeeAssignments);
+ const service = new ManagerRequestService(model as any,employees as any,attendanceDays as any,attendanceEvents as any,scope as any,periodVersion,undefined,ot,employeeAssignments);
+ return Object.assign(service,{__periodVersion:periodVersion});
 }
 /** Records the OT calls and lets each test decide whether the precheck blocks. */
 function fakeOt(overrides:Record<string,any>={}):any{
@@ -74,6 +75,17 @@ describe('ManagerRequestService',()=>{
   expect(day.attendanceStatus).toBe('COMPLETED');
   expect(day.dayResult).toBe('PRESENT');
   expect((s as any).attendanceEvents.create).toHaveBeenCalledWith(expect.objectContaining({eventType:'CHECK_IN',method:'MANUAL',approvalStatus:'APPROVED'}));
+  expect((s as any).__periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
+ });
+ it('fails closed when attendance invalidation fails',async()=>{
+  const row={_id:'adj1',organizationId:'o1',employeeUserId:'u1',employeeId:'p1',departmentId:'d1',type:'ATTENDANCE',status:'PENDING',version:1,workDate:new Date('2026-09-14T00:00:00Z'),requestedStart:new Date('2026-09-14T01:00:00Z'),reason:'Forgot the start-of-shift check-in',metadata:{actionType:'CHECK_IN',adjustmentSource:'MANUAL_ADJUSTMENT'}};
+  const periodVersion={bumpForWorkDates:jest.fn().mockRejectedValue(new Error('version unavailable'))};
+  const s=build([row],['d1'],undefined,undefined,periodVersion);
+  const day:any={_id:'day1',save:jest.fn().mockResolvedValue(undefined)};
+  const dayQuery:any={lean:async()=>day,then:(resolve:any)=>resolve(day)};
+  (s as any).attendanceDays.findOne.mockImplementation(()=>dayQuery);
+  await expect(s.decide('o1','manager','adj1','APPROVED',1)).rejects.toThrow('version unavailable');
+  expect(periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
  });
  it('forbids self approval',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'manager',departmentId:'d1',status:'PENDING',version:1}]);await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toBeInstanceOf(ForbiddenException);});
  it('rejects a stale decision version',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',status:'PENDING',version:2}]);await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toBeInstanceOf(ConflictException);});
@@ -90,6 +102,14 @@ describe('ManagerRequestService',()=>{
   ot.onApproved.mockImplementation(async()=>{order.push('result');});
   await s.decide('o1','manager','1','APPROVED',1);
   expect(order).toEqual(['precheck','write','result']);
+  expect((s as any).__periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
+ });
+ it('fails closed when OT approval invalidation fails',async()=>{
+  const ot=fakeOt();
+  const periodVersion={bumpForWorkDates:jest.fn().mockRejectedValue(new Error('version unavailable'))};
+  const s=build([structuredClone(pendingOt)],['d1'],ot,undefined,periodVersion);
+  await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toThrow('version unavailable');
+  expect(periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
  });
  it('leaves status and version untouched when a labor limit blocks the approval',async()=>{
   const rows=[structuredClone(pendingOt)];
@@ -107,7 +127,7 @@ describe('ManagerRequestService',()=>{
  });
  it('does not touch the OT engine for an attendance request or a rejection',async()=>{
   const ot=fakeOt();
-  const s=build([{_id:'1',organizationId:'o1',type:'ATTENDANCE',employeeUserId:'u1',departmentId:'d1',status:'PENDING',version:1}],['d1'],ot);
+  const s=build([{_id:'1',organizationId:'o1',type:'ATTENDANCE',employeeUserId:'u1',departmentId:'d1',status:'PENDING',version:1,workDate:new Date('2026-09-22T00:00:00Z')}],['d1'],ot);
   await s.decide('o1','manager','1','APPROVED',1);
   expect(ot.calls).toEqual([]);
   const ot2=fakeOt();

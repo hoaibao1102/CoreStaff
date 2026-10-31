@@ -46,6 +46,25 @@ export class Payslip {
   @Prop({ required: true })
   periodLabel: string;
 
+  @Prop({ required: true, min: 1, default: 1 })
+  schemaVersion: number;
+
+  /** Exact period and snapshot lineage used to calculate this payslip. */
+  @Prop({ required: true, min: 1, default: 1 })
+  sourcePeriodVersion: number;
+
+  @Prop({ type: 'ObjectId', ref: 'PayrollInputSnapshot', required: false, index: true })
+  sourceSnapshotId?: string;
+
+  @Prop({ required: false, min: 1 })
+  sourceSnapshotVersion?: number;
+
+  @Prop({ required: false })
+  sourceSnapshotHash?: string;
+
+  @Prop({ required: false })
+  sourceSnapshotSetHash?: string;
+
   @Prop({
     type: String,
     enum: Object.values(PayslipStatus),

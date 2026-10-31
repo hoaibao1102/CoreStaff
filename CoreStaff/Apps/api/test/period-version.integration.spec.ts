@@ -8,7 +8,7 @@
 import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, collection, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, collection, resolveAndAcknowledgePeriod, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -121,7 +121,14 @@ describe('TASK-073 — version bumps on mutation', () => {
     const periodId = await createCurrentPeriod();
     const today = vnToday();
 
-    // No blockers exist, so the period can go straight to CLOSED.
+    const period = await collection('TimesheetPeriod').findById(periodId).lean() as any;
+    await resolveAndAcknowledgePeriod(
+      http, fixture, periodId,
+      period.startDate.toISOString().slice(0, 10),
+      period.endDate.toISOString().slice(0, 10),
+    );
+
+    // Review prerequisites are complete, so the period can go to CLOSED.
     await http.patch(`${API_PREFIX}/${periodId}/status`).set('Cookie', hrCookie).send({ status: 'REVIEWING' });
     const confirmed = await http
       .post(`${API_PREFIX}/${periodId}/department-confirmations`)

@@ -103,3 +103,52 @@ describe('TASK-073 — PeriodVersionService.bumpForWorkDates', () => {
     expect(finds).toHaveLength(0);
   });
 });
+
+describe('PeriodVersionService.bumpForEffectiveWindow', () => {
+  it('bumps every distinct open period intersecting the half-open policy window', async () => {
+    const second = '64f1a2b3c4d5e6f7a8b9c0d2';
+    const calls: any[] = [];
+    const findFilters: any[] = [];
+    const model = {
+      find: (filter: any) => {
+        findFilters.push(filter);
+        return { select: () => ({ session: () => ({ lean: async () => [{ _id: PERIOD }, { _id: second }, { _id: PERIOD }] }) }) };
+      },
+      updateOne: async (filter: any, update: any, options: any) => {
+        calls.push({ filter, update, options });
+        return { modifiedCount: 1 };
+      },
+    };
+    const service = new PeriodVersionService(model as any);
+    const session = { id: 'session' } as any;
+
+    await expect(service.bumpForEffectiveWindow(
+      ORG,
+      new Date('2026-10-01T00:00:00.000Z'),
+      new Date('2026-11-01T00:00:00.000Z'),
+      session,
+    )).resolves.toBe(2);
+    expect(findFilters[0]).toMatchObject({
+      active: true,
+      status: { $ne: 'CLOSED' },
+      startDate: { $lt: new Date('2026-11-01T00:00:00.000Z') },
+      endDate: { $gte: new Date('2026-10-01T00:00:00.000Z') },
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls.every(call => call.options.session === session)).toBe(true);
+  });
+
+  it('uses only a lower bound for an open-ended policy window', async () => {
+    const filters: any[] = [];
+    const model = {
+      find: (filter: any) => {
+        filters.push(filter);
+        return { select: () => ({ session: () => ({ lean: async () => [] }) }) };
+      },
+    };
+    const service = new PeriodVersionService(model as any);
+    await expect(service.bumpForEffectiveWindow(ORG, new Date('2026-10-01T00:00:00.000Z'))).resolves.toBe(0);
+    expect(filters[0].startDate).toBeUndefined();
+    expect(filters[0].endDate).toEqual({ $gte: new Date('2026-10-01T00:00:00.000Z') });
+  });
+});

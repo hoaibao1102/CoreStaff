@@ -113,11 +113,12 @@ function build(options: {
   };
   const shifts = { resolveForEmployeeDate: jest.fn(async () => options.shift === null ? null : (options.shift ?? { _id: 's1', startTime: '08:00', endTime: '17:00', breakMinutes: 120 })) };
   const policies = { laborAt: jest.fn(async (_org: string, _at: Date) => options.laborPolicy ?? LABOR_POLICY), overtimeAt: jest.fn(async (_org: string, _at: Date) => ({ version: 2, legalReference: 'x' })) };
+  const periodVersion = { bumpForWorkDates: jest.fn(async () => 1) };
   const service = new OvertimeService(
     models.requests as any, models.attendanceDays as any, models.calendar as any,
-    models.overrides as any, models.results as any, shifts as any, policies as any,
+    models.overrides as any, models.results as any, shifts as any, policies as any, periodVersion as any,
   );
-  return { service, models, shifts, policies };
+  return { service, models, shifts, policies, periodVersion };
 }
 
 /** A filed OT report for 18:00–20:00, approved in full. */
@@ -404,20 +405,34 @@ describe('OvertimeService', () => {
       expect((await service.listResults(ORG))[0].recalculationRequired).toBe(true);
     });
     it('promotes the type when recomputed after the calendar edit', async () => {
-      const { service, models } = build({ requests: [request()] });
+      const { service, models, periodVersion } = build({ requests: [request()] });
       await service.onApproved(ORG, request());
       models.calendar.rows.push({ organizationId: ORG, date: WORK_DATE, type: 'PUBLIC_HOLIDAY', name: 'Quốc khánh' });
       const outcome = await service.recompute(ORG, WORK_DATE, WORK_DATE);
       expect(outcome).toEqual({ scanned: 1, changed: 1 });
       expect(models.results.rows[0].overtimeType).toBe(OvertimeType.PUBLIC_HOLIDAY);
+      expect(periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
+      expect(periodVersion.bumpForWorkDates).toHaveBeenCalledWith(ORG, [WORK_DATE]);
       // Idempotent: a second run finds nothing left to move.
       expect(await service.recompute(ORG, WORK_DATE, WORK_DATE)).toEqual({ scanned: 1, changed: 0 });
+      expect(periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
+    });
+    it('fails closed when reclassification invalidation fails', async () => {
+      const { service, models, periodVersion } = build({ requests: [request()] });
+      await service.onApproved(ORG, request());
+      models.calendar.rows.push({ organizationId: ORG, date: WORK_DATE, type: 'PUBLIC_HOLIDAY', name: 'Quốc khánh' });
+      periodVersion.bumpForWorkDates.mockRejectedValueOnce(new Error('version unavailable'));
+      await expect(service.recompute(ORG, WORK_DATE, WORK_DATE)).rejects.toThrow('version unavailable');
     });
     it('can be promoted to FINAL, which is what Sprint 6 will call', async () => {
-      const { service, models } = build();
+      const { service, models, periodVersion } = build();
       models.requests.rows.push(request());
       await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
       expect(models.results.rows[0].classificationStatus).toBe('FINAL');
+      periodVersion.bumpForWorkDates.mockClear();
+      models.results.rows[0].classificationStatus = 'PROVISIONAL';
+      await service.recompute(ORG, WORK_DATE, WORK_DATE, { targetStatus: 'FINAL' });
+      expect(periodVersion.bumpForWorkDates).not.toHaveBeenCalled();
     });
     it('refuses an over-long recalculation window', async () => {
       const { service } = build();

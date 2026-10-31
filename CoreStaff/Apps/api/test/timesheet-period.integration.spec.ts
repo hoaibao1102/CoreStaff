@@ -12,7 +12,7 @@
 import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor } from './fixtures';
+import { Fixture, seedTenant, cookieFor, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -46,7 +46,17 @@ const createPeriodBody = (period: string, startDate: string, endDate: string) =>
   endDate,
 });
 
-const validPeriod = () => createPeriodBody('2026-10', '2026-10-01', '2026-10-31');
+function periodStarting(offsetDays: number) {
+  const start = new Date(`${vnToday()}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() + offsetDays);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 30);
+  const startDate = start.toISOString().slice(0, 10);
+  return createPeriodBody(startDate.slice(0, 7), startDate, end.toISOString().slice(0, 10));
+}
+
+const validPeriod = () => periodStarting(0);
+const nextValidPeriod = () => periodStarting(31);
 const validPeriodPast = () => createPeriodBody('2020-01', '2020-01-01', '2020-01-31');
 
 /* ───────── CREATE PERIOD VALIDATIONS ───────── */
@@ -58,7 +68,7 @@ describe('TASK-072 — Create Period Validations', () => {
       .send(validPeriod());
 
     expect(res.status).toBe(201);
-    expect(res.body.data.period).toBe('2026-10');
+    expect(res.body.data.period).toBe(validPeriod().period);
     expect(res.body.data.status).toBe('OPEN');
     expect(res.body.data.version).toBe(1);
   });
@@ -66,7 +76,7 @@ describe('TASK-072 — Create Period Validations', () => {
   it('should reject period with less than 28 days', async () => {
     const res = await http.post('/api/hr/timesheet-periods')
       .set('Cookie', hrCookie)
-      .send(createPeriodBody('2026-10', '2026-10-01', '2026-10-20'));
+      .send({ ...validPeriod(), endDate: validPeriod().startDate });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_DAY_RANGE');
@@ -75,7 +85,7 @@ describe('TASK-072 — Create Period Validations', () => {
   it('should reject period with more than 31 days', async () => {
     const res = await http.post('/api/hr/timesheet-periods')
       .set('Cookie', hrCookie)
-      .send(createPeriodBody('2026-10', '2026-10-01', '2026-11-15'));
+      .send({ ...validPeriod(), endDate: periodStarting(32).startDate });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_DAY_RANGE');
@@ -112,7 +122,7 @@ describe('TASK-072 — Create Period Validations', () => {
 
     const res = await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
-      .send(createPeriodBody('2026-11', '2026-11-01', '2026-11-30'));
+      .send(nextValidPeriod());
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('PERIOD_ALREADY_ACTIVE');
@@ -139,7 +149,7 @@ describe('TASK-072 — Create Period Validations', () => {
     // Now should be able to create next month
     const res = await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
-      .send(createPeriodBody('2026-11', '2026-11-01', '2026-11-30'));
+      .send(nextValidPeriod());
 
     expect(res.status).toBe(201);
   });
@@ -283,7 +293,7 @@ describe('TASK-072 — Reopen Closed Period', () => {
     // Create a fresh OPEN period; the suite's beforeEach closed the other one
     const openRes = await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
-      .send(createPeriodBody('2026-11', '2026-11-01', '2026-11-30'));
+      .send(nextValidPeriod());
 
     const res = await http.patch(`${API_PREFIX}/${openRes.body.data._id}/reopen`)
       .set('Cookie', hrCookie)

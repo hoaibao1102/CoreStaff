@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { ClientSession, Model } from 'mongoose';
 import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
@@ -9,6 +9,7 @@ import { ShiftTemplateDocument } from '../../database/schemas/shift-template.sch
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { BatchValidator } from '../../common/batch-validator';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const LEGACY_UNIQUE_INDEXES = [
@@ -29,6 +30,7 @@ export class AssignmentService {
         @InjectModel('EmployeeProfile') private readonly profileModel: Model<EmployeeProfileDocument>,
         @InjectModel('Workplace') private readonly workplaceModel: Model<WorkplaceDocument>,
         @InjectModel('ShiftTemplate') private readonly shiftTemplateModel: Model<ShiftTemplateDocument>,
+        private readonly periodVersion: PeriodVersionService,
     ) { }
 
     private async removeLegacyUniqueIndex(): Promise<void> {
@@ -84,7 +86,7 @@ export class AssignmentService {
         // An employee may already have an active assignment created without a
         // workplace. In that case, adding a workplace is an enrichment of the
         // existing assignment, not a conflicting second assignment.
-        const enriched: any[] = [];
+        const enrichmentIds: string[] = [];
         const toCreate: string[] = [];
         for (const userId of userIds) {
             if (dto.workplaceId) {
@@ -96,15 +98,8 @@ export class AssignmentService {
                     $or: [{ workplaceId: { $exists: false } }, { workplaceId: null }],
                 }).lean();
                 if (assignmentWithoutWorkplace) {
-                    const updated = await this.assignmentModel.findByIdAndUpdate(
-                        assignmentWithoutWorkplace._id,
-                        { workplaceId: dto.workplaceId },
-                        { new: true },
-                    ).lean();
-                    if (updated) {
-                        enriched.push(updated);
-                        continue;
-                    }
+                    enrichmentIds.push(String(assignmentWithoutWorkplace._id));
+                    continue;
                 }
             }
 
@@ -118,47 +113,35 @@ export class AssignmentService {
 
         batch.throwIfAny();
 
-        if (!toCreate.length) {
-            return enriched.map((item) => ({
-                _id: item._id,
-                organizationId: item.organizationId,
-                userId: item.userId,
-                departmentId: item.departmentId,
-                workplaceId: item.workplaceId,
-                effectiveFrom: item.effectiveFrom,
-                effectiveTo: item.effectiveTo,
-                active: item.active,
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }));
-        }
-
         try {
-            const docs = await this.assignmentModel.insertMany(
-                toCreate.map((userId) => ({
-                    organizationId,
-                    userId,
-                    departmentId: dto.departmentId,
-                    workplaceId: dto.workplaceId,
-                    effectiveFrom: dto.effectiveFrom,
-                    effectiveTo: dto.effectiveTo,
-                })),
-                { ordered: false }
-            );
-            const data = docs.map((doc) => doc.toObject({ versionKey: false }));
-
-            return [...enriched, ...data].map((item) => ({
-                _id: item._id,
-                organizationId: item.organizationId,
-                userId: item.userId,
-                departmentId: item.departmentId,
-                workplaceId: item.workplaceId,
-                effectiveFrom: item.effectiveFrom,
-                effectiveTo: item.effectiveTo,
-                active: item.active,
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }));
+            return await this.transaction(async session => {
+                const enriched: any[] = [];
+                for (const assignmentId of enrichmentIds) {
+                    const updated = await this.assignmentModel.findByIdAndUpdate(
+                        assignmentId, { workplaceId: dto.workplaceId }, { new: true, session },
+                    ).lean();
+                    if (!updated) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+                    enriched.push(updated);
+                }
+                const docs = toCreate.length ? await this.assignmentModel.insertMany(
+                    toCreate.map((userId) => ({
+                        organizationId,
+                        userId,
+                        departmentId: dto.departmentId,
+                        workplaceId: dto.workplaceId,
+                        effectiveFrom: dto.effectiveFrom,
+                        effectiveTo: dto.effectiveTo,
+                    })),
+                    { ordered: false, session },
+                ) : [];
+                const data = docs.map((doc) => doc.toObject({ versionKey: false }));
+                const changed = [...enriched, ...data];
+                if (changed.length) {
+                    const window = unionAssignmentWindows(changed);
+                    await this.invalidate(organizationId, window.from, window.to, session);
+                }
+                return changed.map(publicAssignment);
+            });
         } catch (err) {
             throw mapDuplicateKey(err);
         }
@@ -252,11 +235,16 @@ export class AssignmentService {
         batch.throwIfAny();
 
         try {
-            const doc = await this.assignmentModel
-                .findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true })
-                .lean();
-            if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
-            return doc;
+            const old = await this.findOne(organizationId, id);
+            return await this.transaction(async session => {
+                const doc = await this.assignmentModel
+                    .findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true, session })
+                    .lean();
+                if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+                const window = unionAssignmentWindows([old, { ...old, ...patch }]);
+                await this.invalidate(organizationId, window.from, window.to, session);
+                return doc;
+            });
         } catch (err) {
             if (err instanceof NotFoundException) throw err;
             throw mapDuplicateKey(err);
@@ -266,12 +254,34 @@ export class AssignmentService {
     async setActive(organizationId: string, id: string, active: boolean) {
         const doc = await this.assignmentModel.findOne({ _id: id, organizationId }).lean();
         if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+        if (doc.active === active) return doc;
 
         // HR có thể deactivate bất kỳ assignment nào mà không cần điều kiện
         // (NV nghỉ việc, chuyển phòng, hoặc sửa lỗi dữ liệu)
 
-        const updated = await this.assignmentModel.findByIdAndUpdate(id, { active }, { new: true }).lean();
-        return updated;
+        return this.transaction(async session => {
+            const updated = await this.assignmentModel.findByIdAndUpdate(id, { active }, { new: true, session }).lean();
+            if (!updated) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+            await this.invalidate(organizationId, doc.effectiveFrom, doc.effectiveTo, session);
+            return updated;
+        });
+    }
+
+    private async transaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
+        const session = await this.assignmentModel.db.startSession();
+        try {
+            let result!: T;
+            await session.withTransaction(async () => { result = await work(session); });
+            return result;
+        } finally {
+            await session.endSession();
+        }
+    }
+
+    private invalidate(organizationId: string, from: string | undefined, to: string | undefined, session: ClientSession) {
+        return this.periodVersion.bumpForEffectiveWindow(
+            organizationId, from ? effectiveStart(from) : undefined, to ? dayAfter(to) : undefined, session,
+        );
     }
 
     private async validateReferences(organizationId: string, refs: {
@@ -330,4 +340,20 @@ function mapDuplicateKey(err: unknown): unknown {
         return new ConflictException('ASSIGNMENT_ALREADY_EXISTS');
     }
     return err;
+}
+
+function publicAssignment(item: any) {
+    const { _id, organizationId, userId, departmentId, workplaceId, effectiveFrom, effectiveTo, active, createdAt, updatedAt } = item;
+    return { _id, organizationId, userId, departmentId, workplaceId, effectiveFrom, effectiveTo, active, createdAt, updatedAt };
+}
+
+function effectiveStart(value: string) { return new Date(`${value.slice(0, 10)}T00:00:00.000Z`); }
+function dayAfter(value: string) { return new Date(effectiveStart(value).getTime() + 86400000); }
+function unionAssignmentWindows(rows: Array<{ effectiveFrom?: string; effectiveTo?: string }>) {
+    const starts = rows.map(row => row.effectiveFrom).filter((value): value is string => Boolean(value));
+    const ends = rows.map(row => row.effectiveTo);
+    return {
+        from: starts.length === rows.length ? starts.sort()[0] : undefined,
+        to: ends.every(Boolean) ? (ends as string[]).sort().at(-1) : undefined,
+    };
 }

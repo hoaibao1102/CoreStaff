@@ -91,4 +91,31 @@ export class PeriodVersionService {
     }
     return bumped;
   }
+
+  /** Invalidate open periods whose inclusive date range intersects a half-open policy window. */
+  async bumpForEffectiveWindow(
+    organizationId: string,
+    effectiveFrom?: Date,
+    effectiveTo?: Date,
+    session?: ClientSession,
+  ): Promise<number> {
+    const filter: Record<string, unknown> = {
+      organizationId: new Types.ObjectId(organizationId),
+      active: true,
+      status: { $ne: TimesheetPeriodStatus.CLOSED },
+    };
+    if (effectiveFrom) filter.endDate = { $gte: effectiveFrom };
+    if (effectiveTo) filter.startDate = { $lt: effectiveTo };
+    const periods = await this.periods
+      .find(filter)
+      .select('_id')
+      .session(session ?? null)
+      .lean();
+    const ids = [...new Set(periods.map(period => String(period._id)))];
+    let bumped = 0;
+    for (const periodId of ids) {
+      if (await this.bump(organizationId, periodId, session)) bumped++;
+    }
+    return bumped;
+  }
 }

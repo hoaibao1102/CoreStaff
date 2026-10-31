@@ -8,8 +8,10 @@ import {
   LaborCompliancePolicySchema,
   OvertimePayPolicySchema,
 } from '../../database/schemas/compensation.schema';
+import { WorkCreditPolicySchema } from '../../database/schemas/work-credit-policy.schema';
 import { PoliciesController } from './policies.controller';
 import { PoliciesService } from './policies.service';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 /**
  * TASK-036/037 — effective-dated tenant policies (Labor Compliance + Overtime
@@ -18,9 +20,11 @@ import { PoliciesService } from './policies.service';
 @Module({
   imports: [
     AuthModule,
+    PeriodVersionModule,
     MongooseModule.forFeature([
       { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
       { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
+      { name: 'WorkCreditPolicy', schema: WorkCreditPolicySchema },
       // AuthGuard resolves these model tokens from the *importing* module's
       // context, so every module that puts AuthGuard on a controller must
       // register them itself (same convention as workplace/department/etc.).

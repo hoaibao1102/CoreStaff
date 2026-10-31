@@ -11,7 +11,7 @@
 import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, collection, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, collection, resolveAndAcknowledgePeriod, vnToday } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -246,6 +246,13 @@ describe('TASK-074 — close re-verifies blockers', () => {
     expect(blocked.body.error.code).toBe('BLOCKERS_REMAIN');
 
     await collection('AttendanceDay').deleteOne({ _id: day._id });
+
+    const period = await collection('TimesheetPeriod').findById(periodId).lean() as any;
+    await resolveAndAcknowledgePeriod(
+      http, fixture, periodId,
+      period.startDate.toISOString().slice(0, 10),
+      period.endDate.toISOString().slice(0, 10),
+    );
 
     await collection('DepartmentTimesheetConfirmation').create({
       organizationId: fixture.organizationId,

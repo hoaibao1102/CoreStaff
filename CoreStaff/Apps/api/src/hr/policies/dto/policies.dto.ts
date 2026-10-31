@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min, Max } from 'class-validator';
 
 /** Shared: effective-dated policy base. EffectiveFrom is required; EffectiveTo must be after EffectiveFrom (validated in service via assertNoEffectiveOverlap). */
 export class CreateLaborPolicyDto {
@@ -29,6 +29,18 @@ export class CreateOvertimePolicyDto {
   @ApiProperty({ required: false, default: true }) @IsOptional() @IsBoolean() active?: boolean;
 }
 export class UpdateOvertimePolicyDto extends PartialType(CreateOvertimePolicyDto) {}
+
+export class CreateWorkCreditPolicyDto {
+  @ApiProperty({ example: '2026-01-01T00:00:00.000Z' }) @IsDateString() effectiveFrom: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsDateString() effectiveTo?: string;
+  @ApiProperty({ example: 0.5 }) @IsNumber() @Min(0) @Max(1) halfDayMinimumRatio: number;
+  @ApiProperty({ example: 0.9 }) @IsNumber() @Min(0) @Max(1) fullDayMinimumRatio: number;
+  @ApiProperty() @IsBoolean() paidLeaveCreditEnabled: boolean;
+  @ApiProperty({ enum: ['BLOCK'] }) @IsIn(['BLOCK']) incompleteDayRule: 'BLOCK';
+  @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(1000) businessReference?: string;
+  @ApiProperty({ required: false, default: true }) @IsOptional() @IsBoolean() active?: boolean;
+}
+export class UpdateWorkCreditPolicyDto extends PartialType(CreateWorkCreditPolicyDto) {}
 
 /** Query DTO for the labor enforcement preview (AC-LABOR-01). All minutes are optional; only provided ones are checked. */
 export class PreviewLaborLimitsQuery {

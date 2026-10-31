@@ -187,12 +187,17 @@ function buildService(
 	profiles: ProfileRow[],
 	workplaces: WorkplaceRow[],
 ) {
+	const model = buildAssignmentModel(assignments) as any;
+	const session = { withTransaction: jest.fn(async (work: () => Promise<void>) => work()), endSession: jest.fn(async () => undefined) };
+	model.db = { startSession: jest.fn(async () => session) };
+	model.collection = { dropIndex: jest.fn(async () => undefined) };
 	return new AssignmentService(
-		buildAssignmentModel(assignments) as never,
+		model,
 		buildDepartmentModel(departments) as never,
 		buildProfileModel(profiles) as never,
 		buildWorkplaceModel(workplaces) as never,
 		{} as never,
+		{ bumpForEffectiveWindow: jest.fn(async () => 1) } as never,
 	);
 }
 

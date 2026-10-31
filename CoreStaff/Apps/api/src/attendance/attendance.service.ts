@@ -76,11 +76,10 @@ export class AttendanceService {
     private calculatorService: AttendanceCalculatorService,
     private storageService: StorageService,
     private shiftResolver: ShiftResolverService,
+    private readonly periodVersion: PeriodVersionService,
     @Optional() private readonly eventsGateway?: EventsGateway,
     // TASK-069 — last so positional construction in existing specs is unaffected.
     @Optional() private readonly overtime?: OvertimeService,
-    // TASK-073 — appended last for the same reason; optional so specs keep compiling.
-    @Optional() private readonly periodVersion?: PeriodVersionService,
     @Optional() @InjectModel('EmployeeDayOverride') private readonly dayOverrides?: Model<EmployeeDayOverrideDocument>,
     @Optional() @InjectModel('LeaveRequest') private readonly leaveRequests?: Model<LeaveRequestDocument>,
   ) {}
@@ -509,11 +508,7 @@ export class AttendanceService {
     }
 
     // TASK-073 — a check-in mutates in-period attendance: bump the period version.
-    try {
-      await this.periodVersion?.bump(organizationId, periodId ?? day.periodId);
-    } catch (verErr) {
-      console.warn('[AttendanceService] Period version bump failed on check-in:', verErr);
-    }
+    await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
 
     // 6. Lưu AttendanceEvent
     const event = await this.attendanceEventModel.create({
@@ -738,11 +733,7 @@ export class AttendanceService {
     await day.save();
 
     // TASK-073 — a check-out mutates in-period attendance: bump the period version.
-    try {
-      await this.periodVersion?.bump(organizationId, periodId ?? day.periodId);
-    } catch (verErr) {
-      console.warn('[AttendanceService] Period version bump failed on check-out:', verErr);
-    }
+    await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
 
     // 5. Tạo AttendanceEvent cho CHECK_OUT
     const outEvent = await this.attendanceEventModel.create({
