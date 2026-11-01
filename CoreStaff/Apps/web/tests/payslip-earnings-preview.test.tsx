@@ -193,11 +193,12 @@ test('§1 — thiếu taxableIncome thì tự cộng từ các dòng chịu thu�
 test('§2 TAX DEDUCTIONS — insurance + family deductions yield taxable earnings', () => {
   const html = renderToStaticMarkup(<TaxDeductionsCard payslip={basePayslip} />);
 
-  for (const label of ['Các khoản giảm trừ thuế', 'Bảo hiểm (BHXH + BHYT + BHTN)', 'Giảm trừ bản thân', 'Thu nhập tính thuế']) {
+  for (const label of ['Các khoản giảm trừ thuế', 'Bảo hiểm (BHXH + BHYT + BHTN)', 'Giảm trừ bản thân']) {
     expect(html).toContain(label);
   }
   expect(html).toContain('15.500.000');
-  expect(html).toContain('4.950.000');
+  // Kết quả Thu nhập tính thuế đã chuyển sang mục 3 — mục 2 chỉ liệt kê khoản giảm trừ.
+  expect(html).not.toContain('Thu nhập tính thuế');
   // Căn cứ trích in ở dòng phụ của mục bảo hiểm, không lặp thành dòng riêng.
   expect(html).toContain('Trích trên lương đóng bảo hiểm');
   expect(html).not.toContain('Lương đóng BHXH (căn cứ trích)');

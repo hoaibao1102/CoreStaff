@@ -25,8 +25,11 @@ const payslip = {
   pitAmount: 247_500,
   otherDeductions: 0,
   netSalary: 25_072_500,
+  // 22.130.000 − 1.680.000 − 15.500.000 − 0 = 4.950.000
+  taxableIncome: 22_130_000,
   taxableEarnings: 4_950_000,
   personalDeduction: 15_500_000,
+  dependentDeduction: 0,
   status: 'RELEASED',
   releasedAt: '2026-10-01T03:00:00.000Z',
   earningBreakdown: [
@@ -94,10 +97,10 @@ test('phiếu lương mở dạng trang: đủ 4 mục, sơ đồ công thức v
 test('phiếu lương là một khung duy nhất, các mục xếp dọc ngăn bằng đường kẻ', async () => {
   await render();
 
-  // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 4 mục bên trong.
+  // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 5 mục bên trong.
   expect(container.querySelectorAll('div.ring-1')).toHaveLength(1);
-  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(4);
-  for (const index of ['1', '2', '3']) {
+  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(5);
+  for (const index of ['1', '2', '3', '4']) {
     expect(container.querySelector(`.ring-1 > section:nth-child(${Number(index) + 1})`)?.textContent).toBeTruthy();
   }
   // Không còn sơ đồ công thức 5 khối ở đầu trang.
@@ -130,8 +133,42 @@ test('mục bảo hiểm ở card 2 gập/mở được phần trích chi tiết
   expect(container.innerHTML).toContain('1.280.000');
 });
 
-test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async () => {
+test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế chuyển sang mục 3', async () => {
   await render();
+  const html = container.innerHTML;
+
+  // Mục 2 chỉ liệt kê khoản trừ; mục 3 in bảng nối số về nguồn và ra kết quả.
+  const sections = container.querySelectorAll('.ring-1 > section');
+  expect(sections[1].textContent).not.toContain('Thu nhập tính thuế');
+  expect(sections[2].textContent).toContain('Thu nhập tính thuế');
+  expect(html).toContain('Lấy từ');
+  expect(html).toContain('22.130.000');
+  expect(html).toContain('4.950.000');
+  expect(html).not.toContain('không âm');
+});
+
+test('giảm trừ vượt thu nhập thì ghi rõ đã về 0, không âm', async () => {
+  detail = { ...payslip, taxableIncome: 10_000_000, taxableEarnings: 0, pitAmount: 0, pitBreakdown: [] };
+  await render();
+  expect(container.innerHTML).toContain('đã về 0, không âm');
+});
+
+test('từng mục có nút "?" mở công thức bằng chữ', async () => {
+  await render();
+
+  const helpButtons = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label^="Cách tính:"]')];
+  expect(helpButtons.map((btn) => btn.getAttribute('aria-label'))).toEqual([
+    'Cách tính: Tổng thu nhập (Gross)',
+    'Cách tính: Các khoản giảm trừ thuế',
+    'Cách tính: Thu nhập tính thuế',
+    'Cách tính: Thuế TNCN (PIT)',
+    'Cách tính: Tổng kết & đối soát thực nhận',
+  ]);
+  // Công thức nằm trong tooltip, không in sẵn ra bảng.
+  expect(container.innerHTML).not.toContain('Phụ cấp + Thưởng chuyên cần');
+});
+
+test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async () => {  await render();
   expect(calls.filter((call) => call.path.endsWith('/viewed'))).toHaveLength(1);
   expect(container.innerHTML).toContain('Đã Xem');
 

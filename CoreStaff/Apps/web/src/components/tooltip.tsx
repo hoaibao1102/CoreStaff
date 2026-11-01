@@ -2,10 +2,12 @@ import type { ReactElement, ReactNode } from 'react';
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 
 /** Portal positioning keeps hints clear of scrollable navigation and panels. */
-export function Tooltip({ children, content, disabled = false }: {
+export function Tooltip({ children, content, disabled = false, wide = false }: {
   children: ReactElement;
   content: ReactNode;
   disabled?: boolean;
+  /** Popup rộng hơn cho nội dung nhiều dòng (bảng, danh sách). */
+  wide?: boolean;
 }) {
   return (
     <TooltipPrimitive.Root disabled={disabled}>
@@ -13,7 +15,7 @@ export function Tooltip({ children, content, disabled = false }: {
       <TooltipPrimitive.Portal>
         {/* Dialog dùng z-index 1000+ (xem dialog.tsx) nên popup phải vượt lên trên. */}
         <TooltipPrimitive.Positioner side="right" sideOffset={12} style={{ zIndex: 9999 }}>
-          <TooltipPrimitive.Popup role="tooltip" className="max-w-64 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md transition-opacity duration-150 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none">
+          <TooltipPrimitive.Popup role="tooltip" className={`${wide ? 'max-w-96' : 'max-w-64'} rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md transition-opacity duration-150 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none`}>
             {content}
           </TooltipPrimitive.Popup>
         </TooltipPrimitive.Positioner>

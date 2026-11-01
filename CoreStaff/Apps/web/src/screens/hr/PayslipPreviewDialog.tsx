@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/dialog";
 import { Badge } from '@/components/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/card';
+import { Card, CardContent, CardHeader } from '@/components/card';
 import { Separator } from '@/components/separator';
 import {
   Table,
@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/table';
 import { Tooltip } from '@/components/tooltip';
-import { Calendar, ChevronDown, ChevronUp, User, Building2, Wallet } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronUp, HelpCircle, User, Building2, Wallet } from 'lucide-react';
 
 export type PayslipRow = {
   _id: string;
@@ -105,16 +105,9 @@ export const STATUS_LABELS: Record<string, string> = {
 const formatRate = (rate?: number) => Number(((rate || 0) * 100).toFixed(2));
 
 /** Ô số thứ tự mục — ô vuông navy như mẫu phiếu lương giấy. */
-export function SectionNumber({ value }: { value: number | '=' }) {
+export function SectionNumber({ value }: { value: number }) {
   return (
-    <span
-      className={
-        value === '='
-          ? 'grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-600 text-sm font-bold text-white'
-          : 'grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground'
-      }
-      aria-hidden="true"
-    >
+    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground" aria-hidden="true">
       {value}
     </span>
   );
@@ -133,6 +126,8 @@ export function PayslipSection({
   title,
   subtitle,
   action,
+  formula,
+  wideTooltip = false,
   variant = 'card',
   children,
 }: {
@@ -140,9 +135,30 @@ export function PayslipSection({
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  /** Công thức bằng chữ của mục — in trong tooltip "?" cạnh tiêu đề. */
+  formula?: ReactNode;
+  /** Tooltip công thức chứa bảng nhiều dòng — mở rộng bề ngang. */
+  wideTooltip?: boolean;
   variant?: 'card' | 'sheet';
   children: ReactNode;
 }) {
+  const heading = (
+    <div className="flex items-center gap-1.5">
+      <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-foreground">{title}</h2>
+      {formula && (
+        <Tooltip content={formula} wide={wideTooltip}>
+          <button
+            type="button"
+            aria-label={`Cách tính: ${title}`}
+            className="grid size-5 shrink-0 cursor-help place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <HelpCircle className="size-3.5" aria-hidden="true" />
+          </button>
+        </Tooltip>
+      )}
+    </div>
+  );
+
   const inner = (
     <>
       {/* Dải màu ở hàng tiêu đề bảng, theo thói quen các bảng khác trong dự án
@@ -160,7 +176,7 @@ export function PayslipSection({
           <div className="flex items-start gap-3">
             {typeof index === 'number' && <SectionNumber value={index} />}
             <div>
-              <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-foreground">{title}</h2>
+              {heading}
               {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
             </div>
           </div>
@@ -177,7 +193,7 @@ export function PayslipSection({
         <div className="flex items-start gap-3">
           {typeof index === 'number' && <SectionNumber value={index} />}
           <div>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wide">{title}</CardTitle>
+            {heading}
             {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
@@ -203,13 +219,39 @@ export function getStatusBadgeVariant(status: string): BadgeVariant {
   }
 }
 
+/** Công thức bằng chữ của từng mục — in trong tooltip "?" cho người mới đọc phiếu. */
+const GROSS_FORMULA =
+  'Tổng Gross = Lương cơ bản theo ngày công + Phụ cấp + Thưởng chuyên cần + Thưởng KPI + Tiền làm thêm giờ.';
+const TAX_DEDUCTION_FORMULA =
+  'Ba khoản này được trừ khỏi Thu nhập chịu thuế (mục 1): Bảo hiểm (BHXH + BHYT + BHTN), Giảm trừ bản thân, '
+  + 'Giảm trừ người phụ thuộc. Phần còn lại là Thu nhập tính thuế — in ở đầu mục 3.';
+const TAXABLE_EARNINGS_FORMULA =
+  'Thu nhập tính thuế = Thu nhập chịu thuế − Bảo hiểm (BHXH + BHYT + BHTN) − Giảm trừ bản thân − Giảm trừ người phụ thuộc.';
+const PIT_FORMULA =
+  'Thuế TNCN = phần thu nhập nằm trong bậc × thuế suất của bậc đó.';
+
+/**
+ * Biểu thuế TNCN lũy tiến chuẩn Việt Nam (5 bậc/tháng). In đủ để người đọc thấy
+ * thu nhập của mình rơi vào những bậc nào, kể cả bậc kỳ này chưa chạm tới.
+ */
+const PIT_BRACKET_TABLE = [
+  { bracket: 1, range: 'Đến 10.000.000', rate: 5 },
+  { bracket: 2, range: 'Trên 10.000.000 đến 30.000.000', rate: 10 },
+  { bracket: 3, range: 'Trên 30.000.000 đến 60.000.000', rate: 20 },
+  { bracket: 4, range: 'Trên 60.000.000 đến 100.000.000', rate: 30 },
+  { bracket: 5, range: 'Trên 100.000.000', rate: 35 },
+] as const;
+
 export function GrossEarningsCard({
   payslip,
   variant,
+  showFormula = false,
 }: {
   payslip: PayslipRow;
   /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
   variant?: 'card' | 'sheet';
+  /** Bật tooltip "?" giải thích cách cộng ra Gross. */
+  showFormula?: boolean;
 }) {
   const totalEarnings = payslip.grossEarnings || 0;
   const allowances = payslip.allowanceBreakdown ?? [];
@@ -321,7 +363,13 @@ export function GrossEarningsCard({
                         : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập chịu thuế.'
                     }
                   >
-                    <span className="ml-1 cursor-help font-semibold text-primary" aria-label="Chính sách thuế TNCN cho tiền tăng ca">*</span>
+                    <button
+                      type="button"
+                      aria-label="Chính sách thuế TNCN cho tiền tăng ca"
+                      className="ml-1 inline-flex cursor-help align-middle text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <HelpCircle className="size-3.5" aria-hidden="true" />
+                    </button>
                   </Tooltip>
                 )}
                 {row.detail && (
@@ -372,6 +420,7 @@ export function GrossEarningsCard({
       index={1}
       title="Tổng thu nhập (Gross)"
       subtitle="Các khoản thu nhập cấu thành lương gross của kỳ."
+      formula={showFormula ? GROSS_FORMULA : undefined}
       variant={variant}
     >
       {body}
@@ -379,14 +428,17 @@ export function GrossEarningsCard({
   );
 }
 
-/** §2 — Các khoản giảm trừ khỏi thu nhập chịu thuế, ra Thu nhập tính thuế. */
+/** §2 — Các khoản giảm trừ khỏi Thu nhập chịu thuế. Kết quả để ở đầu mục 3. */
 export function TaxDeductionsCard({
   payslip,
   variant,
+  showFormula = false,
 }: {
   payslip: PayslipRow;
   /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
   variant?: 'card' | 'sheet';
+  /** Bật tooltip "?" giải thích các khoản giảm trừ. */
+  showFormula?: boolean;
 }) {
   const totalInsurance =
     (payslip.socialInsurance || 0) +
@@ -480,34 +532,147 @@ export function TaxDeductionsCard({
           <TableCell className="text-right font-mono text-destructive">{formatDeduction(payslip.dependentDeduction)}</TableCell>
         </TableRow>
       </TableBody>
-      <TableFooter>
-        <TableRow>
-          <TableCell className="font-semibold text-foreground">Thu nhập tính thuế</TableCell>
-          <TableCell className="text-right font-mono font-semibold text-foreground">
-            {formatCurrency(payslip.taxableEarnings || 0)}
-          </TableCell>
-        </TableRow>
-      </TableFooter>
     </Table>
   );
 
   return (
-    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh." variant={variant}>
+    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh." formula={showFormula ? TAX_DEDUCTION_FORMULA : undefined} variant={variant}>
       {body}
     </PayslipSection>
   );
 }
 
-/** §3 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
-export function PitTaxDetails({
+/** §3 — Thu nhập tính thuế: kết quả của mục 2, đầu vào của biểu thuế. */
+export function TaxableEarningsCard({
   payslip,
   variant,
+  index = 3,
+  showFormula = false,
 }: {
   payslip: PayslipRow;
   /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
   variant?: 'card' | 'sheet';
+  /** Số thứ tự mục — đổi được vì mục 3 và 4 có thể tách/gộp. */
+  index?: number;
+  /** Bật tooltip "?" giải thích công thức. */
+  showFormula?: boolean;
+}) {
+  const totalInsurance =
+    (payslip.socialInsurance || 0) +
+    (payslip.healthInsurance || 0) +
+    (payslip.unemploymentInsurance || 0);
+  const taxableIncome = payslip.taxableIncome || 0;
+  const taxableEarnings = payslip.taxableEarnings || 0;
+  // Giảm trừ vượt thu nhập chịu thuế → backend kẹp về 0; nói rõ để phép trừ không "sai".
+  const clampedToZero =
+    taxableIncome - totalInsurance - (payslip.personalDeduction || 0) - (payslip.dependentDeduction || 0) < 0;
+
+  return (
+    <PayslipSection
+      index={index}
+      title="Thu nhập tính thuế"
+      subtitle="Còn lại sau khi trừ bảo hiểm và giảm trừ gia cảnh — căn cứ tính thuế TNCN."
+      formula={showFormula ? TAXABLE_EARNINGS_FORMULA : undefined}
+      wideTooltip
+      variant={variant}
+    >      {/* Cột "Lấy từ" nối số về đúng mục đã in ở trên, để người đọc lần được nguồn. */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Khoản mục</TableHead>
+            <TableHead>Lấy từ</TableHead>
+            <TableHead className="text-right">Số tiền</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell className="font-medium text-foreground">Thu nhập chịu thuế</TableCell>
+            <TableCell className="text-xs text-muted-foreground">Mục 1</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(taxableIncome)}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</TableCell>
+            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-right font-mono text-destructive">−{formatCurrency(totalInsurance)}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Giảm trừ bản thân</TableCell>
+            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-right font-mono text-destructive">
+              −{formatCurrency(payslip.personalDeduction || 0)}
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Giảm trừ người phụ thuộc</TableCell>
+            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-right font-mono text-destructive">
+              −{formatCurrency(payslip.dependentDeduction || 0)}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={2} className="font-semibold text-foreground">= Thu nhập tính thuế</TableCell>
+            <TableCell className="text-right font-mono font-semibold text-foreground">
+              {formatCurrency(taxableEarnings)}
+            </TableCell>
+          </TableRow>
+          {clampedToZero && (
+            <TableRow className="hover:bg-muted/50">
+              <TableCell colSpan={3} className="pb-3 text-xs font-normal text-muted-foreground">
+                Giảm trừ vượt thu nhập chịu thuế nên thu nhập tính thuế đã về 0, không âm.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableFooter>
+      </Table>
+    </PayslipSection>
+  );
+}
+
+/** §4 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
+export function PitTaxDetails({
+  payslip,
+  variant,
+  index = 4,
+  showFormula = false,
+}: {
+  payslip: PayslipRow;
+  /** 'sheet' — khối phẳng trong tờ phiếu của nhân viên; mặc định là card rời. */
+  variant?: 'card' | 'sheet';
+  /** Số thứ tự mục — đổi được vì mục 3 và 4 có thể tách/gộp. */
+  index?: number;
+  /** Bật tooltip "?" giải thích cách tính thuế lũy tiến. */
+  showFormula?: boolean;
 }) {
   const brackets = payslip.pitBreakdown ?? [];
+  // Dải thu nhập và số thuế của bậc đã dùng — tra theo số bậc backend trả về.
+  const appliedByBracket = new Map(brackets.map((bracket) => [bracket.bracket, bracket]));
+  // Toàn bảng biểu thuế; bậc có phát sinh in đậm kèm số tiền, bậc còn lại chỉ in ngưỡng.
+  const bracketFormula = (
+    <span className="block space-y-1">
+      <span className="block font-semibold">Biểu thuế TNCN lũy tiến</span>
+      <span className="block">
+        <span className="block text-muted-foreground">
+          <span className="inline-block w-14">Bậc</span>
+          <span className="inline-block w-16">Thuế suất</span>
+          Thu nhập tính thuế của bậc → thuế phát sinh
+        </span>
+        {PIT_BRACKET_TABLE.map((row) => {
+          const applied = appliedByBracket.get(row.bracket);
+          return (
+            <span key={row.bracket} className={applied ? 'block font-semibold text-foreground' : 'block text-muted-foreground'}>
+              <span className="inline-block w-14">{row.bracket}</span>
+              <span className="inline-block w-16">{row.rate}%</span>
+              {row.range}
+              {applied ? ` → ${formatCurrency(applied.income)} × ${row.rate}% = ${formatCurrency(applied.tax)}` : ''}
+            </span>
+          );
+        })}
+      </span>
+      <span className="mt-1 block">{PIT_FORMULA}</span>
+    </span>
+  );
 
   const body = (
     <>
@@ -554,7 +719,7 @@ export function PitTaxDetails({
   );
 
   return (
-    <PayslipSection index={3} title="Thuế TNCN (PIT)" variant={variant}>
+    <PayslipSection index={index} title="Thuế TNCN (PIT)" formula={showFormula ? bracketFormula : undefined} wideTooltip variant={variant}>
       {body}
     </PayslipSection>
   );
@@ -621,7 +786,10 @@ export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Pr
           {/* 2. TAX DEDUCTIONS */}
           <TaxDeductionsCard payslip={payslip} />
 
-          {/* 3. PIT + tổng khấu trừ */}
+          {/* 3. THU NHẬP TÍNH THUẾ */}
+          <TaxableEarningsCard payslip={payslip} />
+
+          {/* 4. PIT + tổng khấu trừ */}
           <PitTaxDetails payslip={payslip} />
 
           <PayslipSection title="Tổng kết &amp; đối soát thực nhận">

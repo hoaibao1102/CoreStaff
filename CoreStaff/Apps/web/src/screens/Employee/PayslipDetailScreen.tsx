@@ -19,8 +19,8 @@ import {
   PitTaxDetails,
   PayslipSection,
   STATUS_LABELS,
-  SectionNumber,
   TaxDeductionsCard,
+  TaxableEarningsCard,
   formatCurrency,
   formatDate,
   getStatusBadgeVariant,
@@ -161,17 +161,20 @@ export function PayslipDetailScreen({ apiBase, payslipId }: { apiBase?: string; 
           </div>
         </header>
 
-        <GrossEarningsCard payslip={payslip} variant="sheet" />
+        <GrossEarningsCard payslip={payslip} variant="sheet" showFormula />
 
-        <TaxDeductionsCard payslip={payslip} variant="sheet" />
+        <TaxDeductionsCard payslip={payslip} variant="sheet" showFormula />
 
-        <PitTaxDetails payslip={payslip} variant="sheet" />
+        <TaxableEarningsCard payslip={payslip} variant="sheet" showFormula />
+
+        <PitTaxDetails payslip={payslip} variant="sheet" showFormula />
 
         {/* §4: đối soát từ gross về net */}
         <PayslipSection
           title={'Tổng kết & đối soát thực nhận'}
           subtitle="Cân đối lại số thực nhận từ chính các khoản đã in ở trên."
           action={reconciled ? <Badge variant="success">Khớp</Badge> : <Badge variant="outline">Lệch số</Badge>}
+          formula="Tổng thu nhập (Gross) − Bảo hiểm − Thuế TNCN − Khấu trừ khác."
           variant="sheet"
         >
           <Table>
@@ -206,23 +209,16 @@ export function PayslipDetailScreen({ apiBase, payslipId }: { apiBase?: string; 
                 <TableCell className="font-semibold text-foreground">Tổng khấu trừ</TableCell>
                 <TableCell className="text-right font-mono font-semibold text-destructive">−{formatCurrency(totalDeductions)}</TableCell>
               </TableRow>
+              <TableRow className="bg-emerald-50 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/40">
+                <TableCell className="py-3 font-semibold text-emerald-800 dark:text-emerald-300">
+                  Số tiền thực nhận (Net)
+                </TableCell>
+                <TableCell className="py-3 text-right font-mono text-lg font-bold text-emerald-700 dark:text-emerald-300">
+                  {formatCurrency(netSalary)}
+                </TableCell>
+              </TableRow>
             </TableFooter>
           </Table>
-          <div className="-mx-6 -mb-4 mt-4 border-t border-border bg-emerald-50 p-6 dark:bg-emerald-950/40">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-300">
-                <SectionNumber value="=" />
-                Số tiền thực nhận (Net)
-              </span>
-              <span className="font-mono text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-                {formatCurrency(netSalary)}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-emerald-800/80 dark:text-emerald-300/80">
-              {formatCurrency(gross)} − {formatCurrency(totalDeductions)} = {formatCurrency(netSalary)}
-              {reconciled ? ' · khớp với số thực nhận đã phát hành' : ' · lệch với số thực nhận đã phát hành'}
-            </p>
-          </div>
         </PayslipSection>
       </div>
     </div>
