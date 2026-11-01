@@ -33,7 +33,8 @@ import {
   ContractStatus, ContractType, EmploymentStatus, InsuranceContributionType, LeaveDurationType, Role, ShiftScope, WorkMode,
 } from '../src/database/schemas/enums';
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
-import { createDemoApp, DemoApp } from './lib/demo-app';
+import type { Connection } from 'mongoose';
+import { createDemoApp, DemoApp, syncDriverClock } from './lib/demo-app';
 import {
   ACCOUNTS, ACTIVE_PERIOD, CONFIRMATIONS, CURRENT_MONTH_LEAVES, CURRENT_PERIOD, DAY_OVERRIDES, DayPlan, DemoAccount,
   EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, KPI_SCORES, kpiFor, LEAVES, MANAGER_OF, OFFICE, ORG_NAME,
@@ -54,6 +55,8 @@ const ACTIVE_STATUS = (arg('active-status') ?? 'REVIEWING').toUpperCase();
 const DEMO_PASSWORD = process.env.DEMO_SEED_PASSWORD ?? 'Demo123456!';
 
 const REAL_NOW = Date.now();
+/** Set once the demo app boots; lets the virtual clock jump keep the driver warm. */
+let connection: Connection | undefined;
 const TODAY_VN = new Date(REAL_NOW + 7 * 3600_000).toISOString().slice(0, 10);
 const REFERENCE_DATE = (() => {
   const requested = arg('reference-date') ?? TODAY_VN;
@@ -156,9 +159,15 @@ interface Ctx {
   log: string[];
 }
 
+/** Jump the virtual clock and re-stamp the Mongo driver's heartbeat cache. */
+function moveClock(when: Date) {
+  setVirtualNow(when);
+  if (connection) syncDriverClock(connection);
+}
+
 async function at<T>(when: Date, label: string, run: () => Promise<T>): Promise<T> {
   if (when.getTime() > REAL_NOW) throw new Error(`Thao tác "${label}" nằm ở tương lai (${when.toISOString()}).`);
-  setVirtualNow(when);
+  moveClock(when);
   try {
     return await run();
   } catch (error: any) {
@@ -181,7 +190,7 @@ async function resetOrg(demo: DemoApp, orgId: Types.ObjectId) {
 }
 
 async function createWithClock(model: any, when: Date, doc: Record<string, unknown>) {
-  setVirtualNow(when);
+  moveClock(when);
   return model.create(doc);
 }
 
@@ -683,6 +692,7 @@ async function seed() {
     if (existing) await resetOrg(demo, existing._id);
 
     const orgId = new Types.ObjectId();
+    connection = demo.connection;
     const ctx: Ctx = {
       demo, orgId, org: String(orgId), users: new Map(), profiles: new Map(), depts: new Map(),
       shift: null, workplace: null, periods: new Map(), ids: new Map(), log: [],

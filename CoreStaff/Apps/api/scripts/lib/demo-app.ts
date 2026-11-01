@@ -40,6 +40,16 @@ export interface DemoApp {
   close: () => Promise<void>;
 }
 
+/**
+ * Mongoose reports `readyState: 0` — and so buffers every operation until it
+ * times out — when `Date.now() - conn._lastHeartbeatAt` exceeds two heartbeat
+ * intervals. The demo seed jumps the virtual clock by months between actions,
+ * which makes a live connection look stale. Re-stamp it after every jump.
+ */
+export function syncDriverClock(connection: Connection): void {
+  (connection as any)._lastHeartbeatAt = Date.now();
+}
+
 export async function createDemoApp(): Promise<DemoApp> {
   const env = resolveEnv();
   if (!hasMongoUri(env)) throw new Error('MONGODB_URI is not configured in Apps/api/.env');
