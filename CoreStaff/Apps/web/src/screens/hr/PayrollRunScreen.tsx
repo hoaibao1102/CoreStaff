@@ -110,7 +110,8 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     loadClosedPeriods();
   }, []);
 
-  // Quay về từ trang phiếu lương: `?run=<id>` mở lại đúng dialog chi tiết kỳ lương.
+  // Quay về từ dialog phiếu lương: `?run=<id>` mở lại đúng dialog chi tiết kỳ lương.
+  // Link sang phiếu lương giữ kèm `?run=` nên dialog kỳ lương vẫn mở phía sau.
   const runFromUrl = new URLSearchParams(window.location.search).get('run');
   useEffect(() => {
     if (runFromUrl && payrollRuns.length > 0) void handleViewPayslips(runFromUrl);
@@ -522,7 +523,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                         <StatusBadge status={slip.status} />
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="ghost" render={<AppLink href={`/hr/payroll-runs/payslips/${slip._id}`} />}>
+                        <Button size="sm" variant="ghost" render={<AppLink href={`/hr/payroll-runs/payslips/${slip._id}?run=${selectedRun?._id ?? ''}`} />}>
                           <Eye aria-hidden="true" />Xem
                         </Button>
                       </TableCell>

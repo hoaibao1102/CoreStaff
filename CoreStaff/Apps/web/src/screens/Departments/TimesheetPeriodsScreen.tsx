@@ -7,7 +7,7 @@ import { Input } from '@/components/input';
 import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import type { AuthUser } from '@/services/auth';
-import { getTimesheetPeriods, hrErrorMessage, type TimesheetPeriod, type TimesheetPeriodStatus } from '@/services/hrService';
+import { getTimesheetPeriods, hrErrorMessage, updateTimesheetPeriodStatus, type TimesheetPeriod, type TimesheetPeriodStatus } from '@/services/hrService';
 import { TimesheetReviewScreen } from '../timesheet/TimesheetReviewScreen';
 import { CreatePeriodDialog } from './CreatePeriodDialog';
 import { ReopenPeriodDialog } from './ReopenPeriodDialog';
@@ -47,6 +47,7 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
   const [createPanel, setCreatePanel] = useState(false);
   const [reopenPanel, setReopenPanel] = useState<{ id: string } | null>(null);
   const [reviewPeriodId, setReviewPeriodId] = useState<string | null>(null);
+  const [sendingPeriodId, setSendingPeriodId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +79,23 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
     setReopenPanel(null);
     setRevision(r => r + 1);
     toast.success('Mở lại kỳ công thành công!');
+  };
+
+  const handleReview = async (row: TimesheetPeriod) => {
+    if (user.role === 'HR' && row.status === 'OPEN') {
+      setSendingPeriodId(row._id);
+      try {
+        await updateTimesheetPeriodStatus(apiBase, row._id, 'REVIEWING');
+        toast.success(`Đã gửi kỳ công ${row.period} cho nhân viên rà soát.`);
+        setRevision(value => value + 1);
+      } catch (err) {
+        toast.error(hrErrorMessage(err));
+        return;
+      } finally {
+        setSendingPeriodId(null);
+      }
+    }
+    setReviewPeriodId(row._id);
   };
 
   return (
@@ -158,8 +176,12 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
                 {canManage && (
                   <TableCell>
                     {(row.status === 'OPEN' || row.status === 'REVIEWING') && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER') && (
-                      <Button variant="outline" size="sm" onClick={() => setReviewPeriodId(row._id)}>
-                        {user.role === 'DEPARTMENT_MANAGER' ? 'Xác nhận bảng công' : 'Rà soát'}
+                      <Button variant="outline" size="sm" disabled={sendingPeriodId === row._id} onClick={() => void handleReview(row)}>
+                        {sendingPeriodId === row._id
+                          ? 'Đang gửi...'
+                          : user.role === 'DEPARTMENT_MANAGER'
+                            ? 'Xác nhận bảng công'
+                            : row.status === 'OPEN' ? 'Gửi rà soát' : 'Rà soát'}
                       </Button>
                     )}
                     {row.status === 'READY_TO_CLOSE' && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER') && (

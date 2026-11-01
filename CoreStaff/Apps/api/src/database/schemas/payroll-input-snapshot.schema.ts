@@ -61,6 +61,14 @@ export class PayrollInputSnapshot {
   @Prop({ required: true, min: 0, default: 0 })
   hourlyRate: number;
 
+  /** Versioned work-credit fields. Optional so legacy snapshots retain their original contract. */
+  @Prop({ required: false, min: 0 }) standardWorkUnits?: number;
+  @Prop({ required: false, min: 0 }) standardWorkMinutes?: number;
+  @Prop({ required: false, min: 0 }) payableWorkUnits?: number;
+  @Prop({ type: [], required: false, default: undefined }) dailyWorkCredits?: Array<Record<string, unknown>>;
+  @Prop({ type: [], required: false, default: undefined }) workCreditPolicySnapshots?: Array<Record<string, unknown>>;
+  @Prop({ type: [], required: false, default: undefined }) overtimeRateEvidence?: Array<Record<string, unknown>>;
+
   /** Total allowances for the period (TASK-088). */
   @Prop({ required: true, min: 0, default: 0 })
   totalAllowances: number;
@@ -182,6 +190,45 @@ export class PayrollInputSnapshot {
   @Prop({ required: true })
   sourceHash: string;
 
+  /** Persistence contract version. Version 1 rows retain legacy working-day semantics. */
+  @Prop({ required: true, min: 1, default: 1 })
+  schemaVersion: number;
+
+  /** Exact TimesheetPeriod.version closed to create this immutable snapshot. */
+  @Prop({ required: true, min: 1, default: 1 })
+  sourcePeriodVersion: number;
+
+  /** Direct immutable lineage to the summary consumed by this snapshot. */
+  @Prop({ type: 'ObjectId', ref: 'TimesheetSummary', required: false })
+  sourceSummaryId?: string;
+
+  @Prop({ required: false, min: 1 })
+  sourceSummaryVersion?: number;
+
+  @Prop({ required: false })
+  sourceSummaryHash?: string;
+
+  /** SHA-256 of this snapshot's stored frozen payroll payload. */
+  @Prop({ required: false })
+  canonicalPayloadHash?: string;
+
+  /** Prevents legacy day-count inputs from being inferred as decimal work units. */
+  @Prop({
+    required: true,
+    enum: ['LEGACY_WORKING_DAYS_V1', 'VERSIONED_WORK_CREDIT_V2'],
+    default: 'LEGACY_WORKING_DAYS_V1',
+  })
+  calculationContract: string;
+
+  @Prop({ type: 'ObjectId', ref: 'PayrollInputSnapshot', required: false })
+  supersededBySnapshotId?: string;
+
+  @Prop({ type: Date, required: false })
+  supersededAt?: Date;
+
+  @Prop({ required: false, minlength: 10, maxlength: 500 })
+  supersessionReason?: string;
+
   /** Version — increments if re-generated for same period/employee. */
   @Prop({ required: true, min: 1, default: 1 })
   version: number;
@@ -195,9 +242,9 @@ export const PayrollInputSnapshotSchema = SchemaFactory.createForClass(PayrollIn
 
 // ───────── INDEXES ─────────
 
-// Unique: one snapshot per (period, employee) combination
+// Append-only identity: one snapshot per source period version and employee.
 PayrollInputSnapshotSchema.index(
-  { periodId: 1, employeeProfileId: 1 },
+  { organizationId: 1, periodId: 1, sourcePeriodVersion: 1, employeeProfileId: 1 },
   { unique: true }
 );
 

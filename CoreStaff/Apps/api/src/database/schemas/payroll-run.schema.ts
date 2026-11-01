@@ -19,6 +19,8 @@ export enum PayrollRunStatus {
   LOCKED = 'LOCKED',
   RELEASED = 'RELEASED',
   STALE = 'STALE',
+  CANCELLED = 'CANCELLED',
+  DISCARDED = 'DISCARDED',
 }
 
 @Schema({ collection: 'payroll_runs', timestamps: true })
@@ -43,6 +45,25 @@ export class PayrollRun {
 
   @Prop({ required: true })
   runDate: Date;
+
+  @Prop({ required: true, min: 1, default: 1 })
+  schemaVersion: number;
+
+  /** Exact closed TimesheetPeriod.version to which the snapshot set belongs. */
+  @Prop({ required: true, min: 1, default: 1 })
+  sourcePeriodVersion: number;
+
+  /** Sorted immutable snapshot IDs used by every calculation/recalculation. */
+  @Prop({ type: [{ type: 'ObjectId', ref: 'PayrollInputSnapshot' }], default: [] })
+  sourceSnapshotIds: string[];
+
+  /** Canonical SHA-256 over the ordered snapshot ID/hash set. */
+  @Prop({ required: false })
+  sourceSnapshotSetHash?: string;
+
+  /** Monotonic history sequence within one organization/period. */
+  @Prop({ required: true, min: 1, default: 1 })
+  runSequence: number;
 
   // ── Totals (updated during calculation) ────────────────────────────────
 
@@ -74,6 +95,24 @@ export class PayrollRun {
   @Prop()
   notes: string;
 
+  @Prop({ type: 'ObjectId', ref: 'User', required: false })
+  cancelledBy?: string;
+
+  @Prop({ type: Date, required: false })
+  cancelledAt?: Date;
+
+  @Prop({ required: false, minlength: 10, maxlength: 500 })
+  cancellationReason?: string;
+
+  @Prop({ type: 'ObjectId', ref: 'User', required: false })
+  discardedBy?: string;
+
+  @Prop({ type: Date, required: false })
+  discardedAt?: Date;
+
+  @Prop({ required: false, minlength: 10, maxlength: 500 })
+  discardReason?: string;
+
   @Prop({ required: true, min: 1, default: 1 })
   version: number;
 
@@ -83,7 +122,26 @@ export class PayrollRun {
 
 export const PayrollRunSchema = SchemaFactory.createForClass(PayrollRun);
 
-// Indexes
-PayrollRunSchema.index({ organizationId: 1, timesheetPeriodId: 1 }, { unique: true });
+// Historical identity and one-active-run concurrency guard.
+PayrollRunSchema.index(
+  { organizationId: 1, timesheetPeriodId: 1, runSequence: 1 },
+  { unique: true },
+);
+PayrollRunSchema.index(
+  { organizationId: 1, timesheetPeriodId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: {
+        $in: [
+          PayrollRunStatus.DRAFT,
+          PayrollRunStatus.CALCULATED,
+          PayrollRunStatus.LOCKED,
+          PayrollRunStatus.RELEASED,
+        ],
+      },
+    },
+  },
+);
 PayrollRunSchema.index({ status: 1 });
 PayrollRunSchema.index({ organizationId: 1, status: 1 });

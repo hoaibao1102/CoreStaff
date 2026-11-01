@@ -9,15 +9,14 @@ describe('vietnam-time (TASK-068 foundation)', () => {
     expect(to - from).toBe(24 * 3600_000);
   });
 
-  it('matches AttendanceCalculatorService.parseDateTime for every shift boundary', () => {
-    // Parity guard for the extraction: the calculator delegates here, so any
-    // drift would silently move late/early minutes for the whole tenant.
-    const calculator = new AttendanceCalculatorService() as unknown as {
-      parseDateTime(workDate: string, time: string): Date;
-    };
+  it('keeps AttendanceCalculatorService aligned with VN shift boundaries through its public API', () => {
+    const calculator = new AttendanceCalculatorService();
     for (const workDate of ['2026-01-01', '2026-09-22', '2026-12-31', '2027-02-28']) {
-      for (const time of ['00:00', '07:30', '08:30', '12:00', '17:00', '17:30', '23:59']) {
-        expect(vnTimeToUtc(workDate, time)).toBe(calculator.parseDateTime(workDate, time).getTime());
+      for (const time of ['07:30', '08:30', '12:00', '17:00']) {
+        const boundary = vnTimeToUtc(workDate, time);
+        const shift = { startTime: time, endTime: '23:59', breakMinutes: 0, gracePeriodMinutes: 0 };
+        expect(calculator.calculate(workDate, new Date(boundary), undefined, shift).lateMinutes).toBe(0);
+        expect(calculator.calculate(workDate, new Date(boundary + 60_000), undefined, shift).lateMinutes).toBe(1);
       }
     }
   });

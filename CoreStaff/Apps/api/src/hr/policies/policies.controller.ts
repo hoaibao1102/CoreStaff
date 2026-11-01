@@ -7,8 +7,10 @@ import { PoliciesService } from './policies.service';
 import {
   CreateLaborPolicyDto,
   CreateOvertimePolicyDto,
+  CreateWorkCreditPolicyDto,
   UpdateLaborPolicyDto,
   UpdateOvertimePolicyDto,
+  UpdateWorkCreditPolicyDto,
 } from './dto/policies.dto';
 
 @ApiTags('HR / Policies')
@@ -36,6 +38,20 @@ export class PoliciesController {
   async previewLabor(@Tenant() org: string | null, @Query('date') at: string, @Query() usage: Record<string, unknown>) {
     return { success: true, data: await this.service.previewLabor(this.org(org), new Date(at), usage) };
   }
+
+  // ── Work Credit Policy ────────────────────────────────────────────────────
+
+  @Get('work-credit') @Roles('HR') @ApiOperation({ summary: 'List organization work-credit policies.' })
+  async listWorkCredit(@Tenant() org: string | null) { return { success: true, data: await this.service.listWorkCredit(this.org(org)) }; }
+
+  @Get('work-credit/effective') @Roles('HR') @ApiOperation({ summary: 'Effective work-credit policy at a date.' })
+  async workCreditAt(@Tenant() org: string | null, @Query('date') at: string) { return { success: true, data: await this.service.workCreditAt(this.org(org), new Date(at)) }; }
+
+  @Post('work-credit') @Roles('HR') @ApiOperation({ summary: 'Create an effective-dated work-credit policy.' })
+  async createWorkCredit(@Tenant() org: string | null, @Body() dto: CreateWorkCreditPolicyDto) { return { success: true, data: await this.service.createWorkCredit(this.org(org), dto) }; }
+
+  @Patch('work-credit/:id') @Roles('HR') @ApiOperation({ summary: 'Update a work-credit policy (version++).' })
+  async updateWorkCredit(@Tenant() org: string | null, @Param('id') id: string, @Body() dto: UpdateWorkCreditPolicyDto) { return { success: true, data: await this.service.updateWorkCredit(this.org(org), id, dto) }; }
 
   // ── Overtime Pay Policy (TASK-037, SRS §30D.2, §30G) ──────────────────────
 

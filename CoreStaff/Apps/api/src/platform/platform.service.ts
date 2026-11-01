@@ -69,8 +69,100 @@ export class PlatformService {
 				code: dto.code.trim().toUpperCase(),
 				name: dto.name.trim(),
 				status: OrganizationStatus.ACTIVE,
+				attendanceOvertimeV2Enabled: true,
 				createdBy,
 			});
+			const orgId = (doc as any)._id;
+			const db = (this.orgModel as any).db;
+			if (db && typeof db.collection === 'function') {
+				const now = new Date();
+				await db.collection('labor_compliance_policies').updateOne(
+					{ organizationId: orgId, version: 1 },
+					{
+						$setOnInsert: {
+							organizationId: orgId,
+							effectiveFrom: new Date('2026-01-01'),
+							normalDailyMinutes: 480,
+							normalWeeklyMinutes: 2880,
+							maxCombinedDailyMinutes: 720,
+							maxMonthlyOvertimeMinutes: 2400,
+							maxAnnualOvertimeMinutes: 20000,
+							exceptionalAnnualOvertimeMinutes: 24000,
+							warningThresholdPercent: 80,
+							maxRetroactiveFilingDays: 7,
+							probationMinimumRate: 0.85,
+							legalReference: 'BLLĐ 45/2019/QH14',
+							minimumOvertimeMinutes: 60,
+							overtimeRoundingMinutes: 30,
+							maxMonthlyAttendanceConfirmations: 3,
+							version: 1,
+							active: true,
+							status: 'ACTIVE',
+							createdAt: now,
+							updatedAt: now,
+						},
+					},
+					{ upsert: true }
+				);
+
+				await db.collection('work_credit_policies').updateOne(
+					{ organizationId: orgId, active: true },
+					{
+						$setOnInsert: {
+							organizationId: orgId,
+							effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+							halfDayMinimumRatio: 0.5,
+							fullDayMinimumRatio: 1,
+							paidLeaveCreditEnabled: true,
+							incompleteDayRule: 'BLOCK',
+							businessReference: 'Chính sách quy đổi ngày công mặc định',
+							version: 1,
+							active: true,
+							createdAt: now,
+							updatedAt: now,
+						},
+					},
+					{ upsert: true }
+				);
+
+				await db.collection('timesheet_periods').updateOne(
+					{ organizationId: orgId, period: '2026-10' },
+					{
+						$setOnInsert: {
+							organizationId: orgId,
+							period: '2026-10',
+							name: 'Kỳ công tháng 10/2026',
+							startDate: new Date('2026-10-01T00:00:00.000Z'),
+							endDate: new Date('2026-10-31T23:59:59.999Z'),
+							status: 'REVIEWING',
+							active: true,
+							version: 1,
+							createdAt: now,
+							updatedAt: now,
+						},
+					},
+					{ upsert: true }
+				);
+				await db.collection('timesheet_periods').updateOne(
+					{ organizationId: orgId, period: '2026-11' },
+					{
+						$setOnInsert: {
+							organizationId: orgId,
+							period: '2026-11',
+							name: 'Kỳ công tháng 11/2026',
+							startDate: new Date('2026-11-01T00:00:00.000Z'),
+							endDate: new Date('2026-11-30T23:59:59.999Z'),
+							status: 'REVIEWING',
+							active: true,
+							version: 1,
+							createdAt: now,
+							updatedAt: now,
+						},
+					},
+					{ upsert: true }
+				);
+			}
+
 			return doc.toObject();
 		} catch (err) {
 			if (isDuplicate(err)) throw new ConflictException('ORGANIZATION_CODE_TAKEN');

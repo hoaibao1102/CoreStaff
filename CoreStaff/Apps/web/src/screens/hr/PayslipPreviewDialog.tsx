@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/alert';
-import { AppLink } from '@/components/AppLink';
 import { Badge } from '@/components/badge';
-import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader } from '@/components/card';
+import { navigationEvent } from '@/components/AppLink';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
 import { Separator } from '@/components/separator';
 import { Skeleton } from '@/components/skeleton';
 import {
@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/table';
 import { Tooltip } from '@/components/tooltip';
-import { ChevronDown, ChevronUp, HelpCircle, Wallet, ArrowLeft } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, Wallet } from 'lucide-react';
 import { hrRequest } from '@/services/hrService';
 import { employeeRequest } from '@/services/employeeService';
 
@@ -733,92 +733,55 @@ function PayslipDetailSkeleton() {
 }
 
 /**
- * Tờ phiếu lương dạng trang đầy đủ — nhân viên xem phiếu của mình, HR xem
- * phiếu của bất kỳ ai trong tổ chức. Cùng một bố cục, khác endpoint và nhãn nút về.
+ * Tờ phiếu lương mở dạng dialog — nhân viên xem phiếu của mình, HR xem phiếu của
+ * bất kỳ ai trong tổ chức. Cùng một bố cục, khác endpoint.
  */
-export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase }: {
+export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase, closeHref }: {
   payslipId: string;
   mode?: 'employee' | 'hr';
   /** Mặc định lấy base từ config; HR truyền base sẵn của workspace. */
   apiBase?: string | null;
+  /** Nơi quay về khi đóng; HR mặc định mở lại đúng kỳ lương của phiếu. */
+  closeHref?: string;
 }) {
-  const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const isHr = mode === 'hr';
+  const [back, setBack] = useState(() => closeHref ?? (mode === 'hr' ? '/hr/payroll-runs' : '/app/payslips'));
 
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const path = `/api/payslips/${payslipId}`;
-        const slip = isHr
-          ? apiBase
-            ? await hrRequest<PayslipDetail>(apiBase, path)
-            : null
-          : await employeeRequest.get<PayslipDetail>(`/payslips/me/${payslipId}`);
-        if (cancelled) return;
-        if (!slip) throw new Error('Thiếu địa chỉ API.');
-        setPayslip(slip);
-        // Nhân viên: xem là hành vi ghi nhận, lỗi audit không được che phiếu lương.
-        if (!isHr && slip.status === 'RELEASED') {
-          try {
-            await employeeRequest.post<void>(`/payslips/me/${payslipId}/viewed`);
-            if (!cancelled) setPayslip((current) => (current ? { ...current, status: 'VIEWED' } : current));
-          } catch (auditError) {
-            console.error('Failed to mark as viewed:', auditError);
-          }
-        }
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Không thể tải phiếu lương. Vui lòng thử lại sau.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [payslipId, apiBase, isHr]);
-
-  const backButton = (
-    <Button
-      variant="ghost"
-      className="min-h-10 -ml-2"
-      render={
-        <AppLink
-          href={isHr && payslip?.payrollRunId
-            ? `/hr/payroll-runs?run=${payslip.payrollRunId}`
-            : isHr ? '/hr/payroll-runs' : '/app/payslips'}
-        />
-      }
-    >
-      <ArrowLeft aria-hidden="true" />
-      {isHr ? 'Bảng lương' : 'Danh sách phiếu lương'}
-    </Button>
+  // Phiếu lương luôn mở trong dialog: ESC, click ngoài, nút X và nút "Danh sách
+  // phiếu lương" đều về `back`, nên URL không kẹt ở /payslips/:id.
+  return (
+    <Dialog open onOpenChange={(open) => {
+      if (open) return;
+      // Điều hướng SPA (không reload) để giữ nguyên phiên đăng nhập.
+      window.history.pushState(null, '', back);
+      window.dispatchEvent(new Event(navigationEvent));
+    }}>
+      {/* layerOffset: HR mở phiếu từ trong dialog chi tiết kỳ lương, phải nằm trên. */}
+      <DialogContent className="max-w-4xl" layerOffset={1}>
+        <DialogHeader className="border-b border-border pr-16">
+          <DialogTitle>Phiếu lương</DialogTitle>
+          <DialogDescription>
+            {mode === 'hr' ? 'Phiếu lương của nhân viên trong kỳ đã chọn.' : 'Phiếu lương của bạn trong kỳ đã chọn.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          {mode === 'hr'
+            ? <HrPayslipDetail payslipId={payslipId} apiBase={apiBase} onLoad={(slip) => {
+                if (slip.payrollRunId) setBack(`/hr/payroll-runs?run=${slip.payrollRunId}`);
+              }} />
+            : <EmployeePayslipDetail payslipId={payslipId} />}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
+}
 
-  if (loading) return <div className="space-y-6">{backButton}<PayslipDetailSkeleton /></div>;
-
-  if (error || !payslip) {
-    return (
-      <div className="space-y-6">
-        {backButton}
-        <Alert variant="destructive">
-          <AlertDescription>{error || 'Không tìm thấy phiếu lương.'}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
+/** Khung nội dung: chỉ render tờ phiếu; chrome dialog do PayslipDetailPage lo. */
+function PayslipSheet({ payslip }: { payslip: PayslipDetail }) {
   const netSalary = payslip.netSalary || 0;
   const initials = payslip.employeeName.split(' ').filter(Boolean).slice(-2).map((part) => part[0]).join('');
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {backButton}
-
+    <div className="space-y-6">
       {/* Toàn bộ phiếu lương nằm trong một khung duy nhất, các mục ngăn bằng đường kẻ ngang. */}
       <div className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10">
         {/* Đầu phiếu: danh tính nhân viên + kỳ lương + số thực nhận */}
@@ -830,7 +793,7 @@ export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase }: {
               </span>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-semibold tracking-tight text-foreground">{payslip.employeeName}</h1>
+                  <h2 className="text-xl font-semibold tracking-tight text-foreground">{payslip.employeeName}</h2>
                   {payslip.employeeCode && <Badge variant="outline" className="font-mono">{payslip.employeeCode}</Badge>}
                   <Badge variant={getStatusBadgeVariant(payslip.status)}>
                     {STATUS_LABELS[payslip.status] || payslip.status}
@@ -871,6 +834,100 @@ export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase }: {
       </div>
     </div>
   );
+}
+
+function EmployeePayslipDetail({ payslipId }: { payslipId: string }) {
+  const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const slip = await employeeRequest.get<PayslipDetail>(`/payslips/me/${payslipId}`);
+        if (cancelled) return;
+        setPayslip(slip);
+        // Nhân viên: xem là hành vi ghi nhận, lỗi audit không được che phiếu lương.
+        if (slip.status === 'RELEASED') {
+          try {
+            await employeeRequest.post<void>(`/payslips/me/${payslipId}/viewed`);
+            if (!cancelled) setPayslip((current) => (current ? { ...current, status: 'VIEWED' } : current));
+          } catch (auditError) {
+            console.error('Failed to mark as viewed:', auditError);
+          }
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Không thể tải phiếu lương. Vui lòng thử lại sau.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [payslipId]);
+
+  if (loading) return <PayslipDetailSkeleton />;
+
+  if (error || !payslip) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error || 'Không tìm thấy phiếu lương.'}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  return <PayslipSheet payslip={payslip} />;
+}
+
+/** HR xem phiếu của một nhân viên: khác biệt duy nhất là endpoint. */
+function HrPayslipDetail({ payslipId, apiBase, onLoad }: {
+  payslipId: string;
+  apiBase?: string | null;
+  /** Phiếu tải xong — dùng để dựng link quay về đúng kỳ lương. */
+  onLoad?: (slip: PayslipDetail) => void;
+}) {
+  const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const slip = apiBase ? await hrRequest<PayslipDetail>(apiBase, `/api/payslips/${payslipId}`) : null;
+        if (cancelled) return;
+        if (!slip) throw new Error('Thiếu địa chỉ API.');
+        setPayslip(slip);
+        onLoad?.(slip);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Không thể tải phiếu lương. Vui lòng thử lại sau.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payslipId, apiBase]);
+
+  if (loading) return <PayslipDetailSkeleton />;
+
+  if (error || !payslip) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error || 'Không tìm thấy phiếu lương.'}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  return <PayslipSheet payslip={payslip} />;
 }
 
 /** §4 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */

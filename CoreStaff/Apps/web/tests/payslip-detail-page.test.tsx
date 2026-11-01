@@ -75,16 +75,19 @@ async function render(payslipId = 'p1') {
   await act(async () => root.render(createElement(PayslipDetailScreen, { apiBase: 'https://api.test', payslipId })));
 }
 
+/** Phiếu lương mở trong Dialog nên nội dung được portal ra document.body. */
+const scope = () => document.body;
+
 test('phiếu lương mở dạng trang: đủ 4 mục, sơ đồ công thức và số thực nhận', async () => {
   await render();
-  const html = container.innerHTML;
+  const html = scope().innerHTML;
 
   // React escape `&` thành `&amp;` trong innerHTML.
   for (const label of ['Tổng thu nhập (Gross)', 'Thu nhập chịu thuế trước giảm trừ', 'Các khoản giảm trừ thuế', 'Thuế TNCN (PIT)', 'Tổng kết &amp; đối soát thực nhận']) {
     expect(html).toContain(label);
   }
   // Mỗi mục là một bảng thật, không còn dropdown chi tiết.
-  expect(container.querySelectorAll('table').length).toBeGreaterThanOrEqual(4);
+  expect(scope().querySelectorAll('table').length).toBeGreaterThanOrEqual(4);
   expect(html).toContain('ngày công chuẩn');
   expect(html).toContain('Số tiền thực nhận (Net)');
   expect(html).toContain('27.000.000');
@@ -99,47 +102,47 @@ test('phiếu lương là một khung duy nhất, các mục xếp dọc ngăn b
   await render();
 
   // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 5 mục bên trong.
-  expect(container.querySelectorAll('div.ring-1')).toHaveLength(1);
-  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(5);
+  expect(scope().querySelectorAll('div.ring-1')).toHaveLength(1);
+  expect(scope().querySelectorAll('.ring-1 > section')).toHaveLength(5);
   for (const index of ['1', '2', '3', '4']) {
-    expect(container.querySelector(`.ring-1 > section:nth-child(${Number(index) + 1})`)?.textContent).toBeTruthy();
+    expect(scope().querySelector(`.ring-1 > section:nth-child(${Number(index) + 1})`)?.textContent).toBeTruthy();
   }
   // Không còn sơ đồ công thức 5 khối ở đầu trang.
-  expect(container.innerHTML).not.toContain('Tổng Gross');
+  expect(scope().innerHTML).not.toContain('Tổng Gross');
 });
 
 test('đối soát lệch thì không khoe "Khớp"', async () => {
   detail = { ...payslip, netSalary: 25_000_000 };
   await render();
-  expect(container.innerHTML).toContain('Lệch số');
+  expect(scope().innerHTML).toContain('Lệch số');
 });
 
 test('mục bảo hiểm ở card 2 gập/mở được phần trích chi tiết', async () => {
   await render();
 
   const findToggle = () =>
-    [...container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find((btn) =>
+    [...scope().querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find((btn) =>
       btn.textContent?.includes('Bảo hiểm'),
     );
   const toggle = findToggle();
   expect(toggle).toBeDefined();
   // Mặc định gập: dòng con BHXH/BHYT/BHTN chưa in.
   expect(toggle!.getAttribute('aria-expanded')).toBe('false');
-  expect(container.innerHTML).not.toContain('1.280.000');
-  expect(container.innerHTML).toContain('1.680.000');
+  expect(scope().innerHTML).not.toContain('1.280.000');
+  expect(scope().innerHTML).toContain('1.680.000');
 
   await act(async () => toggle!.click());
 
   expect(findToggle()!.getAttribute('aria-expanded')).toBe('true');
-  expect(container.innerHTML).toContain('1.280.000');
+  expect(scope().innerHTML).toContain('1.280.000');
 });
 
 test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế chuyển sang mục 3', async () => {
   await render();
-  const html = container.innerHTML;
+  const html = scope().innerHTML;
 
   // Mục 2 chỉ liệt kê khoản trừ; mục 3 in bảng nối số về nguồn và ra kết quả.
-  const sections = container.querySelectorAll('.ring-1 > section');
+  const sections = scope().querySelectorAll('.ring-1 > section');
   expect(sections[1].textContent).not.toContain('Thu nhập tính thuế');
   expect(sections[2].textContent).toContain('Thu nhập tính thuế');
   expect(html).toContain('Lấy từ');
@@ -151,13 +154,13 @@ test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế
 test('giảm trừ vượt thu nhập thì ghi rõ đã về 0, không âm', async () => {
   detail = { ...payslip, taxableIncome: 10_000_000, taxableEarnings: 0, pitAmount: 0, pitBreakdown: [] };
   await render();
-  expect(container.innerHTML).toContain('đã về 0, không âm');
+  expect(scope().innerHTML).toContain('đã về 0, không âm');
 });
 
 test('từng mục có nút "?" mở công thức bằng chữ', async () => {
   await render();
 
-  const helpButtons = [...container.querySelectorAll<HTMLButtonElement>('button[aria-label^="Cách tính:"]')];
+  const helpButtons = [...scope().querySelectorAll<HTMLButtonElement>('button[aria-label^="Cách tính:"]')];
   expect(helpButtons.map((btn) => btn.getAttribute('aria-label'))).toEqual([
     'Cách tính: Tổng thu nhập (Gross)',
     'Cách tính: Các khoản giảm trừ thuế',
@@ -166,13 +169,13 @@ test('từng mục có nút "?" mở công thức bằng chữ', async () => {
     'Cách tính: Tổng kết & đối soát thực nhận',
   ]);
   // Công thức nằm trong tooltip, không in sẵn ra bảng.
-  expect(container.innerHTML).not.toContain('Phụ cấp + Thưởng chuyên cần');
+  expect(scope().innerHTML).not.toContain('Phụ cấp + Thưởng chuyên cần');
 });
 
 test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async () => {
   await render();
   expect(calls.filter((call) => call.path.endsWith('/viewed'))).toHaveLength(1);
-  expect(container.innerHTML).toContain('Đã Xem');
+  expect(scope().innerHTML).toContain('Đã Xem');
 
   calls = [];
   detail = { ...payslip, status: 'GENERATED' };
@@ -185,18 +188,32 @@ test('trang HR dùng chung bố cục và gọi endpoint HR, không đánh dấu
   await act(async () => root.render(
     createElement(PayslipDetailPage, { apiBase: 'https://api.test', payslipId: 'p1', mode: 'hr' }),
   ));
-  const html = container.innerHTML;
+  const html = scope().innerHTML;
 
   // Cùng một tờ phiếu: vỏ ring bọc ngoài, 5 mục, dòng Net xanh.
-  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(5);
+  expect(scope().querySelectorAll('.ring-1 > section')).toHaveLength(5);
   expect(html).toContain('Số tiền thực nhận (Net)');
   expect(html).toContain('25.072.500');
   for (const label of ['Cách tính: Tổng thu nhập (Gross)', 'Cách tính: Thuế TNCN (PIT)']) {
-    expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+    expect(scope().querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
   }
-  // Nhãn nút quay lại của HR, và endpoint HR chứ không phải self-service.
-  expect(html).toContain('Bảng lương');
-  // Quay về đúng kỳ lương → dialog chi tiết tự mở lại.
-  expect(container.querySelector('a[href="/hr/payroll-runs?run=r9"]')).not.toBeNull();
+  // Phiếu nằm trong dialog, không phải trang riêng.
+  expect(scope().querySelector('[role="dialog"]')).not.toBeNull();
+  // Endpoint HR chứ không phải self-service.
   expect(calls.map((call) => call.path)).toEqual(['/api/payslips/p1']);
+});
+
+test('đóng dialog quay về đúng kỳ lương của phiếu', async () => {
+  detail = { ...payslip, payrollRunId: 'r9' };
+  const pushState = jest.spyOn(window.history, 'pushState');
+  await act(async () => root.render(
+    createElement(PayslipDetailPage, { apiBase: 'https://api.test', payslipId: 'p1', mode: 'hr' }),
+  ));
+
+  const close = scope().querySelector<HTMLButtonElement>('button[aria-label="Đóng hộp thoại"]');
+  expect(close).not.toBeNull();
+  await act(async () => close!.click());
+
+  // HR quay về danh sách bảng lương và mở lại đúng kỳ lương vừa xem.
+  expect(pushState).toHaveBeenCalledWith(null, '', '/hr/payroll-runs?run=r9');
 });

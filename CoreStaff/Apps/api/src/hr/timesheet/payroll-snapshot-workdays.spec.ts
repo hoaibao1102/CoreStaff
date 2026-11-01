@@ -1,6 +1,14 @@
 import { OVERTIME_RATES, computeOvertimePay, deriveInsuranceSalary, hourlyRateFor, resolvePayrollWorkdays } from './payroll-snapshot.service';
 
 describe('payroll snapshot workday basis', () => {
+  it('preserves decimal frozen work units for versioned summaries', () => {
+    expect(resolvePayrollWorkdays({
+      calculationContract: 'VERSIONED_WORK_CREDIT_V2',
+      standardWorkUnits: 22,
+      payableWorkUnits: 20.5,
+    } as any)).toEqual({ standardWorkingDays: 22, payableWorkingDays: 20.5 });
+  });
+
   it('uses the organization calendar standard and does not reduce salary for paid holidays', () => {
     expect(resolvePayrollWorkdays({
       workingDays: 20,
@@ -40,6 +48,11 @@ describe('deriveInsuranceSalary — lương đóng bảo hiểm', () => {
  * Test khoá lại phép tính mà cả hai phía dùng.
  */
 describe('OT pay — số giờ × tiền công 1 giờ × hệ số', () => {
+  it('uses frozen standard minutes for six and eight hour shifts', () => {
+    expect(hourlyRateFor(12_000_000, 20, 7_200)).toBe(100_000);
+    expect(hourlyRateFor(12_000_000, 20, 9_600)).toBe(75_000);
+  });
+
   it('tổng các dòng chi tiết OT bằng đúng otPay đã lưu (khoá B1)', () => {
     const monthlyBaseSalary = 20_000_000;
     const standardWorkingDays = 22;

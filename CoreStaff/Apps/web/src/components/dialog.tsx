@@ -19,17 +19,21 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & { showCloseButton?: boolean; backdropClassName?: string; layerOffset?: number }) {
   const depth = useContext(DialogDepth) + layerOffset;
   const layer = MODAL_LAYER.base + depth * MODAL_LAYER.step;
+  // Provider bọc Popup (không bọc bên trong) để `className` của caller được merge
+  // vào popup thay vì đè mất style vị trí/kích thước mặc định.
   return <DialogPrimitive.Portal>
     <DialogPrimitive.Backdrop forceRender data-slot="dialog-backdrop" style={{ zIndex: layer }} className={cn('fixed inset-0 bg-black/45 backdrop-blur-[3px]', backdropClassName)} />
-    <DialogPrimitive.Popup
-      data-slot="dialog-content"
-      className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-popover text-sm text-popover-foreground shadow-2xl outline-none', className)}
-      {...props}
-      style={{ ...style, zIndex: layer + MODAL_LAYER.popupOffset }}
-    >
-      <DialogDepth.Provider value={depth + 1}>{children}</DialogDepth.Provider>
-      {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" size="icon" className="absolute right-3.5 top-3.5 h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted z-20 cursor-pointer" />} aria-label="Đóng hộp thoại"><X aria-hidden="true" className="size-4" /></DialogPrimitive.Close>}
-    </DialogPrimitive.Popup>
+    <DialogDepth.Provider value={depth + 1}>
+      <DialogPrimitive.Popup
+        data-slot="dialog-content"
+        className={cn('fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-popover text-sm text-popover-foreground shadow-2xl outline-none', className)}
+        {...props}
+        style={{ ...style, zIndex: layer + MODAL_LAYER.popupOffset }}
+      >
+        {children}
+        {showCloseButton && <DialogPrimitive.Close render={<Button variant="ghost" size="icon" className="absolute right-3.5 top-3.5 h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted z-20 cursor-pointer" />} aria-label="Đóng hộp thoại"><X aria-hidden="true" className="size-4" /></DialogPrimitive.Close>}
+      </DialogPrimitive.Popup>
+    </DialogDepth.Provider>
   </DialogPrimitive.Portal>;
 }
 

@@ -11,12 +11,12 @@
  *   4. Manager assignment effective for the period and scoped to the right
  *      department.
  *   5. Compensation/policies: SalaryProfile (base 25M), TaxPolicy, InsurancePolicy,
- *      AttendanceBonusPolicy, KPI input all effective and current for the period.
+ *      WorkCreditPolicy, AttendanceBonusPolicy, KPI input all effective and current.
  *   6. Attendance: 22 workdays, 0 late, 0 early, all confirmed.
  *   7. Overtime: 600 working-day minutes and 240 weekly-off minutes,
- *      each result final and approved by the manager.
- *   8. No pre-existing PayrollInputSnapshot / PayrollRun / Payslip / TimesheetSummary
- *      for the period — these are produced by the workflow under test, not the seed.
+ *      each approved result provisional until the close API finalizes it.
+ *   8. No employee acknowledgement, manager confirmation, summary, snapshot,
+ *      payroll run or payslip exists; APIs produce all lifecycle state.
  *   9. Pure-calculator expected ledger (gross/net/PIT/insurance) matches what
  *      the snapshot/payslip MUST end up at, within ±1 VND reconciliation.
  *
@@ -51,6 +51,7 @@ const PERIOD_END = new Date(Date.UTC(PERIOD_YEAR, PERIOD_MONTH, 0, 23, 59, 59, 9
 const RECONCILIATION_TOLERANCE_VND = 1;
 
 const EXPECTED_ORG_CODE = 'E2E';
+function pad(n: number): string { return n < 10 ? `0${n}` : String(n); }
 
 interface Check { name: string; pass: boolean; detail: string; }
 const checks: Check[] = [];
@@ -92,11 +93,14 @@ async function main() {
   const SalaryProfile = db.model('SalaryProfile');
   const TaxPolicy = db.model('TaxPolicy');
   const InsurancePolicy = db.model('InsurancePolicy');
+  const WorkCreditPolicy = db.model('WorkCreditPolicy');
   const AttendanceBonusPolicy = db.model('AttendanceBonusPolicy');
   const KpiPayrollInput = db.model('KpiPayrollInput');
   const TimesheetPeriod = db.model('TimesheetPeriod');
   const AttendanceDay = db.model('AttendanceDay');
   const OvertimeResult = db.model('OvertimeResult');
+  const EmployeeTimesheetAcknowledgement = db.model('EmployeeTimesheetAcknowledgement');
+  const DepartmentTimesheetConfirmation = db.model('DepartmentTimesheetConfirmation');
   const TimesheetSummary = db.model('TimesheetSummary');
   const PayrollInputSnapshot = db.model('PayrollInputSnapshot');
   const PayrollRun = db.model('PayrollRun');
@@ -143,7 +147,8 @@ async function main() {
   const mgrUserId = byEmail.get(__seedAccounts.manager.email)?._id;
   const hrUserId = byEmail.get(__seedAccounts.hr.email)?._id;
 
-  const empProfile = await EmployeeProfile.findOne({ organizationId, userId: empUserId }).lean();
+  const empProfile: any = await EmployeeProfile.findOne({ organizationId, userId: empUserId }).lean();
+  const employeeProfileId = empProfile?._id;
   record(
     'employee-profile',
     !!empProfile && empProfile.employmentStatus === 'ACTIVE',
@@ -169,14 +174,14 @@ async function main() {
     `managerAssignment=${!!mgrAssignment} scope=${mgrAssignment ? String((mgrAssignment as any).departmentId) : 'n/a'}`,
   );
 
-  const department = await Department.findOne({ organizationId, active: true }).lean();
+  const department: any = await Department.findOne({ organizationId, active: true }).lean();
   const sameScope =
     mgrAssignment && department && String((mgrAssignment as any).departmentId) === String(department._id);
   record('manager-department-scope', !!sameScope, `sameScope=${!!sameScope}`);
 
   const salary = await SalaryProfile.findOne({
     organizationId,
-    employeeProfileId: empProfile._id,
+    employeeProfileId,
     active: true,
     effectiveFrom: { $lte: PERIOD_START },
   }).lean();
@@ -199,10 +204,25 @@ async function main() {
 
   const insurance = await InsurancePolicy.findOne({
     organizationId,
-    active: true,
     effectiveFrom: { $lte: PERIOD_START },
   }).lean();
   record('insurance-policy-effective', !!insurance, `version=${(insurance as any)?.version ?? 'n/a'}`);
+
+  const workCredit: any = await WorkCreditPolicy.findOne({
+    organizationId,
+    active: true,
+    effectiveFrom: { $lte: PERIOD_START },
+    $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: PERIOD_END } }],
+  }).lean();
+  record(
+    'work-credit-policy-effective',
+    !!workCredit
+      && workCredit.halfDayMinimumRatio === 0.5
+      && workCredit.fullDayMinimumRatio === 1
+      && workCredit.paidLeaveCreditEnabled === true
+      && workCredit.incompleteDayRule === 'BLOCK',
+    `version=${workCredit?.version ?? 'n/a'} half=${workCredit?.halfDayMinimumRatio ?? 'n/a'} full=${workCredit?.fullDayMinimumRatio ?? 'n/a'}`,
+  );
 
   const bonus = await AttendanceBonusPolicy.findOne({
     organizationId,
@@ -217,16 +237,16 @@ async function main() {
 
   const kpi = await KpiPayrollInput.findOne({
     organizationId,
-    employeeProfileId: empProfile._id,
-    periodKey: PERIOD,
+    employeeProfileId,
+    period: PERIOD,
   }).lean();
   record(
-    'kpi-input-confirmed',
-    !!kpi && (kpi as any).confirmedAmount === __seedAmounts.kpiBonus,
-    `confirmedAmount=${(kpi as any)?.confirmedAmount ?? 'n/a'}`,
+    'kpi-confirmed',
+    !!kpi && (kpi as any).status === 'CONFIRMED' && (kpi as any).amount === __seedAmounts.kpiBonus,
+    `amount=${(kpi as any)?.amount ?? 'n/a'}`,
   );
 
-  const period = await TimesheetPeriod.findOne({ organizationId, period: PERIOD }).lean();
+  const period: any = await TimesheetPeriod.findOne({ organizationId, period: PERIOD }).lean();
   record(
     'timesheet-period-open',
     !!period && (period as any).status === 'OPEN',
@@ -236,7 +256,7 @@ async function main() {
   const workdays = workdaysInPeriod();
   const attendanceDays = await AttendanceDay.find({
     organizationId,
-    employeeProfileId: empProfile._id,
+    employeeId: empUserId,
     workDate: { $gte: isoDate(PERIOD_START), $lte: isoDate(PERIOD_END) },
   }).lean();
   const lateTotal = attendanceDays.reduce((s, d: any) => s + (d.lateMinutes ?? 0), 0);
@@ -254,11 +274,11 @@ async function main() {
 
   const otResults = await OvertimeResult.find({
     organizationId,
-    employeeProfileId: empProfile._id,
-    workDate: { $gte: isoDate(PERIOD_START), $lte: isoDate(PERIOD_END) },
+    employeeId: empUserId,
+    periodKey: PERIOD,
   }).lean();
-  const otWorkingDay = otResults.filter((o: any) => o.classification === 'WORKING_DAY' || o.overtimeType === 'WORKING_DAY');
-  const otWeeklyOff = otResults.filter((o: any) => o.classification === 'WEEKLY_OFF' || o.overtimeType === 'WEEKLY_OFF');
+  const otWorkingDay = otResults.filter((o: any) => o.overtimeType === 'OT_WORKING_DAY');
+  const otWeeklyOff = otResults.filter((o: any) => o.overtimeType === 'OT_WEEKLY_OFF');
   const otWorkingDayMin = otWorkingDay.reduce((s, o: any) => s + (o.eligibleMinutes ?? 0), 0);
   const otWeeklyOffMin = otWeeklyOff.reduce((s, o: any) => s + (o.eligibleMinutes ?? 0), 0);
   record(
@@ -272,23 +292,27 @@ async function main() {
     `${otWeeklyOffMin}min (expected ${__seedAmounts.otWeeklyOffMinutes})`,
   );
 
-  const allFinal = otResults.every((o: any) => o.classificationStatus === 'FINAL' && o.approvedBy && o.approvedAt);
+  const allProvisional = otResults.length > 0 && otResults.every((o: any) =>
+    o.classificationStatus === 'PROVISIONAL' && o.overtimeRequestId && o.policyVersion && o.inputHash,
+  );
   record(
-    'overtime-approved-final',
-    allFinal,
-    `${otResults.filter((o: any) => o.classificationStatus === 'FINAL').length}/${otResults.length} final`,
+    'overtime-approved-provisional',
+    allProvisional,
+    `${otResults.filter((o: any) => o.classificationStatus === 'PROVISIONAL').length}/${otResults.length} provisional`,
   );
 
-  const [summaries, snapshots, runs, payslips] = await Promise.all([
+  const [acknowledgements, confirmations, summaries, snapshots, runs, payslips] = await Promise.all([
+    EmployeeTimesheetAcknowledgement.countDocuments({ organizationId, periodId: period?._id }),
+    DepartmentTimesheetConfirmation.countDocuments({ organizationId, periodId: period?._id }),
     TimesheetSummary.countDocuments({ organizationId, periodId: period?._id }),
     PayrollInputSnapshot.countDocuments({ organizationId, periodId: period?._id }),
-    PayrollRun.countDocuments({ organizationId, periodId: period?._id }),
-    Payslip.countDocuments({ organizationId, periodKey: PERIOD }),
+    PayrollRun.countDocuments({ organizationId, timesheetPeriodId: period?._id }),
+    Payslip.countDocuments({ organizationId, periodLabel: `${pad(PERIOD_MONTH)}/${PERIOD_YEAR}` }),
   ]);
   record(
-    'no-pre-generated-payroll-state',
-    summaries === 0 && snapshots === 0 && runs === 0 && payslips === 0,
-    `summaries=${summaries} snapshots=${snapshots} runs=${runs} payslips=${payslips} (all should be 0)`,
+    'no-pre-generated-review-or-payroll-state',
+    acknowledgements === 0 && confirmations === 0 && summaries === 0 && snapshots === 0 && runs === 0 && payslips === 0,
+    `acknowledgements=${acknowledgements} confirmations=${confirmations} summaries=${summaries} snapshots=${snapshots} runs=${runs} payslips=${payslips} (all should be 0)`,
   );
 
   const expected = __seedLedger();

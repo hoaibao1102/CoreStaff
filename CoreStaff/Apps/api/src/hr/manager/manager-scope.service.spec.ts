@@ -108,6 +108,18 @@ describe('ManagerScopeService', () => {
     });
   });
 
+  it('uses only effective ManagerAssignment rows for new review authorization', async () => {
+    const service = buildService([
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'active', active: true, effectiveFrom: '2026-01-01' },
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'expired', active: true, effectiveTo: '2026-09-01' },
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'future', active: true, effectiveFrom: '2026-10-01' },
+      { organizationId: 'org-2', managerUserId: 'manager-1', departmentId: 'other', active: true },
+    ], [], [], { userId: 'manager-1', departmentId: 'legacy-profile-department' });
+    await expect(service.getAuthorizedReviewDepartmentIds('org-1', 'manager-1', now)).resolves.toEqual(['active']);
+    await expect(service.requireReviewDepartment('org-1', 'manager-1', 'legacy-profile-department', now))
+      .rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('rejects a requested department outside the effective managed scope', async () => {
     const service = buildService([
       { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'd1', active: true },

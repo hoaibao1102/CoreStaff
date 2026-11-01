@@ -6,7 +6,7 @@ import { Tenant, requireOrganizationId } from '../../common/tenant-context';
 import { parseWindowInstant, vnDateOf } from '../../common/vietnam-time';
 import { dateOnly } from '../../common/date-only';
 import { ManagerRequestService } from '../manager/manager-request.service';
-import { CreateOvertimeRequestDto, DecideOvertimeDto, OvertimeResultQueryDto, RecalculateOvertimeDto } from './dto/overtime.dto';
+import { CreateOvertimeRequestDto, PreviewOvertimeDto, DecideOvertimeDto, OvertimeResultQueryDto, RecalculateOvertimeDto } from './dto/overtime.dto';
 import { OvertimeService } from './overtime.service';
 
 /** §16.6C `POST/GET /api/overtime`, `/api/overtime/mine` — Employee scope. */
@@ -43,6 +43,7 @@ export class OvertimeController {
       requestedEnd: dto.requestedEnd,
       workDescription: dto.workDescription,
       retroactiveReason: dto.retroactiveReason,
+      previewHash: dto.previewHash,
     });
     // Warning only. The block lives at approval (§30B.2), and until the day is
     // worked there is no eligible figure to block on.
@@ -61,6 +62,14 @@ export class OvertimeController {
       if (!(previewError instanceof NotFoundException) || previewError.message !== 'LABOR_POLICY_NOT_FOUND') throw previewError;
       return { success: true, data: { ...created, compliance: null, complianceNote: previewError.message } };
     }
+  }
+
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('preview')
+  async preview(@Tenant() orgId: string | null, @Req() req: any, @Body() dto: PreviewOvertimeDto) {
+    const workDate = dateOnly(dto.workDate);
+    return { success: true, data: await this.overtime.preview(requireOrganizationId(orgId), String(req.user._id), workDate, {
+      from: parseWindowInstant(dto.requestedStart, workDate), to: parseWindowInstant(dto.requestedEnd, workDate),
+    }) };
   }
 
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('mine')
@@ -105,6 +114,7 @@ export class OvertimeController {
         calendarType: context.calendarType ?? null,
         overrideType: context.overrideType ?? null,
         overtimeType: this.overtime.classifyDay(context),
+        ...(await this.overtime.isV2Enabled(org) ? { calculationContract: 'OVERTIME_V2', ...await this.overtime.scheduleSuggestions(org, String(req.user._id), workDate) } : {}),
       },
     };
   }

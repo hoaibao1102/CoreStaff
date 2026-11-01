@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
@@ -27,9 +27,14 @@ export class ManagerController {
     return { success: true, data: await this.scope.listEmployees(this.org(org), this.uid(user), departmentId) };
   }
 
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('requests/attendance-confirmation-preview')
+  async confirmationPreview(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Query('date') date:string) {
+    return {success:true,data:await this.requests.attendanceConfirmationPreview(this.org(org),this.uid(user),date)};
+  }
+
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('requests')
-  async createMine(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Body() dto: CreateManagerRequestDto) {
-    return { success: true, data: await this.requests.createMine(this.org(org), this.uid(user), dto) };
+  async createMine(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Body() dto: CreateManagerRequestDto, @Headers('idempotency-key') key?:string) {
+    return { success: true, data: await this.requests.createMine(this.org(org), this.uid(user), dto, key) };
   }
 
   @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Get('requests/mine')
@@ -43,23 +48,23 @@ export class ManagerController {
   }
 
   @Roles('DEPARTMENT_MANAGER') @Get('manager/approvals/:id')
-  async approval(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Param('id') id: string) {
+  async approval(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Param('id') id: string): Promise<any> {
     return { success: true, data: await this.requests.detail(this.org(org), this.uid(user), id) };
   }
 
   @Roles('DEPARTMENT_MANAGER') @Post('manager/approvals/:id/approve')
   async approve(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Param('id') id: string, @Body() dto: DecideManagerRequestDto) {
-    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'APPROVED', dto.expectedVersion, dto.reason, dto.approvedStart, dto.approvedEnd) };
+    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'APPROVED', dto.expectedVersion, dto.reason, dto.approvedStart, dto.approvedEnd, dto.operationId) };
   }
 
   @Roles('DEPARTMENT_MANAGER') @Post('manager/approvals/:id/reject')
   async reject(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Param('id') id: string, @Body() dto: DecideManagerRequestDto) {
-    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'REJECTED', dto.expectedVersion, dto.reason) };
+    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'REJECTED', dto.expectedVersion, dto.reason, dto.approvedStart, dto.approvedEnd, dto.operationId) };
   }
 
   @Roles('DEPARTMENT_MANAGER') @Post('manager/approvals/:id/request-clarification')
   async clarify(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Param('id') id: string, @Body() dto: DecideManagerRequestDto) {
-    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'CLARIFICATION_REQUESTED', dto.expectedVersion, dto.reason) };
+    return { success: true, data: await this.requests.decide(this.org(org), this.uid(user), id, 'CLARIFICATION_REQUESTED', dto.expectedVersion, dto.reason, dto.approvedStart, dto.approvedEnd, dto.operationId) };
   }
 
   @Roles('HR') @Get('hr/manager-assignments')

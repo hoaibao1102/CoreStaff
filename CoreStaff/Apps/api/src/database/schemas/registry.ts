@@ -17,6 +17,7 @@ import { InsurancePolicySchema } from './insurance-policy.schema';
 import { EnterpriseInsurancePolicySchema } from './enterprise-insurance-policy.schema';
 import { ManagerAssignmentSchema } from './manager-assignment.schema';
 import { ManagerRequestSchema } from './manager-request.schema';
+import { AttendanceConfirmationQuotaSchema } from './attendance-confirmation-quota.schema';
 import { OvertimeResultSchema } from './overtime-result.schema';
 import {
   SalaryProfileSchema, LaborCompliancePolicySchema, AllowanceCatalogSchema,
@@ -39,6 +40,8 @@ import { TimesheetSummarySchema } from './timesheet-summary.schema';
 import { PayrollInputSnapshotSchema } from './payroll-input-snapshot.schema';
 import { PayrollRunSchema } from './payroll-run.schema';
 import { PayslipSchema } from './payslip.schema';
+import { WorkCreditPolicySchema } from './work-credit-policy.schema';
+import { EmployeeTimesheetAcknowledgementSchema } from './employee-timesheet-acknowledgement.schema';
 
 /**
  * Single source of truth for the collections bootstrapped by TASK-015 + TASK-024.
@@ -64,6 +67,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'EnterpriseInsurancePolicy', schema: EnterpriseInsurancePolicySchema },
   { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
   { name: 'ManagerRequest', schema: ManagerRequestSchema },
+  { name: 'AttendanceConfirmationQuota', schema: AttendanceConfirmationQuotaSchema },
   { name: 'OvertimeResult', schema: OvertimeResultSchema },
   { name: 'SalaryProfile', schema: SalaryProfileSchema },
   { name: 'LaborCompliancePolicy', schema: LaborCompliancePolicySchema },
@@ -74,6 +78,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
   { name: 'KpiPolicy', schema: KpiPolicySchema },
   { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
+  { name: 'WorkCreditPolicy', schema: WorkCreditPolicySchema },
   { name: 'AttendanceDay', schema: AttendanceDaySchema },
   { name: 'AttendanceEvent', schema: AttendanceEventSchema },
   { name: 'Evidence', schema: EvidenceSchema },
@@ -86,6 +91,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'TaxPolicy', schema: TaxPolicySchema },
   { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
   { name: 'DepartmentTimesheetConfirmation', schema: DepartmentTimesheetConfirmationSchema },
+  { name: 'EmployeeTimesheetAcknowledgement', schema: EmployeeTimesheetAcknowledgementSchema },
   { name: 'TimesheetSummary', schema: TimesheetSummarySchema },
   { name: 'PayrollInputSnapshot', schema: PayrollInputSnapshotSchema },
   { name: 'PayrollRun', schema: PayrollRunSchema },
@@ -99,6 +105,7 @@ export { ShiftTemplateSchema };
 export { EmployeeAssignmentSchema };
 export { InsuranceProfileSchema };
 export { PayrollInputSnapshotSchema };
+export { WorkCreditPolicy, WorkCreditPolicySchema } from './work-credit-policy.schema';
 export { InsurancePolicySchema };
 export { EnterpriseInsurancePolicySchema };
 export { InsuranceProfile } from './insurance-profile.schema';

@@ -90,6 +90,15 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         workingMinutes: item.workingMinutes,
         lateMinutes: item.lateMinutes ?? 0,
         earlyMinutes: item.earlyMinutes ?? 0,
+        attendanceRequirements: item.attendanceRequirements ?? (item.requiredWorkingMinutes ? {
+          requiredWorkingMinutes: item.requiredWorkingMinutes,
+          approvedLeaveMinutes: item.approvedLeaveMinutes ?? 0,
+          durationTypes: [],
+          approvedLeaveIntervals: [],
+          requiredWorkingIntervals: [],
+          effectiveCheckInTime: item.effectiveCheckInTime ?? null,
+          effectiveCheckOutTime: item.effectiveCheckOutTime ?? null,
+        } : null),
         overtime: item.overtime ?? null,
       }));
 

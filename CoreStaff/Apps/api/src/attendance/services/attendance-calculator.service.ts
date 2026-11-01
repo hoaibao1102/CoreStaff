@@ -7,6 +7,8 @@ export interface ShiftInfo {
   endTime: string;
   breakMinutes: number;
   gracePeriodMinutes: number;
+  breakStartTime?: string;
+  breakEndTime?: string;
   requiredWorkingIntervals?: AttendanceInterval[];
   approvedLeaveIntervals?: AttendanceInterval[];
 }
@@ -29,7 +31,7 @@ export class AttendanceCalculatorService {
 
 export function calculateAttendance(workDate: string, checkInAt: Date, checkOutAt: Date | undefined, shift: ShiftInfo): CalculationResult {
   const at = (time: string) => new Date(vnTimeToUtc(workDate, time));
-  const required = shift.requiredWorkingIntervals;
+  const required = requiredWorkingIntervalsForShift(shift);
   const effectiveCheckInTime = required ? required[0]?.from ?? null : shift.startTime;
   const effectiveCheckOutTime = required ? required[required.length - 1]?.to ?? null : shift.endTime;
   const scheduleStart = effectiveCheckInTime ? at(effectiveCheckInTime) : null;
@@ -62,6 +64,18 @@ export function calculateAttendance(workDate: string, checkInAt: Date, checkOutA
     approvedLeaveMinutes: intervalMinutes(shift.approvedLeaveIntervals),
     requiredWorkingMinutes: required ? intervalMinutes(required) : Math.max(0, clockMinutes(shift.endTime) - clockMinutes(shift.startTime) - (shift.breakMinutes || 0)),
   };
+}
+
+// Explicit leave-adjusted intervals take precedence, including an empty full-leave day.
+// Aggregate-only historical shifts retain the legacy deduction: their break location is unknown.
+export function requiredWorkingIntervalsForShift(shift: ShiftInfo): AttendanceInterval[] | undefined {
+  if (shift.requiredWorkingIntervals !== undefined) return shift.requiredWorkingIntervals;
+  const { startTime, endTime, breakStartTime, breakEndTime } = shift;
+  if (!breakStartTime || !breakEndTime || breakStartTime < startTime || breakEndTime > endTime || breakStartTime >= breakEndTime) return undefined;
+  return [
+    { from: startTime, to: breakStartTime },
+    { from: breakEndTime, to: endTime },
+  ].filter(interval => interval.from < interval.to);
 }
 
 function intervalMinutes(intervals?: AttendanceInterval[]) {

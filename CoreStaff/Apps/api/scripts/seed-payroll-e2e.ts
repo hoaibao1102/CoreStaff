@@ -7,9 +7,10 @@
  *   npm run seed:payroll:e2e -- --period=2026-09 --reset-fixture
  *
  * The seed creates only the *inputs* an E2E flow needs to drive the real
- * workflow (Manager approve -> HR close -> HR calculate -> HR lock -> HR
- * release -> Employee self-view). Snapshot/PayrollRun/Payslip states are
- * produced via API calls during E2E, not pre-seeded here.
+ * workflow (Employee acknowledge -> Manager confirm -> HR close -> HR
+ * calculate -> HR lock -> HR release -> Employee self-view). Review actions,
+ * confirmations, summaries, snapshots, runs and payslips are produced via API
+ * calls during E2E, not pre-seeded here.
  *
  * All amounts are integer VND. Values follow the spec in `.hermes/plans/2026-09-30_*`
  * with the working-month based on 22 standard days × 8 hours.
@@ -166,6 +167,7 @@ async function main() {
   const Assignment = db.model('Assignment');
   const LaborPolicy = db.model('LaborCompliancePolicy');
   const OvertimePolicy = db.model('OvertimePayPolicy');
+  const WorkCreditPolicy = db.model('WorkCreditPolicy');
   const TaxPolicy = db.model('TaxPolicy');
   const InsurancePolicy = db.model('InsurancePolicy');
   const AttendanceBonusPolicy = db.model('AttendanceBonusPolicy');
@@ -175,8 +177,10 @@ async function main() {
   const KpiPayrollInput = db.model('KpiPayrollInput');
   const InsuranceProfile = db.model('InsuranceProfile');
   const TimesheetPeriod = db.model('TimesheetPeriod');
+  const CalendarException = db.model('CalendarException');
   const AttendanceDay = db.model('AttendanceDay');
   const AttendanceEvent = db.model('AttendanceEvent');
+  const ManagerRequest = db.model('ManagerRequest');
   const OvertimeResult = db.model('OvertimeResult');
 
   if (RESET && APPLY) {
@@ -188,9 +192,11 @@ async function main() {
       const userIds = await User.find({ organizationId: orgId }).select('_id').lean();
       await Promise.all([
         TimesheetPeriod.deleteMany({ organizationId: orgId }),
+        CalendarException.deleteMany({ organizationId: orgId }),
         AttendanceDay.deleteMany({ organizationId: orgId }),
         AttendanceEvent.deleteMany({ organizationId: orgId }),
         OvertimeResult.deleteMany({ organizationId: orgId }),
+        ManagerRequest.deleteMany({ organizationId: orgId }),
         KpiPayrollInput.deleteMany({ organizationId: orgId }),
         SalaryProfile.deleteMany({ organizationId: orgId }),
         InsuranceProfile.deleteMany({ organizationId: orgId }),
@@ -206,6 +212,7 @@ async function main() {
         InsurancePolicy.deleteMany({ organizationId: orgId }),
         LaborPolicy.deleteMany({ organizationId: orgId }),
         OvertimePolicy.deleteMany({ organizationId: orgId }),
+        WorkCreditPolicy.deleteMany({ organizationId: orgId }),
         ShiftTemplate.deleteMany({ organizationId: orgId }),
         Workplace.deleteMany({ organizationId: orgId }),
         Position.deleteMany({ organizationId: orgId }),
@@ -240,21 +247,21 @@ async function main() {
   const positionId = await upsertByQuery(
     Position,
     { organizationId, code: 'DEV' },
-    { organizationId, code: 'DEV', name: 'Software Developer', active: true },
+    { organizationId, departmentId, code: 'DEV', name: 'Software Developer', active: true },
     'Position',
   );
 
   const managerPositionId = await upsertByQuery(
     Position,
     { organizationId, code: 'DLEAD' },
-    { organizationId, code: 'DLEAD', name: 'Engineering Lead', active: true },
+    { organizationId, departmentId, code: 'DLEAD', name: 'Engineering Lead', active: true },
     'Position',
   );
 
   const hrPositionId = await upsertByQuery(
     Position,
     { organizationId, code: 'HRBP' },
-    { organizationId, code: 'HRBP', name: 'HR Business Partner', active: true },
+    { organizationId, departmentId, code: 'HRBP', name: 'HR Business Partner', active: true },
     'Position',
   );
 
@@ -346,6 +353,7 @@ async function main() {
         {
           _id: new mongoose.Types.ObjectId(),
           fullName: 'Nguyễn Bé Test',
+          dateOfBirth: '2020-01-15',
           relationship: 'CON',
           status: 'ACTIVE',
           isDisabled: false,
@@ -491,11 +499,29 @@ async function main() {
   );
 
   await upsertByQuery(
+    WorkCreditPolicy,
+    { organizationId, version: 1 },
+    {
+      organizationId,
+      effectiveFrom: new Date(`${PERIOD_YEAR - 1}-01-01`),
+      halfDayMinimumRatio: 0.5,
+      fullDayMinimumRatio: 1,
+      paidLeaveCreditEnabled: true,
+      incompleteDayRule: 'BLOCK',
+      businessReference: 'Explicit E2E work-credit policy',
+      version: 1,
+      active: true,
+    },
+    'WorkCreditPolicy',
+  );
+
+  await upsertByQuery(
     TaxPolicy,
     { organizationId, effectiveFrom: new Date(`${PERIOD_YEAR - 1}-01-01`) },
     {
       organizationId,
       effectiveFrom: new Date(`${PERIOD_YEAR - 1}-01-01`),
+      standardDeduction: VN_PERSONAL_DEDUCTION,
       personalDeduction: VN_PERSONAL_DEDUCTION,
       dependentDeduction: VN_DEPENDENT_DEDUCTION,
       progressiveBrackets: PROGRESSIVE_BRACKETS,
@@ -613,17 +639,18 @@ async function main() {
 
   await upsertByQuery(
     KpiPayrollInput,
-    { organizationId, employeeProfileId: empProfileId, periodKey: PERIOD },
+    { organizationId, employeeProfileId: empProfileId, period: PERIOD },
     {
       organizationId,
       employeeProfileId: empProfileId,
       userId: empUserId,
-      periodKey: PERIOD,
-      grade: 'A',
+      period: PERIOD,
       score: 95,
       baseAmount: FIXTURE_AMOUNTS.kpiBonus,
-      confirmedAmount: FIXTURE_AMOUNTS.kpiBonus,
-      confirmationStatus: 'CONFIRMED',
+      amount: FIXTURE_AMOUNTS.kpiBonus,
+      source: 'MANUAL',
+      status: 'CONFIRMED',
+      version: 1,
       confirmedBy: hrUserId,
       confirmedAt: new Date(),
     },
@@ -664,16 +691,24 @@ async function main() {
   const saturdays = saturdaysInPeriod();
   const standardWorkingDays = workdays.length;
 
+  for (const workDate of saturdays) {
+    await upsertByQuery(
+      CalendarException,
+      { organizationId, date: workDate },
+      { organizationId, date: workDate, type: 'WEEKLY_OFF', name: 'E2E weekly off', createdBy: hrUserId },
+      'CalendarException',
+    );
+  }
+
   for (const workDate of workdays) {
     const checkInAt = new Date(`${workDate}T01:00:00.000Z`);
     const checkOutAt = new Date(`${workDate}T10:00:00.000Z`);
-    await upsertByQuery(
+    const attendanceDayId = await upsertByQuery(
       AttendanceDay,
-      { organizationId, employeeProfileId: empProfileId, workDate },
+      { organizationId, employeeId: empUserId, workDate },
       {
         organizationId,
-        employeeProfileId: empProfileId,
-        userId: empUserId,
+        employeeId: empUserId,
         workDate,
         attendanceStatus: AttendanceStatus.COMPLETED,
         workdayType: WorkdayType.WORKING_DAY,
@@ -684,36 +719,34 @@ async function main() {
         earlyMinutes: 0,
         shiftSnapshot: { startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 10 },
         employeeSnapshot: { departmentId },
-        status: 'CONFIRMED',
+        overallApprovalStatus: 'NOT_REQUIRED',
       },
       'AttendanceDay',
     );
 
     await upsertByQuery(
       AttendanceEvent,
-      { organizationId, employeeProfileId: empProfileId, workDate, type: 'CHECK_IN' },
+      { organizationId, attendanceDayId, eventType: 'CHECK_IN' },
       {
         organizationId,
-        employeeProfileId: empProfileId,
-        userId: empUserId,
-        workDate,
-        type: 'CHECK_IN',
+        attendanceDayId,
+        employeeId: empUserId,
+        eventType: 'CHECK_IN',
+        method: 'MANUAL',
         recordedAt: checkInAt,
-        source: 'SEED',
       },
       'AttendanceEvent',
     );
     await upsertByQuery(
       AttendanceEvent,
-      { organizationId, employeeProfileId: empProfileId, workDate, type: 'CHECK_OUT' },
+      { organizationId, attendanceDayId, eventType: 'CHECK_OUT' },
       {
         organizationId,
-        employeeProfileId: empProfileId,
-        userId: empUserId,
-        workDate,
-        type: 'CHECK_OUT',
+        attendanceDayId,
+        employeeId: empUserId,
+        eventType: 'CHECK_OUT',
+        method: 'MANUAL',
         recordedAt: checkOutAt,
-        source: 'SEED',
       },
       'AttendanceEvent',
     );
@@ -731,22 +764,29 @@ async function main() {
     if (wdAccum >= FIXTURE_AMOUNTS.otWorkingDayMinutes) break;
     const minutes = Math.min(slot.minutes, FIXTURE_AMOUNTS.otWorkingDayMinutes - wdAccum);
     wdAccum += minutes;
+    const overtimeRequestId = await upsertByQuery(
+      ManagerRequest,
+      { organizationId, employeeUserId: empUserId, type: 'OVERTIME', workDate: new Date(`${slot.workDate}T00:00:00.000Z`) },
+      {
+        organizationId, employeeId: empProfileId, employeeUserId: empUserId, departmentId,
+        type: 'OVERTIME', workDate: new Date(`${slot.workDate}T00:00:00.000Z`),
+        reason: 'Approved E2E overtime prerequisite', status: 'APPROVED',
+        reviewedBy: mgrUserId, reviewedAt: new Date(), version: 1,
+      },
+      'ManagerRequest',
+    );
     await upsertByQuery(
       OvertimeResult,
-      { organizationId, employeeProfileId: empProfileId, workDate: slot.workDate, classification: 'WORKING_DAY' },
+      { organizationId, overtimeRequestId },
       {
-        organizationId,
-        employeeProfileId: empProfileId,
-        userId: empUserId,
-        workDate: slot.workDate,
-        classification: 'WORKING_DAY',
-        eligibleMinutes: minutes,
-        overtimeType: 'WORKING_DAY',
-        requestedMinutes: minutes,
-        rate: 1.5,
-        approvedBy: mgrUserId,
-        approvedAt: new Date(),
-        classificationStatus: 'FINAL',
+        organizationId, overtimeRequestId, employeeId: empUserId, departmentId,
+        workDate: slot.workDate, periodKey: PERIOD, yearKey: YEAR_STR,
+        overtimeType: 'OT_WORKING_DAY', classificationStatus: 'PROVISIONAL',
+        requestedMinutes: minutes, approvedMinutes: minutes, actualMinutes: minutes,
+        eligibleMinutes: minutes, eligibleIntervals: [], scheduledMinutes: 480,
+        policyVersion: 1, legalReference: 'BLLĐ 45/2019/QH14',
+        inputHash: crypto.createHash('sha256').update(`${PERIOD}:${slot.workDate}:OT_WORKING_DAY:${minutes}`).digest('hex'),
+        calculatedAt: new Date(),
       },
       'OvertimeResult',
     );
@@ -762,22 +802,29 @@ async function main() {
     const minutes = Math.min(slot.minutes, FIXTURE_AMOUNTS.otWeeklyOffMinutes - weAccum);
     weAccum += minutes;
     if (!slot.workDate) continue;
+    const overtimeRequestId = await upsertByQuery(
+      ManagerRequest,
+      { organizationId, employeeUserId: empUserId, type: 'OVERTIME', workDate: new Date(`${slot.workDate}T00:00:00.000Z`) },
+      {
+        organizationId, employeeId: empProfileId, employeeUserId: empUserId, departmentId,
+        type: 'OVERTIME', workDate: new Date(`${slot.workDate}T00:00:00.000Z`),
+        reason: 'Approved E2E weekly-off overtime prerequisite', status: 'APPROVED',
+        reviewedBy: mgrUserId, reviewedAt: new Date(), version: 1,
+      },
+      'ManagerRequest',
+    );
     await upsertByQuery(
       OvertimeResult,
-      { organizationId, employeeProfileId: empProfileId, workDate: slot.workDate, classification: 'WEEKLY_OFF' },
+      { organizationId, overtimeRequestId },
       {
-        organizationId,
-        employeeProfileId: empProfileId,
-        userId: empUserId,
-        workDate: slot.workDate,
-        classification: 'WEEKLY_OFF',
-        eligibleMinutes: minutes,
-        overtimeType: 'WEEKLY_OFF',
-        requestedMinutes: minutes,
-        rate: 2.0,
-        approvedBy: mgrUserId,
-        approvedAt: new Date(),
-        classificationStatus: 'FINAL',
+        organizationId, overtimeRequestId, employeeId: empUserId, departmentId,
+        workDate: slot.workDate, periodKey: PERIOD, yearKey: YEAR_STR,
+        overtimeType: 'OT_WEEKLY_OFF', classificationStatus: 'PROVISIONAL',
+        requestedMinutes: minutes, approvedMinutes: minutes, actualMinutes: minutes,
+        eligibleMinutes: minutes, eligibleIntervals: [], scheduledMinutes: 0,
+        policyVersion: 1, legalReference: 'BLLĐ 45/2019/QH14',
+        inputHash: crypto.createHash('sha256').update(`${PERIOD}:${slot.workDate}:OT_WEEKLY_OFF:${minutes}`).digest('hex'),
+        calculatedAt: new Date(),
       },
       'OvertimeResult',
     );
@@ -860,7 +907,9 @@ export const __seedLedger = (overrides: Partial<Parameters<typeof computePayroll
     otWeeklyOffMinutes: FIXTURE_AMOUNTS.otWeeklyOffMinutes,
     dependentCount: 1,
     insurance: computeEmployeeInsurance({
-      baseSalary: FIXTURE_AMOUNTS.baseSalary,
+      baseSalary: FIXTURE_AMOUNTS.baseSalary
+        - FIXTURE_AMOUNTS.mealAllowance
+        - FIXTURE_AMOUNTS.responsibilityAllowance,
       socialRate: FIXTURE_AMOUNTS.insuranceSocialRate,
       healthRate: FIXTURE_AMOUNTS.insuranceHealthRate,
       unemploymentRate: FIXTURE_AMOUNTS.insuranceUnemploymentRate,

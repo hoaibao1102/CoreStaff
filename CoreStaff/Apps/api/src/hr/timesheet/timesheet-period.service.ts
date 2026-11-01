@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus, VALID_TRANSITIONS } from '../../database/schemas/timesheet-period.schema';
@@ -16,11 +16,20 @@ import { classifyDayBlockers, summarizeBlockers, PeriodBlockerRow, PeriodBlocker
 import { ConfirmDepartmentTimesheetDto } from './dto/confirm-department-timesheet.dto';
 import { DepartmentTimesheetConfirmationDocument, DepartmentTimesheetSummarySnapshot } from '../../database/schemas/department-timesheet-confirmation.schema';
 import { PeriodVersionService } from './period-version.service';
+import { OvertimeService } from '../overtime/overtime.service';
+import { EmployeeTimesheetReviewService } from './employee-timesheet-review.service';
+import { UserDocument } from '../../database/schemas/user.schema';
+import { PoliciesService } from '../policies/policies.service';
+import { PeriodObligationService } from './period-obligation.service';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
 const MAX_PERIOD_DAYS = 31;
 const REASON_MIN_LENGTH = 10;
+
+function toDateOnly(value: string | Date): string {
+	return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
 
 /**
  * Manager-facing projection for department snapshot review.
@@ -61,6 +70,7 @@ export class TimesheetPeriodService {
 		@InjectModel('TimesheetPeriod') private readonly periodModel: Model<TimesheetPeriodDocument>,
 		@InjectModel('Department') private readonly departmentModel: Model<DepartmentDocument>,
 		@InjectModel('EmployeeProfile') private readonly employeeProfileModel: Model<EmployeeProfileDocument>,
+		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('PayrollInputSnapshot') private readonly snapshotModel: Model<any>,
 		@InjectModel('PayrollRun') private readonly payrollRunModel: Model<any>,
 		private readonly summaryService: TimesheetSummaryService,
@@ -71,6 +81,10 @@ export class TimesheetPeriodService {
 		@InjectModel('ManagerRequest') private readonly managerRequestModel: Model<ManagerRequestDocument>,
 		@InjectModel('DepartmentTimesheetConfirmation') private readonly confirmationModel: Model<DepartmentTimesheetConfirmationDocument>,
 		private readonly periodVersionService: PeriodVersionService,
+		private readonly employeeReviews: EmployeeTimesheetReviewService,
+		@Optional() private readonly overtimeService?: OvertimeService,
+		@Optional() private readonly policies?: PoliciesService,
+		@Optional() private readonly obligations?: PeriodObligationService,
 	) {}
 
 	/**
@@ -153,7 +167,8 @@ export class TimesheetPeriodService {
 	async findAll(organizationId: string, status?: TimesheetPeriodStatus): Promise<any[]> {
 		const filter: Record<string, unknown> = { organizationId, active: true };
 		if (status) filter.status = status;
-		return this.periodModel.find(filter).sort({ period: -1 }).lean();
+		const periods: any[] = await this.periodModel.find(filter).sort({ period: -1 }).lean();
+		return periods.map((period) => this.withPayrollMetadata(period));
 	}
 
 	/**
@@ -168,7 +183,7 @@ export class TimesheetPeriodService {
 		if (doc.status === TimesheetPeriodStatus.OPEN || doc.status === TimesheetPeriodStatus.REVIEWING) {
 			doc = await this.reconcileDepartmentConfirmationStatus(organizationId, doc) ?? doc;
 		}
-		return this.withCurrentConfirmations(organizationId, doc);
+		return this.withPayrollMetadata(await this.withCurrentConfirmations(organizationId, doc));
 	}
 
 	/** TASK-075 — confirm a manager's department for exactly one period version. */
@@ -187,7 +202,7 @@ export class TimesheetPeriodService {
 				periodVersion: period.version,
 			}).lean();
 			if (existing) {
-				await this.managerScopeService.requireDepartment(
+				await this.managerScopeService.requireReviewDepartment(
 					organizationId,
 					managerUserId,
 					dto.departmentId,
@@ -203,7 +218,7 @@ export class TimesheetPeriodService {
 			throw new ConflictException('PERIOD_VERSION_CONFLICT');
 		}
 
-		await this.managerScopeService.requireDepartment(
+		await this.managerScopeService.requireReviewDepartment(
 			organizationId,
 			managerUserId,
 			dto.departmentId,
@@ -233,13 +248,27 @@ export class TimesheetPeriodService {
 
 				const blockers = await this.collectBlockers(organizationId, id, new Set(employeeIds));
 				if (blockers.length) throw new ConflictException('DEPARTMENT_NOT_READY');
-
+				// Legacy previews only contain persisted attendance rows. Check the
+				// canonical schedule before requiring employee acknowledgement.
+				if (this.obligations) {
+					const projection = await this.obligations.loadPeriod({
+						organizationId, periodKey: current.period,
+						startDate: toDateOnly(current.startDate), endDate: toDateOnly(current.endDate),
+						overtimeStatus: 'REVIEWABLE', session,
+					});
+					if (projection.days.some(day => day.departmentId === dto.departmentId
+						&& day.blockers.includes('MISSING_ATTENDANCE_DAY'))) {
+						throw new ConflictException('MISSING_ATTENDANCE_DAY');
+					}
+				}
 				const summaries = await this.summaryService.previewSummariesForDepartment(
 					id,
 					current.period,
 					organizationId,
 					dto.departmentId,
 				);
+				const acknowledgementProgress = await this.employeeReviews.getDepartmentProgress(organizationId, current, dto.departmentId, session);
+				EmployeeTimesheetReviewService.requireCompleteCoverage(acknowledgementProgress);
 				const summarySnapshot = this.buildDepartmentSummarySnapshot(summaries, employeeIds.length);
 
 				confirmation = await this.confirmationModel.findOneAndUpdate(
@@ -562,43 +591,45 @@ export class TimesheetPeriodService {
 	): Promise<void> {
 		const orgObjectId = new Types.ObjectId(organizationId);
 
-		const departmentIds = new Set<string>();
 		const employeeIds = new Set<string>();
 		for (const row of rows) {
-			if (!row.employee.department && row.employee.departmentId) departmentIds.add(row.employee.departmentId);
-			if (!row.employee.name || !row.employee.code) employeeIds.add(row.employeeId);
+			if (!row.employee.name || !row.employee.code || !row.employee.department) employeeIds.add(row.employeeId);
 		}
-		if (!departmentIds.size && !employeeIds.size) return;
+		if (!employeeIds.size) return;
 
-		const [departments, profiles] = await Promise.all([
-			departmentIds.size
-				? this.departmentModel
-						.find({ organizationId: orgObjectId, _id: { $in: [...departmentIds].map((d) => new Types.ObjectId(d)) } })
-						.select('_id name')
-						.lean()
-				: Promise.resolve([] as any[]),
-			employeeIds.size
-				? this.employeeProfileModel
+		const [profiles, users] = await Promise.all([
+			this.employeeProfileModel
 						.find({ organizationId: orgObjectId, userId: { $in: [...employeeIds].map((e) => new Types.ObjectId(e)) } })
-						.select('userId employeeCode fullName')
-						.lean()
-				: Promise.resolve([] as any[]),
+						.select('userId employeeCode departmentId')
+						.lean(),
+			this.userModel
+						.find({ organizationId: orgObjectId, _id: { $in: [...employeeIds].map((e) => new Types.ObjectId(e)) } })
+						.select('_id fullName')
+						.lean(),
 		]);
 
+		const profileByUser = new Map(profiles.map((profile: any) => [String(profile.userId), profile]));
+		const userNames = new Map(users.map((user: any) => [String(user._id), user.fullName]));
+		const departmentIds = new Set<string>();
+		for (const row of rows) {
+			const profile: any = profileByUser.get(row.employeeId);
+			const departmentId = row.employee.departmentId ?? (profile?.departmentId ? String(profile.departmentId) : undefined);
+			if (departmentId) departmentIds.add(departmentId);
+		}
+		const departments = departmentIds.size
+			? await this.departmentModel
+					.find({ organizationId: orgObjectId, _id: { $in: [...departmentIds].map((id) => new Types.ObjectId(id)) } })
+					.select('_id name')
+					.lean()
+			: [];
 		const departmentNames = new Map(departments.map((d: any) => [String(d._id), d.name]));
-		const profileByUser = new Map(profiles.map((p: any) => [String(p.userId), p]));
 
 		for (const row of rows) {
-			if (!row.employee.department && row.employee.departmentId) {
-				row.employee.department = departmentNames.get(row.employee.departmentId);
-			}
-			if (!row.employee.name || !row.employee.code) {
-				const profile = profileByUser.get(row.employeeId);
-				if (profile) {
-					row.employee.name = row.employee.name ?? profile.fullName;
-					row.employee.code = row.employee.code ?? profile.employeeCode;
-				}
-			}
+			const profile: any = profileByUser.get(row.employeeId);
+			row.employee.name = row.employee.name ?? userNames.get(row.employeeId);
+			row.employee.code = row.employee.code ?? profile?.employeeCode;
+			row.employee.departmentId = row.employee.departmentId ?? (profile?.departmentId ? String(profile.departmentId) : undefined);
+			row.employee.department = row.employee.department ?? (row.employee.departmentId ? departmentNames.get(row.employee.departmentId) : undefined);
 		}
 	}
 
@@ -651,6 +682,16 @@ export class TimesheetPeriodService {
 		if (!allowed?.includes(newStatus)) {
 			throw new BadRequestException(
 				`INVALID_TRANSITION: Cannot transition from ${period.status} to ${newStatus}`,
+			);
+		}
+
+		// Employees and managers can only load a reviewed timesheet when a
+		// work-credit policy covers the period, so verify it before sending.
+		if (newStatus === TimesheetPeriodStatus.REVIEWING) {
+			await this.policies?.ensureWorkCreditCoverage(
+				organizationId,
+				new Date(period.startDate),
+				new Date(period.endDate),
 			);
 		}
 
@@ -743,6 +784,15 @@ export class TimesheetPeriodService {
 				}).session(session).lean();
 				if (!current) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 
+				if (!this.overtimeService) throw new ConflictException('OVERTIME_FINALIZATION_UNAVAILABLE');
+				await this.overtimeService.recompute(
+					organizationId,
+					toDateOnly(current.startDate),
+					toDateOnly(current.endDate),
+					{ targetStatus: 'FINAL' },
+					session,
+				);
+
 				const blockers = await this.collectBlockers(organizationId, id);
 				if (blockers.length) throw new ConflictException('BLOCKERS_REMAIN');
 
@@ -773,8 +823,14 @@ export class TimesheetPeriodService {
 					session,
 				);
 
-				doc = await this.periodModel.findByIdAndUpdate(
-					id,
+				doc = await this.periodModel.findOneAndUpdate(
+					{
+						_id: id,
+						organizationId,
+						status: TimesheetPeriodStatus.READY_TO_CLOSE,
+						version: current.version,
+						payrollRunId: { $exists: false },
+					},
 					{
 						$set: {
 							status: TimesheetPeriodStatus.CLOSED,
@@ -785,7 +841,7 @@ export class TimesheetPeriodService {
 					{ new: true, runValidators: true, session },
 				).lean();
 
-				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+				if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 			});
 		} finally {
 			await session.endSession();
@@ -818,12 +874,14 @@ export class TimesheetPeriodService {
 		let updated: any;
 		try {
 			await session.withTransaction(async () => {
-				// Increment version
-				// Invalidate confirmations (handled by TASK-076 caller)
-				// Mark snapshots STALE (handled by TASK-083 caller)
-
-				const doc = await this.periodModel.findByIdAndUpdate(
-					id,
+				const doc = await this.periodModel.findOneAndUpdate(
+					{
+						_id: id,
+						organizationId,
+						status: TimesheetPeriodStatus.CLOSED,
+						version: period.version,
+						payrollRunId: { $exists: false },
+					},
 					{
 						$inc: { version: 1 },
 						$set: {
@@ -840,18 +898,7 @@ export class TimesheetPeriodService {
 					{ new: true, runValidators: true, session },
 				).lean();
 
-				if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
-
-				await this.snapshotModel.updateMany(
-					{ organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
-					{ $set: { status: 'STALE' } },
-					{ session },
-				);
-				await this.payrollRunModel.updateMany(
-					{ organizationId: new Types.ObjectId(organizationId), timesheetPeriodId: new Types.ObjectId(id), active: true },
-					{ $set: { status: 'STALE' } },
-					{ session },
-				);
+				if (!doc) throw new ConflictException('TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL');
 				updated = doc;
 			});
 		} finally {
@@ -859,6 +906,16 @@ export class TimesheetPeriodService {
 		}
 
 		return this.toResponse(updated);
+	}
+
+	private withPayrollMetadata(period: any): any {
+		const payrollStatus = period.payrollState ?? null;
+		return {
+			...period,
+			canReopen: period.status === TimesheetPeriodStatus.CLOSED && !period.payrollRunId,
+			payrollStatus,
+			reopenBlockedReason: period.payrollRunId ? 'TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL' : null,
+		};
 	}
 
 	/**
@@ -871,7 +928,7 @@ export class TimesheetPeriodService {
 		id: string,
 		managerUserId: string,
 		departmentId: string,
-	): Promise<{ summaries: any[] }> {
+	): Promise<{ summaries: any[]; acknowledgementProgress: any }> {
 		const period = await this.findById(organizationId, id);
 
 		if (
@@ -884,7 +941,7 @@ export class TimesheetPeriodService {
 		}
 
 		// Verify manager has scope over this department
-		const managedDepartments = await this.managerScopeService.getManagedDepartmentIds(organizationId, managerUserId);
+		const managedDepartments = await this.managerScopeService.getAuthorizedReviewDepartmentIds(organizationId, managerUserId, new Date(period.endDate));
 		if (!managedDepartments.includes(departmentId)) {
 			throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');
 		}
@@ -897,7 +954,7 @@ export class TimesheetPeriodService {
 			departmentId,
 		);
 
-		return buildManagerSnapshotReview(summaries);
+		return { ...buildManagerSnapshotReview(summaries), acknowledgementProgress: await this.employeeReviews.getDepartmentProgress(organizationId, period, departmentId) };
 	}
 
 	/** Departments with active/probation employees are required to confirm. */

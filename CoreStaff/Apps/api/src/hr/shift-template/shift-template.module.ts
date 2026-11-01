@@ -13,11 +13,13 @@ import { EmployeeProfileSchema } from '../../database/schemas/employee-profile.s
 import { EmployeeAssignmentSchema } from '../../database/schemas/assignment.schema';
 import { PoliciesModule } from '../policies/policies.module';
 import { AttendanceDaySchema } from '../../database/schemas/attendance-day.schema';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 @Module({
 	imports: [
 		AuthModule,
 		PoliciesModule,
+		PeriodVersionModule,
 		MongooseModule.forFeature([
 			{ name: 'ShiftTemplate', schema: ShiftTemplateSchema },
 			{ name: 'Department', schema: DepartmentSchema },

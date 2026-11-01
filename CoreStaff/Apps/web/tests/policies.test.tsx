@@ -134,6 +134,30 @@ async function openRowMenu(ariaLabelPrefix: string, itemText: string) {
 }
 
 /* ───────── Labor Compliance Policy screen ───────── */
+test('labor V2 cannot silently clear an existing explicit value', async () => {
+  laborRows = [{ ...labor, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 }];
+  await render(<LaborCompliancePolicyScreen apiBase="https://api.test" />);
+  await openRowMenu('Mở thao tác chính sách', 'Chỉnh sửa');
+  await setInput('labor-policy-minimumOvertimeMinutes', '');
+  await setInput('labor-policy-legalReference', 'Updated HR policy');
+  await clickText('Lưu thay đổi');
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+  expect(document.body.textContent).toContain('Không thể xóa cấu hình V2 đã lưu');
+});
+test('labor V2 keeps legacy blanks, validates cross fields and sends explicit zero quota', async () => {
+  await render(<LaborCompliancePolicyScreen apiBase="https://api.test" />);
+  await openRowMenu('Mở thao tác chính sách', 'Chỉnh sửa');
+  expect((document.getElementById('labor-policy-minimumOvertimeMinutes') as HTMLInputElement)?.value).toBe('');
+  await setInput('labor-policy-minimumOvertimeMinutes', '15');
+  await setInput('labor-policy-overtimeRoundingMinutes', '30');
+  await setInput('labor-policy-maxMonthlyAttendanceConfirmations', '0');
+  await clickText('Lưu thay đổi');
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+  await setInput('labor-policy-minimumOvertimeMinutes', '60');
+  await clickText('Lưu thay đổi');
+  const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30, maxMonthlyAttendanceConfirmations: 0 });
+});
 
 test('labor lists effective-dated policies with version and status badge', async () => {
   await render(<LaborCompliancePolicyScreen apiBase="https://api.test" />);

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ConfirmationSummary, confirmationError } from '../Employee/AttendanceConfirmationForm';
+import { managerRequestKind, managerRequestLabel, canApproveConfirmation, getManagerRequestDetail } from '@/services/manager.service';
 import {
   Building2,
   Check,
@@ -348,7 +350,7 @@ function ApprovalTab({
           onChange={(e) => setType(e.target.value)}
         >
           <option value="ALL">Tất cả loại</option>
-          <option value="ATTENDANCE">Chấm công Selfie</option>
+          <option value="ATTENDANCE">Công: Selfie / điều chỉnh / xác nhận</option>
           <option value="OVERTIME">Làm thêm giờ (OT)</option>
         </select>
         <select
@@ -409,7 +411,7 @@ function ApprovalTab({
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">
-                          <Camera className="mr-1 inline size-3" /> Chấm công Selfie
+                          <Camera className="mr-1 inline size-3" /> {managerRequestLabel(r)}
                         </Badge>
                       )}
                     </TableCell>
@@ -501,19 +503,33 @@ function DecisionDialog({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<LaborViolation[]>([]);
+  const [confirmationDetail, setConfirmationDetail] = useState<ManagerRequest | null>(null);
+  const [confirmationBlocked, setConfirmationBlocked] = useState(false);
+  const operation = useRef<{ payload: string; key: string } | null>(null);
+  const isConfirmation = managerRequestKind(request) === 'CONFIRMATION';
+  useEffect(() => {
+    if (!isConfirmation) return;
+    let live = true;
+    getManagerRequestDetail(apiBase, request._id).then(detail => { if (live) setConfirmationDetail(detail); }).catch(e => { if (live) setError(confirmationError(e)); });
+    return () => { live = false; };
+  }, [apiBase, request._id, isConfirmation]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const act = async (a: 'approve' | 'reject' | 'request-clarification') => {
+    if (sending || (a === 'approve' && isConfirmation && (confirmationBlocked || !confirmationDetail || !canApproveConfirmation(confirmationDetail)))) return;
     setSending(true);
     setError('');
     setWarnings([]);
     try {
+      const identity = JSON.stringify({ a, reason, version: confirmationDetail?.version ?? request.version });
+      if (isConfirmation && operation.current?.payload !== identity) operation.current = { payload: identity, key: crypto.randomUUID() };
       const decided = await decideManagerRequest(apiBase, request._id, a, {
-        expectedVersion: request.version,
+        expectedVersion: confirmationDetail?.version ?? request.version,
         reason: reason || undefined,
         approvedStart: request.requestedStart,
         approvedEnd: request.requestedEnd,
-      });
+        ...(isConfirmation ? { operationId: operation.current!.key } : {}),
+      }, isConfirmation ? 'ATTENDANCE_CONFIRMATION' : undefined);
       // §30B.2 — a WARNING never blocks an approval, so the only thing that makes
       // it visible is this response (and the WS push to the same rooms).
       const violations = decided.compliance?.violations ?? [];
@@ -547,8 +563,9 @@ function DecisionDialog({
       }
       onDone();
     } catch (e) {
-      setError(hrErrorMessage(e));
-      toast.error('Thao tác thất bại', hrErrorMessage(e));
+      if (isConfirmation) { setError(confirmationError(e)); if ((e as { code?: string }).code === 'ATTENDANCE_CONFIRMATION_STALE') setConfirmationBlocked(true); }
+      else setError(hrErrorMessage(e));
+      toast.error('Thao tác thất bại', isConfirmation ? confirmationError(e) : hrErrorMessage(e));
     } finally {
       setSending(false);
     }
@@ -593,8 +610,8 @@ function DecisionDialog({
     (rawAddress && !rawAddress.startsWith('📍') && !rawAddress.includes('Tọa độ:') ? rawAddress : null);
 
   const isOt = request.type === 'OVERTIME';
-  const isSelfie = request.type === 'ATTENDANCE' && request.metadata?.adjustmentSource !== 'MANUAL_ADJUSTMENT' && (Boolean(request.evidenceId) || Boolean(request.metadata?.actionType));
-  const isAdjustment = request.type === 'ATTENDANCE' && !isSelfie;
+  const isSelfie = managerRequestKind(request) === 'SELFIE';
+  const isAdjustment = managerRequestKind(request) === 'MANUAL';
 
   return (
     <>
@@ -606,6 +623,8 @@ function DecisionDialog({
                 <>
                   <Clock3 className="size-5 text-indigo-600" /> Duyệt làm thêm giờ (OT)
                 </>
+              ) : isConfirmation ? (
+                <>Xác nhận công theo lịch</>
               ) : isSelfie ? (
                 <>
                   <Camera className="size-5 text-blue-600" /> Duyệt Chấm công Selfie
@@ -632,6 +651,8 @@ function DecisionDialog({
               <p className="mt-1 text-sm font-medium">{request.reason}</p>
             </div>
 
+            {isConfirmation && (confirmationDetail?.confirmation ? <ConfirmationSummary preview={confirmationDetail.confirmation} /> : <p role="status">{confirmationDetail ? 'Chưa có bản xem trước xác nhận an toàn; không thể duyệt. Liên hệ HR.' : 'Đang tải chi tiết xác nhận…'}</p>)}
+            {isConfirmation && (!confirmationDetail || !canApproveConfirmation(confirmationDetail) || confirmationBlocked) && <p role="alert">Chưa xác minh ngữ cảnh hoặc kỳ công đã khóa. Không thể duyệt; hãy yêu cầu giải trình hoặc liên hệ HR.</p>}
             {/* Chi tiết cho luồng CHẤM CÔNG SELFIE */}
             {isSelfie && (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -789,11 +810,11 @@ function DecisionDialog({
           {request.status === 'PENDING' && (
             <div className="sticky bottom-0 grid gap-2 border-t bg-background p-4 sm:grid-cols-3">
               <Button
-                disabled={sending}
+                disabled={sending || (isConfirmation && (confirmationBlocked || !confirmationDetail?.confirmation || !canApproveConfirmation(confirmationDetail)))}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                 onClick={() => act('approve')}
               >
-                <Check className="mr-1.5 size-4" /> {isOt ? 'Phê duyệt OT' : isAdjustment ? 'Duyệt điều chỉnh' : 'Phê duyệt công'}
+                <Check className="mr-1.5 size-4" /> {isOt ? 'Phê duyệt OT' : isConfirmation ? 'Duyệt xác nhận công' : isAdjustment ? 'Duyệt điều chỉnh' : 'Phê duyệt công'}
               </Button>
               <Button
                 disabled={sending || reason.trim().length < 10}

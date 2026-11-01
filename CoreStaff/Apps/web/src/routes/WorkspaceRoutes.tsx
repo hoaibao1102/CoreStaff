@@ -16,6 +16,7 @@ import { InsurancePolicyScreen } from '../screens/InsurancePolicy/InsurancePolic
 import { EnterpriseInsuranceScreen } from '../screens/EnterpriseInsurance/EnterpriseInsuranceScreen';
 import { LaborCompliancePolicyScreen } from '../screens/LaborCompliancePolicy/LaborCompliancePolicyScreen';
 import { OvertimePayPolicyScreen } from '../screens/OvertimePayPolicy/OvertimePayPolicyScreen';
+import { WorkCreditPolicyScreen } from '../screens/WorkCreditPolicy/WorkCreditPolicyScreen';
 import { PlatformOrganizationsScreen } from '../screens/PlatformOrganizations/PlatformOrganizationsScreen';
 import { SysAdminOverviewScreen } from '../screens/SysAdminOverview/SysAdminOverviewScreen';
 import { ManagerDepartmentScreen } from '../screens/ManagerDepartment/ManagerDepartmentScreen';
@@ -34,6 +35,7 @@ import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
 import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
 import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
+import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -114,6 +116,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     route === '/hr/assignments' || route === '/hr/salary-profiles' ||
     route === '/hr/organization-allowances' || route === '/hr/attendance-bonus-policies' ||
     route === '/hr/policies/labor-compliance' || route === '/hr/policies/overtime-pay' ||
+    route === '/hr/policies/work-credit' ||
     route === '/hr/insurance-profiles' || route === '/hr/policies/insurance' ||
     route === '/hr/calendar' || route === '/hr/leave-requests' ||
     route === '/hr/tax-policies';
@@ -203,7 +206,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   if (user.role === 'HR') {
     // HR accounts carry no personal workspace: the employee self-service routes
     // are closed here even on a direct URL (backend returns 403 for the same).
-    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/payslips'];
+    const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/compensation', '/app/payslips', '/app/timesheet-review'];
     if (hrPersonalRoutes.some((path) => route === path || route.startsWith(`${path}/`))) {
       return <EmployeeDataState status="forbidden" />;
     }
@@ -242,6 +245,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
             <OvertimePayPolicyScreen apiBase={apiBase} />
+          ) : route === '/hr/policies/work-credit' ? (
+            <WorkCreditPolicyScreen apiBase={apiBase} />
           ) : route === '/hr/tax-policies' && apiBase ? (
             <TaxPolicyList apiBase={apiBase} />
           ) : route === '/hr/calendar' && apiBase ? (
@@ -253,8 +258,11 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
             <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId} timesheetPeriodId="" />
           ) : route.startsWith('/hr/payroll-runs/') && route.split('/')[3] === 'payslips' && apiBase ? (
-            // HR xem đúng một tờ phiếu: cùng bố cục với trang nhân viên.
-            <PayslipDetailPage apiBase={apiBase} payslipId={route.split('/')[4] || ''} mode="hr" />
+            // HR xem đúng một tờ phiếu: dialog đè lên danh sách bảng lương.
+            <>
+              <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId!} timesheetPeriodId="" />
+              <PayslipDetailPage apiBase={apiBase} payslipId={route.split('/')[4] || ''} mode="hr" />
+            </>
           ) : (
             <HrOverviewScreen user={user} apiBase={apiBase} />
           )}
@@ -326,14 +334,28 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
   }
 
   // Personal payslips are shared by employees and department managers.
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && (route === '/app/payslips' || route.startsWith('/app/payslips/')) && apiBase) {
+  // Sidebar entry "/app/compensation" mở tab lương; "/app/payslips" và
+  // "/app/payslips/:id" giữ nguyên UI phiếu lương hiện tại.
+  const isPayslipRoute = route === '/app/payslips' || route.startsWith('/app/payslips/');
+  const isCompensationRoute = route === '/app/compensation' || route === '/app/timesheet-review';
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && isPayslipRoute && apiBase) {
     const payslipId = route.startsWith('/app/payslips/') ? route.split('/').pop() : undefined;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           {/* currentPath giữ nguyên route để mục "Bảng lương của tôi" trên sidebar vẫn sáng. */}
-          {payslipId ? <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} /> : <MyPayslipsScreen apiBase={apiBase} />}
+          <MyPayslipsScreen apiBase={apiBase} />
+          {payslipId && <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} />}
         </section>
+      </WorkspaceShell>
+    );
+  }
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && isCompensationRoute && apiBase) {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <MyCompensationScreen apiBase={apiBase} initialTab="timesheet" />
       </WorkspaceShell>
     );
   }

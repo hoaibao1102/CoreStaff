@@ -93,20 +93,25 @@ export class PayslipService {
     try {
       const payrollRun = await this.payrollRunModel.findOne({
         _id: new Types.ObjectId(payrollRunId),
-        status: PayrollRunStatus.CALCULATED,
+        status: PayrollRunStatus.DRAFT,
       }).lean();
 
       if (!payrollRun) {
-        throw new BadRequestException('PAYROLL_RUN_NOT_FOUND_OR_NOT_CALCULATED');
+        throw new BadRequestException('PAYROLL_RUN_NOT_FOUND_OR_NOT_DRAFT');
       }
 
-      // Get snapshots for this period
+      // Consume only the immutable snapshot set bound when the run was claimed.
       const snapshots = await this.snapshotModel
         .find({
+          _id: { $in: payrollRun.sourceSnapshotIds },
           periodId: payrollRun.timesheetPeriodId,
           organizationId: payrollRun.organizationId,
+          sourcePeriodVersion: payrollRun.sourcePeriodVersion,
         })
         .lean();
+      if (snapshots.length !== payrollRun.sourceSnapshotIds.length) {
+        throw new BadRequestException('BOUND_SNAPSHOT_SET_INCOMPLETE');
+      }
 
       let count = 0;
       for (const snapshot of snapshots) {
@@ -262,6 +267,11 @@ export class PayslipService {
     // Create payslip document
     const created = await this.payslipModel.create({
       payrollRunId: new Types.ObjectId(payrollRunId),
+      sourceSnapshotId: new Types.ObjectId(snapshot._id),
+      sourceSnapshotVersion: snapshot.version,
+      sourceSnapshotHash: snapshot.canonicalPayloadHash,
+      sourceSnapshotSetHash: (await this.payrollRunModel.findById(payrollRunId).lean())?.sourceSnapshotSetHash,
+      sourcePeriodVersion: snapshot.sourcePeriodVersion,
       organizationId: new Types.ObjectId(snapshot.organizationId),
       employeeProfileId: new Types.ObjectId(snapshot.employeeProfileId),
       employeeName: employeeName || 'Unknown',

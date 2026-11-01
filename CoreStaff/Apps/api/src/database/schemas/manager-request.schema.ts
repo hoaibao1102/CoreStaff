@@ -18,6 +18,14 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'AttendanceDay',required:false,index:true}) attendanceDayId?:string;
  @Prop({type:'ObjectId',ref:'Evidence',required:false}) evidenceId?:string;
  @Prop({type:Object,required:false}) metadata?:Record<string,any>;
+ @Prop({enum:['ATTENDANCE_CONFIRMATION','MANUAL_ADJUSTMENT','SELFIE']}) source?:string;
+ @Prop() confirmationSlotActive?:boolean;
+ @Prop() confirmationMonthKey?:string;
+ @Prop({maxlength:128}) confirmationIdempotencyKey?:string;
+ @Prop() confirmationPayloadHash?:string;
+ @Prop({type:Object}) confirmationSnapshot?:Record<string,any>;
+ @Prop() confirmationContextHash?:string;
+ @Prop({type:Object}) confirmationDecision?:Record<string,any>;
  @Prop({type:'ObjectId',ref:'User'}) reviewedBy?:string;
  @Prop({maxlength:1000}) reviewComment?:string;
  @Prop({type:Date}) reviewedAt?:Date;
@@ -37,3 +45,5 @@ export class ManagerRequest{
 export const ManagerRequestSchema=SchemaFactory.createForClass(ManagerRequest);
 ManagerRequestSchema.index({organizationId:1,departmentId:1,status:1,createdAt:-1});
 ManagerRequestSchema.index({organizationId:1,employeeUserId:1,createdAt:-1});
+ManagerRequestSchema.index({organizationId:1,employeeUserId:1,workDate:1},{unique:true,partialFilterExpression:{source:'ATTENDANCE_CONFIRMATION',confirmationSlotActive:true}});
+ManagerRequestSchema.index({organizationId:1,employeeUserId:1,confirmationIdempotencyKey:1},{unique:true,partialFilterExpression:{source:'ATTENDANCE_CONFIRMATION',confirmationIdempotencyKey:{$type:'string'}}});

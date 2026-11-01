@@ -6,8 +6,11 @@ export function getAttendanceHistoryStatus(
   day: DayAttendance,
   today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }),
 ): AttendanceHistoryStatus {
+  // WEEKLY_OFF comes from the company shift schedule. It is outside the
+  // employee's attendance obligation and must not be rendered as a status.
+  if (day.workdayType === 'WEEKLY_OFF') return 'NONE';
   if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') return 'FORFEITED';
-  if (day.status === 'DAY_OFF' || ['WEEKLY_OFF', 'PUBLIC_HOLIDAY', 'PAID_LEAVE', 'UNPAID_LEAVE'].includes(day.workdayType ?? '')) {
+  if (day.status === 'DAY_OFF' || ['PUBLIC_HOLIDAY', 'PAID_LEAVE', 'UNPAID_LEAVE'].includes(day.workdayType ?? '')) {
     return 'DAY_OFF';
   }
 
