@@ -857,8 +857,12 @@ export class OvertimeService {
       const context = await this.dayContext(org, userId, normalizeWorkDate(day.workDate), session);
       try { this.assertVerifiedAttendance(context); } catch { continue; }
       const actual = this.actualInterval(context)!;
-      const overtime = sumMinutes(subtractIntervals([actual], this.scheduledIntervals(context)));
-      const normal = Math.min(context.workingMinutes, scheduledMinutesOf(context.shift));
+      const scheduled = this.scheduledIntervals(context);
+      const overtime = sumMinutes(subtractIntervals([actual], scheduled));
+      // A holiday/weekly-off has no normal hours: every worked minute is already
+      // counted as overtime above, so counting the recurring shift too would
+      // double the day and block any holiday shift longer than half a day.
+      const normal = scheduled.length ? Math.min(context.workingMinutes, scheduledMinutesOf(context.shift)) : 0;
       if (context.workDate === workDate) { usage.normalDailyMinutes = normal; usage.combinedDailyMinutes = normal + overtime; }
       if (week.includes(context.workDate)) usage.normalWeeklyMinutes += normal;
       if (context.workDate.slice(0, 7) === workDate.slice(0, 7)) usage.overtimeMonthlyMinutes += overtime;
