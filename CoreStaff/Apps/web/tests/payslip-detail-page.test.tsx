@@ -98,15 +98,13 @@ test('phiếu lương mở dạng trang: đủ 4 mục, sơ đồ công thức v
   expect(html).toContain('Khớp');
 });
 
-test('phiếu lương là một khung duy nhất, các mục xếp dọc ngăn bằng đường kẻ', async () => {
+test('phiếu lương là một khung duy nhất, 5 mục xếp trên lưới một trang', async () => {
   await render();
 
-  // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 5 mục bên trong.
+  // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 5 mục bên trong lưới 12 cột.
   expect(scope().querySelectorAll('div.ring-1')).toHaveLength(1);
-  expect(scope().querySelectorAll('.ring-1 > section')).toHaveLength(5);
-  for (const index of ['1', '2', '3', '4']) {
-    expect(scope().querySelector(`.ring-1 > section:nth-child(${Number(index) + 1})`)?.textContent).toBeTruthy();
-  }
+  expect(scope().querySelectorAll('.ring-1 section')).toHaveLength(5);
+  expect(scope().querySelectorAll('.ring-1 .grid-cols-12 > div')).toHaveLength(5);
   // Không còn sơ đồ công thức 5 khối ở đầu trang.
   expect(scope().innerHTML).not.toContain('Tổng Gross');
 });
@@ -142,7 +140,7 @@ test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế
   const html = scope().innerHTML;
 
   // Mục 2 chỉ liệt kê khoản trừ; mục 3 in bảng nối số về nguồn và ra kết quả.
-  const sections = scope().querySelectorAll('.ring-1 > section');
+  const sections = scope().querySelectorAll('.ring-1 section');
   expect(sections[1].textContent).not.toContain('Thu nhập tính thuế');
   expect(sections[2].textContent).toContain('Thu nhập tính thuế');
   expect(html).toContain('Lấy từ');
@@ -164,6 +162,7 @@ test('từng mục có nút "?" mở công thức bằng chữ', async () => {
   expect(helpButtons.map((btn) => btn.getAttribute('aria-label'))).toEqual([
     'Cách tính: Tổng thu nhập (Gross)',
     'Cách tính: Các khoản giảm trừ thuế',
+    'Cách tính: Lương đóng bảo hiểm',
     'Cách tính: Thu nhập tính thuế',
     'Cách tính: Thuế TNCN (PIT)',
     'Cách tính: Tổng kết & đối soát thực nhận',
@@ -191,7 +190,7 @@ test('trang HR dùng chung bố cục và gọi endpoint HR, không đánh dấu
   const html = scope().innerHTML;
 
   // Cùng một tờ phiếu: vỏ ring bọc ngoài, 5 mục, dòng Net xanh.
-  expect(scope().querySelectorAll('.ring-1 > section')).toHaveLength(5);
+  expect(scope().querySelectorAll(".ring-1 section")).toHaveLength(5);
   expect(html).toContain('Số tiền thực nhận (Net)');
   expect(html).toContain('25.072.500');
   for (const label of ['Cách tính: Tổng thu nhập (Gross)', 'Cách tính: Thuế TNCN (PIT)']) {

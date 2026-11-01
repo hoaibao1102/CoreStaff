@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/table';
 import { Tooltip } from '@/components/tooltip';
-import { ChevronDown, ChevronUp, HelpCircle, Wallet } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import { hrRequest } from '@/services/hrService';
 import { employeeRequest } from '@/services/employeeService';
 
@@ -107,7 +107,7 @@ const formatRate = (rate?: number) => Number(((rate || 0) * 100).toFixed(2));
 /** Ô số thứ tự mục — ô vuông navy như mẫu phiếu lương giấy. */
 export function SectionNumber({ value }: { value: number }) {
   return (
-    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground" aria-hidden="true">
+    <span className="grid size-5 shrink-0 place-items-center rounded bg-primary text-[11px] font-bold leading-none text-primary-foreground" aria-hidden="true">
       {value}
     </span>
   );
@@ -143,16 +143,16 @@ export function PayslipSection({
   children: ReactNode;
 }) {
   const heading = (
-    <div className="flex items-center gap-1.5">
-      <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-foreground">{title}</h2>
+    <div className="flex min-w-0 items-center gap-2">
+      <h2 className="font-heading text-[13px] font-bold uppercase tracking-wide text-foreground">{title}</h2>
       {formula && (
         <Tooltip content={formula} wide={wideTooltip}>
           <button
             type="button"
             aria-label={`Cách tính: ${title}`}
-            className="grid size-5 shrink-0 cursor-help place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="grid size-5 shrink-0 cursor-help place-items-center rounded-full border border-border text-[11px] font-bold leading-none text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
-            <HelpCircle className="size-3.5" aria-hidden="true" />
+            ?
           </button>
         </Tooltip>
       )}
@@ -163,26 +163,36 @@ export function PayslipSection({
     <>
       {/* Dải màu ở hàng tiêu đề bảng, theo thói quen các bảng khác trong dự án
           (TimesheetReviewScreen, ManagerDepartmentScreen) để hàng tiêu đề tách khỏi dữ liệu. */}
-      <div className="overflow-hidden rounded-lg border border-border bg-card [&_thead]:bg-muted/60 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+      <div className="overflow-hidden border-border bg-card [&_thead]:bg-muted/60 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-[10.5px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground [&_td]:px-2.5 [&_td]:py-1.5">
         {children}
       </div>
     </>
   );
 
   if (variant === 'sheet') {
+    // Card tự thân trên lưới 1 trang: tiêu đề + bảng nén, subtitle vào tooltip
+    // vì mỗi card chỉ còn ~250–380px bề ngang.
     return (
-      <section className="border-t border-border first:border-t-0">
-        <div className="flex items-start justify-between gap-3 px-6 pt-5">
-          <div className="flex items-start gap-3">
-            {typeof index === 'number' && <SectionNumber value={index} />}
-            <div>
-              {heading}
-              {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
-            </div>
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/60 px-3 py-2">
+          {typeof index === 'number' && <SectionNumber value={index} />}
+          {heading}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {subtitle && (
+              <Tooltip content={subtitle}>
+                <button
+                  type="button"
+                  aria-label={`Giải thích: ${title}`}
+                  className="grid size-5 shrink-0 cursor-help place-items-center rounded-full border border-border text-[11px] font-semibold leading-none text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                >
+                  i
+                </button>
+              </Tooltip>
+            )}
+            {action}
           </div>
-          {action}
         </div>
-        <div className="px-6 py-4">{inner}</div>
+        <div className="min-h-0 flex-1 px-0 py-0 text-[13px] leading-snug [&_[data-slot=table-container]]:h-full [&_td]:py-1.5 [&_td]:text-[13px] [&_td]:whitespace-normal [&_tfoot_td]:pt-2 [&_tfoot_td]:pb-2 [&_th]:whitespace-normal">{inner}</div>
       </section>
     );
   }
@@ -225,6 +235,9 @@ const GROSS_FORMULA =
 const TAX_DEDUCTION_FORMULA =
   'Ba khoản này được trừ khỏi Thu nhập chịu thuế (mục 1): Bảo hiểm (BHXH + BHYT + BHTN), Giảm trừ bản thân, '
   + 'Giảm trừ người phụ thuộc. Phần còn lại là Thu nhập tính thuế — in ở đầu mục 3.';
+const INSURANCE_BASE_FORMULA =
+  'Lương đóng bảo hiểm = Lương cơ bản hợp đồng − Tổng phụ cấp (không âm), rồi kẹp sàn/trần riêng của từng khoản. '
+  + 'BHXH, BHYT, BHTN = Lương đóng bảo hiểm × tỷ lệ của khoản đó.';
 const TAXABLE_EARNINGS_FORMULA =
   'Thu nhập tính thuế = Thu nhập chịu thuế − Bảo hiểm (BHXH + BHYT + BHTN) − Giảm trừ bản thân − Giảm trừ người phụ thuộc.';
 const PIT_FORMULA =
@@ -267,7 +280,7 @@ export function GrossEarningsCard({
 
   // Chi tiết OT: giờ × (tiền công 1 giờ × hệ số) = thành tiền.
   const otBreakdown = payslip.otBreakdown;
-  const otLines = (otBreakdown?.breakdown ?? []).filter((line) => line.amount > 0);
+  const otLines = (otBreakdown?.breakdown ?? []).filter((line) => line.amount > 0 && line.type !== 'WEEKLY_OFF');
 
   // Dòng phụ giải thích cách ra số tiền, in ngay dưới tên khoản mục.
   const baseDetail = hasBaseDetail
@@ -373,7 +386,7 @@ export function GrossEarningsCard({
                   </Tooltip>
                 )}
                 {row.detail && (
-                  <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{row.detail}</span>
+                  <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">{row.detail}</span>
                 )}
               </TableCell>
               <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
@@ -383,9 +396,9 @@ export function GrossEarningsCard({
             </TableRow>
             {row.subRows?.map((subRow) => (
               <TableRow key={subRow.key} className="bg-muted/30 hover:bg-muted/30">
-                <TableCell className="pl-6 text-xs font-normal text-muted-foreground">{subRow.label}</TableCell>
-                <TableCell className="text-right font-mono text-xs">{formatCurrency(subRow.amount)}</TableCell>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                <TableCell className="pl-6 text-[11.5px] font-normal text-muted-foreground">{subRow.label}</TableCell>
+                <TableCell className="text-right font-mono text-[11.5px]">{formatCurrency(subRow.amount)}</TableCell>
+                <TableCell className="text-right font-mono text-[11.5px] text-muted-foreground">
                   {formatCurrency(subRow.taxable)}
                 </TableCell>
               </TableRow>
@@ -395,19 +408,19 @@ export function GrossEarningsCard({
       </TableBody>
       <TableFooter>
         <TableRow className="hover:bg-muted/50">
-          <TableCell className="py-3 text-sm font-semibold uppercase tracking-wide text-foreground">
+          <TableCell className="py-2 text-[13px] font-bold uppercase tracking-wide text-foreground">
             Tổng cộng Gross
           </TableCell>
-          <TableCell className="py-3 text-right font-mono text-lg font-bold text-foreground">
+          <TableCell className="py-2 text-right font-mono text-base font-bold text-foreground">
             {formatCurrency(totalEarnings)}
           </TableCell>
           <TableCell />
         </TableRow>
         <TableRow className="hover:bg-muted/50">
-          <TableCell className="pb-3 text-xs font-medium text-muted-foreground">
+          <TableCell className="pb-2 text-[11.5px] font-medium text-muted-foreground">
             Thu nhập chịu thuế trước giảm trừ
           </TableCell>
-          <TableCell className="pb-3 text-right font-mono text-sm text-muted-foreground" colSpan={2}>
+          <TableCell className="pb-2 text-right font-mono text-[13px] text-muted-foreground" colSpan={2}>
             {formatCurrency(taxableIncome)}
           </TableCell>
         </TableRow>
@@ -479,26 +492,39 @@ export function TaxDeductionsCard({
         <TableRow>
           <TableCell>
             {insuranceParts.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowInsuranceParts((open) => !open)}
-                aria-expanded={showInsuranceParts}
-                className="-mx-1 flex w-full items-start gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
-              >
-                <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">
-                  {showInsuranceParts ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                </span>
-                <span>
-                  <span className="font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
-                  {insuranceDetail && (
-                    <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{insuranceDetail}</span>
-                  )}
-                </span>
-              </button>
+              <div className="flex items-start gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowInsuranceParts((open) => !open)}
+                  aria-expanded={showInsuranceParts}
+                  className="-mx-1 flex min-w-0 flex-1 items-start gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
+                >
+                  <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">
+                    {showInsuranceParts ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  </span>
+                  <span>
+                    <span className="font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
+                    {insuranceDetail && (
+                      <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">{insuranceDetail}</span>
+                    )}
+                  </span>
+                </button>
+                {showFormula && (
+                  <Tooltip content={INSURANCE_BASE_FORMULA} wide>
+                    <button
+                      type="button"
+                      aria-label="Cách tính: Lương đóng bảo hiểm"
+                      className="mt-0.5 grid size-5 shrink-0 cursor-help place-items-center rounded-full border border-border text-[11px] font-bold leading-none text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                    >
+                      ?
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
             ) : (
               <>
                 <span className="font-medium text-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</span>
-                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Kỳ này không trích bảo hiểm</span>
+                <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">Kỳ này không trích bảo hiểm</span>
               </>
             )}
           </TableCell>
@@ -507,8 +533,8 @@ export function TaxDeductionsCard({
         {showInsuranceParts &&
           insuranceParts.map((part) => (
             <TableRow key={part.name} className="bg-muted/30 hover:bg-muted/30">
-              <TableCell className="pl-8 text-xs text-muted-foreground">{insuranceLabel(part.name, part.rate)}</TableCell>
-              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+              <TableCell className="pl-8 text-[11.5px] text-muted-foreground">{insuranceLabel(part.name, part.rate)}</TableCell>
+              <TableCell className="text-right font-mono text-[11.5px] text-muted-foreground">
                 {formatCurrency(part.amount)}
               </TableCell>
             </TableRow>
@@ -516,7 +542,7 @@ export function TaxDeductionsCard({
         <TableRow>
           <TableCell>
             <span className="font-medium text-foreground">Giảm trừ bản thân</span>
-            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+            <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">
               Mức giảm trừ gia cảnh cho người nộp thuế
             </span>
           </TableCell>
@@ -525,7 +551,7 @@ export function TaxDeductionsCard({
         <TableRow>
           <TableCell>
             <span className="font-medium text-foreground">Giảm trừ người phụ thuộc</span>
-            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+            <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">
               {dependents > 0 ? `${dependents} người phụ thuộc đã đăng ký` : 'Chưa đăng ký người phụ thuộc'}
             </span>
           </TableCell>
@@ -587,24 +613,24 @@ export function TaxableEarningsCard({
         <TableBody>
           <TableRow>
             <TableCell className="font-medium text-foreground">Thu nhập chịu thuế</TableCell>
-            <TableCell className="text-xs text-muted-foreground">Mục 1</TableCell>
+            <TableCell className="text-[11.5px] text-muted-foreground">Mục 1</TableCell>
             <TableCell className="text-right font-mono">{formatCurrency(taxableIncome)}</TableCell>
           </TableRow>
           <TableRow>
             <TableCell className="text-muted-foreground">Bảo hiểm (BHXH + BHYT + BHTN)</TableCell>
-            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-[11.5px] text-muted-foreground">Mục 2</TableCell>
             <TableCell className="text-right font-mono text-destructive">−{formatCurrency(totalInsurance)}</TableCell>
           </TableRow>
           <TableRow>
             <TableCell className="text-muted-foreground">Giảm trừ bản thân</TableCell>
-            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-[11.5px] text-muted-foreground">Mục 2</TableCell>
             <TableCell className="text-right font-mono text-destructive">
               −{formatCurrency(payslip.personalDeduction || 0)}
             </TableCell>
           </TableRow>
           <TableRow>
             <TableCell className="text-muted-foreground">Giảm trừ người phụ thuộc</TableCell>
-            <TableCell className="text-xs text-muted-foreground">Mục 2</TableCell>
+            <TableCell className="text-[11.5px] text-muted-foreground">Mục 2</TableCell>
             <TableCell className="text-right font-mono text-destructive">
               −{formatCurrency(payslip.dependentDeduction || 0)}
             </TableCell>
@@ -619,7 +645,7 @@ export function TaxableEarningsCard({
           </TableRow>
           {clampedToZero && (
             <TableRow className="hover:bg-muted/50">
-              <TableCell colSpan={3} className="pb-3 text-xs font-normal text-muted-foreground">
+              <TableCell colSpan={3} className="pb-3 text-[11.5px] font-normal text-muted-foreground">
                 Giảm trừ vượt thu nhập chịu thuế nên thu nhập tính thuế đã về 0, không âm.
               </TableCell>
             </TableRow>
@@ -687,10 +713,10 @@ export function NetRecapSection({ payslip, variant, showFormula = false }: {
             <TableCell className="text-right font-mono font-semibold text-destructive">−{formatCurrency(totalDeductions)}</TableCell>
           </TableRow>
           <TableRow className="bg-emerald-50 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/40">
-            <TableCell className="py-3 font-semibold text-emerald-800 dark:text-emerald-300">
+            <TableCell className="py-2.5 text-[13px] font-bold text-emerald-800 dark:text-emerald-300">
               Số tiền thực nhận (Net)
             </TableCell>
-            <TableCell className="py-3 text-right font-mono text-lg font-bold text-emerald-700 dark:text-emerald-300">
+            <TableCell className="py-2.5 text-right font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300">
               {formatCurrency(netSalary)}
             </TableCell>
           </TableRow>
@@ -703,16 +729,29 @@ export function NetRecapSection({ payslip, variant, showFormula = false }: {
 /**
  * Năm mục của một tờ phiếu lương — một nguồn duy nhất cho cả trang nhân viên
  * và trang HR, nên hai bên không thể lệch bố cục.
+ *
+ * Bố cục: lưới 12 cột, 5 card xếp thành 2 hàng — đủ nội dung cho một trang A4
+ * ngang (1123×794) nên dialog không phải cuộn ở màn hình thường.
  */
 export function PayslipSheetItems({ payslip }: { payslip: PayslipRow }) {
   return (
-    <>
-      <GrossEarningsCard payslip={payslip} variant="sheet" showFormula />
-      <TaxDeductionsCard payslip={payslip} variant="sheet" showFormula />
-      <TaxableEarningsCard payslip={payslip} variant="sheet" showFormula />
-      <PitTaxDetails payslip={payslip} variant="sheet" showFormula />
-      <NetRecapSection payslip={payslip} variant="sheet" showFormula />
-    </>
+    <div className="grid grid-cols-12 gap-3">
+      <div className="col-span-12 lg:col-span-5">
+        <GrossEarningsCard payslip={payslip} variant="sheet" showFormula />
+      </div>
+      <div className="col-span-12 sm:col-span-6 lg:col-span-3">
+        <TaxDeductionsCard payslip={payslip} variant="sheet" showFormula />
+      </div>
+      <div className="col-span-12 sm:col-span-6 lg:col-span-4">
+        <TaxableEarningsCard payslip={payslip} variant="sheet" showFormula />
+      </div>
+      <div className="col-span-12 lg:col-span-7">
+        <PitTaxDetails payslip={payslip} variant="sheet" showFormula />
+      </div>
+      <div className="col-span-12 lg:col-span-5">
+        <NetRecapSection payslip={payslip} variant="sheet" showFormula />
+      </div>
+    </div>
   );
 }
 
@@ -756,14 +795,15 @@ export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase, close
       window.dispatchEvent(new Event(navigationEvent));
     }}>
       {/* layerOffset: HR mở phiếu từ trong dialog chi tiết kỳ lương, phải nằm trên. */}
-      <DialogContent className="max-w-4xl" layerOffset={1}>
-        <DialogHeader className="border-b border-border pr-16">
-          <DialogTitle>Phiếu lương</DialogTitle>
-          <DialogDescription>
+      {/* max-w-[1200px]: lưới 5 card cần ~1180px mới đủ chỗ cho chữ 13px. */}
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[1200px]" layerOffset={1}>
+        <DialogHeader className="gap-0 border-b border-border py-3 pr-16">
+          <DialogTitle className="text-base">Phiếu lương</DialogTitle>
+          <DialogDescription className="text-xs">
             {mode === 'hr' ? 'Phiếu lương của nhân viên trong kỳ đã chọn.' : 'Phiếu lương của bạn trong kỳ đã chọn.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {mode === 'hr'
             ? <HrPayslipDetail payslipId={payslipId} apiBase={apiBase} onLoad={(slip) => {
                 if (slip.payrollRunId) setBack(`/hr/payroll-runs?run=${slip.payrollRunId}`);
@@ -778,58 +818,44 @@ export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase, close
 /** Khung nội dung: chỉ render tờ phiếu; chrome dialog do PayslipDetailPage lo. */
 function PayslipSheet({ payslip }: { payslip: PayslipDetail }) {
   const netSalary = payslip.netSalary || 0;
-  const initials = payslip.employeeName.split(' ').filter(Boolean).slice(-2).map((part) => part[0]).join('');
+
+  // Một dải nhận dạng thay cho header cao 120px cũ, để cả phiếu vừa một trang.
+  const identity: Array<{ label: string; value: ReactNode }> = [
+    { label: 'Nhân viên', value: payslip.employeeName },
+    { label: 'Mã nhân viên', value: <span className="font-mono">{payslip.employeeCode || '—'}</span> },
+    { label: 'Mã số thuế', value: <span className="font-mono">{payslip.taxCode || '—'}</span> },
+    { label: 'Kỳ lương', value: payslip.periodLabel || '—' },
+    {
+      label: 'Trạng thái',
+      value: (
+        <Badge variant={getStatusBadgeVariant(payslip.status)}>
+          {STATUS_LABELS[payslip.status] || payslip.status}
+        </Badge>
+      ),
+    },
+    { label: 'Thực nhận', value: <span className="font-mono font-bold">{formatCurrency(netSalary)}</span> },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Toàn bộ phiếu lương nằm trong một khung duy nhất, các mục ngăn bằng đường kẻ ngang. */}
-      <div className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10">
-        {/* Đầu phiếu: danh tính nhân viên + kỳ lương + số thực nhận */}
-        <header className="border-b border-border px-6 py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-muted text-base font-bold text-foreground" aria-hidden="true">
-                {initials}
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-semibold tracking-tight text-foreground">{payslip.employeeName}</h2>
-                  {payslip.employeeCode && <Badge variant="outline" className="font-mono">{payslip.employeeCode}</Badge>}
-                  <Badge variant={getStatusBadgeVariant(payslip.status)}>
-                    {STATUS_LABELS[payslip.status] || payslip.status}
-                  </Badge>
-                </div>
-                <dl className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <dt>Kỳ lương</dt>
-                    <dd className="font-semibold text-foreground">{payslip.periodLabel || '—'}</dd>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <dt>Mã số thuế</dt>
-                    <dd className="font-mono text-foreground">{payslip.taxCode || '—'}</dd>
-                  </div>
-                  {payslip.generatedAt && (
-                    <div className="flex items-center gap-2">
-                      <dt>Khởi tạo</dt>
-                      <dd className="text-foreground">{formatDate(payslip.generatedAt)}</dd>
-                    </div>
-                  )}
-                  {payslip.releasedAt && (
-                    <div className="flex items-center gap-2">
-                      <dt>Phát hành</dt>
-                      <dd className="text-foreground">{formatDate(payslip.releasedAt)}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            </div>
-            <Badge variant="secondary" className="self-start">
-              <Wallet aria-hidden="true" />
-              Thực nhận {formatCurrency(netSalary)}
-            </Badge>
+    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+      <dl className="grid grid-cols-2 border-b border-border bg-muted/30 sm:grid-cols-3 lg:grid-cols-6">
+        {identity.map(({ label, value }) => (
+          <div key={label} className="min-w-0 border-b border-r border-border px-3 py-2 last:border-r-0">
+            <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dd className="truncate text-[14px] font-semibold text-foreground">{value}</dd>
           </div>
-        </header>
+        ))}
+      </dl>
 
+      {(payslip.generatedAt || payslip.releasedAt) && (
+        <p className="border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          {payslip.generatedAt && <>Khởi tạo {formatDate(payslip.generatedAt)}</>}
+          {payslip.generatedAt && payslip.releasedAt && ' · '}
+          {payslip.releasedAt && <>Phát hành {formatDate(payslip.releasedAt)}</>}
+        </p>
+      )}
+
+      <div className="p-2.5">
         <PayslipSheetItems payslip={payslip} />
       </div>
     </div>
