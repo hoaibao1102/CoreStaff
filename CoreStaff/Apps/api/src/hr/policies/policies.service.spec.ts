@@ -1,5 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { PoliciesService } from './policies.service';
+import { validateSync } from 'class-validator';
+import { CreateLaborPolicyDto } from './dto/policies.dto';
+import { LaborCompliancePolicySchema } from '../../database/schemas/compensation.schema';
 
 /* ==========================================================================
    PoliciesService — unit tests (no real MongoDB). Fake Mongoose models mirror
@@ -344,6 +347,54 @@ function buildService(
 }
 
 describe('PoliciesService — LaborCompliancePolicy (TASK-036)', () => {
+  it('resolves explicit V2 OT by Vietnam workDate and quota by month start', async () => {
+    const early = Object.assign(seedLabor('early', 'org1', '2026-09-30T17:00:00Z', { effectiveTo: '2026-10-14T17:00:00Z' }), {
+      minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30, maxMonthlyAttendanceConfirmations: 3,
+    });
+    const late = Object.assign(seedLabor('late', 'org1', '2026-10-14T17:00:00Z'), {
+      minimumOvertimeMinutes: 0, overtimeRoundingMinutes: 0, maxMonthlyAttendanceConfirmations: 0,
+    });
+    const svc = buildService([early, late], []) as any;
+    expect((await svc.overtimeRulesForWorkDate('org1', '2026-10-20'))._id).toBe('late');
+    expect((await svc.attendanceConfirmationRulesForWorkDate('org1', '2026-10-20'))._id).toBe('early');
+    await expect(svc.overtimeRulesForWorkDate('org1', '2026-02-30')).rejects.toThrow('WORK_DATE_INVALID');
+    await expect(svc.overtimeRulesForWorkDate('org2', '2026-10-20')).rejects.toThrow('POLICY_CONFIGURATION_REQUIRED');
+    const legacy = buildService([seedLabor('old', 'org1', '2026-01-01')], []) as any;
+    await expect(legacy.overtimeRulesForWorkDate('org1', '2026-10-20')).rejects.toThrow('POLICY_CONFIGURATION_REQUIRED');
+    await expect(legacy.attendanceConfirmationRulesForWorkDate('org1', '2026-10-20')).rejects.toThrow('POLICY_CONFIGURATION_REQUIRED');
+  });
+  it.each([
+    { minimumOvertimeMinutes: -1 }, { minimumOvertimeMinutes: 1441 },
+    { minimumOvertimeMinutes: 1.5 }, { overtimeRoundingMinutes: 20 },
+    { maxMonthlyAttendanceConfirmations: 32 }, { maxMonthlyAttendanceConfirmations: 1.5 },
+    { minimumOvertimeMinutes: null },
+    { minimumOvertimeMinutes: 15, overtimeRoundingMinutes: 30 },
+    { minimumOvertimeMinutes: 61, overtimeRoundingMinutes: 30 },
+  ])('rejects invalid explicit V2 rules %j without writing', async (rules) => {
+    const rows: LaborRow[] = [];
+    await expect(buildService(rows, []).createLabor('org1', {
+      ...seedLabor('unused', 'org1', '2026-01-01'), effectiveFrom: '2026-01-01', ...rules,
+    } as never)).rejects.toThrow('LABOR_POLICY_V2_RULES_INVALID');
+    expect(rows).toHaveLength(0);
+  });
+
+  it('validates optional V2 integers in the DTO and declares no schema defaults', () => {
+    for (const field of ['minimumOvertimeMinutes', 'overtimeRoundingMinutes', 'maxMonthlyAttendanceConfirmations']) {
+      const dto = Object.assign(new CreateLaborPolicyDto(), { [field]: 1.5 });
+      expect(validateSync(dto).some((error) => error.property === field)).toBe(true);
+      expect(LaborCompliancePolicySchema.path(field)).toBeDefined();
+      expect(LaborCompliancePolicySchema.path(field).options.default).toBeUndefined();
+    }
+  });
+
+  it('preserves missing legacy fields and validates merged partial updates', async () => {
+    const rows = [seedLabor('l1', 'org1', '2026-01-01')];
+    const svc = buildService(rows, []);
+    expect(await svc.laborAt('org1', D('2026-02-01'))).not.toHaveProperty('minimumOvertimeMinutes');
+    await svc.updateLabor('org1', 'l1', { minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30, maxMonthlyAttendanceConfirmations: 0 } as never);
+    await expect(svc.updateLabor('org1', 'l1', { overtimeRoundingMinutes:  60, minimumOvertimeMinutes: 30 } as never)).rejects.toThrow('LABOR_POLICY_V2_RULES_INVALID');
+    expect(await svc.laborAt('org1', D('2026-02-01'))).toHaveProperty('maxMonthlyAttendanceConfirmations', 0);
+  });
   it('creates a policy scoped to the tenant with auto version', async () => {
     const svc = buildService([], []);
     const result = await svc.createLabor('org1', {

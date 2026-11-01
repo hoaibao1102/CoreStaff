@@ -5,6 +5,9 @@ import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, M
 export class CreateLaborPolicyDto {
   @ApiProperty({ example: '2026-01-01T00:00:00.000Z' }) @IsDateString() effectiveFrom: string;
   @ApiProperty({ required: false }) @IsOptional() @IsDateString() effectiveTo?: string;
+  @ApiProperty({ required: false, example: 60 }) @IsOptional() @IsInt() @Min(0) @Max(1440) minimumOvertimeMinutes?: number;
+  @ApiProperty({ required: false, enum: [0, 15, 30, 60] }) @IsOptional() @IsInt() @IsIn([0, 15, 30, 60]) overtimeRoundingMinutes?: number;
+  @ApiProperty({ required: false, example: 3 }) @IsOptional() @IsInt() @Min(0) @Max(31) maxMonthlyAttendanceConfirmations?: number;
   @ApiProperty({ example: 480 }) @IsInt() @Min(0) normalDailyMinutes: number;
   @ApiProperty({ example: 2880 }) @IsInt() @Min(0) normalWeeklyMinutes: number;
   @ApiProperty({ example: 720 }) @IsInt() @Min(0) maxCombinedDailyMinutes: number;

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model } from 'mongoose';
 import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
@@ -64,6 +64,8 @@ interface ShiftLike {
   breakMinutes?: number;
 }
 
+export interface EndpointProvenance { source: 'OBSERVED' | 'CONFIRMED_SCHEDULE' | 'MANUAL_ADJUSTMENT' | 'LEGACY_UNKNOWN'; eventId?: string; requestId?: string }
+
 interface DayContext {
   workDate: string;
   calendarType?: CalendarExceptionType;
@@ -73,6 +75,9 @@ interface DayContext {
   attendanceDayId?: string;
   checkInAt?: Date;
   checkOutAt?: Date;
+  checkInProvenance?: EndpointProvenance;
+  checkOutProvenance?: EndpointProvenance;
+  overallApprovalStatus?: string;
   workingMinutes: number;
   departmentId?: string;
 }
@@ -85,6 +90,7 @@ interface DayContext {
  */
 export interface OtRequestLike {
   _id?: unknown;
+  metadata?: { calculationContract?: string; [key: string]: unknown };
   employeeUserId: string | { _id: unknown };
   departmentId?: string | { _id: unknown };
   workDate: string | Date;
@@ -125,6 +131,7 @@ export class OvertimeService {
     private readonly shifts: ShiftResolverService,
     private readonly policies: PoliciesService,
     private readonly periodVersion: PeriodVersionService,
+    @Optional() @InjectModel('Organization') private readonly organizations?: Model<any>,
   ) {}
 
   /** BR-OT-01/AC-OT-01 — refuse a client that tried to choose its own OT type or minutes. */
@@ -168,9 +175,9 @@ export class OvertimeService {
    * refused: `LABOR_POLICY_NOT_FOUND` belongs at approval (D38), where the
    * figure actually matters, not at the moment an employee reports real hours.
    */
-  async maxFilingDays(org: string, workDate: string): Promise<number> {
+  async maxFilingDays(org: string, workDate: string, session?: ClientSession): Promise<number> {
     try {
-      const policy = await this.laborPolicyFor(org, workDate);
+      const policy = await this.laborPolicyFor(org, workDate, session);
       const days = (policy as { maxRetroactiveFilingDays?: number | null }).maxRetroactiveFilingDays;
       return typeof days === 'number' && Number.isFinite(days) ? days : DEFAULT_MAX_RETROACTIVE_FILING_DAYS;
     } catch (error) {
@@ -198,8 +205,8 @@ export class OvertimeService {
    * subtracted — no second notion of "the normal shift" exists to drift.
    * BR-SHIFT-01 forbids hard-coding 08:00–17:00, so no clock time appears here.
    */
-  async assertOutsideSchedule(org: string, userId: string, window: Interval, workDate: string): Promise<void> {
-    const context = await this.dayContext(org, userId, workDate);
+  async assertOutsideSchedule(org: string, userId: string, window: Interval, workDate: string, session?: ClientSession): Promise<void> {
+      const context = await this.dayContext(org, userId, workDate, session);
     const scheduled = this.scheduledIntervals(context);
     if (!scheduled.length) return;
     if (minutesInside(window, scheduled) > 0) {
@@ -224,11 +231,25 @@ export class OvertimeService {
     workDate: string,
     submittedAt: Date,
     retroactiveReason?: string,
-  ): Promise<{ isRetroactive: boolean; retroactiveReason?: string }> {
-    await this.assertOutsideSchedule(org, userId, window, workDate);
-    await this.assertNoOverlap(org, userId, window, workDate);
-    const days = await this.maxFilingDays(org, workDate);
-    return this.deriveRetroactive(workDate, submittedAt, retroactiveReason, days);
+    options: { session?: ClientSession; previewHash?: string; v2Enabled?: boolean } = {},
+  ): Promise<{ isRetroactive: boolean; retroactiveReason?: string; calculationContract?: 'OVERTIME_V2' }> {
+    const v2 = options.v2Enabled ?? await this.isV2Enabled(org, options.session);
+    if (v2) {
+      const preview = await this.preview(org, userId, workDate, window, options.session, true);
+      if (options.previewHash && options.previewHash !== preview.contextHash) throw new ConflictException('OVERTIME_PREVIEW_STALE');
+      if (!preview.canFile) throw new ConflictException(preview.blockedReasons[0]);
+    }
+    if (v2) {
+      if (!options.session?.inTransaction()) throw new ConflictException('OVERTIME_TRANSACTION_REQUIRED');
+      await this.periodVersion.claimForWorkDate(org, workDate, options.session);
+      const claimed = await this.attendanceDays.updateOne({ organizationId: org, employeeId: userId, workDate }, { $inc: { __v: 1 } }, { session: options.session });
+      if (claimed.matchedCount !== 1) throw new ConflictException('OVERTIME_ATTENDANCE_INCOMPLETE');
+    }
+    await this.assertOutsideSchedule(org, userId, window, workDate, options.session);
+    await this.assertNoOverlap(org, userId, window, workDate, undefined, options.session);
+    const days = await this.maxFilingDays(org, workDate, options.session);
+    const result = this.deriveRetroactive(workDate, submittedAt, retroactiveReason, days);
+    return v2 ? { ...result, calculationContract: 'OVERTIME_V2' } : result;
   }
 
   /**
@@ -237,8 +258,8 @@ export class OvertimeService {
    * new window may not overlap an existing PENDING/APPROVED one for the same
    * employee and date.
    */
-  async assertNoOverlap(org: string, userId: string, window: Interval, workDate: string, exceptRequestId?: string): Promise<void> {
-    const existing = await this.requests.find({
+  async assertNoOverlap(org: string, userId: string, window: Interval, workDate: string, exceptRequestId?: string, session?: ClientSession): Promise<void> {
+      const existing = await inSession(this.requests.find({
       organizationId: org,
       employeeUserId: userId,
       type: 'OVERTIME',
@@ -246,7 +267,7 @@ export class OvertimeService {
       // `manager_requests.workDate` is a Date (TASK-066) where every other
       // collection in this file uses a 'YYYY-MM-DD' string.
       workDate: dayAsDate(workDate),
-    }).lean();
+    }), session).lean();
     for (const row of existing) {
       if (exceptRequestId && String(row._id) === String(exceptRequestId)) continue;
       const from = row.approvedStart ?? row.requestedStart;
@@ -276,6 +297,9 @@ export class OvertimeService {
       attendanceDayId: day?._id ? String(day._id) : undefined,
       checkInAt: day?.checkInAt,
       checkOutAt: day?.checkOutAt,
+      checkInProvenance: (day as any)?.checkInProvenance,
+      checkOutProvenance: (day as any)?.checkOutProvenance,
+      overallApprovalStatus: day?.overallApprovalStatus,
       workingMinutes: day?.workingMinutes ?? 0,
       departmentId: day?.employeeSnapshot?.departmentId ? String(day.employeeSnapshot.departmentId) : undefined,
     };
@@ -291,7 +315,7 @@ export class OvertimeService {
   }
 
   /** TASK-069 — one approved request, reduced to the four §15.11 minute figures. */
-  async computeForRequest(org: string, request: OtRequestLike, session?: ClientSession): Promise<{
+  async computeForRequest(org: string, request: OtRequestLike, session?: ClientSession, allowUnverified = false): Promise<{
     context: DayContext;
     overtimeType: OvertimeType;
     computation: OtComputation;
@@ -302,14 +326,32 @@ export class OvertimeService {
     const approved = request.approvedStart && request.approvedEnd
       ? this.windowOf(request.approvedStart, request.approvedEnd, context.workDate, 'OVERTIME_WINDOW_INVALID')
       : undefined;
+    const v2 = request.metadata?.calculationContract === 'OVERTIME_V2';
+    let evidenceReason: string | undefined;
+    if (v2) {
+      try { this.assertVerifiedAttendance(context); }
+      catch (error) { if (!allowUnverified) throw error; evidenceReason = (error as Error).message; }
+    }
+    const policy = v2 ? await this.v2Policy(org, context.workDate, session) : undefined;
     const computation = computeOvertime({
+      calculationContract: v2 ? 'OVERTIME_V2' : undefined,
+      policy,
       workDate: context.workDate,
       overtimeType: this.classifyDay(context),
       requested,
       approved,
-      actual: this.actualInterval(context),
+      actual: evidenceReason ? undefined : this.actualInterval(context),
       scheduled: this.scheduledIntervals(context),
     });
+    if (evidenceReason) {
+      const span = this.actualInterval(context);
+      computation.actualMinutes = span ? sumMinutes([span]) : 0;
+      computation.reasons = [evidenceReason]; computation.calculationNote = evidenceReason;
+    }
+    if (v2) {
+      computation.policySnapshot = policy;
+      computation.provenanceSnapshot = { checkIn: context.checkInProvenance, checkOut: context.checkOutProvenance, approvalStatus: context.overallApprovalStatus };
+    }
     return { context, overtimeType: computation.overtimeType, computation, window: approved ?? requested };
   }
 
@@ -319,12 +361,30 @@ export class OvertimeService {
    * (not today, or a mid-month policy edit would move a past decision).
    * A BLOCK throws; WARNINGs come back on the result for the caller to surface.
    */
-  async precheckApproval(org: string, request: OtRequestLike): Promise<{
+  async claimApproval(org: string, request: OtRequestLike, session: ClientSession): Promise<void> {
+    const workDate = normalizeWorkDate(request.workDate);
+    const v2 = request.metadata?.calculationContract === 'OVERTIME_V2';
+    try {
+      await this.periodVersion.claimForWorkDate(org, workDate, session);
+    } catch (error) {
+      // Pre-cutover V1 requests may predate period setup. Only absence is
+      // compatible: a covering closed/payroll-claimed period must still block.
+      if (v2 || !(error instanceof ConflictException) || error.message !== 'PERIOD_REQUIRED') throw error;
+    }
+    const claimed = await this.attendanceDays.updateOne(
+      { organizationId: org, employeeId: otEmployeeUserId(request), workDate },
+      { $inc: { __v: 1 } }, { session },
+    );
+    if (v2 && claimed.matchedCount !== 1) throw new ConflictException('OVERTIME_ATTENDANCE_INCOMPLETE');
+    await this.assertNoOverlap(org, otEmployeeUserId(request), this.windowOf(request.approvedStart ?? request.requestedStart, request.approvedEnd ?? request.requestedEnd, workDate, 'OVERTIME_WINDOW_INVALID'), workDate, String(request._id), session);
+  }
+
+  async precheckApproval(org: string, request: OtRequestLike, session?: ClientSession): Promise<{
     overtimeType: OvertimeType;
     computation: OtComputation;
     labor: ReturnType<typeof evaluateLaborLimits>;
   }> {
-    const { context, overtimeType, computation, window } = await this.computeForRequest(org, request);
+    const { context, overtimeType, computation, window } = await this.computeForRequest(org, request, session);
     // D39 — the filing guard checked the *requested* window. What gets paid is
     // the *approved* one, which the manager may rewrite, and the shift itself
     // may have moved under a request that sat in the queue. Same rule, re-read
@@ -333,8 +393,8 @@ export class OvertimeService {
     if (scheduled.length && minutesInside(window, scheduled) > 0) {
       throw new ConflictException('OVERTIME_OVERLAPS_SCHEDULE');
     }
-    const laborPolicy = await this.laborPolicyFor(org, context.workDate);
-    const usage = await this.usageFor(org, otEmployeeUserId(request), context.workDate, computation.eligibleMinutes);
+    const laborPolicy = await this.laborPolicyFor(org, context.workDate, session);
+    const usage = await this.usageFor(org, otEmployeeUserId(request), context.workDate, computation.rawEligibleMinutes ?? computation.eligibleMinutes, computation.calculationContract === 'OVERTIME_V2', session);
     const evaluation = evaluateLaborLimits(
       { version: laborPolicy.version, legalReference: laborPolicy.legalReference, ...laborLimitsFromPolicy(laborPolicy) },
       usage,
@@ -355,7 +415,7 @@ export class OvertimeService {
   async previewLimits(org: string, userId: string, workDateValue: string | Date, requestedMinutes: number) {
     const context = await this.dayContext(org, userId, workDateValue);
     const laborPolicy = await this.laborPolicyFor(org, context.workDate);
-    const usage = await this.usageFor(org, userId, context.workDate, requestedMinutes);
+    const usage = await this.usageFor(org, userId, context.workDate, requestedMinutes, await this.isV2Enabled(org));
     return evaluateLaborLimits(
       { version: laborPolicy.version, legalReference: laborPolicy.legalReference, ...laborLimitsFromPolicy(laborPolicy) },
       usage,
@@ -375,21 +435,22 @@ export class OvertimeService {
    * added to every bucket it belongs to, which is how one approval can trip the
    * daily and the monthly limit in the same pass (§30B.2 "kiểm tra đồng thời").
    */
-  async usageFor(org: string, userId: string, workDate: string, candidateMinutes: number): Promise<LaborUsage> {
+  async usageFor(org: string, userId: string, workDate: string, candidateMinutes: number, v2 = false, session?: ClientSession): Promise<LaborUsage> {
+    if (v2) return this.observedUsage(org, userId, workDate, session);
     const week = weekOf(workDate);
     // No date exclusion anywhere: the request being decided is still PENDING so
     // it has no stored result yet, and *other* requests' OT on this same day is
     // just as owed against the monthly and annual caps.
     const [monthBanked, yearBanked, weekDays, bankedRows, day] = await Promise.all([
-      this.eligibleOn(org, userId, { periodKey: workDate.slice(0, 7) }),
-      this.eligibleOn(org, userId, { yearKey: workDate.slice(0, 4) }),
-      this.attendanceDays.find({ organizationId: org, employeeId: userId, workDate: { $gte: week[0], $lte: week[week.length - 1] } })
+      this.eligibleOn(org, userId, { periodKey: workDate.slice(0, 7) }, session),
+      this.eligibleOn(org, userId, { yearKey: workDate.slice(0, 4) }, session),
+      inSession(this.attendanceDays.find({ organizationId: org, employeeId: userId, workDate: { $gte: week[0], $lte: week[week.length - 1] } }), session)
         .select('workDate workingMinutes shiftSnapshot')
         .lean(),
-      this.results.find({ organizationId: org, employeeId: userId, workDate: { $gte: week[0], $lte: week[week.length - 1] } })
+      inSession(this.results.find({ organizationId: org, employeeId: userId, workDate: { $gte: week[0], $lte: week[week.length - 1] } }), session)
         .select('workDate eligibleMinutes')
         .lean(),
-      this.attendanceDays.findOne({ organizationId: org, employeeId: userId, workDate }).select('workingMinutes shiftSnapshot').lean(),
+      inSession(this.attendanceDays.findOne({ organizationId: org, employeeId: userId, workDate }), session).select('workingMinutes shiftSnapshot').lean(),
     ]);
     const bankedByDate = new Map<string, number>();
     for (const row of bankedRows) {
@@ -422,13 +483,13 @@ export class OvertimeService {
    * PROVISIONAL result on approval). Attendance is only a snapshot at this
    * moment; a later check-out refreshes it through `recomputeForDay`.
    */
-  async onApproved(org: string, request: OtRequestLike): Promise<OvertimeResult> {
-    const { context, overtimeType, computation } = await this.computeForRequest(org, request);
-    const laborPolicy = await this.laborPolicyFor(org, context.workDate);
+  async onApproved(org: string, request: OtRequestLike, session?: ClientSession): Promise<OvertimeResult> {
+    const { context, overtimeType, computation } = await this.computeForRequest(org, request, session);
+    const laborPolicy = await this.laborPolicyFor(org, context.workDate, session);
     return this.persistResult(org, request, context, overtimeType, computation, {
       policyVersion: laborPolicy.version,
       legalReference: laborPolicy.legalReference,
-    });
+    }, 'PROVISIONAL', session);
   }
 
   /** §30B.2 — the result stores the policy version and legal reference it used. */
@@ -443,6 +504,8 @@ export class OvertimeService {
     session?: ClientSession,
   ): Promise<OvertimeResult> {
     const overtimeRequestId = String(request._id);
+    const existing = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId }), session).lean();
+    if (existing?.classificationStatus === 'FINAL' && await this.isFinalImmutable(org, existing.workDate, session)) return existing as OvertimeResult;
     const departmentId = idOf(request.departmentId) || (context.departmentId ?? '');
     if (!departmentId) throw new ConflictException('OVERTIME_DEPARTMENT_UNKNOWN');
     const document: Record<string, unknown> = {
@@ -463,6 +526,14 @@ export class OvertimeService {
       requestedMinutes: computation.requestedMinutes,
       approvedMinutes: computation.approvedMinutes,
       actualMinutes: computation.actualMinutes,
+      calculationContract: computation.calculationContract ?? 'LEGACY_V1',
+      rawEligibleMinutes: computation.rawEligibleMinutes,
+      payableMinutes: computation.payableMinutes,
+      roundingDroppedMinutes: computation.roundingDroppedMinutes,
+      minimumThresholdApplied: computation.minimumThresholdApplied,
+      reasons: computation.reasons,
+      policySnapshot: computation.policySnapshot,
+      provenanceSnapshot: computation.provenanceSnapshot,
       eligibleMinutes: computation.eligibleMinutes,
       eligibleIntervals: computation.eligibleIntervals.map((interval) => ({ from: new Date(interval.from), to: new Date(interval.to) })),
       scheduledMinutes: scheduledMinutesOf(context.shift),
@@ -482,7 +553,7 @@ export class OvertimeService {
         : undefined,
       policyVersion: labor.policyVersion,
       legalReference: labor.legalReference,
-      inputHash: this.hashOf(context, overtimeType, labor),
+      inputHash: computation.calculationContract === 'OVERTIME_V2' ? this.v2Hash(context, overtimeType, computation.policySnapshot) : this.hashOf(context, overtimeType, labor),
       calculationNote: computation.calculationNote.slice(0, 500),
       calculatedAt: new Date(),
     };
@@ -492,6 +563,23 @@ export class OvertimeService {
     const row = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId }), session).lean();
     if (!row) throw new NotFoundException('OVERTIME_RESULT_NOT_FOUND');
     return row as OvertimeResult;
+  }
+
+  /** FINAL freezes a close, not the mutable source after an authorized reopen.
+   * Missing/ambiguous ownership fails closed; historical summaries and payroll
+   * snapshots are versioned artifacts and are deliberately never updated here.
+   */
+  private async isFinalImmutable(org: string, workDate: string | Date, session?: ClientSession): Promise<boolean> {
+    const date = normalizeWorkDate(workDate);
+    const periods = await inSession(this.results.db.model('TimesheetPeriod').find({
+      organizationId: org,
+      active: true,
+      startDate: { $lte: date },
+      endDate: { $gte: date },
+    }), session).lean();
+    if (periods.length !== 1) return true;
+    const period = periods[0];
+    return period.payrollRunId != null || !['OPEN', 'REVIEWING', 'READY_TO_CLOSE'].includes(period.status);
   }
 
   /** HR review list — each row carries its own staleness verdict (AC-OT-05). */
@@ -520,10 +608,12 @@ export class OvertimeService {
    */
   async isStale(
     org: string,
-    row: { employeeId: string; workDate: string; overtimeType: OvertimeType; inputHash: string },
+    row: { employeeId: string; workDate: string; overtimeType: OvertimeType; inputHash: string; calculationContract?: string; classificationStatus?: string },
   ): Promise<boolean> {
+    if (row.classificationStatus === 'FINAL' && await this.isFinalImmutable(org, row.workDate)) return false;
     try {
       const context = await this.dayContext(org, String(row.employeeId), row.workDate);
+      if (row.calculationContract === 'OVERTIME_V2') return this.v2Hash(context, this.classifyDay(context), await this.v2Policy(org, row.workDate)) !== row.inputHash;
       const laborPolicy = await this.laborPolicyFor(org, row.workDate);
       return this.hashOf(context, this.classifyDay(context), { policyVersion: laborPolicy.version, legalReference: laborPolicy.legalReference }) !== row.inputHash;
     } catch {
@@ -561,17 +651,20 @@ export class OvertimeService {
     const rows = await inSession(this.requests.find(query), session).lean();
     let changed = 0;
     for (const request of rows) {
-      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike, session);
+      const frozen = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId: String(request._id) }), session).lean();
+      if (frozen?.classificationStatus === 'FINAL' && await this.isFinalImmutable(org, frozen.workDate, session)) continue;
+      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike, session, true);
       const laborPolicy = await this.laborPolicyFor(org, context.workDate, session);
       const labor = { policyVersion: laborPolicy.version, legalReference: laborPolicy.legalReference };
       const before = await inSession(this.results.findOne({ organizationId: org, overtimeRequestId: String(request._id) }), session).lean();
       const targetStatus = options.targetStatus ?? 'PROVISIONAL';
+      if (targetStatus === 'FINAL' && computation.calculationContract === 'OVERTIME_V2' && computation.reasons?.some(reason => reason.startsWith('OVERTIME_ATTENDANCE_'))) throw new ConflictException('OVERTIME_UNRESOLVED');
       const projectionChanged = !before
         || before.overtimeType !== overtimeType
         || before.approvedMinutes !== computation.approvedMinutes
         || before.actualMinutes !== computation.actualMinutes
         || before.eligibleMinutes !== computation.eligibleMinutes
-        || this.hashOf(context, overtimeType, labor) !== before.inputHash;
+        || (computation.calculationContract === 'OVERTIME_V2' ? this.v2Hash(context, overtimeType, computation.policySnapshot) : this.hashOf(context, overtimeType, labor)) !== before.inputHash;
       const moved = projectionChanged || before.classificationStatus !== targetStatus;
       if (!moved) continue;
       await this.persistResult(org, request as OtRequestLike, context, overtimeType, computation, labor, targetStatus, session);
@@ -605,7 +698,7 @@ export class OvertimeService {
       workDate: dayAsDate(date),
     }).lean();
     for (const request of rows) {
-      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike);
+      const { context, overtimeType, computation } = await this.computeForRequest(org, request as OtRequestLike, undefined, true);
       const laborPolicy = await this.laborPolicyFor(org, context.workDate);
       await this.persistResult(org, request as OtRequestLike, context, overtimeType, computation, {
         policyVersion: laborPolicy.version,
@@ -634,6 +727,9 @@ export class OvertimeService {
     workDate: string,
   ): Promise<{ unreportedMinutes: number; workedTo: Date } | null> {
     const context = await this.dayContext(org, userId, workDate);
+    if (await this.isV2Enabled(org)) {
+      try { this.assertVerifiedAttendance(context); } catch { return null; }
+    }
     const worked = this.actualInterval(context);
     if (!worked) return null;
     const approved = await this.requests.find({
@@ -746,6 +842,105 @@ export class OvertimeService {
     return window;
   }
 
+  private v2Hash(context: DayContext, overtimeType: OvertimeType, policy: unknown): string {
+    return inputHashOf({ contract: 'OVERTIME_V2', base: this.hashOf(context, overtimeType, { policyVersion: 0 }), policy,
+      provenance: { checkIn: context.checkInProvenance, checkOut: context.checkOutProvenance, approvalStatus: context.overallApprovalStatus } });
+  }
+
+  private async observedUsage(org: string, userId: string, workDate: string, session?: ClientSession): Promise<LaborUsage> {
+    const week = weekOf(workDate);
+    const from = [workDate.slice(0, 4) + '-01-01', week[0]].sort()[0];
+    const to = [workDate.slice(0, 4) + '-12-31', week[6]].sort()[1];
+    const days = await inSession(this.attendanceDays.find({ organizationId: org, employeeId: userId, workDate: { $gte: from, $lte: to } }), session).lean();
+    const usage = { normalDailyMinutes: 0, normalWeeklyMinutes: 0, combinedDailyMinutes: 0, overtimeMonthlyMinutes: 0, overtimeAnnualMinutes: 0 };
+    for (const day of days) {
+      const context = await this.dayContext(org, userId, normalizeWorkDate(day.workDate), session);
+      try { this.assertVerifiedAttendance(context); } catch { continue; }
+      const actual = this.actualInterval(context)!;
+      const overtime = sumMinutes(subtractIntervals([actual], this.scheduledIntervals(context)));
+      const normal = Math.min(context.workingMinutes, scheduledMinutesOf(context.shift));
+      if (context.workDate === workDate) { usage.normalDailyMinutes = normal; usage.combinedDailyMinutes = normal + overtime; }
+      if (week.includes(context.workDate)) usage.normalWeeklyMinutes += normal;
+      if (context.workDate.slice(0, 7) === workDate.slice(0, 7)) usage.overtimeMonthlyMinutes += overtime;
+      if (context.workDate.slice(0, 4) === workDate.slice(0, 4)) usage.overtimeAnnualMinutes += overtime;
+    }
+    return usage;
+  }
+
+  async scheduleSuggestions(org: string, userId: string, workDate: string) {
+    const context = await this.dayContext(org, userId, workDate);
+    try { this.assertVerifiedAttendance(context); }
+    catch (error) { return { canFile: false, blockedReasons: [(error as Error).message], provenance: { checkIn: context.checkInProvenance, checkOut: context.checkOutProvenance }, suggestedOvertimeIntervals: [] }; }
+    const claims = await this.requests.find({ organizationId: org, employeeUserId: userId, type: 'OVERTIME', status: { $in: ['PENDING', 'APPROVED'] }, workDate: dayAsDate(workDate) }).lean();
+    const cuts = [...this.scheduledIntervals(context)];
+    for (const claim of claims) {
+      if (!(claim.approvedStart ?? claim.requestedStart) || !(claim.approvedEnd ?? claim.requestedEnd)) continue;
+      cuts.push(this.windowOf(claim.approvedStart ?? claim.requestedStart, claim.approvedEnd ?? claim.requestedEnd, workDate, 'OVERTIME_WINDOW_INVALID'));
+    }
+    const suggestions = [];
+    for (const span of subtractIntervals([this.actualInterval(context)!], cuts)) {
+      const result = await this.preview(org, userId, workDate, span, undefined, true);
+      suggestions.push({ from: new Date(span.from).toISOString(), to: new Date(span.to).toISOString(), ...result });
+    }
+    const blockedReasons = [...new Set(suggestions.flatMap(s => s.blockedReasons))];
+    return { canFile: suggestions.some(s => s.canFile), blockedReasons, policy: suggestions[0]?.policy,
+      provenance: { checkIn: context.checkInProvenance, checkOut: context.checkOutProvenance }, suggestedOvertimeIntervals: suggestions };
+  }
+
+  async isV2Enabled(org: string, session?: ClientSession): Promise<boolean> {
+    if (!this.organizations) return false;
+    const tenant = await inSession(this.organizations.findOne({ _id: org }), session).lean();
+    return (tenant as { attendanceOvertimeV2Enabled?: boolean } | null)?.attendanceOvertimeV2Enabled === true;
+  }
+
+  async preview(org: string, userId: string, workDate: string, window: Interval, session?: ClientSession, forceV2 = false) {
+    if (!forceV2 && !await this.isV2Enabled(org, session)) {
+      const context = await this.dayContext(org, userId, workDate, session);
+      const computation = computeOvertime({ workDate, overtimeType: this.classifyDay(context), requested: window, actual: this.actualInterval(context), scheduled: this.scheduledIntervals(context) });
+      const blockedReasons = minutesInside(window, this.scheduledIntervals(context)) > 0 ? ['OVERTIME_OVERLAPS_SCHEDULE'] : [];
+      return { ...computation, workDate, calculationContract: 'LEGACY_V1' as const, canFile: blockedReasons.length === 0, blockedReasons,
+        contextHash: inputHashOf({ workDate, window, computation }), policy: undefined };
+    }
+    const context = await this.dayContext(org, userId, workDate, session);
+    const blockedReasons: string[] = [];
+    let computation: OtComputation | undefined;
+    let policy: Awaited<ReturnType<OvertimeService['v2Policy']>> | undefined;
+    try {
+      this.assertVerifiedAttendance(context);
+      policy = await this.v2Policy(org, workDate, session);
+      computation = computeOvertime({ workDate, overtimeType: this.classifyDay(context), requested: window,
+        actual: this.actualInterval(context), scheduled: this.scheduledIntervals(context), calculationContract: 'OVERTIME_V2', policy });
+      if (computation.minimumThresholdApplied) blockedReasons.push('OVERTIME_BELOW_MINIMUM');
+      if (minutesInside(window, this.scheduledIntervals(context)) > 0) blockedReasons.push('OVERTIME_OVERLAPS_SCHEDULE');
+    } catch (error) {
+      if (error instanceof ConflictException || (error instanceof Error && ['UNSUPPORTED_OVERNIGHT_SHIFT', 'POLICY_CONFIGURATION_REQUIRED'].includes(error.message))) blockedReasons.push((error as Error).message);
+      else throw error;
+    }
+    const provenance = { checkIn: context.checkInProvenance, checkOut: context.checkOutProvenance, approvalStatus: context.overallApprovalStatus };
+    const contextHash = inputHashOf({ workDate, window, shift: context.shift, calendarType: context.calendarType, overrideType: context.overrideType,
+      checkInAt: context.checkInAt?.toISOString(), checkOutAt: context.checkOutAt?.toISOString(), provenance, policy });
+    return { workDate, calculationContract: 'OVERTIME_V2' as const, ...computation, policy, provenance, contextHash,
+      canFile: blockedReasons.length === 0, blockedReasons };
+  }
+
+  assertVerifiedAttendance(context: DayContext): void {
+    if (!this.actualInterval(context)) throw new ConflictException('OVERTIME_ATTENDANCE_INCOMPLETE');
+    if (!['APPROVED', 'NOT_REQUIRED'].includes(context.overallApprovalStatus ?? '')) throw new ConflictException('OVERTIME_ATTENDANCE_NOT_VERIFIED');
+    if (context.checkInProvenance?.source !== 'OBSERVED' || context.checkOutProvenance?.source !== 'OBSERVED') throw new ConflictException('OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED');
+  }
+
+  private async v2Policy(org: string, workDate: string, session?: ClientSession) {
+    let p: any;
+    try { p = await this.laborPolicyFor(org, workDate, session); }
+    catch (error) { if (error instanceof NotFoundException) throw new ConflictException('POLICY_CONFIGURATION_REQUIRED'); throw error; }
+    const minimum = p.minimumOvertimeMinutes;
+    const step = p.overtimeRoundingMinutes;
+    if (!Number.isInteger(minimum) || minimum < 0 || minimum > 1440 || ![0, 15, 30, 60].includes(step)
+      || (minimum > 0 && step > 0 && (minimum < step || minimum % step !== 0))) throw new ConflictException('POLICY_CONFIGURATION_REQUIRED');
+    return { id: String(p._id), version: p.version, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo,
+      minimumOvertimeMinutes: minimum, overtimeRoundingMinutes: step };
+  }
+
   private actualInterval(context: DayContext): Interval | undefined {
     if (!context.checkInAt || !context.checkOutAt) return undefined;
     const from = new Date(context.checkInAt).getTime();
@@ -774,9 +969,10 @@ export class OvertimeService {
     org: string,
     userId: string,
     filter: Record<string, unknown>,
+    session?: ClientSession,
   ): Promise<number> {
     const query: Record<string, unknown> = { organizationId: org, employeeId: userId, ...filter };
-    const rows = await this.results.find(query).select('eligibleMinutes').lean();
+    const rows = await inSession(this.results.find(query), session).select('eligibleMinutes').lean();
     return rows.reduce((total, row) => total + (row.eligibleMinutes ?? 0), 0);
   }
 }

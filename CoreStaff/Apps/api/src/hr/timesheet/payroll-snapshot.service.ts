@@ -581,6 +581,10 @@ export class PayrollSnapshotService {
       String(insurance.payableWorkingDays),
     ].join('|');
 
+    if (summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2') {
+      return canonicalPayloadHash({ legacyInputs: hashInput, calculationContract: summary.calculationContract,
+        sourceSummaryHash: summary.canonicalPayloadHash ?? summary.sourceHash });
+    }
     return createHash('sha256').update(hashInput).digest('hex');
   }
 

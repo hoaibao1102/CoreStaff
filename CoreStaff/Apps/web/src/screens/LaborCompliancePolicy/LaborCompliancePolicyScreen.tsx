@@ -54,6 +54,7 @@ import {
 } from "../Policies/policies.ui";
 
 const PAGE_SIZE = 10;
+const V2_FIELDS = ['minimumOvertimeMinutes', 'overtimeRoundingMinutes', 'maxMonthlyAttendanceConfirmations'] as const;
 
 const TIME_FIELDS = [
   "normalDailyMinutes",
@@ -79,6 +80,9 @@ function formatHours(minutes: number): string {
 type Form = Record<keyof CreateLaborPolicyPayload, string>;
 
 const EMPTY: Form = {
+  minimumOvertimeMinutes: "",
+  overtimeRoundingMinutes: "",
+  maxMonthlyAttendanceConfirmations: "",
   effectiveFrom: "",
   effectiveTo: "",
   normalDailyMinutes: "",
@@ -94,6 +98,9 @@ const EMPTY: Form = {
 };
 
 const LABELS: Record<keyof Form, string> = {
+  minimumOvertimeMinutes: "OT V2 — Ngưỡng tối thiểu (phút)",
+  overtimeRoundingMinutes: "OT V2 — Block làm tròn xuống (0/15/30/60 phút)",
+  maxMonthlyAttendanceConfirmations: "Xác nhận công — Hạn mức tháng (0..31; 0 = chặn)",
   effectiveFrom: "Hiệu lực từ",
   effectiveTo: "Hiệu lực đến (không bắt buộc)",
   normalDailyMinutes: "Giờ làm thường ngày tối đa (giờ)",
@@ -122,6 +129,16 @@ const REQUIRED: (keyof Form)[] = [
 ];
 
 function validate(form: Form): string {
+  for (const key of V2_FIELDS) {
+    if (!form[key].trim()) continue;
+    const value = Number(form[key]);
+    const max = key === 'minimumOvertimeMinutes' ? 1440 : key === 'maxMonthlyAttendanceConfirmations' ? 31 : 60;
+    if (!Number.isInteger(value) || value < 0 || value > max || (key === 'overtimeRoundingMinutes' && ![0, 15, 30, 60].includes(value)))
+      return `"${LABELS[key]}" không hợp lệ.`;
+  }
+  const min = Number(form.minimumOvertimeMinutes), step = Number(form.overtimeRoundingMinutes);
+  if (min > 0 && step > 0 && (min < step || min % step !== 0))
+    return "Ngưỡng OT phải lớn hơn hoặc bằng block và chia hết cho block.";
   if (!form.effectiveFrom.trim()) return "Vui lòng chọn ngày hiệu lực.";
   if (!form.legalReference.trim()) return "Vui lòng nhập tham chiếu pháp lý.";
 
@@ -168,11 +185,15 @@ function payloadFrom(form: Form): CreateLaborPolicyPayload {
     active: form.active !== "false",
   };
   if (form.effectiveTo.trim()) payload.effectiveTo = form.effectiveTo.trim();
+  for (const key of V2_FIELDS) if (form[key].trim()) payload[key] = Number(form[key]);
   return payload;
 }
 
 function fromPolicy(policy: LaborCompliancePolicy): Form {
   return {
+    minimumOvertimeMinutes: policy.minimumOvertimeMinutes === undefined ? '' : String(policy.minimumOvertimeMinutes),
+    overtimeRoundingMinutes: policy.overtimeRoundingMinutes === undefined ? '' : String(policy.overtimeRoundingMinutes),
+    maxMonthlyAttendanceConfirmations: policy.maxMonthlyAttendanceConfirmations === undefined ? '' : String(policy.maxMonthlyAttendanceConfirmations),
     effectiveFrom: policy.effectiveFrom.slice(0, 10),
     effectiveTo: policy.effectiveTo ? policy.effectiveTo.slice(0, 10) : "",
     normalDailyMinutes: minutesToHours(policy.normalDailyMinutes),
@@ -227,6 +248,7 @@ function LaborDetailDialog({
               { label: "Tăng ca năm tối đa", value: formatHours(policy.maxAnnualOvertimeMinutes) },
               { label: "Hạn mức ngoại lệ tăng ca năm", value: formatHours(policy.exceptionalAnnualOvertimeMinutes) },
               { label: "Ngưỡng cảnh báo", value: `${policy.warningThresholdPercent}%` },
+              ...V2_FIELDS.map((key) => ({ label: LABELS[key], value: policy[key] === undefined ? 'Chưa cấu hình (legacy V1)' : String(policy[key]) })),
               { label: "Mức lương thử việc tối thiểu", value: `${Math.round(policy.probationMinimumRate * 100)}%` },
               { label: "Tham chiếu pháp lý", value: policy.legalReference },
               { label: "Phiên bản", value: `v${policy.version}` },
@@ -271,6 +293,10 @@ function LaborPolicyDialog({
   }, [open, policy]);
 
   const save = async () => {
+    if (policy && V2_FIELDS.some((key) => policy[key] !== undefined && !form[key].trim())) {
+      setFormError("Không thể xóa cấu hình V2 đã lưu; hãy nhập giá trị explicit (0 nếu phù hợp).");
+      return;
+    }
     const message = validate(form);
     if (message) {
       setFormError(message);
@@ -314,6 +340,7 @@ function LaborPolicyDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 pt-2">
+          <p className="mb-3 text-sm text-muted-foreground">OT V2 áp dụng policy theo ngày làm việc; quota xác nhận công lấy policy tại đầu tháng ngày làm việc (Asia/Ho_Chi_Minh). Để trống giữ legacy V1, không tự áp dụng 60/30/3. Lưu cấu hình không bật rollout V2; thay đổi làm mất hiệu lực review kỳ mở, không tính lại kỳ đã đóng. Ngưỡng 0 cho phép phần dưới block bị loại; quota 0 chặn đơn mới. Đây là cấu hình nghiệp vụ cần HR phê duyệt, không phải chuẩn pháp luật.</p>
           <FormError message={formError} />
         </div>
         <div className="grid gap-5 px-6 pb-2 sm:grid-cols-2">
@@ -386,6 +413,7 @@ function diffPayload(
   const changed: UpdateLaborPolicyPayload = {};
   for (const key of Object.keys(EMPTY) as (keyof Form)[]) {
     if (form[key] === original[key]) continue;
+    if (V2_FIELDS.includes(key as typeof V2_FIELDS[number]) && !form[key].trim()) continue;
     if (key === "active") {
       changed.active = form[key] === "true";
     } else if (key === "effectiveFrom") {

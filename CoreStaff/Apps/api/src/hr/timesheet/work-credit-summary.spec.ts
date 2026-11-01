@@ -39,6 +39,29 @@ describe('buildWorkCreditSummaryProjection', () => {
     expect(result.sourceHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it('freezes explicit 85% policy evidence without mutating a previous 100% projection', async () => {
+    const facts = [day('2026-10-01', 480, 475), day('2026-10-02', 450, 383),
+      day('2026-10-03', 480, 240, { payableLeaveMinutes: 240 })];
+    const live = policy('same-policy', 1);
+    const before = await buildWorkCreditSummaryProjection(facts as any, async () => live);
+    const frozenBefore = JSON.stringify(before);
+    live.version = 2;
+    live.fullDayMinimumRatio = 0.85;
+    const after = await buildWorkCreditSummaryProjection(facts as any, async () => live);
+    expect(before.dailyWorkCredits.map((row: any) => row.workCredit)).toEqual([0.5, 0.5, 1]);
+    expect(after.dailyWorkCredits.map((row: any) => row.workCredit)).toEqual([1, 1, 1]);
+    expect(after.sourceHash).not.toBe(before.sourceHash);
+    expect(JSON.stringify(before)).toBe(frozenBefore);
+  });
+
+  it('binds a policy version change even if payable units stay equal', async () => {
+    const facts = [day('2026-10-01', 480, 480)];
+    const before = await buildWorkCreditSummaryProjection(facts as any, async () => policy('p1', 1, 0.5, 0.85));
+    const after = await buildWorkCreditSummaryProjection(facts as any, async () => policy('p1', 2, 0.5, 0.85));
+    expect(before.payableWorkUnits).toBe(after.payableWorkUnits);
+    expect(before.sourceHash).not.toBe(after.sourceHash);
+  });
+
   it('blocks missing policy, missing attendance facts and unresolved days', async () => {
     await expect(buildWorkCreditSummaryProjection([day('2026-10-01', 480, 0)] as any, async () => null as any))
       .rejects.toThrow(new ConflictException('WORK_CREDIT_POLICY_MISSING'));

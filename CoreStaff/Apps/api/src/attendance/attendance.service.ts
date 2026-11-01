@@ -9,9 +9,9 @@ import {
 } from '@nestjs/common';
 import { EventsGateway } from '../events/events.gateway';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { createHash } from 'node:crypto';
-import { AttendanceDay, AttendanceDayDocument } from '../database/schemas/attendance-day.schema';
+import { AttendanceDay, AttendanceDayDocument, AttendanceEndpointSource } from '../database/schemas/attendance-day.schema';
 import { AttendanceEvent, AttendanceEventDocument } from '../database/schemas/attendance-event.schema';
 import { Evidence, EvidenceDocument } from '../database/schemas/evidence.schema';
 import {
@@ -23,7 +23,7 @@ import {
 } from '../database/schemas/enums';
 import { HaversineService } from './services/haversine.service';
 import { resolveVerification } from './services/attendance-verification';
-import { AttendanceCalculatorService } from './services/attendance-calculator.service';
+import { AttendanceCalculatorService, requiredWorkingIntervalsForShift } from './services/attendance-calculator.service';
 import { StorageService } from '../storage/storage.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
@@ -60,6 +60,15 @@ function intersectClockIntervals(left: Array<{ from: string; to: string }>, righ
 
 @Injectable()
 export class AttendanceService {
+  private readonly postCommitNotifications = new WeakMap<ClientSession, Array<() => unknown>>();
+
+  private async notifyAfterCommit(session: ClientSession | undefined, notify: () => unknown): Promise<void> {
+    if (!session) { await notify(); return; }
+    const notifications = this.postCommitNotifications.get(session);
+    if (!notifications) throw new Error('ATTENDANCE_TRANSACTION_NOTIFICATION_QUEUE_REQUIRED');
+    notifications.push(notify);
+  }
+
   constructor(
     @InjectModel('AttendanceDay') private attendanceDayModel: Model<AttendanceDayDocument>,
     @InjectModel('AttendanceEvent') private attendanceEventModel: Model<AttendanceEventDocument>,
@@ -217,6 +226,8 @@ export class AttendanceService {
       attendanceStatus,
       availableAction,
       workMode: day?.workMode || null,
+      checkInProvenance: day?.checkInProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
+      checkOutProvenance: day?.checkOutProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
       checkIn: checkInEvent
         ? {
             eventId: checkInEvent._id,
@@ -277,6 +288,10 @@ export class AttendanceService {
     };
   }
 
+  private async createRecord(model: Model<any>, value: any, session?: ClientSession): Promise<any> {
+    return session ? (await model.create([value], { session }))[0] : model.create(value);
+  }
+
   private requestHash(operation: 'CHECK_IN' | 'CHECK_OUT', dto: unknown, file?: UploadedFile): string {
     return createHash('sha256')
       .update(JSON.stringify({ operation, dto, file: file ? createHash('sha256').update(file.buffer).digest('hex') : null }))
@@ -306,8 +321,9 @@ export class AttendanceService {
     operation: 'CHECK_IN' | 'CHECK_OUT',
     requestHash: string,
     responseBody: Record<string, unknown>,
+    session?: ClientSession,
   ) {
-    await this.idempotencyModel.create({
+    await this.createRecord(this.idempotencyModel, {
       organizationId,
       userId,
       key: key.trim(),
@@ -316,13 +332,43 @@ export class AttendanceService {
       responseStatus: 200,
       responseBody,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    });
+    }, session);
   }
 
   /**
    * Xử lý Check-in
    */
-  async checkIn(
+  private async punchTransaction<T>(organizationId: string, run: (session?: ClientSession) => Promise<T>): Promise<T> {
+    const db = this.attendanceDayModel.db;
+    const organization = db ? await db.model('Organization').findById(organizationId).lean() as any : null;
+    if (organization?.attendanceOvertimeV2Enabled !== true) return run();
+    const session = await db.startSession();
+    try {
+      const result = await session.withTransaction(() => {
+        // withTransaction can rerun its callback: only the committed attempt may emit.
+        this.postCommitNotifications.set(session, []);
+        return run(session);
+      }) as T;
+      for (const notify of this.postCommitNotifications.get(session) ?? []) {
+        try { await notify(); }
+        catch (error) { console.warn('[AttendanceService] post-commit notification error:', error); }
+      }
+      return result;
+    } finally {
+      this.postCommitNotifications.delete(session);
+      await session.endSession();
+    }
+  }
+
+  async checkIn(employeeId: string, organizationId: string, dto: CheckInDto, file?: UploadedFile, clientIp?: string, userAgent?: string, idempotencyKey?: string) {
+    return this.punchTransaction(organizationId, session => this.checkInInternal(employeeId, organizationId, dto, file, clientIp, userAgent, idempotencyKey, session));
+  }
+
+  async checkOut(employeeId: string, organizationId: string, dto: CheckOutDto, file?: UploadedFile, clientIp?: string, userAgent?: string, idempotencyKey?: string) {
+    return this.punchTransaction(organizationId, session => this.checkOutInternal(employeeId, organizationId, dto, file, clientIp, userAgent, idempotencyKey, session));
+  }
+
+  private async checkInInternal(
     employeeId: string,
     organizationId: string,
     dto: CheckInDto,
@@ -330,6 +376,7 @@ export class AttendanceService {
     clientIp?: string,
     userAgent?: string,
     idempotencyKey?: string,
+    session?: ClientSession,
   ) {
     const requestHash = this.requestHash('CHECK_IN', dto, file);
     const replay = await this.idempotencyReplay(organizationId, employeeId, idempotencyKey, 'CHECK_IN', requestHash);
@@ -338,14 +385,17 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
+    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+
     // 1. Kiểm tra đã check-in chưa
-    const existingDay = await this.attendanceDayModel.findOne({
+    const existingDayQuery = this.attendanceDayModel.findOne({
       organizationId: orgObjectId,
       employeeId: empObjectId,
       workDate,
     });
+    const existingDay = await (session ? existingDayQuery.session(session) : existingDayQuery);
 
-    if (existingDay && existingDay.attendanceStatus !== AttendanceStatus.NOT_CHECKED_IN) {
+    if (existingDay && (existingDay.attendanceStatus !== AttendanceStatus.NOT_CHECKED_IN || (session && existingDay.checkInAt))) {
       throw new ConflictException('ALREADY_CHECKED_IN');
     }
 
@@ -411,6 +461,8 @@ export class AttendanceService {
       const newEvidenceId = new Types.ObjectId();
       const storageKey = `${organizationId}/evidence/${newEvidenceId}.jpg`;
 
+      // Object storage is outside MongoDB: rollback/retry may leave orphan uploads.
+      // Do not compensate with deletes without an ownership/retry-safe cleanup design.
       if (this.storageService.isConfigured()) {
         try {
           await this.storageService.upload(storageKey, selfie.buffer, selfie.mimetype);
@@ -420,7 +472,7 @@ export class AttendanceService {
         }
       }
 
-      const evidenceDoc = await this.evidenceModel.create({
+      const evidenceDoc = await this.createRecord(this.evidenceModel, {
         _id: newEvidenceId,
         organizationId: orgObjectId,
         ownerUserId: empObjectId,
@@ -428,7 +480,7 @@ export class AttendanceService {
         originalFileName: selfie.originalname || 'selfie.jpg',
         mimeType: selfie.mimetype,
         sizeBytes: selfie.size,
-      });
+              }, session);
 
       evidenceId = evidenceDoc._id as Types.ObjectId;
 
@@ -449,7 +501,9 @@ export class AttendanceService {
       endTime: shift?.endTime || '17:00',
       breakMinutes: shift?.breakMinutes ?? 60,
       gracePeriodMinutes: shift?.gracePeriodMinutes ?? 15,
-      requiredWorkingIntervals: appliedLeave?.requiredWorkingIntervals,
+      breakStartTime: shift?.breakStartTime,
+      breakEndTime: shift?.breakEndTime,
+      requiredWorkingIntervals: appliedLeave?.requiredWorkingIntervals ?? (shift ? requiredWorkingIntervalsForShift(shift) : undefined),
       approvedLeaveIntervals: appliedLeave?.approvedLeaveIntervals,
     };
 
@@ -466,12 +520,19 @@ export class AttendanceService {
     const calcResult = this.calculatorService.calculate(workDate, recordedAt, undefined, shiftSnapshot);
 
     // 4.5. Resolve active period for this workDate
-    const periodId = await this.resolvePeriodId(orgObjectId, workDate);
+    const periodId = claim?.periodId ?? await this.resolvePeriodId(orgObjectId, workDate);
+
+    const eventId = new Types.ObjectId();
+    const checkInProvenance = {
+      source: approvalStatus === AttendanceApprovalStatus.NOT_REQUIRED
+        ? AttendanceEndpointSource.OBSERVED : AttendanceEndpointSource.LEGACY_UNKNOWN,
+      eventId,
+    };
 
     // 5. Lưu AttendanceDay
-    let day = existingDay;
+    let day: any = existingDay;
     if (!day) {
-      day = await this.attendanceDayModel.create({
+      day = await this.createRecord(this.attendanceDayModel, {
         organizationId: orgObjectId,
         employeeId: empObjectId,
         workDate,
@@ -480,6 +541,7 @@ export class AttendanceService {
         attendanceStatus: AttendanceStatus.CHECKED_IN,
         overallApprovalStatus: approvalStatus,
         checkInAt: recordedAt,
+        checkInProvenance,
         lateMinutes: calcResult.lateMinutes,
         approvedLeaveMinutes: calcResult.approvedLeaveMinutes,
         requiredWorkingMinutes: calcResult.requiredWorkingMinutes,
@@ -487,12 +549,13 @@ export class AttendanceService {
         effectiveCheckOutTime: calcResult.effectiveCheckOutTime,
         shiftSnapshot,
         workplaceSnapshot,
-      });
+      }, session);
     } else {
       day.workMode = dto.workMode;
       day.attendanceStatus = AttendanceStatus.CHECKED_IN;
       day.overallApprovalStatus = approvalStatus;
       day.checkInAt = recordedAt;
+      day.checkInProvenance = checkInProvenance;
       day.lateMinutes = calcResult.lateMinutes;
       day.approvedLeaveMinutes = calcResult.approvedLeaveMinutes;
       day.requiredWorkingMinutes = calcResult.requiredWorkingMinutes;
@@ -504,14 +567,19 @@ export class AttendanceService {
       if (periodId && !day.periodId) {
         day.periodId = new Types.ObjectId(periodId);
       }
-      await day.save();
+      if (session) {
+        const result = await this.attendanceDayModel.updateOne({ _id: day._id, organizationId: orgObjectId, checkInAt: null }, { $set: day.getChanges().$set }, { session });
+        if (result.modifiedCount !== 1) throw new ConflictException('ALREADY_CHECKED_IN');
+      } else await day.save();
     }
 
     // TASK-073 — a check-in mutates in-period attendance: bump the period version.
-    await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
+    if (!session) await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
 
     // 6. Lưu AttendanceEvent
-    const event = await this.attendanceEventModel.create({
+    const event = await this.createRecord(this.attendanceEventModel, {
+      _id: eventId,
+      provenance: checkInProvenance,
       organizationId: orgObjectId,
       attendanceDayId: day._id,
       employeeId: empObjectId,
@@ -532,7 +600,7 @@ export class AttendanceService {
       userAgent,
       isFallback,
       note: dto.note,
-    });
+    }, session);
 
     // 7. Nếu Selfie, tạo ManagerRequest (ApprovalRequest)
     if (method === AttendanceMethod.SELFIE) {
@@ -552,6 +620,7 @@ export class AttendanceService {
           address,
           isFallback,
         },
+        session,
       );
     }
 
@@ -571,20 +640,20 @@ export class AttendanceService {
       },
       attendanceRequirements: appliedLeave ? { ...appliedLeave, effectiveCheckInTime: calcResult.effectiveCheckInTime, effectiveCheckOutTime: calcResult.effectiveCheckOutTime, requiredWorkingMinutes: calcResult.requiredWorkingMinutes } : null,
     };
-    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_IN', requestHash, response as any);
-    this.eventsGateway?.notifyAttendanceChanged(
+    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_IN', requestHash, response as any, session);
+    await this.notifyAfterCommit(session, () => this.eventsGateway?.notifyAttendanceChanged(
       employeeId,
       organizationId,
       assignment.departmentId?._id || assignment.departmentId,
       response,
-    );
+    ));
     return response;
   }
 
   /**
    * Xử lý Check-out
    */
-  async checkOut(
+  private async checkOutInternal(
     employeeId: string,
     organizationId: string,
     dto: CheckOutDto,
@@ -592,6 +661,7 @@ export class AttendanceService {
     clientIp?: string,
     userAgent?: string,
     idempotencyKey?: string,
+    session?: ClientSession,
   ) {
     const requestHash = this.requestHash('CHECK_OUT', dto, file);
     const replay = await this.idempotencyReplay(organizationId, employeeId, idempotencyKey, 'CHECK_OUT', requestHash);
@@ -600,23 +670,29 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
+    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+
     // 1. Tìm ngày công hiện tại
-    const day = await this.attendanceDayModel.findOne({
+    const dayQuery = this.attendanceDayModel.findOne({
       organizationId: orgObjectId,
       employeeId: empObjectId,
       workDate,
     });
+    const day = await (session ? dayQuery.session(session) : dayQuery);
 
     if (!day || day.attendanceStatus !== AttendanceStatus.CHECKED_IN) {
       throw new ConflictException('INVALID_ATTENDANCE_ACTION');
     }
 
+    if (session && day.checkOutAt) throw new ConflictException('ALREADY_CHECKED_OUT');
+
     // Kiểm tra đã check-out chưa
-    const existingOutEvent = await this.attendanceEventModel.findOne({
+    const existingOutQuery = this.attendanceEventModel.findOne({
       organizationId: orgObjectId,
       attendanceDayId: day._id,
       eventType: AttendanceEventType.CHECK_OUT,
     });
+    const existingOutEvent = await (session ? existingOutQuery.session(session) : existingOutQuery);
 
     if (existingOutEvent) {
       throw new ConflictException('ALREADY_CHECKED_OUT');
@@ -677,6 +753,8 @@ export class AttendanceService {
       const newEvidenceId = new Types.ObjectId();
       const storageKey = `${organizationId}/evidence/${newEvidenceId}.jpg`;
 
+      // Object storage is outside MongoDB: rollback/retry may leave orphan uploads.
+      // Do not compensate with deletes without an ownership/retry-safe cleanup design.
       if (this.storageService.isConfigured()) {
         try {
           await this.storageService.upload(storageKey, selfie.buffer, selfie.mimetype);
@@ -686,7 +764,7 @@ export class AttendanceService {
         }
       }
 
-      const evidenceDoc = await this.evidenceModel.create({
+      const evidenceDoc = await this.createRecord(this.evidenceModel, {
         _id: newEvidenceId,
         organizationId: orgObjectId,
         ownerUserId: empObjectId,
@@ -694,7 +772,7 @@ export class AttendanceService {
         originalFileName: selfie.originalname || 'checkout-selfie.jpg',
         mimeType: selfie.mimetype,
         sizeBytes: selfie.size,
-      });
+              }, session);
 
       evidenceId = evidenceDoc._id as Types.ObjectId;
 
@@ -711,13 +789,20 @@ export class AttendanceService {
     const calcResult = this.calculatorService.calculate(workDate, checkInAt, recordedAt, shift);
 
     // 3.5. Resolve active period for this workDate (ensure periodId is set)
-    const periodId = await this.resolvePeriodId(orgObjectId, workDate);
+    const periodId = claim?.periodId ?? await this.resolvePeriodId(orgObjectId, workDate);
     if (periodId && !day.periodId) {
       day.periodId = new Types.ObjectId(periodId);
     }
 
     // 4. Cập nhật AttendanceDay
+    const eventId = new Types.ObjectId();
+    const checkOutProvenance = {
+      source: approvalStatus === AttendanceApprovalStatus.NOT_REQUIRED
+        ? AttendanceEndpointSource.OBSERVED : AttendanceEndpointSource.LEGACY_UNKNOWN,
+      eventId,
+    };
     day.checkOutAt = recordedAt;
+    day.checkOutProvenance = checkOutProvenance;
     day.workingMinutes = calcResult.workingMinutes ?? 0;
     day.earlyMinutes = calcResult.earlyMinutes;
     day.approvedLeaveMinutes = calcResult.approvedLeaveMinutes;
@@ -730,13 +815,18 @@ export class AttendanceService {
       day.overallApprovalStatus = AttendanceApprovalStatus.PENDING;
     }
 
-    await day.save();
+    if (session) {
+      const result = await this.attendanceDayModel.updateOne({ _id: day._id, organizationId: orgObjectId, checkOutAt: null, attendanceStatus: AttendanceStatus.CHECKED_IN }, { $set: day.getChanges().$set }, { session });
+      if (result.modifiedCount !== 1) throw new ConflictException('ALREADY_CHECKED_OUT');
+    } else await day.save();
 
     // TASK-073 — a check-out mutates in-period attendance: bump the period version.
-    await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
+    if (!session) await this.periodVersion.bump(organizationId, periodId ?? day.periodId);
 
     // 5. Tạo AttendanceEvent cho CHECK_OUT
-    const outEvent = await this.attendanceEventModel.create({
+    const outEvent = await this.createRecord(this.attendanceEventModel, {
+      _id: eventId,
+      provenance: checkOutProvenance,
       organizationId: orgObjectId,
       attendanceDayId: day._id,
       employeeId: empObjectId,
@@ -757,7 +847,7 @@ export class AttendanceService {
       userAgent,
       isFallback,
       note: dto.note,
-    });
+    }, session);
 
     if (method === AttendanceMethod.SELFIE) {
       await this.createApprovalRequestForManager(
@@ -776,13 +866,14 @@ export class AttendanceService {
           address,
           isFallback,
         },
+        session,
       );
     }
 
     // TASK-069 — an OT day approved before today may now have real punches.
     // Fire-and-forget like the WS notifies: the day's own check-out must never
     // fail because a derived figure could not be refreshed.
-    if (this.overtime) {
+    if (this.overtime && !session) {
       this.overtime.recomputeForDay(organizationId, employeeId, workDate).catch((otErr) => {
         console.warn('[AttendanceService] overtime recomputeForDay error:', otErr);
       });
@@ -828,13 +919,13 @@ export class AttendanceService {
         approvalStatus: outEvent.approvalStatus,
       },
     };
-    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_OUT', requestHash, response as any);
-    this.eventsGateway?.notifyAttendanceChanged(
+    await this.saveIdempotency(organizationId, employeeId, idempotencyKey!, 'CHECK_OUT', requestHash, response as any, session);
+    await this.notifyAfterCommit(session, () => this.eventsGateway?.notifyAttendanceChanged(
       employeeId,
       organizationId,
       assignment?.departmentId?._id || assignment?.departmentId,
       response,
-    );
+    ));
     return response;
   }
 
@@ -987,6 +1078,8 @@ export class AttendanceService {
 
       return {
         ...day,
+        checkInProvenance: day.checkInProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
+        checkOutProvenance: day.checkOutProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
         checkIn: inEvt
           ? {
               eventId: inEvt._id,
@@ -1101,6 +1194,7 @@ export class AttendanceService {
     reasonText: string,
     evidenceId?: Types.ObjectId,
     metadata?: Record<string, any>,
+    session?: ClientSession,
   ) {
     try {
       // 1. Tìm EmployeeProfile theo userId
@@ -1122,7 +1216,7 @@ export class AttendanceService {
           : 'Chấm công Selfie xác thực ngoài văn phòng khi tan ca';
       }
 
-      const created = await this.managerRequestModel.create({
+      const created = await this.createRecord(this.managerRequestModel, {
         organizationId,
         departmentId: deptId,
         employeeId: empId || userId,
@@ -1138,30 +1232,33 @@ export class AttendanceService {
           ...metadata,
           actionType,
         },
-      });
+      }, session);
 
-      // Phát thông báo Realtime tới Quản lý phòng ban
-      try {
-        const empProfile: any = await this.employeeProfileModel.findOne({ organizationId, userId }).lean();
-        if (deptId) {
-          this.eventsGateway?.notifyNewRequest(String(deptId), {
-            requestId: created._id.toString(),
-            type: 'ATTENDANCE',
-            departmentId: String(deptId),
-            employeeUserId: userId.toString(),
-            employeeName: empProfile?.fullName || 'Nhân viên',
-            employeeCode: empProfile?.employeeCode || '',
-            actionType,
-            workDate,
-            reason,
-            status: 'PENDING',
-            createdAt: created.createdAt || new Date(),
-          });
+      // Phát thông báo Realtime tới Quản lý phòng ban, sau khi commit.
+      await this.notifyAfterCommit(session, async () => {
+        try {
+          const empProfile: any = await this.employeeProfileModel.findOne({ organizationId, userId }).lean();
+          if (deptId) {
+            await this.eventsGateway?.notifyNewRequest(String(deptId), {
+              requestId: created._id.toString(),
+              type: 'ATTENDANCE',
+              departmentId: String(deptId),
+              employeeUserId: userId.toString(),
+              employeeName: empProfile?.fullName || 'Nhân viên',
+              employeeCode: empProfile?.employeeCode || '',
+              actionType,
+              workDate,
+              reason,
+              status: 'PENDING',
+              createdAt: created.createdAt || new Date(),
+            });
+          }
+        } catch (wsErr) {
+          console.warn('[AttendanceService] notifyNewRequest error:', wsErr);
         }
-      } catch (wsErr) {
-        console.warn('[AttendanceService] notifyNewRequest error:', wsErr);
-      }
+      });
     } catch (err) {
+      if (session) throw err;
       console.error('[AttendanceService] Failed to create ManagerRequest:', err);
     }
   }

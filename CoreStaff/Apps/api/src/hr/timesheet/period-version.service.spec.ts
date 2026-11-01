@@ -27,6 +27,64 @@ function fakePeriods(resolve: (filter: any) => any) {
 const ORG = '64f1a2b3c4d5e6f7a8b9c0d0';
 const PERIOD = '64f1a2b3c4d5e6f7a8b9c0d1';
 
+describe('PeriodVersionService.claimForWorkDate', () => {
+  const session = { inTransaction: () => true } as any;
+  function setup(rows: any[], modifiedCount = 1) {
+    const writes: any[] = [];
+    const model = {
+      find: () => ({ session: () => ({ lean: async () => rows }) }),
+      updateOne: async (filter: any, update: any, options: any) => {
+        writes.push({ filter, update, options });
+        return { modifiedCount };
+      },
+    };
+    return { service: new PeriodVersionService(model as any), writes };
+  }
+
+  it('claims and invalidates the exact open period version in the caller transaction', async () => {
+    const { service, writes } = setup([{ _id: PERIOD, version: 4, status: 'READY_TO_CLOSE' }]);
+    await expect(service.claimForWorkDate(ORG, '2026-10-05', session))
+      .resolves.toEqual({ periodId: PERIOD, version: 5 });
+    expect(writes[0].filter).toMatchObject({ version: 4, status: 'READY_TO_CLOSE', payrollRunId: { $exists: false } });
+    expect(writes[0].update).toMatchObject({ $inc: { version: 1 }, $set: { status: 'REVIEWING', managerSnapshotClosed: false, departmentSnapshots: [] } });
+    expect(writes[0].options.session).toBe(session);
+  });
+
+  it('requires an active transaction before resolving any period', async () => {
+    const { service, writes } = setup([]);
+    await expect(service.claimForWorkDate(ORG, '2026-10-05', { inTransaction: () => false } as any))
+      .rejects.toThrow('TRANSACTION_REQUIRED');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('requires a covering period', async () => {
+    await expect(setup([]).service.claimForWorkDate(ORG, '2026-10-05', session)).rejects.toThrow('PERIOD_REQUIRED');
+  });
+
+  it.each([
+    [{ _id: PERIOD, version: 4, status: 'CLOSED' }],
+    [{ _id: PERIOD, version: 4, status: 'OPEN', payrollRunId: PERIOD }],
+  ])('rejects closed or payroll-claimed periods without writing', async (period) => {
+    const { service, writes } = setup([period]);
+    await expect(service.claimForWorkDate(ORG, '2026-10-05', session)).rejects.toThrow('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('rejects a lost period CAS rather than allowing the source write', async () => {
+    const { service } = setup([{ _id: PERIOD, version: 4, status: 'OPEN' }], 0);
+    await expect(service.claimForWorkDate(ORG, '2026-10-05', session)).rejects.toThrow('PERIOD_VERSION_CONFLICT');
+  });
+
+  it('does not select arbitrarily between overlapping periods', async () => {
+    const { service } = setup([{ _id: PERIOD }, { _id: ORG }]);
+    await expect(service.claimForWorkDate(ORG, '2026-10-05', session)).rejects.toThrow('CONTEXT_REQUIRES_REVIEW');
+  });
+
+  it.each(['2026-02-30', '2026-1-05', '2026-10-05T00:00:00Z'])('rejects invalid date-only token %s', async (date) => {
+    await expect(setup([]).service.claimForWorkDate(ORG, date, session)).rejects.toThrow('INVALID_WORK_DATE');
+  });
+});
+
 describe('TASK-073 — PeriodVersionService.bump', () => {
   it('increments the version of an open period', async () => {
     const { model, calls } = fakePeriods(() => ({ _id: PERIOD }));

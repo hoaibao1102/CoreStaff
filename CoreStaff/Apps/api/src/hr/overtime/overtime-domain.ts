@@ -153,6 +153,8 @@ export interface OtComputationInput {
   actual?: Interval;
   /** The scheduled span(s); empty on a weekly off or holiday, so nothing is subtracted. */
   scheduled: Interval[];
+  calculationContract?: 'LEGACY_V1' | 'OVERTIME_V2';
+  policy?: { minimumOvertimeMinutes: number; overtimeRoundingMinutes: number };
 }
 
 export interface OtComputation {
@@ -165,6 +167,14 @@ export interface OtComputation {
   /** Minutes lost to the VN-day clamp, surfaced in `calculationNote` rather than hidden. */
   droppedAfterClampMinutes: number;
   calculationNote: string;
+  calculationContract?: 'LEGACY_V1' | 'OVERTIME_V2';
+  rawEligibleMinutes?: number;
+  payableMinutes?: number;
+  roundingDroppedMinutes?: number;
+  minimumThresholdApplied?: boolean;
+  reasons?: string[];
+  policySnapshot?: Record<string, unknown>;
+  provenanceSnapshot?: Record<string, unknown>;
 }
 
 /**
@@ -190,6 +200,13 @@ export interface OtComputation {
 export function computeOvertime(input: OtComputationInput): OtComputation {
   const day = vnDayBounds(input.workDate);
   const daySpans = [day];
+  if (input.calculationContract === 'OVERTIME_V2') {
+    const minimum = input.policy?.minimumOvertimeMinutes;
+    const step = input.policy?.overtimeRoundingMinutes;
+    if (!Number.isInteger(minimum) || minimum! < 0 || minimum! > 1440 || ![0, 15, 30, 60].includes(step!)
+      || (minimum! > 0 && step! > 0 && (minimum! < step! || minimum! % step! !== 0))) throw new Error('POLICY_CONFIGURATION_REQUIRED');
+    if ([input.requested, input.approved, input.actual, ...input.scheduled].some(span => span && (span.from < day.from || span.to > day.to))) throw new Error('UNSUPPORTED_OVERNIGHT_SHIFT');
+  }
 
   const clamp = (span: Interval | undefined): Interval | undefined => {
     if (!span) return undefined;
@@ -232,7 +249,19 @@ export function computeOvertime(input: OtComputationInput): OtComputation {
   }
   if (dropped > 0) notes.push('CROSS_MIDNIGHT_CLAMPED');
 
+  let v2: Partial<OtComputation> = {};
+  if (input.calculationContract === 'OVERTIME_V2') {
+    const rawEligibleMinutes = eligibleMinutes;
+    const minimum = input.policy!.minimumOvertimeMinutes;
+    const step = input.policy!.overtimeRoundingMinutes;
+    const minimumThresholdApplied = rawEligibleMinutes < minimum;
+    eligibleMinutes = minimumThresholdApplied ? 0 : step === 0 ? rawEligibleMinutes : Math.floor(rawEligibleMinutes / step) * step;
+    v2 = { calculationContract: 'OVERTIME_V2', rawEligibleMinutes, payableMinutes: eligibleMinutes,
+      roundingDroppedMinutes: rawEligibleMinutes - eligibleMinutes, minimumThresholdApplied,
+      reasons: minimumThresholdApplied ? ['OVERTIME_BELOW_MINIMUM'] : [] };
+  }
   return {
+    ...v2,
     overtimeType: input.overtimeType,
     requestedMinutes,
     approvedMinutes,

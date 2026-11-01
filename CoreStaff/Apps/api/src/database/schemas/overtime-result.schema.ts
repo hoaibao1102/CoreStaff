@@ -66,6 +66,15 @@ export class OvertimeResult {
   /** BR-OT-03/AC-OT-04: `approved ∩ actual − scheduled`, never above approvedMinutes. */
   @Prop({ required: true, min: 0 }) eligibleMinutes: number;
 
+  @Prop({ enum: ['LEGACY_V1', 'OVERTIME_V2'] }) calculationContract?: string;
+  @Prop({ min: 0 }) rawEligibleMinutes?: number;
+  @Prop({ min: 0 }) payableMinutes?: number;
+  @Prop({ min: 0 }) roundingDroppedMinutes?: number;
+  @Prop() minimumThresholdApplied?: boolean;
+  @Prop({ type: [String] }) reasons?: string[];
+  @Prop({ type: Object }) policySnapshot?: Record<string, unknown>;
+  @Prop({ type: Object }) provenanceSnapshot?: Record<string, unknown>;
+
   @Prop({ type: [{ from: Date, to: Date }], default: [] }) eligibleIntervals: EligibleInterval[];
 
   /** Scheduled working minutes of the day, for the combined-daily limit audit trail. */

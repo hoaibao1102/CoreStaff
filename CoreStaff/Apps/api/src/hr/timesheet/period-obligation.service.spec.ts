@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { AttendanceCalculatorService } from '../../attendance/services/attendance-calculator.service';
 import {
   canonicalPeriodProjectionHash,
   buildPeriodObligationProjection,
@@ -29,6 +30,51 @@ const input: PeriodFactInput = {
 };
 
 describe('deterministic period obligation projection', () => {
+  it.each([false, true])('08–12 calculator to projection preserves S480 and requires W240; explicit intervals=%s', explicit => {
+    const calculated = new AttendanceCalculatorService().calculate('2026-09-01',
+      new Date('2026-09-01T01:00:00Z'), new Date('2026-09-01T05:00:00Z'), {
+        startTime: '08:00', endTime: '17:00', breakMinutes: 60, gracePeriodMinutes: 0,
+        ...{ breakStartTime: '12:00', breakEndTime: '13:00' },
+        ...(explicit ? { requiredWorkingIntervals: [{ from: '08:00', to: '12:00' }, { from: '13:00', to: '17:00' }] } : {}),
+      });
+    const result = buildPeriodObligationProjection({ ...input, endDate: '2026-09-01',
+      attendanceDays: [{ ...input.attendanceDays[0], workingMinutes: calculated.workingMinutes!,
+        checkInAt: '2026-09-01T01:00:00.000Z', checkOutAt: '2026-09-01T05:00:00.000Z' }],
+    }, { overtimeStatus: 'FINAL' });
+    // Projection trusts stored workingMinutes; it does not repair an upstream break deduction.
+    expect(result.days[0]).toMatchObject({ scheduledObligationMinutes: 480, workedScheduledMinutes: 240 });
+  });
+
+  it('binds equal-pay V2 policy and endpoint evidence without changing legacy payloads', () => {
+    const facts: any = structuredClone(input);
+    const ot = facts.overtimeResults[0];
+    Object.assign(ot, { calculationContract: 'OVERTIME_V2', rawEligibleMinutes: 89,
+      payableMinutes: 60, roundingDroppedMinutes: 29, minimumThresholdApplied: false,
+      policySnapshot: { policyId: 'policy', version: 1, minimumOvertimeMinutes: 60, overtimeRoundingMinutes: 30 },
+      provenanceSnapshot: { checkIn: { source: 'OBSERVED', eventId: 'in' }, checkOut: { source: 'OBSERVED', eventId: 'out' }, approvalStatus: 'NOT_REQUIRED' },
+      reasons: [], inputHash: 'inputs' });
+    const project = () => buildPeriodObligationProjection(facts, { overtimeStatus: 'FINAL' });
+    const before = project();
+    ot.policySnapshot.version = 2;
+    expect(canonicalPeriodProjectionHash(project())).not.toBe(canonicalPeriodProjectionHash(before));
+    const policyChanged = project();
+    ot.provenanceSnapshot.checkOut.eventId = 'replacement';
+    expect(canonicalPeriodProjectionHash(project())).not.toBe(canonicalPeriodProjectionHash(policyChanged));
+    expect(project().totals.overtimeMinutes).toBe(60);
+    const legacy = buildPeriodObligationProjection(input, { overtimeStatus: 'FINAL' });
+    expect(legacy.days[0].source).not.toHaveProperty('overtimeEvidence');
+    facts.overtimeResults[0] = { ...input.overtimeResults[0], calculationContract: 'LEGACY_V1' };
+    expect(project().canonicalPayload).toBe(legacy.canonicalPayload);
+  });
+
+  it('binds attendance provenance changes even with unchanged punches and payable minutes', () => {
+    const facts: any = structuredClone(input);
+    facts.attendanceDays[0].checkOutProvenance = { source: 'OBSERVED', eventId: 'event' };
+    const before = buildPeriodObligationProjection(facts, { overtimeStatus: 'FINAL' });
+    facts.attendanceDays[0].checkOutProvenance = { source: 'CONFIRMED_SCHEDULE', requestId: 'request' };
+    const after = buildPeriodObligationProjection(facts, { overtimeStatus: 'FINAL' });
+    expect(canonicalPeriodProjectionHash(after)).not.toBe(canonicalPeriodProjectionHash(before));
+  });
   it('enumerates every eligible date and emits a blocker for a missing scheduled AttendanceDay', () => {
     const result = buildPeriodObligationProjection(input, { overtimeStatus: 'FINAL' });
     expect(result.days).toHaveLength(2);

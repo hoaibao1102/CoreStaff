@@ -95,6 +95,7 @@ export class PoliciesService {
   }
 
   async createLabor(org: string, dto: CreateLaborPolicyDto) {
+    this.assertLaborV2Rules(dto);
     const effectiveFrom = date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
     const session = await this.laborPolicies.db.startSession();
@@ -121,9 +122,41 @@ export class PoliciesService {
     return this.effectiveLabor(org, at, session);
   }
 
+  /** V2 callers opt in explicitly; legacy laborAt remains unchanged. */
+  async overtimeRulesForWorkDate(org: string, workDate: string, session?: ClientSession) {
+    const policy = await this.explicitLaborForWorkDate(org, workDate, false, session);
+    if (policy.minimumOvertimeMinutes === undefined || policy.overtimeRoundingMinutes === undefined) {
+      throw new ConflictException('POLICY_CONFIGURATION_REQUIRED');
+    }
+    return policy;
+  }
+
+  async attendanceConfirmationRulesForWorkDate(org: string, workDate: string, session?: ClientSession) {
+    const policy = await this.explicitLaborForWorkDate(org, workDate, true, session);
+    if (policy.maxMonthlyAttendanceConfirmations === undefined) throw new ConflictException('POLICY_CONFIGURATION_REQUIRED');
+    return policy;
+  }
+
+  private async explicitLaborForWorkDate(org: string, workDate: string, monthStart: boolean, session?: ClientSession) {
+    const day = new Date(`${workDate}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate) || !Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== workDate) {
+      throw new BadRequestException('WORK_DATE_INVALID');
+    }
+    const key = monthStart ? `${workDate.slice(0, 7)}-01` : workDate;
+    try {
+      const policy = await this.effectiveLabor(org, new Date(`${key}T00:00:00+07:00`), session);
+      this.assertLaborV2Rules(policy);
+      return policy;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) throw new ConflictException('POLICY_CONFIGURATION_REQUIRED');
+      throw error;
+    }
+  }
+
   async updateLabor(org: string, id: string, dto: UpdateLaborPolicyDto) {
     const old = await this.laborPolicies.findOne({ _id: id, organizationId: org }).lean();
     if (!old) throw new NotFoundException('LABOR_POLICY_NOT_FOUND');
+    this.assertLaborV2Rules({ ...old, ...dto });
     const effectiveFrom = dto.effectiveFrom ? date(dto.effectiveFrom) : old.effectiveFrom;
     const effectiveTo = dto.effectiveTo !== undefined
       ? dto.effectiveTo ? date(dto.effectiveTo) : undefined
@@ -149,6 +182,16 @@ export class PoliciesService {
       return result;
     } finally {
       await session.endSession();
+    }
+  }
+
+  private assertLaborV2Rules(rules: Partial<Pick<LaborCompliancePolicy, 'minimumOvertimeMinutes' | 'overtimeRoundingMinutes' | 'maxMonthlyAttendanceConfirmations'>>): void {
+    const { minimumOvertimeMinutes: min, overtimeRoundingMinutes: step, maxMonthlyAttendanceConfirmations: quota } = rules;
+    const integerInRange = (v: unknown, max: number) => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max);
+    if (!integerInRange(min, 1440) || !integerInRange(quota, 31)
+      || (step !== undefined && ![0, 15, 30, 60].includes(step))
+      || (min !== undefined && step !== undefined && min > 0 && step > 0 && (min < step || min % step !== 0))) {
+      throw new BadRequestException('LABOR_POLICY_V2_RULES_INVALID');
     }
   }
 

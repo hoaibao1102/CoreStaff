@@ -1,5 +1,13 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { MongooseModule, getConnectionToken } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
+import { PoliciesService } from '../policies/policies.service';
+import { EventsGateway } from '../../events/events.gateway';
+import { EventsModule } from '../../events/events.module';
+import { registryEntries } from '../../database/schemas/registry';
+import { MongoosePeriodFactSource } from '../timesheet/mongoose-period-fact-source';
+import { PeriodVersionService } from '../timesheet/period-version.service';
+import { AttendanceConfirmationService, CONFIRMATION_MODELS } from './attendance-confirmation.service';
 import { AuthModule } from '../../auth/auth.module';
 import { RolesGuard } from '../../common/rbac.decorator';
 import { ManagerAssignmentSchema } from '../../database/schemas/manager-assignment.schema';
@@ -22,7 +30,8 @@ import { HrOvertimeController, ManagerOvertimeController, OvertimeController } f
 import { PeriodVersionModule } from '../timesheet/period-version.module';
 
 @Module({
-  imports: [AuthModule, OvertimeModule, PeriodVersionModule, MongooseModule.forFeature([
+  imports: [EventsModule, AuthModule, OvertimeModule, PeriodVersionModule, MongooseModule.forFeature([
+    ...registryEntries(),
     { name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
     { name: 'ManagerRequest', schema: ManagerRequestSchema },
     { name: 'Assignment', schema: EmployeeAssignmentSchema },
@@ -36,7 +45,14 @@ import { PeriodVersionModule } from '../timesheet/period-version.module';
     { name: 'AttendanceEvent', schema: AttendanceEventSchema },
   ])],
   controllers: [ManagerController, OvertimeController, ManagerOvertimeController, HrOvertimeController],
-  providers: [ManagerScopeService, ManagerAssignmentService, ManagerRequestService, RolesGuard],
+  providers: [ManagerScopeService, ManagerAssignmentService, ManagerRequestService, RolesGuard, AttendanceConfirmationService, {
+    provide: CONFIRMATION_MODELS,
+    inject: [getConnectionToken(), PeriodVersionService, ManagerScopeService, EventsGateway],
+    useFactory: (connection:Connection, periodVersion:PeriodVersionService, scope:ManagerScopeService, notify:EventsGateway) => {
+      const model=(name:string)=>connection.model(name);
+      return {policyRules:new PoliciesService(model('LaborCompliancePolicy') as any,model('OvertimePayPolicy') as any,model('WorkCreditPolicy') as any,periodVersion),source:new MongoosePeriodFactSource(model('EmployeeProfile'),model('Assignment'),model('ShiftTemplate'),model('CalendarException'),model('LeaveRequest'),model('AttendanceDay'),model('OvertimeResult')),requests:model('ManagerRequest'),quotas:model('AttendanceConfirmationQuota'),policies:model('LaborCompliancePolicy'),periods:model('TimesheetPeriod'),days:model('AttendanceDay'),events:model('AttendanceEvent'),audit:model('ApprovalHistory'),shifts:model('ShiftTemplate'),overrides:model('EmployeeDayOverride'),periodVersion,scope,notify};
+    },
+  }],
   exports: [ManagerScopeService, ManagerAssignmentService, ManagerRequestService],
 })
 export class ManagerModule {}
