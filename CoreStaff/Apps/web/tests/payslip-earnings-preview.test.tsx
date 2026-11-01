@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactNode } from 'react';
-import { GrossEarningsCard, TaxDeductionsCard, PitTaxDetails, PayslipPreviewDialog } from '../src/screens/hr/PayslipPreviewDialog';
+import { GrossEarningsCard, TaxDeductionsCard, PitTaxDetails, NetRecapSection } from '../src/screens/hr/PayslipPreviewDialog';
 
 jest.mock('@/components/tooltip', () => ({
   Tooltip: ({ children, content }: { children: ReactNode; content: ReactNode }) => <>{children}<span>{content}</span></>,
@@ -253,15 +253,15 @@ test('§3 — không phát sinh thuế thì nói rõ thay vì bảng rỗng', ()
   expect(html).toContain('Không phát sinh thuế TNCN.');
 });
 
-test('NET — banner hiện công thức Gross − Tổng khấu trừ = Net', () => {
-  const html = renderToStaticMarkup(
-    <PayslipPreviewDialog open onClose={() => {}} payslip={basePayslip} periodLabel="09/2026" />,
-  );
+test('NET — mục 5 dựng lại Net từ các khoản đã in: Gross − Tổng khấu trừ', () => {
+  const html = renderToStaticMarkup(<NetRecapSection payslip={basePayslip} />);
 
   // Tổng khấu trừ = 1.680.000 (BH) + 247.500 (PIT) + 0 = 1.927.500
-  expect(html).toContain('Lương thực nhận (Net)');
+  expect(html).toContain('Số tiền thực nhận (Net)');
   expect(html).toContain('Tổng khấu trừ');
-  // Công thức: 27.230.000 − 1.927.500 = 25.302.500 (bỏ qua khoảng trắng/&nbsp;)
-  const flat = html.replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ');
-  expect(flat).toMatch(/27\.230\.000\s*₫\s*−\s*1\.927\.500\s*₫\s*=\s*25\.302\.500\s*₫/);
+  expect(html).toContain('27.230.000');
+  expect(html).toContain('1.927.500');
+  expect(html).toContain('25.302.500');
+  // Đối soát khớp → khoe badge Khớp.
+  expect(html).toContain('Khớp');
 });

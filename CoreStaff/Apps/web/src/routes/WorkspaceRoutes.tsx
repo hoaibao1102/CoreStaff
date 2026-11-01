@@ -33,6 +33,7 @@ import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
 import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
+import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -251,6 +252,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
             <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId} timesheetPeriodId="" />
+          ) : route.startsWith('/hr/payroll-runs/') && route.split('/')[3] === 'payslips' && apiBase ? (
+            // HR xem đúng một tờ phiếu: cùng bố cục với trang nhân viên.
+            <PayslipDetailPage apiBase={apiBase} payslipId={route.split('/')[4] || ''} mode="hr" />
           ) : (
             <HrOverviewScreen user={user} apiBase={apiBase} />
           )}

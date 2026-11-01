@@ -2,6 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { PayslipDetailScreen } from '../src/screens/Employee/PayslipDetailScreen';
+import { PayslipDetailPage } from '../src/screens/hr/PayslipPreviewDialog';
 
 jest.mock('../src/config/api', () => ({
   resolveApiBase: async () => ({ base: 'https://api.test' }),
@@ -168,7 +169,8 @@ test('từng mục có nút "?" mở công thức bằng chữ', async () => {
   expect(container.innerHTML).not.toContain('Phụ cấp + Thưởng chuyên cần');
 });
 
-test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async () => {  await render();
+test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async () => {
+  await render();
   expect(calls.filter((call) => call.path.endsWith('/viewed'))).toHaveLength(1);
   expect(container.innerHTML).toContain('Đã Xem');
 
@@ -176,4 +178,25 @@ test('chỉ đánh dấu đã xem khi phiếu ở trạng thái RELEASED', async
   detail = { ...payslip, status: 'GENERATED' };
   await render();
   expect(calls.filter((call) => call.path.endsWith('/viewed'))).toHaveLength(0);
+});
+
+test('trang HR dùng chung bố cục và gọi endpoint HR, không đánh dấu đã xem', async () => {
+  detail = { ...payslip, payrollRunId: 'r9' };
+  await act(async () => root.render(
+    createElement(PayslipDetailPage, { apiBase: 'https://api.test', payslipId: 'p1', mode: 'hr' }),
+  ));
+  const html = container.innerHTML;
+
+  // Cùng một tờ phiếu: vỏ ring bọc ngoài, 5 mục, dòng Net xanh.
+  expect(container.querySelectorAll('.ring-1 > section')).toHaveLength(5);
+  expect(html).toContain('Số tiền thực nhận (Net)');
+  expect(html).toContain('25.072.500');
+  for (const label of ['Cách tính: Tổng thu nhập (Gross)', 'Cách tính: Thuế TNCN (PIT)']) {
+    expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+  }
+  // Nhãn nút quay lại của HR, và endpoint HR chứ không phải self-service.
+  expect(html).toContain('Bảng lương');
+  // Quay về đúng kỳ lương → dialog chi tiết tự mở lại.
+  expect(container.querySelector('a[href="/hr/payroll-runs?run=r9"]')).not.toBeNull();
+  expect(calls.map((call) => call.path)).toEqual(['/api/payslips/p1']);
 });

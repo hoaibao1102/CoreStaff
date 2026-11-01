@@ -1,8 +1,11 @@
-import { Fragment, useState, type ReactNode } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/dialog";
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Alert, AlertDescription } from '@/components/alert';
+import { AppLink } from '@/components/AppLink';
 import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
 import { Card, CardContent, CardHeader } from '@/components/card';
 import { Separator } from '@/components/separator';
+import { Skeleton } from '@/components/skeleton';
 import {
   Table,
   TableBody,
@@ -13,10 +16,14 @@ import {
   TableRow,
 } from '@/components/table';
 import { Tooltip } from '@/components/tooltip';
-import { Calendar, ChevronDown, ChevronUp, HelpCircle, User, Building2, Wallet } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, Wallet, ArrowLeft } from 'lucide-react';
+import { hrRequest } from '@/services/hrService';
+import { employeeRequest } from '@/services/employeeService';
 
 export type PayslipRow = {
   _id: string;
+  /** Bảng lương sinh ra phiếu — HR dùng để quay về đúng kỳ lương. */
+  payrollRunId?: string;
   employeeName: string;
   employeeCode?: string;
   taxCode?: string;
@@ -72,13 +79,6 @@ export type PayslipRow = {
   generatedAt?: string;
   releasedAt?: string;
 };
-
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  payslip: PayslipRow | null;
-  periodLabel: string;
-}
 
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -630,6 +630,249 @@ export function TaxableEarningsCard({
   );
 }
 
+/** §5 — dựng lại Net từ chính các khoản đã in ở trên, để thấy phép cộng khớp. */
+export function NetRecapSection({ payslip, variant, showFormula = false }: {
+  payslip: PayslipRow;
+  variant?: 'card' | 'sheet';
+  showFormula?: boolean;
+}) {
+  const totalInsurance =
+    (payslip.socialInsurance || 0) + (payslip.healthInsurance || 0) + (payslip.unemploymentInsurance || 0);
+  const otherDeductions = payslip.otherDeductions || 0;
+  const totalDeductions = totalInsurance + (payslip.pitAmount || 0) + otherDeductions;
+  const netSalary = payslip.netSalary || 0;
+  const gross = payslip.grossEarnings || 0;
+  // Đối soát: lệch quá 1₫ thì không khoe "Khớp".
+  const reconciled = Math.abs(gross - totalDeductions - netSalary) <= 1;
+
+  return (
+    <PayslipSection
+      index={5}
+      title="Tổng kết & đối soát thực nhận"
+      subtitle="Cân đối lại số thực nhận từ chính các khoản đã in ở trên."
+      action={reconciled ? <Badge variant="success">Khớp</Badge> : <Badge variant="outline">Lệch số</Badge>}
+      formula={showFormula ? 'Tổng thu nhập (Gross) − Bảo hiểm − Thuế TNCN − Khấu trừ khác.' : undefined}
+      variant={variant}
+    >
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Hạng mục đối soát</TableHead>
+            <TableHead className="text-right">Giá trị phát sinh</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Tổng thu nhập (Gross)</TableCell>
+            <TableCell className="text-right font-mono">{formatCurrency(gross)}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Trích nộp bảo hiểm (người lao động)</TableCell>
+            <TableCell className="text-right font-mono text-destructive">−{formatCurrency(totalInsurance)}</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="text-muted-foreground">Thuế TNCN phải nộp</TableCell>
+            <TableCell className="text-right font-mono text-destructive">−{formatCurrency(payslip.pitAmount || 0)}</TableCell>
+          </TableRow>
+          {otherDeductions > 0 && (
+            <TableRow>
+              <TableCell className="text-muted-foreground">Khấu trừ khác</TableCell>
+              <TableCell className="text-right font-mono text-destructive">−{formatCurrency(otherDeductions)}</TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell className="font-semibold text-foreground">Tổng khấu trừ</TableCell>
+            <TableCell className="text-right font-mono font-semibold text-destructive">−{formatCurrency(totalDeductions)}</TableCell>
+          </TableRow>
+          <TableRow className="bg-emerald-50 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/40">
+            <TableCell className="py-3 font-semibold text-emerald-800 dark:text-emerald-300">
+              Số tiền thực nhận (Net)
+            </TableCell>
+            <TableCell className="py-3 text-right font-mono text-lg font-bold text-emerald-700 dark:text-emerald-300">
+              {formatCurrency(netSalary)}
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </PayslipSection>
+  );
+}
+
+/**
+ * Năm mục của một tờ phiếu lương — một nguồn duy nhất cho cả trang nhân viên
+ * và trang HR, nên hai bên không thể lệch bố cục.
+ */
+export function PayslipSheetItems({ payslip }: { payslip: PayslipRow }) {
+  return (
+    <>
+      <GrossEarningsCard payslip={payslip} variant="sheet" showFormula />
+      <TaxDeductionsCard payslip={payslip} variant="sheet" showFormula />
+      <TaxableEarningsCard payslip={payslip} variant="sheet" showFormula />
+      <PitTaxDetails payslip={payslip} variant="sheet" showFormula />
+      <NetRecapSection payslip={payslip} variant="sheet" showFormula />
+    </>
+  );
+}
+
+type PayslipDetail = PayslipRow & { periodLabel?: string };
+
+function PayslipDetailSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-10 w-52 rounded-lg" />
+      <div className="space-y-4 rounded-xl bg-card p-6 ring-1 ring-foreground/10">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tờ phiếu lương dạng trang đầy đủ — nhân viên xem phiếu của mình, HR xem
+ * phiếu của bất kỳ ai trong tổ chức. Cùng một bố cục, khác endpoint và nhãn nút về.
+ */
+export function PayslipDetailPage({ payslipId, mode = 'employee', apiBase }: {
+  payslipId: string;
+  mode?: 'employee' | 'hr';
+  /** Mặc định lấy base từ config; HR truyền base sẵn của workspace. */
+  apiBase?: string | null;
+}) {
+  const [payslip, setPayslip] = useState<PayslipDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isHr = mode === 'hr';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const path = `/api/payslips/${payslipId}`;
+        const slip = isHr
+          ? apiBase
+            ? await hrRequest<PayslipDetail>(apiBase, path)
+            : null
+          : await employeeRequest.get<PayslipDetail>(`/payslips/me/${payslipId}`);
+        if (cancelled) return;
+        if (!slip) throw new Error('Thiếu địa chỉ API.');
+        setPayslip(slip);
+        // Nhân viên: xem là hành vi ghi nhận, lỗi audit không được che phiếu lương.
+        if (!isHr && slip.status === 'RELEASED') {
+          try {
+            await employeeRequest.post<void>(`/payslips/me/${payslipId}/viewed`);
+            if (!cancelled) setPayslip((current) => (current ? { ...current, status: 'VIEWED' } : current));
+          } catch (auditError) {
+            console.error('Failed to mark as viewed:', auditError);
+          }
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Không thể tải phiếu lương. Vui lòng thử lại sau.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [payslipId, apiBase, isHr]);
+
+  const backButton = (
+    <Button
+      variant="ghost"
+      className="min-h-10 -ml-2"
+      render={
+        <AppLink
+          href={isHr && payslip?.payrollRunId
+            ? `/hr/payroll-runs?run=${payslip.payrollRunId}`
+            : isHr ? '/hr/payroll-runs' : '/app/payslips'}
+        />
+      }
+    >
+      <ArrowLeft aria-hidden="true" />
+      {isHr ? 'Bảng lương' : 'Danh sách phiếu lương'}
+    </Button>
+  );
+
+  if (loading) return <div className="space-y-6">{backButton}<PayslipDetailSkeleton /></div>;
+
+  if (error || !payslip) {
+    return (
+      <div className="space-y-6">
+        {backButton}
+        <Alert variant="destructive">
+          <AlertDescription>{error || 'Không tìm thấy phiếu lương.'}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  const netSalary = payslip.netSalary || 0;
+  const initials = payslip.employeeName.split(' ').filter(Boolean).slice(-2).map((part) => part[0]).join('');
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      {backButton}
+
+      {/* Toàn bộ phiếu lương nằm trong một khung duy nhất, các mục ngăn bằng đường kẻ ngang. */}
+      <div className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10">
+        {/* Đầu phiếu: danh tính nhân viên + kỳ lương + số thực nhận */}
+        <header className="border-b border-border px-6 py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-muted text-base font-bold text-foreground" aria-hidden="true">
+                {initials}
+              </span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold tracking-tight text-foreground">{payslip.employeeName}</h1>
+                  {payslip.employeeCode && <Badge variant="outline" className="font-mono">{payslip.employeeCode}</Badge>}
+                  <Badge variant={getStatusBadgeVariant(payslip.status)}>
+                    {STATUS_LABELS[payslip.status] || payslip.status}
+                  </Badge>
+                </div>
+                <dl className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <dt>Kỳ lương</dt>
+                    <dd className="font-semibold text-foreground">{payslip.periodLabel || '—'}</dd>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <dt>Mã số thuế</dt>
+                    <dd className="font-mono text-foreground">{payslip.taxCode || '—'}</dd>
+                  </div>
+                  {payslip.generatedAt && (
+                    <div className="flex items-center gap-2">
+                      <dt>Khởi tạo</dt>
+                      <dd className="text-foreground">{formatDate(payslip.generatedAt)}</dd>
+                    </div>
+                  )}
+                  {payslip.releasedAt && (
+                    <div className="flex items-center gap-2">
+                      <dt>Phát hành</dt>
+                      <dd className="text-foreground">{formatDate(payslip.releasedAt)}</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </div>
+            <Badge variant="secondary" className="self-start">
+              <Wallet aria-hidden="true" />
+              Thực nhận {formatCurrency(netSalary)}
+            </Badge>
+          </div>
+        </header>
+
+        <PayslipSheetItems payslip={payslip} />
+      </div>
+    </div>
+  );
+}
+
 /** §4 — Thuế TNCN lũy tiến tính trên Thu nhập tính thuế. */
 export function PitTaxDetails({
   payslip,
@@ -722,122 +965,5 @@ export function PitTaxDetails({
     <PayslipSection index={index} title="Thuế TNCN (PIT)" formula={showFormula ? bracketFormula : undefined} wideTooltip variant={variant}>
       {body}
     </PayslipSection>
-  );
-}
-
-export function PayslipPreviewDialog({ open, onClose, payslip, periodLabel }: Props) {
-  if (!payslip) return null;
-
-  const totalInsurance =
-    (payslip.socialInsurance || 0) + (payslip.healthInsurance || 0) + (payslip.unemploymentInsurance || 0);
-  const effectivePIT = payslip.pitAmount || 0;
-  const otherDeductions = payslip.otherDeductions || 0;
-  // Tổng khấu trừ = tiền thực sự bị trừ khỏi Gross. Khớp công thức Net của backend:
-  // netSalary = gross − insurance − PIT − otherDeductions.
-  const totalDeductions = totalInsurance + effectivePIT + otherDeductions;
-  const netSalary = payslip.netSalary || 0;
-
-  return (
-    <Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Bảng chi tiết lương - {periodLabel}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6 px-1">
-          {/* Employee Info */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="flex items-start gap-3">
-                  <User className="mt-0.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nhân viên</p>
-                    <p className="mt-0.5 text-sm font-semibold">{payslip.employeeName}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Building2 className="mt-0.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mã NV</p>
-                    <p className="mt-0.5 font-mono text-sm">{payslip.employeeCode || '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Calendar className="mt-0.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mã số thuế</p>
-                    <p className="mt-0.5 font-mono text-sm">{payslip.taxCode || '—'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t pt-4">
-                <span className="text-sm text-muted-foreground">Trạng thái</span>
-                <Badge variant={getStatusBadgeVariant(payslip.status)}>
-                  {STATUS_LABELS[payslip.status] || payslip.status}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 1. GROSS + thu nhập chịu thuế */}
-          <GrossEarningsCard payslip={payslip} />
-
-          {/* 2. TAX DEDUCTIONS */}
-          <TaxDeductionsCard payslip={payslip} />
-
-          {/* 3. THU NHẬP TÍNH THUẾ */}
-          <TaxableEarningsCard payslip={payslip} />
-
-          {/* 4. PIT + tổng khấu trừ */}
-          <PitTaxDetails payslip={payslip} />
-
-          <PayslipSection title="Tổng kết &amp; đối soát thực nhận">
-            <div className="p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Bảo hiểm</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(totalInsurance)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Thuế TNCN</span>
-                  <span className="font-mono text-destructive">-{formatCurrency(effectivePIT)}</span>
-                </div>
-                {otherDeductions > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Khấu trừ khác</span>
-                    <span className="font-mono text-destructive">-{formatCurrency(otherDeductions)}</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between font-semibold text-foreground">
-                  <span>Tổng khấu trừ</span>
-                  <span className="font-mono text-lg text-destructive">-{formatCurrency(totalDeductions)}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
-                    <span className="font-semibold text-foreground">Lương thực nhận (Net)</span>
-                  </div>
-                  <span className="font-mono text-2xl font-bold text-primary">{formatCurrency(netSalary)}</span>
-                </div>
-                <p className="mt-2 border-t border-primary/20 pt-2 text-xs text-muted-foreground">
-                  {formatCurrency(payslip.grossEarnings || 0)} − {formatCurrency(totalDeductions)} = {formatCurrency(netSalary)}
-                </p>
-              </div>
-            </div>
-          </PayslipSection>
-
-          {/* Timestamps */}
-          <div className="text-xs text-muted-foreground">
-            {payslip.generatedAt && <p>Tạo: {formatDate(payslip.generatedAt)}</p>}
-            {payslip.releasedAt && <p>Phát hành: {formatDate(payslip.releasedAt)}</p>}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
