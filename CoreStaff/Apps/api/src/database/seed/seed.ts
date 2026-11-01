@@ -18,6 +18,8 @@ import {
   LaborCompliancePolicySchema,
   OvertimePayPolicySchema,
 } from '../schemas/compensation.schema';
+import { WorkCreditPolicySchema } from '../schemas/work-credit-policy.schema';
+import { TimesheetPeriodSchema } from '../schemas/timesheet-period.schema';
 import { EmploymentStatus, Role, OrganizationStatus, ShiftScope, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
@@ -116,16 +118,21 @@ async function main(): Promise<void> {
     const OvertimePolicy = connection.model('OvertimePayPolicy', OvertimePayPolicySchema);
     const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
     const BonusTemplate = connection.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
+    const WorkCreditPolicy = connection.model('WorkCreditPolicy', WorkCreditPolicySchema);
+    const TimesheetPeriod = connection.model('TimesheetPeriod', TimesheetPeriodSchema);
 
     const orgIds = new Map<string, mongoose.Types.ObjectId>();
     for (const { code, name } of ORGS) {
       const existing = await Org.findOne({ code }).exec();
       if (existing) {
         orgIds.set(code, existing._id);
+        if (!(existing as any).attendanceOvertimeV2Enabled) {
+          await Org.updateOne({ _id: existing._id }, { $set: { attendanceOvertimeV2Enabled: true } });
+        }
         console.log(`[seed] SKIPPED org ${code}`);
         continue;
       }
-      const created = await Org.create({ code, name, status: OrganizationStatus.ACTIVE });
+      const created = await Org.create({ code, name, status: OrganizationStatus.ACTIVE, attendanceOvertimeV2Enabled: true });
       orgIds.set(code, created._id);
       console.log(`[seed] CREATED org ${code}`);
     }
@@ -153,8 +160,76 @@ async function main(): Promise<void> {
             maxRetroactiveFilingDays: 7,
             probationMinimumRate: 0.85,
             legalReference: 'BLLĐ 45/2019/QH14',
+            minimumOvertimeMinutes: 60,
+            overtimeRoundingMinutes: 30,
+            maxMonthlyAttendanceConfirmations: 3,
             version: 1,
             active: true,
+          },
+        },
+        { upsert: true },
+      );
+      await LaborPolicy.updateOne(
+        { organizationId },
+        {
+          $set: {
+            minimumOvertimeMinutes: 60,
+            overtimeRoundingMinutes: 30,
+            maxMonthlyAttendanceConfirmations: 3,
+          },
+        },
+      );
+      await WorkCreditPolicy.updateOne(
+        { organizationId, active: true },
+        {
+          $setOnInsert: {
+            organizationId,
+            effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+            halfDayMinimumRatio: 0.5,
+            fullDayMinimumRatio: 1,
+            paidLeaveCreditEnabled: true,
+            incompleteDayRule: 'BLOCK',
+            businessReference: 'Chính sách quy đổi ngày công mặc định',
+            version: 1,
+            active: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true },
+      );
+      await TimesheetPeriod.updateOne(
+        { organizationId, period: '2026-10' },
+        {
+          $setOnInsert: {
+            organizationId,
+            period: '2026-10',
+            name: 'Kỳ công tháng 10/2026',
+            startDate: new Date('2026-10-01T00:00:00.000Z'),
+            endDate: new Date('2026-10-31T23:59:59.999Z'),
+            status: 'REVIEWING',
+            active: true,
+            version: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true },
+      );
+      await TimesheetPeriod.updateOne(
+        { organizationId, period: '2026-11' },
+        {
+          $setOnInsert: {
+            organizationId,
+            period: '2026-11',
+            name: 'Kỳ công tháng 11/2026',
+            startDate: new Date('2026-11-01T00:00:00.000Z'),
+            endDate: new Date('2026-11-30T23:59:59.999Z'),
+            status: 'REVIEWING',
+            active: true,
+            version: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           },
         },
         { upsert: true },
