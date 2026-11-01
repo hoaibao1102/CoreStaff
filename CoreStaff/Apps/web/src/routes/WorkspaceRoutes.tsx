@@ -32,6 +32,9 @@ import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
+import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
+import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
+import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
 import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
 
 interface WorkspaceRoutesProps {
@@ -204,7 +207,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     // HR accounts carry no personal workspace: the employee self-service routes
     // are closed here even on a direct URL (backend returns 403 for the same).
     const hrPersonalRoutes = ['/app/profile', '/app/attendance', '/app/attendance/history', '/app/leave', '/app/ot', '/app/compensation', '/app/payslips', '/app/timesheet-review'];
-    if (hrPersonalRoutes.includes(route)) return <EmployeeDataState status="forbidden" />;
+    if (hrPersonalRoutes.some((path) => route === path || route.startsWith(`${path}/`))) {
+      return <EmployeeDataState status="forbidden" />;
+    }
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -252,6 +257,12 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (
             <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId} timesheetPeriodId="" />
+          ) : route.startsWith('/hr/payroll-runs/') && route.split('/')[3] === 'payslips' && apiBase ? (
+            // HR xem đúng một tờ phiếu: dialog đè lên danh sách bảng lương.
+            <>
+              <PayrollRunScreen apiBase={apiBase} organizationId={user.organizationId!} timesheetPeriodId="" />
+              <PayslipDetailPage apiBase={apiBase} payslipId={route.split('/')[4] || ''} mode="hr" />
+            </>
           ) : (
             <HrOverviewScreen user={user} apiBase={apiBase} />
           )}
@@ -322,10 +333,29 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}><section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><LeaveOvertimeScreen /></section></WorkspaceShell>;
   }
 
-  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && ['/app/compensation', '/app/timesheet-review', '/app/payslips'].includes(route) && apiBase) {
+  // Personal payslips are shared by employees and department managers.
+  // Sidebar entry "/app/compensation" mở tab lương; "/app/payslips" và
+  // "/app/payslips/:id" giữ nguyên UI phiếu lương hiện tại.
+  const isPayslipRoute = route === '/app/payslips' || route.startsWith('/app/payslips/');
+  const isCompensationRoute = route === '/app/compensation' || route === '/app/timesheet-review';
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && isPayslipRoute && apiBase) {
+    const payslipId = route.startsWith('/app/payslips/') ? route.split('/').pop() : undefined;
     return (
-      <WorkspaceShell user={user} currentPath="/app/compensation" onLogout={onLogout} apiBase={apiBase}>
-        <MyCompensationScreen apiBase={apiBase} initialTab={route === '/app/payslips' ? 'payslip' : 'timesheet'} />
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          {/* currentPath giữ nguyên route để mục "Bảng lương của tôi" trên sidebar vẫn sáng. */}
+          <MyPayslipsScreen apiBase={apiBase} />
+          {payslipId && <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} />}
+        </section>
+      </WorkspaceShell>
+    );
+  }
+
+  if ((user.role === 'EMPLOYEE' || user.role === 'DEPARTMENT_MANAGER') && isCompensationRoute && apiBase) {
+    return (
+      <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
+        <MyCompensationScreen apiBase={apiBase} initialTab="timesheet" />
       </WorkspaceShell>
     );
   }
