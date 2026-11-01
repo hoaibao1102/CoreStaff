@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/table';
 import { toast } from '@/components/toast';
-import { PayslipPreviewDialog } from './PayslipPreviewDialog';
+import { AppLink } from '@/components/AppLink';
 import { hrErrorMessage, hrRequest } from '@/services/hrService';
 import { Calculator, Download, Eye, LockKeyhole, Plus, Send } from 'lucide-react';
 
@@ -102,7 +102,6 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
   const [payslips, setPayslips] = useState<PayslipRow[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [previewSlip, setPreviewSlip] = useState<PayslipRow | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
 
@@ -110,6 +109,14 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     loadPayrollRuns();
     loadClosedPeriods();
   }, []);
+
+  // Quay về từ dialog phiếu lương: `?run=<id>` mở lại đúng dialog chi tiết kỳ lương.
+  // Link sang phiếu lương giữ kèm `?run=` nên dialog kỳ lương vẫn mở phía sau.
+  const runFromUrl = new URLSearchParams(window.location.search).get('run');
+  useEffect(() => {
+    if (runFromUrl && payrollRuns.length > 0) void handleViewPayslips(runFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runFromUrl, payrollRuns.length]);
 
   const loadPayrollRuns = async () => {
     try {
@@ -440,7 +447,16 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
 
       {/* Payslips Detail */}
       {selectedRun && (
-        <Dialog open onOpenChange={(open) => !open && setSelectedRun(null)}>
+        <Dialog open onOpenChange={(open) => {
+          if (open) return;
+          setSelectedRun(null);
+          // Bỏ `?run=` để nút Back của trình duyệt không mở lại dialog vừa đóng.
+          const url = new URL(window.location.href);
+          if (url.searchParams.has('run')) {
+            url.searchParams.delete('run');
+            window.history.replaceState(null, '', url);
+          }
+        }}>
           <DialogContent className="max-w-6xl">
             <DialogHeader className="border-b border-border pr-16">
               <DialogTitle>Chi tiết bảng lương · {selectedRun.periodLabel}</DialogTitle>
@@ -507,7 +523,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                         <StatusBadge status={slip.status} />
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="ghost" onClick={() => setPreviewSlip(slip)}>
+                        <Button size="sm" variant="ghost" render={<AppLink href={`/hr/payroll-runs/payslips/${slip._id}?run=${selectedRun?._id ?? ''}`} />}>
                           <Eye aria-hidden="true" />Xem
                         </Button>
                       </TableCell>
@@ -517,14 +533,6 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
               </TableBody>
             </Table></div>
             </div>
-            {previewSlip && (
-              <PayslipPreviewDialog
-                open
-                onClose={() => setPreviewSlip(null)}
-                payslip={previewSlip}
-                periodLabel={selectedRun.periodLabel}
-              />
-            )}
           </DialogContent>
         </Dialog>
       )}

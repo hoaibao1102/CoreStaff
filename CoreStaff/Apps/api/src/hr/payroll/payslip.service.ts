@@ -373,6 +373,12 @@ export class PayslipService {
     await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
       $set: { status: PayrollRunStatus.RELEASED },
     });
+    // Same period claim update as PayrollRunService.release, so the timesheet
+    // period does not keep reporting LOCKED after the Web release button.
+    await this.payrollRunModel.db?.model('TimesheetPeriod').updateOne(
+      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.LOCKED },
+      { $set: { payrollState: PayrollRunStatus.RELEASED } },
+    );
 
     this.eventsGateway?.notifyPayslipReleased(
       profiles.map((profile) => profile.userId),
