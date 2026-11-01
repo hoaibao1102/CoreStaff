@@ -139,8 +139,12 @@ function minutesBetween(from: string, to: string): number {
 }
 
 function leaveMinutes(leave: PeriodLeave): number {
-  if (leave.startDate !== leave.endDate && leave.calculatedMinutes !== undefined) {
-    throw new Error('AMBIGUOUS_MULTI_DAY_LEAVE_MINUTES');
+  if (leave.startDate !== leave.endDate) {
+    // A multi-day request is always FULL_DAY and stores the period total in
+    // calculatedMinutes; its approved intervals are the per-day shape.
+    const perDay = (leave.approvedLeaveIntervals ?? []).reduce((sum, interval) => sum + minutesBetween(interval.from, interval.to), 0);
+    if (perDay > 0) return perDay;
+    if (leave.calculatedMinutes !== undefined) throw new Error('AMBIGUOUS_MULTI_DAY_LEAVE_MINUTES');
   }
   if (leave.calculatedMinutes !== undefined) return Math.max(0, leave.calculatedMinutes);
   return (leave.approvedLeaveIntervals ?? []).reduce((sum, interval) => sum + minutesBetween(interval.from, interval.to), 0);
@@ -225,7 +229,11 @@ export function buildPeriodObligationProjection(
         lateMinutes: Math.max(0, attendance?.lateMinutes ?? 0),
         earlyMinutes: Math.max(0, attendance?.earlyMinutes ?? 0),
         attendanceState: attendance?.attendanceStatus ?? attendance?.dayResult,
-        unresolvedIncomplete: Boolean(attendance && attendance.dayResult === 'INCOMPLETE' && attendance.resolutionType !== 'FORFEITED_MISSING_PUNCH'),
+        // Check-in/check-out never write dayResult, so a single punch is the
+        // incomplete signal too; otherwise a forgotten check-out reads as 0 credit
+        // that the employee can acknowledge before any explanation is decided.
+        unresolvedIncomplete: Boolean(attendance && attendance.resolutionType !== 'FORFEITED_MISSING_PUNCH'
+          && (attendance.dayResult === 'INCOMPLETE' || Boolean(attendance.checkInAt) !== Boolean(attendance.checkOutAt))),
         forfeitedMissingPunch: attendance?.resolutionType === 'FORFEITED_MISSING_PUNCH',
         blockers: scheduled > 0 && !attendance && leaveCoveredMinutes < scheduled ? ['MISSING_ATTENDANCE_DAY'] : [],
         source: {

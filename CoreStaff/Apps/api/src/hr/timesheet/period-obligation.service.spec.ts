@@ -128,6 +128,19 @@ describe('deterministic period obligation projection', () => {
     }, { overtimeStatus: 'FINAL' })).toThrow('AMBIGUOUS_MULTI_DAY_LEAVE_MINUTES');
   });
 
+  it('reads a multi-day full-day leave per day from its approved intervals', () => {
+    const result = buildPeriodObligationProjection({
+      ...input,
+      attendanceDays: [],
+      leaveRequests: [{
+        id: 'multi-day', userId: 'u1', startDate: '2026-09-01', endDate: '2026-09-02',
+        leaveType: 'PAID_LEAVE', status: 'HR_APPLIED', calculatedMinutes: 960,
+        approvedLeaveIntervals: [{ from: '08:00', to: '12:00' }, { from: '13:00', to: '17:00' }],
+      }],
+    }, { overtimeStatus: 'FINAL' });
+    expect(result.days.map(day => [day.payableLeaveMinutes, day.blockers.length])).toEqual([[480, 0], [480, 0]]);
+  });
+
   it('makes weekly off and public holidays zero standard obligation', () => {
     for (const type of ['WEEKLY_OFF', 'PUBLIC_HOLIDAY'] as const) {
       const result = buildPeriodObligationProjection({

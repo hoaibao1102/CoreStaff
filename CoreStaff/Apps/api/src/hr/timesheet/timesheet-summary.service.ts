@@ -28,6 +28,37 @@ function toDateOnly(value: string | Date): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
 }
 
+function daysInPeriodMonth(periodKey: string): number {
+  return new Date(Date.UTC(Number(periodKey.slice(0, 4)), Number(periodKey.slice(5, 7)), 0)).getUTCDate();
+}
+
+/**
+ * The legacy count/minute columns (presentDays, late/early, leave days...) read
+ * from the canonical obligation projection, so a V2 summary describes the same
+ * days the employee acknowledged. Only scheduled days count: a weekly-off or
+ * holiday shift worked as OT carries punches but no late/early obligation.
+ */
+export function summarizeObligationDays(days: Array<PeriodObligationDay & { unresolvedIncomplete?: boolean; forfeitedMissingPunch?: boolean }>) {
+  const scheduled = days.filter(day => day.scheduledObligationMinutes > 0);
+  const sum = (rows: typeof days, pick: (day: (typeof days)[number]) => number) => rows.reduce((total, day) => total + pick(day), 0);
+  const leaveDays = (pick: (day: (typeof days)[number]) => number) =>
+    Math.round(sum(scheduled, day => pick(day) / day.scheduledObligationMinutes) * 100) / 100;
+  return {
+    workingDays: scheduled.length,
+    presentDays: scheduled.filter(day => day.checkInAt && day.checkOutAt).length,
+    incompleteDays: scheduled.filter(day => day.unresolvedIncomplete || day.blockers.includes('MISSING_ATTENDANCE_DAY')).length,
+    absentDays: scheduled.filter(day => day.forfeitedMissingPunch).length,
+    paidLeaveDays: leaveDays(day => day.payableLeaveMinutes),
+    unpaidLeaveDays: leaveDays(day => day.unpaidLeaveMinutes),
+    holidayDays: days.filter(day => day.calendarType === 'PUBLIC_HOLIDAY' || day.calendarType === 'WEEKLY_OFF').length,
+    totalWorkingMinutes: sum(scheduled, day => day.workedScheduledMinutes),
+    totalLateMinutes: sum(scheduled, day => day.lateMinutes),
+    totalEarlyMinutes: sum(scheduled, day => day.earlyMinutes),
+    otherPaidLeaveDays: leaveDays(day => day.payableLeaveMinutes),
+    otherUnpaidLeaveDays: leaveDays(day => day.unpaidLeaveMinutes),
+  };
+}
+
 export async function buildWorkCreditSummaryProjection(
   days: Array<PeriodObligationDay & { unresolvedIncomplete?: boolean; forfeitedMissingPunch?: boolean }>,
   resolvePolicy: (workDate: string) => Promise<ResolvedWorkCreditPolicy | null>,
@@ -286,8 +317,19 @@ export class TimesheetSummaryService {
     for (const [profileId, days] of grouped) {
       const profile: any = await this.employeeProfileModel.findById(profileId).session(session).lean();
       if (!profile) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-      const legacy = await this.buildSummaryForEmployee(periodId, periodKey, organizationId, String(profile.userId),
-        projection.days.length, [], [], session);
+      // Payroll still reads OT minutes, late/early and absent days from these
+      // columns (OT pay, attendance bonus), so they must come from the same
+      // facts as the work credits rather than stay at the empty-input zeros.
+      const overtimeRecords = await this.overtimeResultModel
+        .find({ organizationId: new Types.ObjectId(organizationId), employeeId: new Types.ObjectId(String(profile.userId)), periodKey, classificationStatus: 'FINAL' }, { eligibleMinutes: 1, overtimeType: 1 })
+        .session(session)
+        .lean();
+      const legacy = {
+        ...await this.buildSummaryForEmployee(periodId, periodKey, organizationId, String(profile.userId),
+          daysInPeriodMonth(periodKey), [], [], session),
+        ...summarizeObligationDays(days),
+        ...this.aggregateOvertimeMinutes(overtimeRecords),
+      };
       const workCredit = await buildWorkCreditSummaryProjection(days, async workDate => {
         try {
           return await this.policiesService!.workCreditAt(organizationId, new Date(`${workDate}T12:00:00.000Z`), session) as ResolvedWorkCreditPolicy;
@@ -316,6 +358,9 @@ export class TimesheetSummaryService {
     organizationId: string,
     departmentId?: string,
   ): Promise<any[]> {
+    if (this.periodObligationService && this.policiesService) {
+      return this.previewWorkCreditSummaries(periodId, periodKey, organizationId, departmentId);
+    }
     const year = parseInt(periodKey.slice(0, 4));
     const month = parseInt(periodKey.slice(5, 7));
     const totalDays = new Date(year, month, 0).getDate();
@@ -384,6 +429,63 @@ export class TimesheetSummaryService {
       results.push(summary);
     }
 
+    return results;
+  }
+
+  /**
+   * Draft counterpart of `generateWorkCreditSummaries`: the same projection and
+   * column mapping, so what managers confirm is what HR close freezes. OT that
+   * is approved but not yet promoted to FINAL is shown, scoped to this period.
+   */
+  private async previewWorkCreditSummaries(
+    periodId: string,
+    periodKey: string,
+    organizationId: string,
+    departmentId?: string,
+  ): Promise<any[]> {
+    const period: any = await this.summaryModel.db.model('TimesheetPeriod').findOne({
+      _id: new Types.ObjectId(periodId), organizationId: new Types.ObjectId(organizationId),
+    }).lean();
+    if (!period) throw new NotFoundException('PERIOD_NOT_FOUND');
+    const projection = await this.periodObligationService!.loadPeriod({
+      organizationId, periodKey, startDate: toDateOnly(period.startDate),
+      endDate: toDateOnly(period.endDate), overtimeStatus: 'REVIEWABLE',
+    });
+    const grouped = new Map<string, PeriodObligationDay[]>();
+    for (const day of projection.days) {
+      if (departmentId && day.departmentId !== departmentId) continue;
+      grouped.set(day.userId, [...(grouped.get(day.userId) ?? []), day]);
+    }
+    const eligibleUserIds = new Set(await this.excludeHrUsers([...grouped.keys()]));
+    const results: any[] = [];
+    for (const [userId, days] of grouped) {
+      if (!eligibleUserIds.has(userId)) continue;
+      const overtimeRecords = await this.overtimeResultModel
+        .find({ organizationId: new Types.ObjectId(organizationId), employeeId: new Types.ObjectId(userId), periodKey, classificationStatus: { $in: ['PROVISIONAL', 'FINAL'] } }, { eligibleMinutes: 1, overtimeType: 1 })
+        .lean();
+      const workCredit = await buildWorkCreditSummaryProjection(days, async workDate => {
+        try {
+          return await this.policiesService!.workCreditAt(organizationId, new Date(`${workDate}T12:00:00.000Z`)) as ResolvedWorkCreditPolicy;
+        } catch (error) {
+          if (error instanceof NotFoundException) return null;
+          throw error;
+        }
+      }, { allowUnresolved: true }).catch((error) => {
+        if (error instanceof ConflictException && error.message === 'WORK_CREDIT_POLICY_MISSING') return null;
+        throw error;
+      });
+      results.push({
+        ...await this.buildSummaryForEmployee(periodId, periodKey, organizationId, userId, daysInPeriodMonth(periodKey), [], []),
+        ...summarizeObligationDays(days),
+        ...this.aggregateOvertimeMinutes(overtimeRecords),
+        ...(workCredit ? {
+          standardWorkUnits: workCredit.standardWorkUnits,
+          standardWorkMinutes: workCredit.standardWorkMinutes,
+          payableWorkUnits: workCredit.payableWorkUnits,
+          hasUnresolvedDays: workCredit.hasUnresolvedDays,
+        } : {}),
+      });
+    }
     return results;
   }
 

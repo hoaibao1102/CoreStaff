@@ -16,6 +16,9 @@ Chạy lệnh reset để đưa toàn bộ dữ liệu 3 kỳ về trạng thái
 ```bash
 npm --prefix CoreStaff/Apps/api run seed:demo:reset
 ```
+Sau reset: kỳ **2026-09** đã chốt & phát lương (để tra cứu lịch sử), kỳ **2026-10** đang mở còn 2 điểm nghẽn giữ lại để demo tay (`NV-KD-003`, `NV-KT-003`), kỳ **2026-11** mới mở (chưa tới hạn chốt).
+
+> **Mẹo rút gọn:** thao tác gỡ các blocker còn lại, cho nhân viên/QL xác nhận, HR chốt & chạy lương đều có script bổ sung tương ứng — xem `Docs/DEMO_SEED_GUIDE.md` mục 5.2 (`demo:resolve`, `demo:ack`, `demo:confirm`, `demo:close`). Buổi demo dưới đây trình diễn các thao tác này **bằng tay** trên Web/Mobile.
 
 ---
 
@@ -25,7 +28,7 @@ npm --prefix CoreStaff/Apps/api run seed:demo:reset
 |---|---|---|---|
 | **Nhân viên (Employee)** | **Điện thoại Android** | `nv.kinh-doanh.1@anphat.local` | Demo trải nghiệm chấm công thực tế (Vào ca/Ra ca, Wi-Fi/GPS/Selfie), gửi đơn phép, xem phiếu lương cá nhân |
 | **Quản lý phòng ban (Manager)** | **Web / Laptop** | `quan.ly.kinh-doanh@anphat.local` | Rà soát bảng công phòng ban, kiểm tra blocker, duyệt đơn giải trình, xác nhận bảng công bộ phận |
-| **Quản trị Nhân sự (HR Admin)** | **Web / Laptop** | `hr@anphat.local` | Giám sát toàn công ty, chốt kỳ công tháng 9, sinh snapshot, chạy tính lương, khóa bảng lương và phát hành phiếu lương |
+| **Quản trị Nhân sự (HR Admin)** | **Web / Laptop** | `hr@anphat.local` | Giám sát toàn công ty, chốt kỳ công tháng 10, sinh snapshot, chạy tính lương, khóa bảng lương và phát hành phiếu lương |
 
 ---
 
@@ -33,7 +36,7 @@ npm --prefix CoreStaff/Apps/api run seed:demo:reset
 
 ```
 [PHA 1: ANDROID MOBILE]  →  [PHA 2: WEB QUẢN LÝ]  →  [PHA 3: WEB HR CHỐT KỲ]  →  [PHA 4: ANDROID MOBILE]
-Chấm công thực tế             Duyệt đơn giải trình        Chốt kỳ công tháng 9           Nhận phiếu lương tức thì
+Chấm công thực tế             Duyệt đơn giải trình        Chốt kỳ công tháng 10          Nhận phiếu lương tức thì
 Vào ca / Ra ca                Xử lý điểm nghẽn blocker    Tính lương tự động &           Kiểm tra chi tiết
 Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phiếu lương          Gross - Net - BHXH - Thuế
 ```
@@ -68,8 +71,8 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 #### Bước 1.3: Xem Lịch sử & Phiếu lương đã nhận
 - Cuộn xuống danh sách ngày công trong tháng để thấy dữ liệu chấm công minh bạch.
 - Chuyển sang Tab **"Phiếu lương"**:
-  - Nhấn mở phiếu lương tháng **08/2026** (kỳ đã phát hành).
-  - Trình bày trực quan: Lương cơ bản, Ngày công chuẩn (22 ngày), Lương Gross, các khoản trích nộp bắt buộc (BHXH 8%, BHYT 1.5%, BHTN 1%), Thuế TNCN lũy tiến từng phần, và số tiền thực lĩnh (Net Salary).
+  - Nhấn mở phiếu lương tháng **09/2026** (kỳ lịch sử đã phát hành).
+  - Trình bày trực quan: Lương cơ bản, Ngày công chuẩn, Lương Gross, các khoản trích nộp bắt buộc (BHXH 8%, BHYT 1.5%, BHTN 1%), Thuế TNCN lũy tiến từng phần, và số tiền thực lĩnh (Net Salary).
 
 ---
 
@@ -79,22 +82,25 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 
 #### Bước 2.1: Đăng nhập Trưởng phòng Kinh doanh
 - Trên Web Dashboard, đăng nhập: `quan.ly.kinh-doanh@anphat.local` / `Demo123456!`.
-- Vào mục **"Quản lý Kỳ Công"** (`/timesheet/review`) → Chọn kỳ **2026-09**.
+- Vào mục **"Quản lý Kỳ Công"** (`/timesheet/review`) → Chọn kỳ **2026-10**.
 
 #### Bước 2.2: Trình diễn Cảnh báo Điểm nghẽn (Blockers)
 - **Điểm nhấn giải thích**:
   - Tỷ lệ hoàn thành công chưa đạt 100%.
-  - Bảng blocker hiển thị rõ nhân viên `Đặng Văn Khoa` (`NV-KD-003`) bị lỗi: **"Thiếu check-in"** ngày 15/09/2026.
+  - Bảng blocker hiển thị rõ nhân viên `Đặng Văn Khoa` (`NV-KD-003`) bị lỗi: **"Thiếu check-out"** ngày 21/10/2026, và `Bùi Phương Thảo` (`NV-KT-003`) **vắng không rõ lý do** ngày 28/10/2026.
   - Nếu Quản lý cố tình nhấn chốt/xác nhận khi còn blocker: Hệ thống từ chối và cảnh báo lỗi nghiệp vụ. Không cho phép gian lận hay làm tròn thiếu căn cứ.
 
 #### Bước 2.3: Duyệt Đơn Giải trình Bổ sung công
 - Mở danh sách yêu cầu (`Manager Requests`):
-  - Nhân viên `Đặng Văn Khoa` đã gửi đơn giải trình: *"Quên chấm công vào do vào ca gấp tiếp khách hàng"*.
+  - Nhân viên `Đặng Văn Khoa` đã gửi đơn giải trình ngày 21/10: *"Quên chấm công ra do đi gặp khách hàng ở Thủ Đức rồi về thẳng nhà"*.
 - Quản lý nhấn **"Duyệt đơn"** (Approve).
-- Quay lại màn hình rà soát kỳ công: Điểm nghẽn được gỡ bỏ hoàn toàn, công phòng Kinh doanh chuyển sang trạng thái sẵn sàng.
+- Với trường hợp `Bùi Phương Thảo` (28/10) không có đơn, Quản lý/HR **xử lý vắng không phép** — hệ thống ghi nhận khấu trừ công đúng nội quy.
+- Quay lại màn hình rà soát kỳ công: các điểm nghẽn được gỡ bỏ, công phòng Kinh doanh/Kỹ thuật chuyển sang trạng thái sẵn sàng.
+
+> Các điểm nghẽn & đơn chờ duyệt còn lại (selfie công tác `NV-KD-002` 15/10, giải trình `NV-KT-001` 19/10 & `NV-KT-002` 20/10, OT `NV-KD-002` 30/10…) có thể gỡ nhanh bằng `npm run demo:resolve` thay vì bấm tay từng cái.
 
 #### Bước 2.4: Trình diễn Tính năng mới — Phân loại Làm nửa ngày, Đi muộn & Về sớm
-- Xem chi tiết bảng công của nhân viên `Vũ Thị Mai` (`NV-KD-002`) ngày **23/09/2026**:
+- Xem chi tiết bảng công của nhân viên `Vũ Thị Mai` (`NV-KD-002`) ngày **23/10/2026**:
   - Đã có đơn nghỉ phép nửa ngày sáng (`MORNING_HALF` 08:00 - 12:00, 240 phút) được HR duyệt.
   - Ca làm việc buổi chiều bắt đầu từ 13:00 đến 17:00 (chuẩn 240 phút).
   - Nhân viên vào ca chiều lúc **13:25** (hệ thống tự động ghi nhận **Đi muộn 25 phút** so với mốc 13:00).
@@ -108,9 +114,9 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 
 > **Mục tiêu**: Minh họa "Flow chính của dự án" — Đóng gói dữ liệu chấm công thành Snapshot bất biến, kích hoạt Engine tính lương chuẩn Luật Lao động & Thuế Việt Nam.
 
-#### Bước 3.1: HR Kiểm tra & Chốt Kỳ Công Tháng 9
+#### Bước 3.1: HR Kiểm tra & Chốt Kỳ Công Tháng 10
 - Đăng nhập tài khoản HR: `hr@anphat.local` / `Demo123456!`.
-- Truy cập **"Quản lý Kỳ Công"** → Kỳ **2026-09**:
+- Truy cập **"Quản lý Kỳ Công"** → Kỳ **2026-10**:
   - Trạng thái các phòng ban: Phòng KD và KT đều đã được xác nhận.
   - Kỳ chuyển sang trạng thái: **"READY_TO_CLOSE"** (Sẵn sàng chốt).
 - HR nhấn nút **"Chốt kỳ công"** (`Close Timesheet Period`):
@@ -120,7 +126,7 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 
 #### Bước 3.2: Khởi tạo Bảng lương & Tính lương tự động
 - Chuyển sang menu **"Bảng Lương"** (`Payroll Runs`):
-  - Nhấn **"Tạo bảng lương mới"** cho kỳ `2026-09`.
+  - Nhấn **"Tạo bảng lương mới"** cho kỳ `2026-10`.
 - Bảng lương ban đầu ở trạng thái `DRAFT` (Nháp).
 - HR nhấn nút **"Tính lương"** (Calculate):
   - Engine backend xử lý tự động trong mili-giây:
@@ -146,7 +152,7 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 
 - Quay trở lại điện thoại **Android**:
 - Vuốt xuống để Refresh (hoặc chuyển sang Tab **"Phiếu lương"**):
-  - Xuất hiện ngay phiếu lương mới: **Kỳ Tháng 09/2026**.
+  - Xuất hiện ngay phiếu lương mới: **Kỳ Tháng 10/2026**.
 - Mở phiếu lương xem chi tiết:
   - Lương thực lĩnh (Net) đã phản ánh chính xác ngày công đã chốt, giờ OT được duyệt và các khoản bảo hiểm, thuế đúng từng đồng theo quy định pháp luật.
 - **Kết luận thông điệp buổi Demo**:
@@ -164,4 +170,8 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
      npm --prefix CoreStaff/Apps/api run seed:demo:reset
      ```
 3. **Nếu hội đồng muốn xem nhanh kết quả kỳ chốt hoàn tất**:
-   - Cho xem trực tiếp kỳ lịch sử `2026-08` đã chốt và phát hành sẵn với đầy đủ 8 phiếu lương mẫu.
+   - Cho xem trực tiếp kỳ lịch sử `2026-09` đã chốt và phát hành sẵn với đầy đủ 8 phiếu lương mẫu.
+4. **Nếu muốn chạy nhanh trọn luồng chốt kỳ 2026-10 (không demo tay)**:
+   ```bash
+   npm --prefix CoreStaff/Apps/api run demo:all
+   ```
