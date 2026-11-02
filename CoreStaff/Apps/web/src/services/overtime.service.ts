@@ -36,11 +36,17 @@ export function overtimeErrorMessage(code: string): string {
     OVERTIME_ATTENDANCE_NOT_VERIFIED: 'Dữ liệu chấm công chưa được xác minh. Vui lòng chờ duyệt hoặc liên hệ HR.',
     OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED: 'Mốc bổ sung theo lịch hoặc chưa rõ nguồn không chứng minh OT. Vui lòng liên hệ HR.',
     OVERTIME_BELOW_MINIMUM: 'Thời gian OT thực tế của đơn chưa đạt ngưỡng tối thiểu theo chính sách.',
+    OVERTIME_OVERLAPS_SCHEDULE: 'Khung giờ đăng ký OT đang trùng với ca làm việc chính.',
+    OVERTIME_FILING_WINDOW_CLOSED: 'Đã quá thời hạn gửi yêu cầu OT cho ngày này.',
+    OVERTIME_RETROACTIVE_REASON_REQUIRED: 'Vui lòng nhập lý do gửi yêu cầu OT trễ hạn.',
+    OVERTIME_OVERLAP: 'Khung giờ này đang trùng với một yêu cầu OT khác.',
+    OVERTIME_WINDOW_INVALID: 'Khung giờ OT chưa hợp lệ. Vui lòng kiểm tra lại giờ bắt đầu và kết thúc.',
+    OVERTIME_REQUEST_WINDOW_INVALID: 'Khung giờ yêu cầu OT chưa hợp lệ.',
     POLICY_CONFIGURATION_REQUIRED: 'HR cần cấu hình đầy đủ chính sách OT cho ngày làm việc này.',
     OVERTIME_PREVIEW_STALE: 'Dữ liệu đã thay đổi. Vui lòng xem lại dự tính OT trước khi gửi.',
     UNSUPPORTED_OVERNIGHT_SHIFT: 'Chưa hỗ trợ ca qua đêm. Vui lòng liên hệ HR.',
     PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công đã khóa hoặc đã được sử dụng cho bảng lương.',
     PERIOD_REQUIRED: 'Chưa có kỳ công phù hợp. Vui lòng liên hệ HR.',
   };
-  return messages[code] ?? code;
+  return messages[code] ?? 'Không thể xác định điều kiện OT cho thời gian đã chọn. Vui lòng kiểm tra lại hoặc liên hệ HR.';
 }

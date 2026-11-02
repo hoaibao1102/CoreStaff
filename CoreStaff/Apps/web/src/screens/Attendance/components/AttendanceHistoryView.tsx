@@ -8,7 +8,7 @@ import type { DayAttendance, AttendanceMethod } from '../types';
 import { DayDetailModal } from './DayDetailModal';
 import { resolveApiBase, apiUrl } from '../../../config/api';
 import { getAttendanceHistory } from '../../../services/attendance.service';
-import { getAttendanceHistoryStatus } from '../historyStatus';
+import { getAttendanceHistoryStatus, hasPartialDayLeave } from '../historyStatus';
 
 const WEEKDAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -298,6 +298,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
             const dayNum = Number(dateStr.slice(-2));
 
             const historyStatus = day ? getAttendanceHistoryStatus(day) : 'NONE';
+            const hasPartialLeave = day ? hasPartialDayLeave(day) : false;
             const statusLabel = {
               FORGOTTEN: 'Quên chấm công',
               FORFEITED: 'Mất ngày công',
@@ -331,8 +332,8 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
               <button
                 key={dateStr}
                 type="button"
-                title={`${dayNum}/${Number(selectedMonth.slice(5))}: ${statusLabel}`}
-                aria-label={`${dateStr}: ${statusLabel}`}
+                title={`${dayNum}/${Number(selectedMonth.slice(5))}: ${statusLabel}${hasPartialLeave ? ' · Nghỉ phép nửa buổi' : ''}`}
+                aria-label={`${dateStr}: ${statusLabel}${hasPartialLeave ? ', Nghỉ phép nửa buổi' : ''}`}
                 onClick={() => {
                   if (day) setActiveDetailDay(day);
                 }}
@@ -349,6 +350,12 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
                     <span
                       className={`size-1.5 sm:size-2 rounded-full ${statusDotClass}`}
                       title={statusLabel}
+                    />
+                  )}
+                  {hasPartialLeave && (
+                    <span
+                      className="size-1.5 rounded-full bg-slate-400 shadow-[0_0_6px_#94a3b8] sm:size-2"
+                      title="Nghỉ phép nửa buổi"
                     />
                   )}
                   {(day?.earlyMinutes ?? 0) > 0 && historyStatus !== 'EARLY_LEAVE' && (
