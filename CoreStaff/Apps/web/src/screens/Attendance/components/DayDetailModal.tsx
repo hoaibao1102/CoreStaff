@@ -4,7 +4,7 @@ import type { DayAttendance } from '../types';
 import { EvidenceCard } from './EvidenceCard';
 import { Badge } from '../../../components/badge';
 import { AppLink } from '../../../components/AppLink';
-import { getAttendanceHistoryStatus, type AttendanceHistoryStatus } from '../historyStatus';
+import { getAttendanceHistoryStatus, hasPartialDayLeave, type AttendanceHistoryStatus } from '../historyStatus';
 
 export interface DayDetailModalProps {
   isOpen: boolean;
@@ -214,6 +214,7 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
 
   if (!isOpen || !day) return null;
   const historyStatus = getAttendanceHistoryStatus(day);
+  const hasPartialLeave = hasPartialDayLeave(day);
   const creditDetail = calculateDayWorkCredit(day, historyStatus);
 
   const adjustmentType = day.checkInAt || day.checkIn?.recordedAt ? 'CHECK_OUT' : 'CHECK_IN';
@@ -312,6 +313,9 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
               )}
               {(day.earlyMinutes ?? 0) > 0 && historyStatus === 'LATE' && (
                 <Badge variant="secondary" className="bg-rose-100 text-rose-800 text-[11px] px-2 py-0.5">Về sớm</Badge>
+              )}
+              {hasPartialLeave && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-800 text-[11px] px-2 py-0.5">Nghỉ phép nửa buổi</Badge>
               )}
             </div>
           </div>

@@ -963,7 +963,7 @@ export class AttendanceService {
     const endOfMonth = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
 
     // Chạy song song query days, otRequests và results đã tính, sử dụng B-tree index
-    const [rawDays, otRequests, otResults]: [any[], any[], any[]] = await Promise.all([
+    const [rawDays, otRequests, otResults, leaveOverrides]: [any[], any[], any[], any[]] = await Promise.all([
       this.attendanceDayModel
         .find({
           organizationId: orgObjectId,
@@ -986,6 +986,16 @@ export class AttendanceService {
         .lean(),
       // Absent when AttendanceModule is loaded without OvertimeModule.
       this.overtime?.resultsForRange(organizationId, targetUserObjId.toString(), startMonthStr, endMonthStr) ?? Promise.resolve([]),
+      // A full-day leave does not necessarily create an attendance_days row.
+      // Read the applied override as a first-class history source so approved
+      // leave remains visible even when the employee made no punch that day.
+      this.dayOverrides
+        ?.find({
+          organizationId: orgObjectId,
+          employeeId: { $in: possibleEmpIds },
+          date: { $gte: startMonthStr, $lte: endMonthStr },
+        })
+        .lean() ?? Promise.resolve([]),
     ]);
 
     // Deduplicate in case multiple records exist for the same workDate (e.g. legacy seed records)
@@ -1004,9 +1014,32 @@ export class AttendanceService {
         }
       }
     }
+
+    const overridesByDate = new Map<string, any[]>();
+    for (const override of leaveOverrides) {
+      const rows = overridesByDate.get(override.date) ?? [];
+      rows.push(override);
+      overridesByDate.set(override.date, rows);
+
+      if (!daysByDate.has(override.date)) {
+        daysByDate.set(override.date, {
+          _id: `leave-${override.date}`,
+          organizationId: orgObjectId,
+          employeeId: override.employeeId,
+          workDate: override.date,
+          attendanceStatus: AttendanceStatus.DAY_OFF,
+          workdayType: override.type,
+          workingMinutes: 0,
+          lateMinutes: 0,
+          earlyMinutes: 0,
+          checkInAt: null,
+          checkOutAt: null,
+        });
+      }
+    }
     const days = Array.from(daysByDate.values()).sort((a, b) => b.workDate.localeCompare(a.workDate));
 
-    const dayIds = days.map((d) => d._id);
+    const dayIds = rawDays.map((d) => d._id);
     const events: any[] = dayIds.length > 0
       ? await this.attendanceEventModel
           .find({
@@ -1027,6 +1060,24 @@ export class AttendanceService {
     const dayResults = new Map(otResults.map((r) => [String(r.overtimeRequestId), r]));
 
     const items = days.map((day) => {
+      const appliedOverrides = overridesByDate.get(day.workDate) ?? [];
+      const approvedLeaveIntervals = appliedOverrides.flatMap((row) => row.approvedLeaveIntervals ?? []);
+      let requiredWorkingIntervals: Array<{ from: string; to: string }> = appliedOverrides[0]?.requiredWorkingIntervals ?? [];
+      for (const override of appliedOverrides.slice(1)) {
+        requiredWorkingIntervals = intersectClockIntervals(requiredWorkingIntervals, override.requiredWorkingIntervals ?? []);
+      }
+      const attendanceRequirements = appliedOverrides.length
+        ? {
+            durationTypes: appliedOverrides.map((row) => row.durationType),
+            leaveTypes: appliedOverrides.map((row) => row.type),
+            approvedLeaveIntervals,
+            requiredWorkingIntervals,
+            approvedLeaveMinutes: appliedOverrides.reduce((sum, row) => sum + (row.calculatedMinutes ?? 0), 0),
+            requiredWorkingMinutes: clockIntervalMinutes(requiredWorkingIntervals),
+            effectiveCheckInTime: day.effectiveCheckInTime ?? null,
+            effectiveCheckOutTime: day.effectiveCheckOutTime ?? null,
+          }
+        : day.attendanceRequirements;
       const dayEvents = events.filter((e) => String(e.attendanceDayId) === String(day._id));
       const inEvt = dayEvents.find((e) => e.eventType === AttendanceEventType.CHECK_IN);
       const outEvt = dayEvents.find((e) => e.eventType === AttendanceEventType.CHECK_OUT);
@@ -1078,6 +1129,13 @@ export class AttendanceService {
 
       return {
         ...day,
+        ...(appliedOverrides.length ? {
+          workdayType: appliedOverrides[0].type,
+          attendanceStatus: appliedOverrides.every((row) => !row.requiredWorkingIntervals?.length)
+            ? AttendanceStatus.DAY_OFF
+            : day.attendanceStatus,
+          attendanceRequirements,
+        } : {}),
         checkInProvenance: day.checkInProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
         checkOutProvenance: day.checkOutProvenance ?? { source: AttendanceEndpointSource.LEGACY_UNKNOWN },
         checkIn: inEvt

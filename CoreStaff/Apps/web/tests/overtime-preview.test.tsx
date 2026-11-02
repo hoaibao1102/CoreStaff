@@ -38,6 +38,12 @@ describe('overtime preview UX', () => {
     expect(container.textContent).toContain('không xác nhận thời gian OT');
     await act(async () => root.unmount()); container.remove();
   });
+  it('never exposes internal overtime reason codes', () => {
+    const { overtimeErrorMessage } = require('../src/services/overtime.service');
+    expect(overtimeErrorMessage('OVERTIME_ATTENDANCE_INCOMPLETE')).toContain('Chưa đủ dữ liệu xác minh OT');
+    expect(overtimeErrorMessage('SOME_INTERNAL_OVERTIME_CODE')).toBe('Không thể xác định điều kiện OT cho thời gian đã chọn. Vui lòng kiểm tra lại hoặc liên hệ HR.');
+    expect(overtimeErrorMessage('SOME_INTERNAL_OVERTIME_CODE')).not.toContain('SOME_INTERNAL_OVERTIME_CODE');
+  });
   it('calls the preview API without trusting client minutes', async () => {
     const { previewOvertime } = require('../src/services/overtime.service');
     global.fetch = jest.fn(async () => ({ ok: true, text: async () => JSON.stringify({ success: true, data: { rawEligibleMinutes: 95, payableMinutes: 90 } }) })) as any;
