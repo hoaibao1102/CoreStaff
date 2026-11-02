@@ -957,6 +957,22 @@ export class TimesheetPeriodService {
 		return { ...buildManagerSnapshotReview(summaries), acknowledgementProgress: await this.employeeReviews.getDepartmentProgress(organizationId, period, departmentId) };
 	}
 
+	/**
+	 * Per-department employee acknowledgement progress for the review screen.
+	 * Cheaper than the snapshot preview: no work-credit summaries are built, so
+	 * a manager can see who has confirmed before opening the full preview.
+	 */
+	async getDepartmentAcknowledgementProgress(
+		organizationId: string,
+		id: string,
+		managerUserId: string,
+		departmentId: string,
+	): Promise<any> {
+		const period = await this.findById(organizationId, id);
+		await this.managerScopeService.requireReviewDepartment(organizationId, managerUserId, departmentId);
+		return this.employeeReviews.getDepartmentProgress(organizationId, period, departmentId);
+	}
+
 	/** Departments with active/probation employees are required to confirm. */
 	private async getRequiredDepartmentIds(organizationId: string): Promise<string[]> {
 		const departmentIds = await this.employeeProfileModel.distinct('departmentId', {
