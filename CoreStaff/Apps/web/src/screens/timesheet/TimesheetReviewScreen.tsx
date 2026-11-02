@@ -30,6 +30,7 @@ import {
   TimesheetPeriod,
   confirmDepartmentTimesheet,
   TimesheetAcknowledgementProgress,
+  getDepartmentAcknowledgementProgress,
 } from '@/services/hrService';
 import { getManagerContext, ManagerContext } from '@/services/manager.service';
 import { toast } from '@/components/toast';
@@ -102,6 +103,10 @@ export function TimesheetReviewScreen({
   const [previewData, setPreviewData] = useState<{ summaries: any[]; acknowledgementProgress?: TimesheetAcknowledgementProgress } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDepartmentId, setPreviewDepartmentId] = useState<string | null>(null);
+  // Ai đã xác nhận bảng công — tải sẵn cho từng phòng ban quản lý.
+  const [acknowledgements, setAcknowledgements] = useState<Record<string, TimesheetAcknowledgementProgress>>({});
+  const [acknowledgementsLoading, setAcknowledgementsLoading] = useState<Record<string, boolean>>({});
+  const [acknowledgementsError, setAcknowledgementsError] = useState<Record<string, string>>({});
   // TASK-074 — blocker drill-down
   const [expandedBlocker, setExpandedBlocker] = useState<PeriodBlockerType | null>(null);
   const [blockerRows, setBlockerRows] = useState<PeriodBlockerRow[]>([]);
@@ -159,6 +164,13 @@ export function TimesheetReviewScreen({
     };
   }, [apiBase, selectedPeriod?._id]);
 
+  // Manager view: preload who confirmed for every department they manage, so
+  // the review screen answers "ai đã xác nhận?" without opening the preview.
+  useEffect(() => {
+    if (!selectedPeriod || userRole !== 'DEPARTMENT_MANAGER' || !managerContext) return;
+    managerContext.managedDepartments.forEach(department => { void loadAcknowledgements(department.id); });
+  }, [selectedPeriod?._id, selectedPeriod?.version, userRole, managerContext]);
+
   async function loadPeriods() {
     setLoading(true);
     try {
@@ -214,6 +226,20 @@ export function TimesheetReviewScreen({
     }
   }
 
+  async function loadAcknowledgements(departmentId: string) {
+    if (!selectedPeriod) return;
+    setAcknowledgementsLoading(current => ({ ...current, [departmentId]: true }));
+    setAcknowledgementsError(current => ({ ...current, [departmentId]: '' }));
+    try {
+      const progress = await getDepartmentAcknowledgementProgress(apiBase, selectedPeriod._id, departmentId);
+      setAcknowledgements(current => ({ ...current, [departmentId]: progress }));
+    } catch (err) {
+      setAcknowledgementsError(current => ({ ...current, [departmentId]: hrErrorMessage(err) }));
+    } finally {
+      setAcknowledgementsLoading(current => ({ ...current, [departmentId]: false }));
+    }
+  }
+
   async function handlePreviewSnapshot(departmentId: string) {
     if (!selectedPeriod) return;
     setPreviewDepartmentId(departmentId);
@@ -248,6 +274,7 @@ export function TimesheetReviewScreen({
       setTimeout(() => {
         loadPeriods();
         setSelectedPeriod(null);
+        setAcknowledgements({});
         setCloseSuccess(false);
       }, 2000);
     } catch (err: any) {
@@ -273,6 +300,7 @@ export function TimesheetReviewScreen({
       );
       setPreviewData(null);
       setPreviewDepartmentId(null);
+      setAcknowledgements(current => { const next = { ...current }; delete next[departmentId]; return next; });
       await loadPeriodDetail(selectedPeriod._id);
     } catch (err: any) {
       toast.error(hrErrorMessage(err));
@@ -657,6 +685,14 @@ export function TimesheetReviewScreen({
                               </div>
                             )}
                           </div>
+                          {!confirmation && (
+                            <DepartmentAcknowledgementPanel
+                              progress={acknowledgements[dept.id]}
+                              loading={!!acknowledgementsLoading[dept.id]}
+                              error={acknowledgementsError[dept.id]}
+                              onRefresh={() => void loadAcknowledgements(dept.id)}
+                            />
+                          )}
                           {!confirmation && departmentBlockers[dept.id]?.total > 0 && (
                             <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3" role="alert">
                               <p className="font-medium text-destructive">{dept.name} còn {departmentBlockers[dept.id].total} lỗi cần xử lý trước khi xác nhận.</p>
@@ -799,6 +835,108 @@ export function TimesheetReviewScreen({
             await loadPeriodDetail(selectedPeriod._id);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+const ACKNOWLEDGEMENT_LABEL: Record<string, string> = {
+  ACKNOWLEDGED: 'Đã xác nhận',
+  DISPUTED: 'Báo sai lệch',
+  PENDING: 'Chưa xác nhận',
+};
+
+/**
+ * Ai đã xác nhận bảng công — danh sách từng nhân viên của phòng ban kèm trạng
+ * thái, để quản lý biết còn chờ ai trước khi xác nhận phòng ban.
+ */
+export function DepartmentAcknowledgementPanel({
+  progress,
+  loading,
+  error,
+  onRefresh,
+}: {
+  progress?: TimesheetAcknowledgementProgress;
+  loading: boolean;
+  error?: string;
+  onRefresh: () => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (loading && !progress) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Đang tải trạng thái xác nhận…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm" role="alert">
+        <span className="text-destructive">{error}</span>
+        <Button size="sm" variant="outline" onClick={onRefresh}>Thử lại</Button>
+      </div>
+    );
+  }
+  if (!progress) return null;
+
+  // Chỉ những người chưa xác nhận mới cần hành động; mở rộng để xem toàn bộ.
+  const pending = progress.employees.filter((employee) => employee.state !== 'ACKNOWLEDGED');
+  const visible = showAll ? progress.employees : pending;
+  const done = progress.acknowledgedEmployees >= progress.eligibleEmployees;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">
+          Nhân viên xác nhận:{' '}
+          <span className={done ? 'text-emerald-700' : 'text-amber-700'}>
+            {progress.acknowledgedEmployees}/{progress.eligibleEmployees}
+          </span>
+          {progress.disputedEmployees > 0 && (
+            <span className="ml-2 text-destructive">{progress.disputedEmployees} báo sai lệch</span>
+          )}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onRefresh} disabled={loading}>
+            <Loader2 className={`size-3.5 ${loading ? 'animate-spin' : 'hidden'}`} /> Làm mới
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? 'Chỉ người chưa xác nhận' : `Xem tất cả (${progress.eligibleEmployees})`}
+          </Button>
+        </div>
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-sm text-emerald-700">Tất cả nhân viên trong phòng ban đã xác nhận bảng công.</p>
+      ) : (
+        <ul className="divide-y rounded-md border border-border bg-background">
+          {visible.map((employee) => (
+            <li key={employee.userId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="min-w-0">
+                <span className="font-medium">{employee.fullName ?? 'Nhân viên'}</span>
+                {employee.employeeCode && (
+                  <span className="ml-1.5 font-mono text-xs text-muted-foreground">{employee.employeeCode}</span>
+                )}
+                {employee.state === 'DISPUTED' && employee.disputeReason && (
+                  <span className="mt-1 block text-xs text-muted-foreground">{employee.disputeReason}</span>
+                )}
+              </span>
+              <Badge
+                variant="outline"
+                className={
+                  employee.state === 'ACKNOWLEDGED'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : employee.state === 'DISPUTED'
+                      ? 'border-destructive/30 bg-destructive/5 text-destructive'
+                      : 'border-amber-300 bg-amber-50 text-amber-800'
+                }
+              >
+                {ACKNOWLEDGEMENT_LABEL[employee.state] ?? employee.state}
+              </Badge>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

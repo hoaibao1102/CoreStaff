@@ -32,7 +32,6 @@ import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
-import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
 import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
 import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
 import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
@@ -343,11 +342,10 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     const payslipId = route.startsWith('/app/payslips/') ? route.split('/').pop() : undefined;
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
-        <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          {/* currentPath giữ nguyên route để mục "Bảng lương của tôi" trên sidebar vẫn sáng. */}
-          <MyPayslipsScreen apiBase={apiBase} />
-          {payslipId && <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} />}
-        </section>
+        {/* Phiếu lương mở trên tab "Bảng lương" của Công & Lương, nên đóng
+            phiếu là quay lại đúng trang đó thay vì một danh sách rời. */}
+        <MyCompensationScreen key="payslip" apiBase={apiBase} initialTab="payslip" />
+        {payslipId && <PayslipDetailScreen apiBase={apiBase} payslipId={payslipId} />}
       </WorkspaceShell>
     );
   }
