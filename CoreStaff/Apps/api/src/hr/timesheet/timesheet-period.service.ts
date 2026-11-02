@@ -353,12 +353,6 @@ export class TimesheetPeriodService {
 		const totalEmployees = summariesGenerated;
 		const snapshotsCreated = scopedSnapshots.length;
 
-		const scopedSummaries = scopedEmployeeIds
-			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
-			: summaries;
-		const scopedSnapshots = scopedEmployeeIds
-			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
-			: snapshots;
 		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
 		const eligibleEmployeeIds = new Set(scopedSummaries.map((summary: any) => String(summary.userId)));
 		const employeesMissingPunches = new Set(
@@ -443,12 +437,6 @@ export class TimesheetPeriodService {
 		const period = await this.findById(organizationId, id);
 
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
-		const scopedSummaries = scopedEmployeeIds
-			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
-			: summaries;
-		const scopedSnapshots = scopedEmployeeIds
-			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
-			: snapshots;
 		let rows = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
 
 		if (opts.type) rows = rows.filter((row) => row.type === opts.type);
@@ -492,12 +480,6 @@ export class TimesheetPeriodService {
 		// Managers may only open days of employees inside their scope. 404 rather
 		// than 403 so the endpoint does not leak whether the day exists.
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
-		const scopedSummaries = scopedEmployeeIds
-			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
-			: summaries;
-		const scopedSnapshots = scopedEmployeeIds
-			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
-			: snapshots;
 		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
 			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
 		}
