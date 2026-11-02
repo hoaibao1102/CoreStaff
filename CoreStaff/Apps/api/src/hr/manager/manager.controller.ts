@@ -43,7 +43,7 @@ export class ManagerController {
   }
 
   @Roles('DEPARTMENT_MANAGER') @Get('manager/approvals')
-  async approvals(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Query('type') type?: string, @Query('status') status?: string, @Query('departmentId') departmentId?: string) {
+  async approvals(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Query('type') type?: string, @Query('status') status?: string, @Query('departmentId') departmentId?: string): Promise<any> {
     return { success: true, data: await this.requests.listForManager(this.org(org), this.uid(user), { type, status, departmentId }) };
   }
 

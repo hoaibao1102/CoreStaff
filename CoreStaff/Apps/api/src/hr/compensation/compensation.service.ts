@@ -191,16 +191,21 @@ export class CompensationService {
     return row;
   }
 
-  async getApplicableKpiPolicy(org: string, departmentId?: string) {
-    const now = new Date();
+  async getApplicableKpiPolicy(org: string, departmentId?: string, periodOrDate?: string | Date) {
+    let refDate = new Date();
+    if (typeof periodOrDate === 'string' && /^\d{4}-\d{2}$/.test(periodOrDate)) {
+      refDate = new Date(`${periodOrDate}-28T00:00:00.000Z`);
+    } else if (periodOrDate instanceof Date) {
+      refDate = periodOrDate;
+    }
     if (departmentId) {
       const deptPolicy = await this.kpiPolicies.findOne({
         organizationId: org,
         active: true,
         scope: 'DEPARTMENT',
         departmentIds: departmentId,
-        effectiveFrom: { $lte: now },
-        $or: [{ effectiveTo: null }, { effectiveTo: { $gt: now } }],
+        effectiveFrom: { $lte: refDate },
+        $or: [{ effectiveTo: null }, { effectiveTo: { $gt: refDate } }],
       }).sort({ effectiveFrom: -1 }).lean();
       if (deptPolicy) return deptPolicy;
     }
@@ -209,8 +214,8 @@ export class CompensationService {
       organizationId: org,
       active: true,
       scope: 'ALL',
-      effectiveFrom: { $lte: now },
-      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: now } }],
+      effectiveFrom: { $lte: refDate },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: refDate } }],
     }).sort({ effectiveFrom: -1 }).lean();
 
     return allPolicy ?? null;
@@ -256,14 +261,26 @@ export class CompensationService {
       await this.managerScope.requireDepartment(org, actorId, String(emp.departmentId));
     }
 
+    const applicablePolicy = await this.getApplicableKpiPolicy(
+      org,
+      emp.departmentId ? String(emp.departmentId) : undefined,
+      dto.period
+    );
+    if (!applicablePolicy && !dto.policyId) {
+      throw new ConflictException('KPI_POLICY_REQUIRED');
+    }
+
     let finalAmount = dto.amount;
-    if (dto.baseAmount !== undefined && dto.tierPercentage !== undefined) {
-      finalAmount = Math.round((dto.baseAmount * dto.tierPercentage) / 100);
+    const baseAmt = dto.baseAmount !== undefined ? dto.baseAmount : applicablePolicy?.baseAmount;
+    if (baseAmt !== undefined && dto.tierPercentage !== undefined) {
+      finalAmount = Math.round((baseAmt * dto.tierPercentage) / 100);
     }
 
     try {
       const row = await this.kpis.create({
         ...dto,
+        policyId: dto.policyId || applicablePolicy?._id,
+        baseAmount: baseAmt,
         amount: finalAmount,
         departmentId: emp.departmentId,
         employeeProfileId: dto.employeeId,

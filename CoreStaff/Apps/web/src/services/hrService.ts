@@ -332,6 +332,15 @@ export interface EmployeeDocument {
  */
 export const HR_ERROR_CODES: Record<string, string> = {
     WORK_CREDIT_POLICY_MISSING: 'Chưa có chính sách quy đổi ngày công áp dụng cho kỳ này. Vui lòng cấu hình chính sách trước.',
+    PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công của ngày này đã chốt hoặc đã phát hành bảng lương. Không thể điều chỉnh dữ liệu chấm công.',
+    PERIOD_REQUIRED: 'Chưa có kỳ công phù hợp cho ngày làm việc này. Vui lòng liên hệ HR để kiểm tra.',
+    ATTENDANCE_EVIDENCE_INVALID: 'Minh chứng chấm công không hợp lệ hoặc đã được xử lý trước đó.',
+    // Attendance adjustment errors
+    CHECK_IN_ALREADY_EXISTS: 'Ngày này đã có mốc chấm công vào (check-in), không thể bổ sung thêm.',
+    CHECK_OUT_ALREADY_EXISTS: 'Ngày này đã có mốc chấm công ra (check-out), không thể bổ sung thêm.',
+    CHECK_IN_MUST_BE_BEFORE_CHECK_OUT: 'Giờ vào (check-in) phải trước giờ ra (check-out).',
+    CHECK_OUT_MUST_BE_AFTER_CHECK_IN: 'Giờ ra (check-out) phải sau giờ vào (check-in).',
+    REQUEST_STATE_CHANGED: 'Trạng thái yêu cầu đã thay đổi hoặc đã được xử lý. Vui lòng tải lại trang.',
     // Assignment errors
     AT_LEAST_ONE_FILTER_REQUIRED: 'Vui lòng chọn trạng thái hoặc nơi làm việc để lọc dữ liệu.',
     USER_NOT_FOUND_IN_TENANT: 'Không tìm thấy nhân viên trong tổ chức hiện tại.',
@@ -403,6 +412,9 @@ export const HR_ERROR_CODES: Record<string, string> = {
     KPI_INPUT_ALREADY_EXISTS: 'Nhân viên này đã có dữ liệu KPI trong kỳ lương được chọn.',
     KPI_INPUT_CONFIRMED_IMMUTABLE: 'Dữ liệu KPI đã được xác nhận và không thể chỉnh sửa.',
     KPI_INPUT_NOT_DRAFT: 'Chỉ có thể xác nhận bản ghi KPI ở trạng thái Nháp.',
+    KPI_POLICY_REQUIRED: 'Chưa có chính sách KPI hiệu lực cho kỳ này. Vui lòng thiết lập chính sách trước.',
+    KPI_POLICY_NOT_FOUND: 'Không tìm thấy chính sách KPI áp dụng cho kỳ này.',
+    KPI_TIER_INVALID: 'Thang bậc đánh giá KPI không hợp lệ theo chính sách hiện hành.',
 
     // Insurance Profile errors (TASK-038)
     INSURANCE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ tham gia bảo hiểm.',
@@ -451,7 +463,6 @@ export const HR_ERROR_CODES: Record<string, string> = {
     // `LABOR_POLICY_NOT_FOUND` already maps in the salary/policy block above.
     SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt yêu cầu của chính mình.',
     REVIEW_REASON_REQUIRED: 'Vui lòng nhập lý do (tối thiểu 10 ký tự) khi từ chối hoặc yêu cầu giải trình.',
-    REQUEST_STATE_CHANGED: 'Yêu cầu đã được xử lý bởi người khác. Vui lòng tải lại danh sách.',
     PERIOD_VERSION_CONFLICT: 'Bảng công đã thay đổi sau lần rà soát. Dữ liệu sẽ được tải lại; vui lòng kiểm tra và xác nhận lại.',
     TIMESHEET_REVIEW_CHANGED: 'Nội dung bảng công đã thay đổi. Vui lòng tải lại và kiểm tra lại.',
     EMPLOYEE_ACKNOWLEDGEMENT_PENDING: 'Còn nhân viên chưa rà soát bảng công.',
@@ -528,15 +539,16 @@ export function mapHrError(code?: string, fallback?: string): string {
  */
 export function hrErrorMessage(error: unknown): string {
     const err = error as { code?: string; status?: number; message?: string };
+    const errKey = err.code || err.message;
 
     // Ưu tiên code lỗi từ backend
-    if (err.code && HR_ERROR_CODES[err.code]) {
+    if (errKey && HR_ERROR_CODES[errKey]) {
         // Lỗi thiếu cột có dạng `MÃ:Sheet:Tên cột` — nói rõ thiếu cột nào thì HR
         // mới sửa được, chỉ báo mã lỗi chung chung thì vô ích.
-        if (err.code === 'EMPLOYEE_IMPORT_MISSING_COLUMNS' && err.message?.includes(':')) {
-            return `${HR_ERROR_CODES[err.code]} (${err.message.split(':').slice(1).join(':')})`;
+        if (errKey === 'EMPLOYEE_IMPORT_MISSING_COLUMNS' && err.message?.includes(':')) {
+            return `${HR_ERROR_CODES[errKey]} (${err.message.split(':').slice(1).join(':')})`;
         }
-        return HR_ERROR_CODES[err.code];
+        return HR_ERROR_CODES[errKey];
     }
 
     // Xử lý theo HTTP status
@@ -1538,4 +1550,41 @@ export async function closeEnterpriseInsurancePolicy(base: string, id: string, e
         method: 'PATCH',
         body: JSON.stringify({ effectiveTo }),
     });
+}
+
+export interface HrAuditLogItem {
+    _id: string;
+    eventId: string;
+    actorId?: string;
+    actorNameSnapshot?: string;
+    actorRoleSnapshot?: string;
+    action: string;
+    targetType: string;
+    targetId?: string;
+    targetSummary?: string;
+    correlationId?: string;
+    source?: string;
+    outcome?: string;
+    reason?: string;
+    isSelfApproved?: boolean;
+    details?: any;
+    occurredAt: string;
+}
+
+export async function getHrAuditLogs(
+    base: string,
+    params: { action?: string; actorId?: string; isSelfApproved?: boolean; page?: number; limit?: number } = {},
+): Promise<{ data: HrAuditLogItem[]; total: number }> {
+    const q = new URLSearchParams();
+    if (params.action) q.set('action', params.action);
+    if (params.actorId) q.set('actorId', params.actorId);
+    if (params.isSelfApproved !== undefined) q.set('isSelfApproved', String(params.isSelfApproved));
+    if (params.page) q.set('page', String(params.page));
+    if (params.limit) q.set('limit', String(params.limit));
+    const res = await hrRequest<{ success: boolean; data: HrAuditLogItem[]; total: number }>(
+        base,
+        `/api/hr/audit-logs${q.size ? `?${q}` : ''}`,
+        { method: 'GET' },
+    );
+    return { data: Array.isArray(res) ? res : res.data ?? [], total: (res as any).total ?? (Array.isArray(res) ? res.length : 0) };
 }

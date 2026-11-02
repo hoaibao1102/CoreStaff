@@ -57,6 +57,18 @@ export class ManagerRequestService {
     if (!departmentId) throw new NotFoundException('EMPLOYEE_ASSIGNMENT_NOT_FOUND');
     if (dto.type === 'ATTENDANCE') {
       await this.confirmation?.assertLegacyCreateAllowed(org);
+      if (this.requests.db) {
+        const date = new Date(`${workDate}T00:00:00.000Z`);
+        const period: any = await this.requests.db.model('TimesheetPeriod').findOne({
+          organizationId: org,
+          active: true,
+          startDate: { $lte: date },
+          endDate: { $gte: date },
+        }).lean();
+        if (period && (period.status === 'CLOSED' || period.payrollRunId != null)) {
+          throw new ConflictException('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+        }
+      }
       if (!dto.adjustmentType || !dto.requestedStart) throw new ConflictException('ATTENDANCE_ADJUSTMENT_DETAILS_REQUIRED');
       const requestedAt = new Date(dto.requestedStart);
       const requestedWorkDate = requestedAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
@@ -150,7 +162,7 @@ export class ManagerRequestService {
     return this.requests.find({ organizationId: org, employeeUserId: userId }).sort({ createdAt: -1 }).lean();
   }
 
-  async listForManager(org: string, managerId: string, filter: { type?: string; status?: string; departmentId?: string }) {
+  async listForManager(org: string, managerId: string, filter: { type?: string; status?: string; departmentId?: string }): Promise<any[]> {
     const ids = await this.scope.getManagedDepartmentIds(org, managerId);
     if (filter.departmentId) await this.scope.requireDepartment(org, managerId, filter.departmentId);
     const departments = filter.departmentId ? [filter.departmentId] : ids;
@@ -173,8 +185,17 @@ export class ManagerRequestService {
       .populate('employeeUserId', 'fullName email avatarUrl')
       .sort({ createdAt: -1 })
       .lean();
-    const reviewDepartments=await this.scope.getAuthorizedReviewDepartmentIds(org,managerId);
-    return rows.filter(row=>row.source!=='ATTENDANCE_CONFIRMATION'||(reviewDepartments.includes(String(row.departmentId))&&String((row.employeeUserId as any)?._id??row.employeeUserId)!==managerId));
+    const reviewDepartments = await this.scope.getAuthorizedReviewDepartmentIds(org, managerId);
+    return rows
+      .filter(row => row.source !== 'ATTENDANCE_CONFIRMATION' || reviewDepartments.includes(String(row.departmentId)))
+      .map(row => {
+        const empUserId = String((row.employeeUserId as any)?._id ?? row.employeeUserId);
+        const isSelfRequest = empUserId === String(managerId);
+        return {
+          ...row,
+          isSelfRequest,
+        };
+      });
   }
 
   async detail(org: string, managerId: string, id: string): Promise<any> {
@@ -184,18 +205,33 @@ export class ManagerRequestService {
       .populate('employeeUserId', 'fullName email avatarUrl')
       .lean();
     if (!row) throw new NotFoundException('REQUEST_NOT_FOUND');
-    if(row.source==='ATTENDANCE_CONFIRMATION') {
-      const employee=String((row.employeeUserId as any)?._id??row.employeeUserId);
-      if(employee===managerId)throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
-      await this.scope.requireReviewDepartment(org,managerId,String(row.departmentId));
-      if(!this.confirmation)return {...row,canApprove:false,contextValidity:{valid:false}};
-      try {
-        const {snapshot,...confirmation}=await this.confirmation.preview(org,employee,new Date(row.workDate).toISOString().slice(0,10));
-        const valid=confirmation.contextHash===row.confirmationContextHash;
-        const blockers=confirmation.blockedReasons.filter(code=>code!=='MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
-        return {...row,confirmation:{...confirmation,enabled:true},canApprove:row.status==='PENDING'&&valid&&blockers.length===0&&confirmation.period?.canMutate===true,contextValidity:{valid}};
-      }catch(error:any){return {...row,canApprove:false,contextValidity:{valid:false},confirmation:{enabled:false,canSubmit:false,blockedReasons:[error.message]}};}
+    const currentEmpUserId = String(
+      (row.employeeUserId as any)?._id ??
+      row.employeeUserId ??
+      (row.employeeId as any)?._id ??
+      row.employeeId
+    );
+    const isSelfApproval = currentEmpUserId === String(managerId);
 
+    if (row.source === 'ATTENDANCE_CONFIRMATION') {
+      const employee = String((row.employeeUserId as any)?._id ?? row.employeeUserId);
+      await this.scope.requireReviewDepartment(org, managerId, String(row.departmentId));
+      if (!this.confirmation) return { ...row, isSelfRequest: isSelfApproval, isSelfApproval, canApprove: false, contextValidity: { valid: false } };
+      try {
+        const { snapshot, ...confirmation } = await this.confirmation.preview(org, employee, new Date(row.workDate).toISOString().slice(0, 10));
+        const valid = confirmation.contextHash === row.confirmationContextHash;
+        const blockers = confirmation.blockedReasons.filter(code => code !== 'MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
+        return {
+          ...row,
+          isSelfRequest: isSelfApproval,
+          isSelfApproval,
+          confirmation: { ...confirmation, enabled: true },
+          canApprove: row.status === 'PENDING' && valid && blockers.length === 0 && confirmation.period?.canMutate === true,
+          contextValidity: { valid },
+        };
+      } catch (error: any) {
+        return { ...row, isSelfRequest: isSelfApproval, isSelfApproval, canApprove: false, contextValidity: { valid: false }, confirmation: { enabled: false, canSubmit: false, blockedReasons: [error.message] } };
+      }
     }
     try {
       await this.scope.requireDepartment(org, managerId, String(row.departmentId));
@@ -204,7 +240,31 @@ export class ManagerRequestService {
       const employeeUserId = String(populatedEmployeeUser?._id ?? populatedEmployeeUser);
       if (!await this.scope.isEmployeeInManagedScope(org, managerId, employeeUserId)) throw error;
     }
-    return row;
+    let periodInfo = { status: 'OPEN', canMutate: true };
+    if (this.requests.db && row.workDate) {
+      try {
+        const date = new Date(row.workDate);
+        const period: any = await this.requests.db.model('TimesheetPeriod').findOne({
+          organizationId: org,
+          active: true,
+          startDate: { $lte: date },
+          endDate: { $gte: date },
+        }).lean();
+        if (period) {
+          const isClosed = period.status === 'CLOSED' || period.payrollRunId != null;
+          periodInfo = { status: period.status, canMutate: !isClosed };
+        }
+      } catch (pErr) {
+        // fallback
+      }
+    }
+    return {
+      ...row,
+      period: periodInfo,
+      canApprove: row.status === 'PENDING' && periodInfo.canMutate,
+      isSelfRequest: isSelfApproval,
+      isSelfApproval,
+    };
   }
 
   async decide(
@@ -228,7 +288,14 @@ export class ManagerRequestService {
       (current.employeeUserId?._id ?? current.employeeUserId) ||
       (current.employeeId?._id ?? current.employeeId)
     );
-    if (currentEmpUserId === String(managerId)) throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
+    const isSelfApproved = currentEmpUserId === String(managerId);
+    const selfApprovalAudit = isSelfApproved
+      ? {
+          isSelfApproved: true,
+          auditTag: 'SELF_APPROVED',
+          auditNote: 'Quản lý tự duyệt (Self-approved) - Lưu vết kiểm toán cho HR hậu kiểm',
+        }
+      : {};
     if ((status === 'REJECTED' || status === 'CLARIFICATION_REQUESTED') && (!reason || reason.trim().length < 10)) {
       throw new ConflictException('REVIEW_REASON_REQUIRED');
     }
@@ -258,7 +325,7 @@ export class ManagerRequestService {
         precheck = await this.ot!.precheckApproval(org, candidate, session);
         const updated = await this.requests.findOneAndUpdate(
           { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
-          { $set: { status, reviewedBy: managerId, reviewComment: reason, reviewedAt: new Date(), approvedStart: candidate.approvedStart, approvedEnd: candidate.approvedEnd }, $inc: { version: 1 } },
+          { $set: { status, reviewedBy: managerId, reviewComment: reason, reviewedAt: new Date(), approvedStart: candidate.approvedStart, approvedEnd: candidate.approvedEnd, ...selfApprovalAudit }, $inc: { version: 1 } },
           { new: true, session },
         ).lean();
         if (!updated) throw new ConflictException('REQUEST_STATE_CHANGED');
@@ -280,6 +347,7 @@ export class ManagerRequestService {
             reviewedAt: new Date(),
             approvedStart: approvedStart ? new Date(approvedStart) : undefined,
             approvedEnd: approvedEnd ? new Date(approvedEnd) : undefined,
+            ...selfApprovalAudit,
           },
           $inc: { version: 1 },
         },
@@ -429,9 +497,19 @@ export class ManagerRequestService {
             );
           }
         }
+        const isSelfApprovedAttendance =
+          String(fresh.employeeUserId) === String(managerId) ||
+          String(fresh.employeeId?._id ?? fresh.employeeId) === String(managerId);
+        const selfAuditAttendance = isSelfApprovedAttendance
+          ? {
+              isSelfApproved: true,
+              auditTag: 'SELF_APPROVED',
+              auditNote: 'Quản lý tự duyệt (Self-approved) - Lưu vết kiểm toán cho HR hậu kiểm',
+            }
+          : {};
         const row = await this.requests.findOneAndUpdate(
           { _id: id, organizationId: org, status: 'PENDING', version: expectedVersion },
-          { $set: { status, reviewedBy: managerId, reviewedAt: new Date(), reviewComment: reason }, $inc: { version: 1 } },
+          { $set: { status, reviewedBy: managerId, reviewedAt: new Date(), reviewComment: reason, ...selfAuditAttendance }, $inc: { version: 1 } },
           { new: true, session },
         ).lean();
         if (!row) throw new ConflictException('REQUEST_STATE_CHANGED');
@@ -453,23 +531,56 @@ export class ManagerRequestService {
     } finally { await session.endSession(); }
   }
 
+  private resolveAdjustmentParams(request: any, day?: any) {
+    let action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT' | undefined;
+    if (!action) {
+      if (day?.checkInAt && !day?.checkOutAt) action = 'CHECK_OUT';
+      else if (!day?.checkInAt && day?.checkOutAt) action = 'CHECK_IN';
+      else if (/vào|in|bắt đầu/i.test(request.reason || '')) action = 'CHECK_IN';
+      else if (/ra|out|kết thúc|về/i.test(request.reason || '')) action = 'CHECK_OUT';
+      else action = 'CHECK_IN';
+    }
+
+    const workDate = day?.workDate || (request.workDate ? new Date(request.workDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : dateOnly(new Date().toISOString()));
+    let recordedAt = request.requestedStart ? new Date(request.requestedStart) : null;
+    if (!recordedAt || isNaN(recordedAt.getTime())) {
+      const timeStr = action === 'CHECK_IN' ? (day?.shiftSnapshot?.startTime || '08:00') : (day?.shiftSnapshot?.endTime || '17:00');
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const baseDate = new Date(`${workDate}T00:00:00.000Z`);
+      baseDate.setUTCHours((hh || 8) - 7, mm || 0, 0, 0);
+      recordedAt = baseDate;
+    }
+    return { action, recordedAt, workDate };
+  }
+
   private async applyAttendanceAdjustment(org: string, request: any, session?: ClientSession) {
-    const action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT';
-    const recordedAt = new Date(request.requestedStart);
-    const workDate = dateOnly(new Date(request.workDate).toISOString());
+    const workDateVn = request.workDate ? new Date(request.workDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : '';
+    const workDateUtc = dateOnly(new Date(request.workDate).toISOString());
     const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
-    const query = this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate });
-    let day: any = await (session ? query.session(session) : query);
+
+    let day: any = null;
+    if (request.attendanceDayId) {
+      const query = this.attendanceDays.findOne({ _id: request.attendanceDayId, organizationId: org });
+      day = await (session ? query.session(session) : query);
+    }
+    if (!day) {
+      const query = this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate: { $in: [workDateVn, workDateUtc] } });
+      day = await (session ? query.session(session) : query);
+    }
+
     if (!day) {
       const value = {
         organizationId: org,
         employeeId: employeeUserId,
-        workDate,
+        workDate: workDateVn || workDateUtc,
         attendanceStatus: AttendanceStatus.NOT_CHECKED_IN,
         overallApprovalStatus: AttendanceApprovalStatus.APPROVED,
       };
       day = session ? (await this.attendanceDays.create([value], { session }))[0] : await this.attendanceDays.create(value);
     }
+
+    const { action, recordedAt } = this.resolveAdjustmentParams(request, day);
+
     if (action === 'CHECK_IN') {
       if (day.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
       if (day.checkOutAt && recordedAt >= new Date(day.checkOutAt)) throw new ConflictException('CHECK_IN_MUST_BE_BEFORE_CHECK_OUT');
@@ -495,28 +606,46 @@ export class ManagerRequestService {
     }
     day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
     await day.save(session ? { session } : undefined);
+    const isSelfApprovedAdjustment =
+      String(request.employeeUserId?._id ?? request.employeeUserId) === String(request.reviewedBy || '') ||
+      Boolean(request.isSelfApproved);
     const event = {
       organizationId: org,
       attendanceDayId: day._id,
       employeeId: employeeUserId,
       eventType: action === 'CHECK_IN' ? AttendanceEventType.CHECK_IN : AttendanceEventType.CHECK_OUT,
       method: AttendanceMethod.MANUAL,
-      provenance: {source:'MANUAL_ADJUSTMENT',requestId:request._id},
+      provenance: {
+        source: 'MANUAL_ADJUSTMENT',
+        requestId: request._id,
+        ...(isSelfApprovedAdjustment ? { isSelfApproved: true, auditTag: 'SELF_APPROVED' } : {}),
+      },
       recordedAt,
       approvalStatus: AttendanceApprovalStatus.APPROVED,
       validationStatus: 'VALID',
-      note: request.reason,
+      note: isSelfApprovedAdjustment
+        ? `[TỰ DUYỆT] ${request.reason || ''}`.trim()
+        : request.reason,
     };
     if (session) await this.attendanceEvents.create([event], { session });
     else await this.attendanceEvents.create(event);
   }
 
   private async assertAttendanceAdjustmentCanApply(org: string, request: any) {
-    const action = request.metadata?.actionType as 'CHECK_IN' | 'CHECK_OUT';
-    const recordedAt = new Date(request.requestedStart);
-    const workDate = dateOnly(new Date(request.workDate).toISOString());
+    const workDateVn = request.workDate ? new Date(request.workDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : '';
+    const workDateUtc = dateOnly(new Date(request.workDate).toISOString());
     const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
-    const day: any = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate }).lean();
+
+    let day: any = null;
+    if (request.attendanceDayId) {
+      day = await this.attendanceDays.findOne({ _id: request.attendanceDayId, organizationId: org }).lean();
+    }
+    if (!day) {
+      day = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate: { $in: [workDateVn, workDateUtc] } }).lean();
+    }
+
+    const { action, recordedAt } = this.resolveAdjustmentParams(request, day);
+
     if (action === 'CHECK_IN') {
       if (day?.checkInAt) throw new ConflictException('CHECK_IN_ALREADY_EXISTS');
       if (day?.checkOutAt && recordedAt >= new Date(day.checkOutAt)) throw new ConflictException('CHECK_IN_MUST_BE_BEFORE_CHECK_OUT');

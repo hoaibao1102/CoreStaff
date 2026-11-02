@@ -29,6 +29,9 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'User'}) reviewedBy?:string;
  @Prop({maxlength:1000}) reviewComment?:string;
  @Prop({type:Date}) reviewedAt?:Date;
+ @Prop({type:Boolean,default:false}) isSelfApproved?:boolean;
+ @Prop({type:String,maxlength:64}) auditTag?:string;
+ @Prop({type:String,maxlength:500}) auditNote?:string;
  /**
   * TASK-068 §15.11 additions for `type:'OVERTIME'`. All optional: existing web
   * payloads and existing rows stay valid, and `ATTENDANCE` requests ignore them.

@@ -338,16 +338,29 @@ export class TimesheetPeriodService {
 			);
 		const snapshots = await this.snapshotService.findByPeriod(id);
 
-		const summariesGenerated = summaries.length;
+		// Managers only see statistics and blockers for departments they manage.
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		const scopedSummaries = scopedEmployeeIds
+			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
+			: summaries;
+		const scopedSnapshots = scopedEmployeeIds
+			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+			: snapshots;
+
+		const summariesGenerated = scopedSummaries.length;
 		// The summary service owns the attendance-eligible population and excludes
 		// HR-only accounts, which do not clock in/out.
 		const totalEmployees = summariesGenerated;
-		const snapshotsCreated = snapshots.length;
+		const snapshotsCreated = scopedSnapshots.length;
 
-		// Managers only see blockers for departments they manage.
-		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		const scopedSummaries = scopedEmployeeIds
+			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
+			: summaries;
+		const scopedSnapshots = scopedEmployeeIds
+			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+			: snapshots;
 		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
-		const eligibleEmployeeIds = new Set(summaries.map((summary: any) => String(summary.userId)));
+		const eligibleEmployeeIds = new Set(scopedSummaries.map((summary: any) => String(summary.userId)));
 		const employeesMissingPunches = new Set(
 			blockers
 				.filter((row) => row.type === 'MISSING_CHECK_IN' || row.type === 'MISSING_CHECK_OUT')
@@ -379,11 +392,17 @@ export class TimesheetPeriodService {
 		const confirmedDepartmentIds = new Set(
 			currentConfirmations.map((confirmation) => String(confirmation.departmentId)),
 		);
-		const departmentConfirmationProgress = requiredDepartments.map((department: any) => ({
+		const managedDeptIds = opts.role === 'DEPARTMENT_MANAGER' && opts.userId
+			? new Set(await this.managerScopeService.getManagedDepartmentIds(organizationId, opts.userId))
+			: null;
+		const allProgress = requiredDepartments.map((department: any) => ({
 			departmentId: String(department._id),
 			departmentName: department.name,
 			confirmed: confirmedDepartmentIds.has(String(department._id)),
 		}));
+		const departmentConfirmationProgress = managedDeptIds
+			? allProgress.filter((d: any) => managedDeptIds.has(d.departmentId))
+			: allProgress;
 
 		return {
 			periodId: id,
@@ -424,6 +443,12 @@ export class TimesheetPeriodService {
 		const period = await this.findById(organizationId, id);
 
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		const scopedSummaries = scopedEmployeeIds
+			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
+			: summaries;
+		const scopedSnapshots = scopedEmployeeIds
+			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+			: snapshots;
 		let rows = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
 
 		if (opts.type) rows = rows.filter((row) => row.type === opts.type);
@@ -467,6 +492,12 @@ export class TimesheetPeriodService {
 		// Managers may only open days of employees inside their scope. 404 rather
 		// than 403 so the endpoint does not leak whether the day exists.
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+		const scopedSummaries = scopedEmployeeIds
+			? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
+			: summaries;
+		const scopedSnapshots = scopedEmployeeIds
+			? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+			: snapshots;
 		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
 			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
 		}
@@ -547,6 +578,86 @@ export class TimesheetPeriodService {
 				await this.periodVersionService.bump(organizationId, id, session);
 			});
 			return updated;
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	async requestExplanationForMissingPunch(
+		organizationId: string,
+		id: string,
+		dayId: string,
+		actor: { userId: string; role?: string },
+		note?: string,
+	): Promise<any> {
+		const period = await this.findById(organizationId, id);
+		if (![TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING].includes(period.status)) {
+			throw new ConflictException('PERIOD_NOT_EDITABLE');
+		}
+		if (!Types.ObjectId.isValid(dayId)) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		const day: any = await this.attendanceDayModel.findOne({
+			_id: new Types.ObjectId(dayId),
+			organizationId: new Types.ObjectId(organizationId),
+			periodId: new Types.ObjectId(id),
+		}).lean();
+		if (!day) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, actor);
+		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
+			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		}
+		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') throw new ConflictException('DAY_ALREADY_FORFEITED');
+		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
+
+		const cleanNote = note?.trim() || 'HR yêu cầu nhân viên giải trình lý do thiếu mốc chấm công.';
+
+		const session = await this.attendanceDayModel.db.startSession();
+		try {
+			let updatedDay: any;
+			await session.withTransaction(async () => {
+				updatedDay = await this.attendanceDayModel.findOneAndUpdate(
+					{ _id: day._id, organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
+					{
+						$set: {
+							overallApprovalStatus: 'CLARIFICATION_REQUESTED',
+						},
+					},
+					{ new: true, session },
+				).lean();
+
+				const existingRequest = await this.managerRequestModel.findOne({
+					organizationId: new Types.ObjectId(organizationId),
+					attendanceDayId: day._id,
+				}).session(session);
+
+				if (existingRequest) {
+					existingRequest.status = 'CLARIFICATION_REQUESTED';
+					existingRequest.reviewComment = cleanNote;
+					existingRequest.reviewedBy = actor.userId;
+					existingRequest.reviewedAt = new Date();
+					await existingRequest.save({ session });
+				} else {
+					await this.managerRequestModel.create([{
+						organizationId: new Types.ObjectId(organizationId),
+						employeeUserId: day.employeeId,
+						departmentId: day.departmentId || day.employeeSnapshot?.departmentId,
+						workDate: day.workDate,
+						type: 'ATTENDANCE',
+						requestKind: 'ATTENDANCE_CONFIRMATION',
+						source: 'HR_MISSING_PUNCH_EXPLANATION',
+						status: 'CLARIFICATION_REQUESTED',
+						attendanceDayId: day._id,
+						reason: cleanNote,
+						reviewedBy: actor.userId,
+						reviewedAt: new Date(),
+						version: 1,
+					}], { session });
+				}
+
+				await this.periodVersionService.bump(organizationId, id, session);
+			});
+			return updatedDay;
 		} finally {
 			await session.endSession();
 		}

@@ -19,6 +19,7 @@ import { OvertimeModule } from './overtime/overtime.module';
 import { TaxPolicyModule } from './tax-policy/tax-policy.module';
 import { TimesheetPeriodModule } from './timesheet/timesheet-period.module';
 import { PayrollModule } from './payroll/payroll.module';
+import { HrAuditModule } from './audit/hr-audit.module';
 
 /**
  * HR Core: Sprint 2 catalogs + EmployeeProfile (TASK-020..023), Sprint 3
@@ -52,6 +53,7 @@ import { PayrollModule } from './payroll/payroll.module';
 		TaxPolicyModule,
 		TimesheetPeriodModule,
 		PayrollModule,
+		HrAuditModule,
 	],
 })
 export class HrModule {}

@@ -30,6 +30,7 @@ import { CalendarScreen } from '../screens/Scheduling/CalendarScreen';
 import { HrLeaveScreen } from '../screens/Leave/HrLeaveScreen';
 import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
+import { HrAuditLogScreen } from '../screens/HrAudit/HrAuditLogScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { MyPayslipsScreen } from '../screens/Employee/MyPayslipsScreen';
@@ -253,6 +254,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <CalendarScreen apiBase={apiBase} />
           ) : route === '/hr/leave-requests' && apiBase ? (
             <HrLeaveScreen apiBase={apiBase} />
+          ) : route === '/hr/audit-logs' && apiBase ? (
+            <HrAuditLogScreen apiBase={apiBase} />
           ) : route === '/hr/periods' ? (
             <EmployeeDataState status="unavailable" description="Tính năng đang được phát triển." />
           ) : route === '/hr/payroll-runs' && user.organizationId && apiBase ? (

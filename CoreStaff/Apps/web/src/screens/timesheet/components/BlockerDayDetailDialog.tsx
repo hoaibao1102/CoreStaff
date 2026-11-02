@@ -12,12 +12,14 @@ import {
 } from '@/components/dialog';
 import {
   hrErrorMessage,
+  hrRequest,
   getPeriodDayDetail,
   resolveMissingPunchAsAbsent,
   AttendanceDayDetail,
   PeriodBlockerRow,
 } from '@/services/hrService';
 import { toast } from '@/components/toast';
+import { formatVN } from '@/lib/datetime';
 
 const DAY_RESULT_LABEL: Record<string, string> = {
   PRESENT: 'Có mặt',
@@ -46,7 +48,7 @@ function formatTime(value?: string | null): string {
 
 function formatDate(value?: string): string {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 /**
@@ -75,6 +77,9 @@ export function BlockerDayDetailDialog({
   const [showAbsenceResolution, setShowAbsenceResolution] = useState(false);
   const [resolutionReason, setResolutionReason] = useState('');
   const [resolving, setResolving] = useState(false);
+  const [showExplanationForm, setShowExplanationForm] = useState(false);
+  const [explanationNote, setExplanationNote] = useState('');
+  const [requestingExplanation, setRequestingExplanation] = useState(false);
 
   useEffect(() => {
     if (!open || !blocker) return;
@@ -84,6 +89,8 @@ export function BlockerDayDetailDialog({
     setDetail(null);
     setShowAbsenceResolution(false);
     setResolutionReason('');
+    setShowExplanationForm(false);
+    setExplanationNote('');
     void getPeriodDayDetail(apiBase, periodId, blocker.attendanceDayId)
       .then((data) => { if (!cancelled) setDetail(data); })
       .catch((err) => { if (!cancelled) setError(hrErrorMessage(err)); })
@@ -93,6 +100,25 @@ export function BlockerDayDetailDialog({
 
   const day = detail?.day;
   const canResolveAsAbsent = blocker?.type === 'MISSING_CHECK_IN' || blocker?.type === 'MISSING_CHECK_OUT';
+
+  async function handleRequestExplanation() {
+    if (!blocker) return;
+    setRequestingExplanation(true);
+    setError(null);
+    try {
+      await hrRequest(apiBase, `/api/hr/timesheet-periods/${periodId}/days/${blocker.attendanceDayId}/request-explanation`, {
+        method: 'POST',
+        body: JSON.stringify({ note: explanationNote.trim() || undefined }),
+      });
+      toast.success('Đã gửi yêu cầu giải trình về cho nhân viên.');
+      onOpenChange(false);
+      await onResolved?.();
+    } catch (err) {
+      setError(hrErrorMessage(err));
+    } finally {
+      setRequestingExplanation(false);
+    }
+  }
 
   async function handleResolveAsAbsent() {
     if (!blocker) return;
@@ -227,23 +253,70 @@ export function BlockerDayDetailDialog({
               )}
 
               {canResolveAsAbsent && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm space-y-3">
                   <div className="font-semibold text-amber-900">Xử lý trường hợp quên chấm công</div>
-                  <p className="mt-1 text-amber-800">
-                    Nếu không bổ sung check-in/check-out, quản lý có thể xác nhận nhân viên vắng.
-                    Ngày này sẽ không được tính công và quyết định được lưu lại để đối soát.
+                  <p className="text-amber-800">
+                    HR có thể yêu cầu nhân viên giải trình lý do quên chấm công để quản lý duyệt bổ sung, hoặc trực tiếp xác nhận vắng không tính công.
                   </p>
-                  {!showAbsenceResolution ? (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="mt-3"
-                      onClick={() => setShowAbsenceResolution(true)}
-                    >
-                      Xác nhận mất ngày công
-                    </Button>
-                  ) : (
-                    <div className="mt-3 space-y-3">
+
+                  {!showAbsenceResolution && !showExplanationForm && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        type="button"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => { setShowExplanationForm(true); setShowAbsenceResolution(false); }}
+                      >
+                        Yêu cầu NV giải trình
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => { setShowAbsenceResolution(true); setShowExplanationForm(false); }}
+                      >
+                        Xác nhận mất ngày công
+                      </Button>
+                    </div>
+                  )}
+
+                  {showExplanationForm && (
+                    <div className="space-y-3 pt-2 border-t border-amber-200">
+                      <div>
+                        <label htmlFor="explanation-note" className="font-medium text-amber-950">
+                          Ghi chú yêu cầu giải trình cho nhân viên:
+                        </label>
+                        <Textarea
+                          id="explanation-note"
+                          className="mt-1 bg-white"
+                          value={explanationNote}
+                          onChange={(e) => setExplanationNote(e.target.value)}
+                          placeholder="Ví dụ: Ngày 29 thiếu chấm công ra ca. Vui lòng trình bày lý do để quản lý duyệt."
+                          disabled={requestingExplanation}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={requestingExplanation}
+                          onClick={() => setShowExplanationForm(false)}
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          type="button"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          disabled={requestingExplanation}
+                          onClick={handleRequestExplanation}
+                        >
+                          {requestingExplanation && <Loader2 className="mr-2 size-4 animate-spin" />}
+                          Gửi yêu cầu về cho nhân viên
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {showAbsenceResolution && (
+                    <div className="space-y-3 pt-2 border-t border-amber-200">
                       <div>
                         <label htmlFor="absence-resolution-reason" className="font-medium text-amber-950">
                           Lý do xử lý <span className="text-destructive">*</span>

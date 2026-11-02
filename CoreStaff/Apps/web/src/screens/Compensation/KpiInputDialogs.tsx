@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Award, CheckCircle2, ChevronRight, Info, Sparkles } from 'lucide-react';
+import { AlertCircle, Award, CheckCircle2, ChevronRight, Info, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/alert';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
@@ -90,7 +90,7 @@ export function KpiInputCreateDialog({
 
     // Pre-fetch general or company-wide KPI policy so tiers are visible immediately
     setLoadingPolicy(true);
-    getApplicableKpiPolicy(apiBase)
+    getApplicableKpiPolicy(apiBase, undefined, period)
       .then(pol => setPolicy(pol))
       .catch(() => setPolicy(null))
       .finally(() => setLoadingPolicy(false));
@@ -102,7 +102,7 @@ export function KpiInputCreateDialog({
     const emp = employees.find(e => e._id === employeeId);
     if (!emp?.departmentId) return;
     setLoadingPolicy(true);
-    getApplicableKpiPolicy(apiBase, emp.departmentId)
+    getApplicableKpiPolicy(apiBase, emp.departmentId, period)
       .then(pol => {
         if (pol) {
           setPolicy(pol);
@@ -155,6 +155,7 @@ export function KpiInputCreateDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!policy) return setError('Chưa có chính sách KPI hiệu lực cho kỳ này. Vui lòng thiết lập chính sách KPI trước.');
     if (!employeeId) return setError('Vui lòng chọn nhân viên.');
     if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
       return setError('Kỳ lương không hợp lệ (Định dạng YYYY-MM).');
@@ -315,8 +316,14 @@ export function KpiInputCreateDialog({
                   </div>
                 </div>
               ) : (
-                <div className="p-3 rounded-lg border border-dashed border-border bg-muted/10 text-xs text-muted-foreground">
-                  Không tìm thấy chính sách KPI riêng. Bạn có thể tự nhập số tiền thưởng KPI trực tiếp bên dưới.
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-950">Chưa có chính sách KPI hiệu lực:</p>
+                    <p className="leading-relaxed mt-0.5">
+                      Hệ thống chưa tìm thấy chính sách KPI nào áp dụng cho kỳ này. Vui lòng thiết lập chính sách KPI trước khi đánh giá kết quả cho nhân viên.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -367,7 +374,7 @@ export function KpiInputCreateDialog({
 
           <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
-            <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Lưu kết quả KPI'}</Button>
+            <Button type="submit" disabled={submitting || (!loadingPolicy && !policy)} title={!policy ? 'Cần cấu hình chính sách KPI trước khi nhập' : undefined}>{submitting ? 'Đang lưu…' : 'Lưu kết quả KPI'}</Button>
           </div>
         </form>
       </DialogContent>

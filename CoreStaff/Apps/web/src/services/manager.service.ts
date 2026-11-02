@@ -79,6 +79,11 @@ export interface ManagerRequest {
   workDescription?: string;
   isRetroactive?: boolean;
   retroactiveReason?: string;
+  isSelfRequest?: boolean;
+  isSelfApproval?: boolean;
+  isSelfApproved?: boolean;
+  auditTag?: string;
+  auditNote?: string;
   version: number;
   createdAt?: string;
   attendanceDayId?: string;

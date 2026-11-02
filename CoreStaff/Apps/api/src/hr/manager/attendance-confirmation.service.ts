@@ -31,7 +31,8 @@ export class AttendanceConfirmationService {
       await session.withTransaction(async()=>{
         const current=await read(m.requests.findOne({_id:id,organizationId:org,source:'ATTENDANCE_CONFIRMATION'}),session);
         if(!current)throw new ConflictException('REQUEST_NOT_FOUND');
-        if(String(current.employeeUserId)===managerId)throw new ConflictException('SELF_APPROVAL_FORBIDDEN');
+        const isSelfApproved = String(current.employeeUserId) === managerId;
+        const auditNote = isSelfApproved ? 'Quản lý tự duyệt (Self-approved) - Lưu vết kiểm toán cho HR hậu kiểm' : undefined;
         await m.scope.requireReviewDepartment(org,managerId,String(current.departmentId));
         if(current.confirmationDecision?.operationId===operationId){if(current.confirmationDecision.operationHash!==operationHash)throw new ConflictException('REQUEST_STATE_CHANGED');result=current;return;}
         if(current.status!=='PENDING'||current.version!==expectedVersion)throw new ConflictException('REQUEST_STATE_CHANGED');
@@ -44,7 +45,34 @@ export class AttendanceConfirmationService {
           if(blockers.length)throw new ConflictException(blockers[0]);
         }
         const claim=await m.periodVersion.claimForWorkDate(org,workDate,session);
-        const row=await m.requests.findOneAndUpdate({_id:id,organizationId:org,status:'PENDING',version:expectedVersion,confirmationSlotActive:true},{$set:{status,reviewedBy:managerId,reviewedAt:new Date(),reviewComment:reason?.trim(),confirmationSlotActive:status==='APPROVED',confirmationDecision:{operationId,operationHash,audit:{requestId:id,actorId:managerId,reason:reason?.trim(),decidedAt:new Date(),synthetic:status==='APPROVED',before:preview?.existingPunches??current.confirmationSnapshot?.punches,after:preview?{checkInAt:preview.proposedChanges.checkInAt,checkOutAt:preview.proposedChanges.checkOutAt,...preview.proposedChanges.calculation}:undefined,sourceRefs:preview?.snapshot?.source??current.confirmationSnapshot?.source,contextHash:current.confirmationContextHash}}},$inc:{version:1}},{new:true,session}).session(session).lean();
+        const row=await m.requests.findOneAndUpdate({_id:id,organizationId:org,status:'PENDING',version:expectedVersion,confirmationSlotActive:true},{$set:{
+          status,
+          reviewedBy:managerId,
+          reviewedAt:new Date(),
+          reviewComment:reason?.trim(),
+          confirmationSlotActive:status==='APPROVED',
+          isSelfApproved,
+          auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+          auditNote,
+          confirmationDecision:{
+            operationId,
+            operationHash,
+            audit:{
+              requestId:id,
+              actorId:managerId,
+              reason:reason?.trim(),
+              decidedAt:new Date(),
+              synthetic:status==='APPROVED',
+              isSelfApproved,
+              auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+              auditNote,
+              before:preview?.existingPunches??current.confirmationSnapshot?.punches,
+              after:preview?{checkInAt:preview.proposedChanges.checkInAt,checkOutAt:preview.proposedChanges.checkOutAt,...preview.proposedChanges.calculation}:undefined,
+              sourceRefs:preview?.snapshot?.source??current.confirmationSnapshot?.source,
+              contextHash:current.confirmationContextHash
+            }
+          }
+        },$inc:{version:1}},{new:true,session}).session(session).lean();
         if(!row)throw new ConflictException('REQUEST_STATE_CHANGED');
         if(status==='APPROVED'){
           const filter:any={organizationId:org,employeeId:current.employeeUserId,workDate,checkInAt:preview.existingPunches.checkInAt?new Date(preview.existingPunches.checkInAt):null,checkOutAt:preview.existingPunches.checkOutAt?new Date(preview.existingPunches.checkOutAt):null};
@@ -56,7 +84,24 @@ export class AttendanceConfirmationService {
             const eventId=new Types.ObjectId();
             set[field]=new Date(preview.proposedChanges[field]);
             set[field==='checkInAt'?'checkInProvenance':'checkOutProvenance']={source:'CONFIRMED_SCHEDULE',requestId:id,eventId};
-            events.push({_id:eventId,organizationId:org,employeeId:current.employeeUserId,eventType,method:'MANUAL',recordedAt:set[field],approvalStatus:'APPROVED',validationStatus:'VALID',requestId:id,provenance:{source:'CONFIRMED_SCHEDULE',requestId:id,eventId},note:current.reason});
+            events.push({
+              _id:eventId,
+              organizationId:org,
+              employeeId:current.employeeUserId,
+              eventType,
+              method:'MANUAL',
+              recordedAt:set[field],
+              approvalStatus:'APPROVED',
+              validationStatus:'VALID',
+              requestId:id,
+              provenance:{
+                source:'CONFIRMED_SCHEDULE',
+                requestId:id,
+                eventId,
+                ...(isSelfApproved ? { isSelfApproved: true, auditTag: 'SELF_APPROVED' } : {}),
+              },
+              note: isSelfApproved ? `[TỰ DUYỆT] ${current.reason || ''}`.trim() : current.reason,
+            });
           }
           const day=await m.days.findOneAndUpdate(filter,{$set:set,$setOnInsert:{organizationId:org,employeeId:current.employeeUserId,workDate}},{new:true,upsert:!before,session}).session(session).lean();
           if(!day)throw new ConflictException('ATTENDANCE_CONFIRMATION_STALE');
@@ -65,7 +110,17 @@ export class AttendanceConfirmationService {
           const released=await m.quotas.updateOne({organizationId:org,employeeUserId:current.employeeUserId,monthKey:current.confirmationMonthKey,usedSlots:{$gt:0}},{$inc:{usedSlots:-1}},{session});
           if(released.modifiedCount!==1)throw new ConflictException('CONFIRMATION_QUOTA_INCONSISTENT');
         }
-        await m.audit.create([{organizationId:org,approvalRequestId:id,actorId:managerId,action:status,previousStatus:'PENDING',newStatus:status,comment:reason}],{session});
+        await m.audit.create([{
+          organizationId:org,
+          approvalRequestId:id,
+          actorId:managerId,
+          action:status,
+          previousStatus:'PENDING',
+          newStatus:status,
+          comment:reason,
+          isSelfApproved,
+          auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+        }],{session});
         result=row;changed=true;
       });
       if(changed){try{m.notify?.notifyApprovalDecision(String(result.employeeUserId),{requestId:id,type:'ATTENDANCE',status,organizationId:org,reviewedBy:managerId,reviewComment:reason,departmentId:String(result.departmentId),workDate:result.workDate});}catch{/* Commit is authoritative. */}}
