@@ -74,7 +74,7 @@ export class EmployeeTimesheetReviewService {
     const projection = await this.obligations.loadPeriod({ organizationId, periodKey: period.period,
       startDate: toDateOnly(period.startDate), endDate: toDateOnly(period.endDate), overtimeStatus: 'REVIEWABLE', session });
     const employees = [...new Map(projection.days.filter(day => day.departmentId === departmentId).map(day => [day.userId, day])).values()];
-    const rows = [];
+    const rows: any[] = [];
     for (const employee of employees) {
       try {
         const review: any = await this.buildOwnReview(organizationId, String(period._id), employee.userId, session);
@@ -92,6 +92,9 @@ export class EmployeeTimesheetReviewService {
         throw error;
       }
     }
+    // A manager cannot act on a bare userId list: name each employee so the
+    // review screen can show who has and has not confirmed the timesheet.
+    await this.attachEmployeeNames(organizationId, rows);
     const progress = {
       eligibleEmployees: rows.length,
       acknowledgedEmployees: rows.filter(row => row.state === 'ACKNOWLEDGED').length,
@@ -100,6 +103,21 @@ export class EmployeeTimesheetReviewService {
       employees: rows,
     };
     return progress;
+  }
+
+  private async attachEmployeeNames(organizationId: string, rows: any[]) {
+    if (!rows.length || typeof (this.profiles as any)?.find !== 'function') return;
+    const userIds = rows.map(row => new Types.ObjectId(row.userId));
+    const [profiles, users] = await Promise.all([
+      this.profiles.find({ organizationId, userId: { $in: userIds } }).select('userId employeeCode').lean(),
+      this.profiles.db.model('User').find({ organizationId, _id: { $in: userIds } }).select('_id fullName').lean(),
+    ]);
+    const profilesByUser = new Map((profiles as any[]).map(profile => [String(profile.userId), profile]));
+    const namesByUser = new Map((users as any[]).map(user => [String(user._id), user.fullName]));
+    for (const row of rows) {
+      row.employeeCode = profilesByUser.get(String(row.userId))?.employeeCode ?? null;
+      row.fullName = namesByUser.get(String(row.userId)) ?? null;
+    }
   }
 
   static requireCompleteCoverage(rows: Array<{ state: string }> | { pendingEmployees: number; disputedEmployees: number }) {

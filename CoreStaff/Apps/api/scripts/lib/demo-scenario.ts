@@ -252,7 +252,7 @@ export const DAY_OVERRIDES: Record<string, Override> = {
   '2026-10-15|NV-KD-002': {
     in: { time: '08:10:05', method: 'SELFIE', site: 'DONG_A_BT', note: 'Gặp khách hàng Đông Á ký phụ lục hợp đồng' },
     out: { time: '17:18:30', method: 'SELFIE', site: 'DONG_A_BT', note: 'Kết thúc làm việc tại khách hàng' },
-    workMode: 'OUT_OFFICE', story: 'Selfie công tác — QL CHƯA duyệt (blocker, script bổ sung xử lý)',
+    workMode: 'OUT_OFFICE', story: 'DEMO: selfie công tác chưa duyệt → giữ lại cho QL KD duyệt tay. ẢNH MINH HỌA: seed chỉ ghi metadata, chưa upload ảnh lên storage.',
   },
   '2026-10-16|NV-KT-003': day('08:31:50', '17:20:05', { story: 'Đi muộn' }),
   '2026-10-19|NV-KT-001': { in: null, out: null, workMode: 'IN_OFFICE', story: 'Quên điện thoại ở nhà, không chấm công cả ngày → giải trình CHỜ duyệt (script bổ sung xử lý)' },
@@ -268,6 +268,9 @@ export const DAY_OVERRIDES: Record<string, Override> = {
   '2026-10-29|NV-KD-001': day('07:46:05', '19:11:35', { story: 'Hoàn thiện báo giá dự án (OT 150%)' }),
   '2026-10-30|NV-KD-001': day('07:50:12', null, { story: 'Quên chấm công ra, CHƯA giải trình (script bổ sung xử lý)' }),
   '2026-10-30|NV-KD-002': day('07:56:40', '18:42:05', { story: 'Ở lại làm báo cáo tháng — OT đã gửi, CHƯA duyệt' }),
+
+  // ── Tháng 11 (kỳ hiện tại — chỉ để demo OT, kỳ chưa rà soát) ───────────────
+  '2026-11-01|NV-KT-001': day('07:58:20', '17:06:45', { story: 'Chủ nhật trực bảo trì máy chủ (OT cuối tuần 200%)' }),
 };
 
 export function planFor(code: EmployeeCode, date: string, isWorkday: boolean): DayPlan | null {
@@ -350,6 +353,10 @@ export const OVERTIMES: OtSpec[] = [
   // Đã gửi nhưng QL chưa duyệt → chưa được tính lương cho tới khi duyệt.
   { code: 'NV-KD-002', date: '2026-10-30', windows: [['17:30', '18:30']], reason: 'Tổng hợp báo cáo doanh số tháng 10 gửi ban giám đốc',
     workDescription: 'Đối soát doanh số, lập báo cáo tháng', fileAt: ['2026-10-30', '18:50'] },
+
+  // Tháng 11 — OT gần ngày demo, kỳ hiện tại chưa rà soát (chỉ để xem màn hình OT).
+  { code: 'NV-KT-001', date: '2026-11-01', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Trực bảo trì máy chủ định kỳ ngày Chủ nhật',
+    workDescription: 'Cập nhật bản vá bảo mật, kiểm tra sao lưu, khởi động lại dịch vụ', fileAt: ['2026-11-01', '17:25'], approveAt: ['2026-11-02', '08:35'], approveComment: 'Xác nhận lịch trực bảo trì' },
 ];
 
 export interface ConfirmationSpec { code: EmployeeCode; date: string; reason: string; fileAt: At; approveAt?: At }
@@ -366,7 +373,7 @@ export const CONFIRMATIONS: ConfirmationSpec[] = [
   { code: 'NV-KT-001', date: '2026-10-19', reason: 'Quên điện thoại ở nhà nên không chấm công ngày 19/10; vẫn làm việc cả ngày tại văn phòng, có anh Long xác nhận',
     fileAt: ['2026-10-20', '08:30'] },
   { code: 'NV-KT-002', date: '2026-10-20', reason: 'Quên bấm ra ca, rời văn phòng lúc 17h15 sau khi họp xong với đội dự án',
-    fileAt: ['2026-10-21', '08:42'] },
+    fileAt: ['2026-10-21', '08:42'], approveAt: ['2026-10-21', '14:10'] },
   // DEMO: QL Kinh doanh duyệt trực tiếp trong buổi bảo vệ.
   { code: 'NV-KD-003', date: '2026-10-21', reason: 'Quên chấm công ra do đi gặp khách hàng ở Thủ Đức rồi về thẳng nhà lúc 17h30, đã báo anh Hưng qua Zalo',
     fileAt: ['2026-10-22', '09:03'] },
@@ -384,24 +391,43 @@ export interface ForfeitSpec { code: EmployeeCode; date: string; at: At; reason:
 export const FORFEITS: ForfeitSpec[] = [
   { code: 'NV-KD-003', date: '2026-09-18', at: ['2026-09-21', '10:05'],
     reason: 'Rời văn phòng từ 10h không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },
+  // Tháng 10: QL Kỹ thuật xử lý ngay trong lúc seed, để kỳ 10 chỉ còn vướng ở phòng KD.
+  { code: 'NV-KT-003', date: '2026-10-28', at: ['2026-10-30', '09:15'],
+    reason: 'Rời văn phòng từ giữa giờ không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },
 ];
 
-/** Các ngày còn blocker sau seed, giữ lại để demo trực tiếp (không bị script bổ sung xử lý). */
-export const DEMO_KEEP: EmployeeCode[] = ['NV-KD-003', 'NV-KT-003'];
+/**
+ * Vướng mắc để lại cho người trình bày tự xử lý trên Web/Mobile.
+ * Cố ý chỉ chọn tài khoản phòng KD: một quản lý, một phòng ban, không phải đổi tài khoản giữa các phòng.
+ */
+export const DEMO_KEEP: EmployeeCode[] = ['NV-KD-002', 'NV-KD-003'];
+
+/** Tài khoản tự bấm "Xác nhận bảng công" trên app — cùng 2 mã KD ở trên. */
+export const DEMO_SKIP_ACK: EmployeeCode[] = ['NV-KD-002', 'NV-KD-003'];
 
 // ─── KPI ────────────────────────────────────────────────────────────────────
-const KPI_TIERS = [
+/** Bậc KPI — dùng chung cho `KpiPolicy` (seed qua CompensationService) và `kpiFor`. */
+export const KPI_TIERS = [
   { min: 90, name: 'Xuất sắc', percentage: 100 },
   { min: 80, name: 'Tốt', percentage: 75 },
   { min: 70, name: 'Đạt', percentage: 50 },
   { min: 0, name: 'Chưa đạt', percentage: 0 },
 ];
+/** Mức KPI cơ sở của công ty (scope ALL) — một chính sách chung cho mọi phòng ban. */
+export const KPI_BASE_AMOUNT = 2_000_000;
 export const KPI_SCORES: Record<string, Partial<Record<EmployeeCode, number>>> = {
   [HISTORY_PERIOD]: { 'QL-KD-001': 92, 'QL-KT-001': 88, 'NV-KD-001': 95, 'NV-KD-002': 78, 'NV-KD-003': 72, 'NV-KT-001': 91, 'NV-KT-002': 85, 'NV-KT-003': 81 },
   [ACTIVE_PERIOD]: { 'QL-KD-001': 86, 'QL-KT-001': 93, 'NV-KD-001': 89, 'NV-KD-002': 74, 'NV-KD-003': 68, 'NV-KT-001': 96, 'NV-KT-002': 90, 'NV-KT-003': 79 },
 };
-export function kpiFor(code: EmployeeCode, score: number) {
-  const baseAmount = code.startsWith('QL-') ? 3_000_000 : 2_000_000;
+/** Bậc KPI đúng hình dạng `KpiPolicy.tiers` (khoảng điểm liền kề, không chồng lấn). */
+export function kpiPolicyTiers() {
+  return KPI_TIERS.map((tier, index) => ({
+    name: tier.name, percentage: tier.percentage, minScore: tier.min,
+    maxScore: index === 0 ? 100 : KPI_TIERS[index - 1].min - 1, order: index + 1,
+  }));
+}
+
+export function kpiFor(score: number) {
   const tier = KPI_TIERS.find(row => score >= row.min)!;
-  return { score, tierName: tier.name, tierPercentage: tier.percentage, baseAmount, amount: Math.round(baseAmount * tier.percentage / 100) };
+  return { score, tierName: tier.name, tierPercentage: tier.percentage, baseAmount: KPI_BASE_AMOUNT, amount: Math.round(KPI_BASE_AMOUNT * tier.percentage / 100) };
 }

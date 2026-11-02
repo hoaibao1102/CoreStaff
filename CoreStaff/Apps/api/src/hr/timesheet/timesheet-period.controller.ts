@@ -296,6 +296,28 @@ export class TimesheetPeriodController {
 	}
 
 	@Roles('DEPARTMENT_MANAGER')
+	@Get(':id/acknowledgement-progress')
+	@ApiOperation({ summary: 'Manager views which employees in a department confirmed the timesheet.' })
+	@ApiResponse({ status: 403, description: 'DEPARTMENT_SCOPE_VIOLATION' })
+	@ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
+	@ApiErrorExamples()
+	async getAcknowledgementProgress(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Query('departmentId') departmentId: string,
+		@CurrentUser() user: any,
+	) {
+		const orgId = requireOrganizationId(organizationId);
+		const data = await this.service.getDepartmentAcknowledgementProgress(
+			orgId,
+			id,
+			String(user._id ?? user.id),
+			departmentId,
+		);
+		return { success: true, data };
+	}
+
+	@Roles('DEPARTMENT_MANAGER')
 	@Get(':id/snapshot-preview')
 	@ApiOperation({ summary: 'Manager previews snapshot data for their department before closing.' })
 	@ApiResponse({ status: 400, description: 'PERIOD_NOT_READY | DEPARTMENT_SCOPE_VIOLATION' })

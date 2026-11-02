@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { OvertimeSuggestions } from '../../components/overtime/OvertimeSuggestions';
 import { AttendanceConfirmationForm } from './AttendanceConfirmationForm';
 import { confirmationSource, getOvertimePreview, type OvertimePreview, managerRequestLabel } from '../../services/manager.service';
+import { overtimeErrorMessage } from '../../services/overtime.service';
 import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../../components/alert';
 import { Input } from '../../components/input';
@@ -466,9 +467,7 @@ export function LeaveOvertimeScreen() {
                       )}
                       {otResult.preview.blockedReasons?.map(code => (
                         <p key={code} role="alert" className="text-destructive font-medium">
-                          {code === 'OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED'
-                            ? 'Mốc công nguồn CONFIRMED_SCHEDULE không đủ điều kiện tính OT. Vui lòng liên hệ HR xác minh giờ thực tế.'
-                            : code}
+                          {overtimeErrorMessage(code)}
                         </p>
                       ))}
                     </div>

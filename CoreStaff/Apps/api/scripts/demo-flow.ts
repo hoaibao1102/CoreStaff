@@ -11,7 +11,8 @@
  *   npm run demo:all                    # Chạy trọn luồng (diễn tập)
  *
  * Tùy chọn: --keep=NV-KD-003,NV-KT-003  (tài khoản giữ blocker để demo tay)
- *           --skip-ack=NV-KD-001        (tài khoản tự bấm "Xác nhận bảng công" khi demo)
+ *           --skip-ack=NV-KD-001        (tài khoản tự bấm "Xác nhận bảng công" khi demo;
+ *                                        mặc định NV-KD-001, NV-KT-002)
  *           --period=2026-10 --org-code=ANPHAT
  *
  * Thứ tự đúng khi demo: gỡ blocker (tay + resolve) → ack → confirm → close.
@@ -23,7 +24,7 @@ import { Types } from 'mongoose';
 import { Role } from '../src/database/schemas/enums';
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
 import { createDemoApp, DemoApp } from './lib/demo-app';
-import { ACTIVE_PERIOD, DEMO_KEEP } from './lib/demo-scenario';
+import { ACTIVE_PERIOD, DEMO_KEEP, DEMO_SKIP_ACK } from './lib/demo-scenario';
 
 type Step = 'status' | 'resolve' | 'ack' | 'confirm' | 'close' | 'all';
 export interface FlowOptions { orgCode: string; step: Step; keep: string[]; skipAck: string[]; period?: string }
@@ -282,7 +283,7 @@ async function main() {
   if (!['status', 'resolve', 'ack', 'confirm', 'close', 'all'].includes(step)) throw new Error(`--step không hợp lệ: ${step}`);
   const demo = await createDemoApp();
   try {
-    const options: FlowOptions = { orgCode: (arg('org-code') ?? 'ANPHAT').toUpperCase(), step, keep: list('keep', DEMO_KEEP), skipAck: list('skip-ack', []), period: arg('period') };
+    const options: FlowOptions = { orgCode: (arg('org-code') ?? 'ANPHAT').toUpperCase(), step, keep: list('keep', DEMO_KEEP), skipAck: list('skip-ack', DEMO_SKIP_ACK), period: arg('period') };
     if (step !== 'status') await runDemoFlow(demo, options);
     await printDemoStatus(demo, options.orgCode);
   } finally {

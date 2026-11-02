@@ -224,6 +224,41 @@ describe('AttendanceService endpoint writers', () => {
     expect(day.save).not.toHaveBeenCalled();
   });
 
+  it('includes an applied full-day leave in history when no attendance day exists', async () => {
+    const { service } = punchFixture(true);
+    (service as any).attendanceDayModel.find = jest.fn(() => ({ sort: () => ({ lean: async () => [] }) }));
+    (service as any).dayOverrides = {
+      find: jest.fn(() => ({
+        lean: async () => [{
+          _id: new Types.ObjectId(),
+          organizationId: new Types.ObjectId(organizationId),
+          employeeId: new Types.ObjectId(ownerId),
+          date: '2026-10-27',
+          type: 'PAID_LEAVE',
+          durationType: 'FULL_DAY',
+          calculatedMinutes: 480,
+          approvedLeaveIntervals: [{ from: '08:00', to: '12:00' }, { from: '13:00', to: '17:00' }],
+          requiredWorkingIntervals: [],
+        }],
+      })),
+    };
+
+    const history = await service.getHistory(ownerId, organizationId, '2026-10');
+
+    expect(history.items).toHaveLength(1);
+    expect(history.items[0]).toMatchObject({
+      workDate: '2026-10-27',
+      attendanceStatus: 'DAY_OFF',
+      workdayType: 'PAID_LEAVE',
+      attendanceRequirements: {
+        durationTypes: ['FULL_DAY'],
+        leaveTypes: ['PAID_LEAVE'],
+        approvedLeaveMinutes: 480,
+        requiredWorkingMinutes: 0,
+      },
+    });
+  });
+
   it.each([false, true])('keeps pending SELFIE unverified for checkout=%s', async checkout => {
     const { service, day, events, requests } = punchFixture(checkout);
     const action = checkout ? service.checkOut.bind(service) : service.checkIn.bind(service);

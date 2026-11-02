@@ -30,15 +30,16 @@ import { calculateAttendance, requiredWorkingIntervalsForShift } from '../src/at
 import { AttendanceEndpointSource } from '../src/database/schemas/attendance-day.schema';
 import {
   AttendanceApprovalStatus, AttendanceEventType, AttendanceMethod, AttendanceStatus, CalendarExceptionType,
-  ContractStatus, ContractType, EmploymentStatus, InsuranceContributionType, LeaveDurationType, Role, ShiftScope, WorkMode,
+  ContractStatus, ContractType, EmploymentStatus, EnterpriseInsuranceCostBearer, InsuranceContributionType, LeaveDurationType,
+  Role, ShiftScope, WorkMode,
 } from '../src/database/schemas/enums';
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
 import type { Connection } from 'mongoose';
 import { createDemoApp, DemoApp, syncDriverClock } from './lib/demo-app';
 import {
   ACCOUNTS, ACTIVE_PERIOD, CONFIRMATIONS, CURRENT_MONTH_LEAVES, CURRENT_PERIOD, DAY_OVERRIDES, DayPlan, DemoAccount,
-  EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, KPI_SCORES, kpiFor, LEAVES, MANAGER_OF, OFFICE, ORG_NAME,
-  OVERTIMES, planFor, PunchSpec, SELFIE_APPROVALS, SITES,
+  EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, KPI_BASE_AMOUNT, KPI_SCORES, kpiFor, kpiPolicyTiers, LEAVES,
+  MANAGER_OF, OFFICE, ORG_NAME, OVERTIMES, planFor, PunchSpec, SELFIE_APPROVALS, SITES,
 } from './lib/demo-scenario';
 import { printDemoStatus, runDemoFlow } from './demo-flow';
 
@@ -50,6 +51,7 @@ const APPLY = ARGS.includes('--apply');
 const RESET = ARGS.includes('--reset');
 const VERIFY_ONLY = ARGS.includes('--verify-only');
 const REHEARSAL = ARGS.includes('--close-active') || ARGS.includes('--rehearsal');
+/** Seed chỉ gieo dữ liệu thô; gỡ blocker là bước riêng `npm run demo:resolve` để demo minh bạch. */
 const ORG_CODE = (arg('org-code') ?? 'ANPHAT').toUpperCase();
 const ACTIVE_STATUS = (arg('active-status') ?? 'REVIEWING').toUpperCase();
 const DEMO_PASSWORD = process.env.DEMO_SEED_PASSWORD ?? 'Demo123456!';
@@ -370,6 +372,27 @@ async function seedMasterData(ctx: Ctx) {
     });
   }
 
+  // Chính sách KPI công ty (một bậc chung, áp cho mọi phòng ban) — HR khai qua
+  // CompensationService, đúng endpoint màn hình Lương → Chính sách KPI.
+  const kpiPolicyAt = vn('2025-12-26', '10:20');
+  await at(kpiPolicyAt, 'Khai báo chính sách KPI', async () => {
+    const row: any = await demo.compensation.createKpiPolicy(ctx.org, {
+      name: 'Chính sách KPI An Phát 2026', policyType: 'GRADE', baseAmount: KPI_BASE_AMOUNT,
+      tiers: kpiPolicyTiers(),
+      effectiveFrom: '2026-01-01', scope: 'ALL',
+    });
+    ctx.ids.set('kpi-policy', String(row._id));
+  });
+
+  // Bảo hiểm doanh nghiệp (tự nguyện, công ty chịu phí) — HR khai qua service thật.
+  await at(vn('2025-12-26', '10:30'), 'Khai báo bảo hiểm doanh nghiệp', () =>
+    demo.enterpriseInsurance.create(ctx.org, String(ctx.users.get('HR-001')), {
+      effectiveFrom: '2026-01-01', provider: 'Bảo Việt',
+      coverageDescription: 'Bảo hiểm tai nạn con người 24/24 + chăm sóc sức khỏe cơ bản cho toàn bộ nhân viên chính thức',
+      premiumPerEmployee: null, costBearer: EnterpriseInsuranceCostBearer.EMPLOYER,
+      note: 'Dữ liệu demo — nhà cung cấp/mức phí là minh họa, HR thay bằng hợp đồng thật khi cần.',
+    }));
+
   // Lịch nghỉ lễ do HR khai báo qua CalendarService (tự làm mới OT/phiên bản kỳ).
   for (const h of HOLIDAYS) {
     await at(vn('2026-08-20', '09:30'), `Khai báo ngày lễ ${h.date}`, () =>
@@ -395,9 +418,10 @@ async function seedKpi(ctx: Ctx, period: string) {
   for (const acc of EMPLOYEE_ACCOUNTS) {
     const score = KPI_SCORES[period]?.[acc.code];
     if (score === undefined) continue;
-    const kpi = kpiFor(acc.code, score);
+    const kpi = kpiFor(score);
     await createWithClock(ctx.demo.model('KpiPayrollInput'), vn(last, '17:30'), {
-      organizationId: ctx.orgId, employeeProfileId: ctx.profiles.get(acc.code), departmentId: ctx.depts.get(acc.dept), period,
+      organizationId: ctx.orgId, employeeProfileId: ctx.profiles.get(acc.code), departmentId: ctx.depts.get(acc.dept),
+      policyId: ctx.ids.get('kpi-policy'), period,
       ...kpi, source: 'MANUAL', note: `Đánh giá KPI tháng ${period.slice(5)}/${period.slice(0, 4)}`, status: 'CONFIRMED', version: 1,
       evaluatedBy: ctx.users.get(MANAGER_OF[acc.dept]), evaluatedAt: vn(last, '15:00'),
       confirmedBy: ctx.users.get('HR-001'), confirmedAt: vn(last, '17:30'),
@@ -747,6 +771,21 @@ async function verify() {
     const problems: string[] = [];
     if (org.attendanceOvertimeV2Enabled !== true) problems.push('Organization chưa bật attendanceOvertimeV2Enabled');
 
+    // Chính sách công ty: KPI (scope ALL) + bảo hiểm doanh nghiệp phải có bản ghi hiệu lực
+    // tại ngày tham chiếu, và mọi KpiPayrollInput đã xác nhận phải trỏ đúng policy.
+    const kpiPolicies: any[] = await demo.model('KpiPolicy').find({ organizationId: orgId, active: true }).lean();
+    const kpiPolicy = kpiPolicies.find(p => p.scope === 'ALL' && p.effectiveFrom <= new Date(`${REFERENCE_DATE}T23:59:59Z`));
+    if (!kpiPolicy) problems.push('Thiếu KpiPolicy hiệu lực (scope ALL)');
+    else {
+      const inputs: any[] = await demo.model('KpiPayrollInput').find({ organizationId: orgId, status: 'CONFIRMED' }).lean();
+      for (const input of inputs) {
+        if (String(input.policyId ?? '') !== String(kpiPolicy._id)) problems.push(`KpiPayrollInput ${input.period}/${input.employeeProfileId} không trỏ tới KpiPolicy`);
+        else if (input.amount !== Math.round((input.baseAmount ?? 0) * (input.tierPercentage ?? 0) / 100)) problems.push(`KpiPayrollInput ${input.period}/${input.employeeProfileId} lệch bậc: ${input.amount}`);
+      }
+    }
+    const enterprisePolicies: any[] = await demo.model('EnterpriseInsurancePolicy').find({ organizationId: orgId }).lean();
+    if (!enterprisePolicies.length) problems.push('Thiếu EnterpriseInsurancePolicy');
+
     const days: any[] = await demo.model('AttendanceDay').find({ organizationId: orgId }).lean();
     let recomputed = 0;
     for (const day of days) {
@@ -790,8 +829,11 @@ async function verify() {
         else if (expected > 0 && !(slip.otBreakdown?.otPay > 0)) problems.push(`Phiếu lương ${s.employeeCode} có OT ${expected} phút nhưng tiền OT = 0`);
       }
     }
+    const enterprise = enterprisePolicies[0];
     console.log(`\n─── VERIFY [${ORG_CODE}] ───`);
     console.log(`Đã tính lại ${recomputed} ngày công bằng calculator, ${requests.length} yêu cầu, ${results.length} kết quả OT.`);
+    if (kpiPolicy) console.log(`KpiPolicy: ${kpiPolicy.name} (scope ${kpiPolicy.scope}) — mức cơ sở ${fmtMoney(kpiPolicy.baseAmount)} đ, ${kpiPolicy.tiers.length} bậc, hiệu lực ${new Date(kpiPolicy.effectiveFrom).toISOString().slice(0, 10)}`);
+    if (enterprise) console.log(`EnterpriseInsurancePolicy: ${enterprise.provider} — chịu phí ${enterprise.costBearer}, hiệu lực ${new Date(enterprise.effectiveFrom).toISOString().slice(0, 10)}`);
     await printDemoStatus(demo, ORG_CODE);
     if (problems.length) {
       console.log(`\n✗ ${problems.length} điểm không nhất quán:`);

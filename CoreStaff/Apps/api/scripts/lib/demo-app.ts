@@ -24,6 +24,8 @@ import { EmployeeTimesheetReviewService } from '../../src/hr/timesheet/employee-
 import { PeriodObligationService } from '../../src/hr/timesheet/period-obligation.service';
 import { PayrollRunService } from '../../src/hr/payroll/payroll-run.service';
 import { PayslipService } from '../../src/hr/payroll/payslip.service';
+import { CompensationService } from '../../src/hr/compensation/compensation.service';
+import { EnterpriseInsurancePolicyService } from '../../src/hr/enterprise-insurance-policy/enterprise-insurance-policy.service';
 
 export interface DemoApp {
   app: INestApplication;
@@ -37,6 +39,8 @@ export interface DemoApp {
   obligations: PeriodObligationService;
   payrollRuns: PayrollRunService;
   payslips: PayslipService;
+  compensation: CompensationService;
+  enterpriseInsurance: EnterpriseInsurancePolicyService;
   close: () => Promise<void>;
 }
 
@@ -82,6 +86,8 @@ export async function createDemoApp(): Promise<DemoApp> {
     obligations: get(PeriodObligationService),
     payrollRuns: get(PayrollRunService),
     payslips: get(PayslipService),
+    compensation: get(CompensationService),
+    enterpriseInsurance: get(EnterpriseInsurancePolicyService),
     close: async () => { await app.close(); },
   };
 }

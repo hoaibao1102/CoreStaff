@@ -28,9 +28,15 @@ export function confirmationError(error: unknown): string {
     UNSUPPORTED_OVERNIGHT_SHIFT: 'Chưa hỗ trợ ca qua đêm. Vui lòng liên hệ HR.',
     ALREADY_COMPLETE: 'Ngày này đã đủ mốc công, không thể ghi đè.',
     NO_WORK_OBLIGATION: 'Ngày này không có nghĩa vụ làm việc cần bổ sung.',
+    ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED: 'Chỉ có thể gửi xác nhận công cho ngày đã qua.',
+    ATTENDANCE_ADJUSTMENT_PAST_DATE_REQUIRED: 'Chỉ có thể điều chỉnh công cho ngày đã qua.',
+    NEEDS_MANUAL_REVIEW: 'Dữ liệu chấm công của ngày này cần HR kiểm tra trước khi tạo yêu cầu.',
+    ATTENDANCE_CONFIRMATION_DISABLED: 'Tính năng xác nhận công hiện chưa được bật. Vui lòng liên hệ HR.',
+    ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: 'Thông tin xác nhận công chưa hợp lệ. Vui lòng kiểm tra lại.',
     ATTENDANCE_CONFIRMATION_FLOW_REQUIRED: 'Vui lòng dùng xác nhận công theo lịch, không nhập giờ thủ công.',
   };
-  return (code && messages[code]) || (error instanceof Error ? error.message : `Cần HR xác minh (${code ?? 'lỗi kết nối'}).`);
+  if (code && messages[code]) return messages[code];
+  return 'Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.';
 }
 
 export function ConfirmationSummary({ preview: p }: { preview: AttendanceConfirmationPreview }) {
@@ -170,21 +176,20 @@ export function AttendanceConfirmationForm({
   }, [apiBase, workDate, revision, bypass]);
 
   if (bypass) return <>{legacy}</>;
-  if (result?.date !== workDate) return <p role="status" className="p-6 text-sm text-muted-foreground">Đang tải xem trước…</p>;
-  if (result.legacy) return <>{legacy}</>;
-  if (!result.preview) return <p role="alert" className="p-6 text-sm text-destructive">{result.error}</p>;
+  const currentResult = result?.date === workDate ? result : null;
+  if (currentResult?.legacy) return <>{legacy}</>;
 
-  const preview = result.preview;
-  const canSubmit = !busy && !stale && preview.canSubmit && Boolean(preview.actionType) && Boolean(preview.previewHash)
-    && !preview.blockedReasons?.length && preview.period?.canMutate !== false
-    && (preview.quota?.remaining ?? 1) > 0 && reason.trim().length >= 10 && reason.trim().length <= 1000;
+  const preview = currentResult?.preview;
+  const canSubmit = Boolean(preview) && !busy && !stale && preview!.canSubmit && Boolean(preview!.actionType) && Boolean(preview!.previewHash)
+    && !preview!.blockedReasons?.length && preview!.period?.canMutate !== false
+    && (preview!.quota?.remaining ?? 1) > 0 && reason.trim().length >= 10 && reason.trim().length <= 1000;
 
   return (
     <form
       className="space-y-4 p-6"
       onSubmit={async event => {
         event.preventDefault();
-        if (!canSubmit || submitting.current) return;
+        if (!canSubmit || !preview || submitting.current) return;
         submitting.current = true; setBusy(true); setError('');
         const payload = { workDate, reason: reason.trim(), previewHash: preview.previewHash! };
         const serialized = JSON.stringify(payload);
@@ -211,7 +216,17 @@ export function AttendanceConfirmationForm({
         />
       </label>
 
-      <ConfirmationSummary preview={preview} />
+      {!currentResult ? (
+        <div role="status" className="rounded-xl border border-blue-100 bg-blue-50/30 p-4 text-sm text-muted-foreground">
+          Đang tải xem trước…
+        </div>
+      ) : preview ? (
+        <ConfirmationSummary preview={preview} />
+      ) : (
+        <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
+          {currentResult.error}
+        </p>
+      )}
 
       <label className="grid gap-1.5 text-sm font-medium">
         Lý do xác nhận công
