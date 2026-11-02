@@ -2,6 +2,15 @@ import type { DayAttendance } from './types';
 
 export type AttendanceHistoryStatus = 'FORGOTTEN' | 'FORFEITED' | 'DAY_OFF' | 'LATE' | 'EARLY_LEAVE' | 'ATTENDED' | 'NONE';
 
+export function hasPartialDayLeave(day: DayAttendance): boolean {
+  if (!['PAID_LEAVE', 'UNPAID_LEAVE'].includes(day.workdayType ?? '')) return false;
+  const requirements = day.attendanceRequirements;
+  return Boolean(
+    (requirements?.requiredWorkingMinutes ?? 0) > 0
+    || requirements?.durationTypes.some((type) => type !== 'FULL_DAY'),
+  );
+}
+
 export function getAttendanceHistoryStatus(
   day: DayAttendance,
   today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }),
@@ -10,7 +19,8 @@ export function getAttendanceHistoryStatus(
   // employee's attendance obligation and must not be rendered as a status.
   if (day.workdayType === 'WEEKLY_OFF') return 'NONE';
   if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') return 'FORFEITED';
-  if (day.status === 'DAY_OFF' || ['PUBLIC_HOLIDAY', 'PAID_LEAVE', 'UNPAID_LEAVE'].includes(day.workdayType ?? '')) {
+  const partialDayLeave = hasPartialDayLeave(day);
+  if (!partialDayLeave && (day.status === 'DAY_OFF' || ['PUBLIC_HOLIDAY', 'PAID_LEAVE', 'UNPAID_LEAVE'].includes(day.workdayType ?? ''))) {
     return 'DAY_OFF';
   }
 

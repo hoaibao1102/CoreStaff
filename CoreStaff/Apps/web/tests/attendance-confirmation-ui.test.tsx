@@ -9,6 +9,11 @@ describe('confirmation preview UI', () => {
  let host: HTMLDivElement; let root: Root;
  beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); host=document.createElement('div'); document.body.append(host); root=createRoot(host); jest.resetAllMocks(); Object.defineProperty(crypto, 'randomUUID', { configurable:true, value: () => 'test-key' }); });
  afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
+ it('maps validation codes to user-facing copy without exposing internal identifiers', () => {
+  expect(api.confirmationError('ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED')).toBe('Chỉ có thể gửi xác nhận công cho ngày đã qua.');
+  expect(api.confirmationError('SOME_INTERNAL_CONFIRMATION_CODE')).toBe('Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.');
+  expect(api.confirmationError('SOME_INTERNAL_CONFIRMATION_CODE')).not.toContain('SOME_INTERNAL_CONFIRMATION_CODE');
+ });
  it('shows safe preview, no editable times, and blocks submission until a valid reason', async () => {
   (hrRequest as jest.Mock).mockResolvedValue({ enabled:true, workDate:'2026-10-29', canSubmit:true, actionType:'CHECK_OUT', previewHash:'h', blockedReasons:[], existingPunches:{checkInAt:'2026-10-29T01:00:00Z'}, proposedChanges:{checkOutAt:'2026-10-29T10:00:00Z'}, quota:{monthKey:'2026-10',usedSlots:1,limit:3,remaining:2}, period:{status:'OPEN',canMutate:true} });
   await act(async () => root.render(<api.AttendanceConfirmationForm apiBase="base" workDate="2026-10-29" onDateChange={()=>{}} onCreated={()=>{}} legacy={<p>Legacy</p>} />));
@@ -29,6 +34,24 @@ describe('confirmation preview UI', () => {
   expect(host.textContent).toContain('HR');
   expect(host.textContent).not.toContain('Legacy');
   expect(host.querySelector<HTMLButtonElement>('button[type=submit]')?.disabled).toBe(true);
+ });
+ it('keeps the modal form mounted while loading a date in another month', async () => {
+  let resolveNext!: (p:any)=>void;
+  const first={enabled:true,workDate:'2026-10-29',canSubmit:true,actionType:'CHECK_OUT',previewHash:'oct',blockedReasons:[]};
+  (hrRequest as jest.Mock).mockResolvedValueOnce(first).mockImplementationOnce(()=>new Promise(r=>{resolveNext=r;}));
+  const render=(date:string)=>root.render(<api.AttendanceConfirmationForm apiBase="base" workDate={date} onDateChange={()=>{}} onCreated={()=>{}} legacy={null}/>);
+  await act(async()=>render('2026-10-29'));
+  const form=host.querySelector('form')!;
+  const textarea=host.querySelector('textarea')!;
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,'Lý do đang nhập không được mất'); textarea.dispatchEvent(new Event('input',{bubbles:true}));});
+
+  await act(async()=>render('2026-11-02'));
+
+  expect(host.querySelector('form')).toBe(form);
+  expect(host.querySelector('textarea')).toBe(textarea);
+  expect((host.querySelector('textarea') as HTMLTextAreaElement).value).toBe('Lý do đang nhập không được mất');
+  expect(host.querySelector('[role=status]')).not.toBeNull();
+  await act(async()=>resolveNext({...first,workDate:'2026-11-02',previewHash:'nov'}));
  });
  it('submits trimmed reason with server hash and retains identity on retry, invalidates stale preview', async () => {
   const preview={enabled:true,workDate:'2026-10-29',canSubmit:true,actionType:'CHECK_OUT',previewHash:'h',blockedReasons:[]};
