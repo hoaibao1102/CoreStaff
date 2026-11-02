@@ -31,7 +31,7 @@ import { AttendanceEndpointSource } from '../src/database/schemas/attendance-day
 import {
   AttendanceApprovalStatus, AttendanceEventType, AttendanceMethod, AttendanceStatus, CalendarExceptionType,
   ContractStatus, ContractType, EmploymentStatus, EnterpriseInsuranceCostBearer, InsuranceContributionType, LeaveDurationType,
-  Role, ShiftScope, WorkMode,
+  Role, ShiftScope, WorkdayType, WorkMode,
 } from '../src/database/schemas/enums';
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
 import type { Connection } from 'mongoose';
@@ -524,10 +524,13 @@ async function insertPunchesForDate(ctx: Ctx, date: string) {
 
     const checkIn = punch(plan.in, inAt, 'CHECK_IN');
     const calcIn = calculateAttendance(date, inAt, undefined, shiftSnapshot);
+    // Ngày lễ/nghỉ tuần đi làm vẫn có bản ghi chấm công, nhưng bản chất ngày là
+    // ngày nghỉ — đúng thứ tự ưu tiên lịch mà DayClassificationService dùng.
+    const dayType = HOLIDAY_DATES.has(date) ? WorkdayType.PUBLIC_HOLIDAY : isWeekend(date) ? WorkdayType.WEEKLY_OFF : WorkdayType.WORKING_DAY;
     const day: any = {
       _id: dayId, organizationId: ctx.orgId, employeeId: userId, workDate: date, periodId,
       workMode: plan.workMode === 'OUT_OFFICE' ? WorkMode.OUT_OFFICE : WorkMode.IN_OFFICE,
-      workdayType: 'WORKING_DAY', attendanceStatus: AttendanceStatus.CHECKED_IN,
+      workdayType: dayType, attendanceStatus: AttendanceStatus.CHECKED_IN,
       overallApprovalStatus: checkIn.selfie ? AttendanceApprovalStatus.PENDING : AttendanceApprovalStatus.NOT_REQUIRED,
       checkInAt: inAt, checkInProvenance: { source: checkIn.source, eventId: checkIn.eventId },
       lateMinutes: calcIn.lateMinutes, earlyMinutes: 0, approvedLeaveMinutes: calcIn.approvedLeaveMinutes,
