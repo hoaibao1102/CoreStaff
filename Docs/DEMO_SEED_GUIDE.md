@@ -68,7 +68,19 @@ Các vướng ở phòng KT đều được xử lý sẵn bên trong seed (khô
 - Chỉ có dữ liệu chấm công tới ngày tham chiếu, **không có dữ liệu tương lai**.
 - **Chưa tạo bản ghi rà soát, chưa chốt, chưa có lương** — đúng thực tế: tháng chưa kết thúc, chưa tới kỳ tính lương.
 - Có 2 đơn nghỉ phép để demo luồng duyệt đơn: 1 đơn đã duyệt (NV-KD-002, 20/11), 1 đơn chờ QL duyệt (NV-KT-002, 13/11).
-- Có OT cuối tuần 01/11 của NV-KT-001 (Chủ nhật trực bảo trì, đã QL duyệt) để màn hình OT tháng hiện tại không trống.
+- Chủ nhật **01/11** có 4 người đi làm: NV-KT-001 (đã khai + duyệt OT), NV-KD-002 (đã khai + duyệt OT), NV-KT-002 (đã khai, **chờ duyệt**), NV-KD-001 (**đi làm nhưng chưa khai OT** — dùng để demo tạo đơn OT cuối tuần trên app).
+
+### 3.4. Ngày lễ có người đi làm — vừa có đơn OT vừa không
+Bộ seed cố ý để **mỗi ngày lễ đều có cả hai trường hợp**, đúng dữ liệu thật:
+
+| Ngày lễ | Có đơn OT (đã duyệt) | Đi làm **không** khai OT |
+|---|---|---|
+| 02/09 (Quốc khánh) | NV-KT-001, NV-KT-003 (OT lễ 300%, đã FINAL trong kỳ 09) | NV-KT-002 (trực buổi sáng 08:03–12:06) |
+| 31/10 (lễ thành lập công ty, rơi thứ Bảy) | NV-KT-003 (OT lễ 300%, PROVISIONAL kỳ 10) | NV-KT-002 (trực 07:56–17:09) |
+
+Ngày 31/10 là **thứ Bảy nhưng khai báo là `PUBLIC_HOLIDAY`** → hệ thống phân loại OT 300% (lễ thắng cuối tuần), không phải 200%. Dùng ngày này để demo: đăng nhập `nv.ky.thuat.2@anphat.local` → tạo đơn OT cho 31/10 → QL Kỹ thuật duyệt → kết quả OT hiện hệ số lễ.
+
+> Hệ quả kỹ thuật: bản ghi `AttendanceDay` ngày lễ/cuối tuần giờ mang `workdayType` tương ứng (`PUBLIC_HOLIDAY` / `WEEKLY_OFF`) thay vì luôn là `WORKING_DAY`, nên bảng công không đếm nhầm ngày lễ thành ngày công chuẩn.
 
 ---
 
@@ -78,19 +90,23 @@ Bộ seed cố tình trải đủ các tình huống ảnh hưởng tới công 
 
 | Tình huống | Minh họa ở |
 |---|---|
-| OT ngày thường (150%) | NV-KT-002 (10/09, 22/10), NV-KD-001 (24/09, 29/10), NV-KT-001 (14/10) |
+| OT ngày thường (150%) | NV-KT-002 (10/09, 22/09, 22/10), NV-KT-003 (08/09), NV-KD-001 (24/09, 29/10), NV-KD-002 (30/09, 21/10), NV-KT-001 (14/10) |
 | OT cuối tuần — thứ Bảy (200%) | NV-KT-001 & NV-KT-003 (26/09, 24/10) |
-| OT ngày lễ Quốc khánh (300%) | NV-KT-001 (02/09) |
-| OT đã gửi nhưng **chưa duyệt** (không được tính lương) | NV-KD-002 (30/10) |
+| OT Chủ nhật (200%) | NV-KD-001 (20/09), NV-KT-001 & NV-KD-002 (01/11) |
+| OT ngày lễ Quốc khánh (300%) | NV-KT-001, NV-KT-003 (02/09) |
+| OT ngày lễ **rơi vào thứ Bảy** — vẫn 300%, lễ thắng cuối tuần | NV-KT-003 (31/10) |
+| Đi làm ngày lễ **không khai OT** → demo tạo đơn OT trên app | NV-KT-002 (02/09, 31/10) |
+| Đi làm Chủ nhật **không khai OT** → demo tạo đơn OT trên app | NV-KD-001 (01/11) |
+| OT đã gửi nhưng **chưa duyệt** (không được tính lương) | NV-KD-002 (30/10), NV-KT-002 (01/11) |
 | Đi muộn | NV-KD-002, QL-KD-001, QL-KT-001… |
 | Về sớm | NV-KD-002 (22/09), QL-KT-001 (26/10), NV-KT-003 (25/09) |
-| Nghỉ phép năm có lương (cả ngày) | NV-KT-001 (21/09), NV-KT-002 (28–29/09, nghỉ 2 ngày), NV-KT-001 (09/10) |
-| Nghỉ phép có lương nửa ngày | NV-KD-002 (11/09 chiều, 23/10 sáng), NV-KD-001 (27/10 chiều) |
-| Nghỉ **không lương** (NV thử việc) | NV-KD-003 (17/09, 12–13/10) |
+| Nghỉ phép năm có lương (cả ngày) | NV-KT-001 (21/09), NV-KT-002 (18/09, 28–29/09), NV-KT-003 (15/10) |
+| Nghỉ phép có lương nửa ngày | NV-KD-002 (11/09 chiều, 12/10 sáng, 23/10 sáng), NV-KD-001 (17/09 chiều, 27/10 chiều), NV-KT-001 (16/10 chiều, 29/10 sáng) |
+| Nghỉ **không lương** | NV-KD-003 (17/09, 12–13/10, 15/10 chiều), NV-KT-003 (24/09), NV-KD-001 (20/10) |
 | Nửa ngày + đi muộn ca chiều + về sớm → **0,5 công** | NV-KD-002 (23/10) |
 | Công tác ngoài (chấm công **selfie** → QL duyệt) | NV-KD-001 (15/09, 08/10), NV-KT-002 (23/09), NV-KD-002 (15/10, chờ duyệt) — *không có file ảnh, xem cảnh báo §3.2* |
-| Quên chấm công → **giải trình** được duyệt | NV-KD-001 (04/09), NV-KT-003 (09/09, 06/10), NV-KT-001 (19/10), NV-KT-002 (20/10), NV-KD-003 (21/10) |
-| **Vắng không phép** (bị khấu trừ công) | NV-KD-003 (18/09), NV-KT-003 (28/10) |
+| Quên chấm công → **giải trình** được duyệt | NV-KD-001 (04/09), NV-KT-003 (09/09, 06/10), NV-KT-001 (19/10), NV-KT-002 (20/10), NV-KD-003 (21/10, 27/10) |
+| **Vắng không phép** (bị khấu trừ công) | NV-KD-003 (18/09), NV-KT-002 (16/09, 13/10), NV-KT-003 (28/10) |
 | Nhân viên **thử việc 85% lương, chưa đóng BH** | NV-KD-003 |
 | Thưởng KPI theo bậc, thưởng chuyên cần | Tất cả (điểm KPI khai trong `KPI_SCORES`) |
 
@@ -190,24 +206,31 @@ Mật khẩu chung: `Demo123456!`
 | 6 | Duyệt **giải trình `NV-KD-003` 21/10** | "Nhân viên tự nộp giải trình, QL duyệt. Hệ thống tự tính lại công ngày đó." |
 | 7 | Tab 3 (NV-KD-002) → "Công của tôi" → Xác nhận | "Nhân viên thấy **21.5/22 công**, xác nhận là đã đồng ý." |
 | 8 | Chạy `npm run demo:ack -- --skip-ack=NV-KD-003` | ⚠️ **Bắt buộc có `--skip-ack`** — xem lưu ý bên dưới. Kết quả: ack hộ 6 người, để `NV-KD-003` chờ (và in `NV-KD-002 đã xác nhận trước đó` nếu đã bấm tay ở bước 7). |
-| 9 | Tab 3 (nếu là `NV-KD-003`) hoặc chạy `npm run demo:ack -- --skip-ack=` | Cho **chính** `NV-KD-003` tự xác nhận. Kết quả: `✓ NV-KD-003 Đặng Văn Khoa: 20/22 công`. |
+| 9 | Tab 3 (nếu là `NV-KD-003`) hoặc chạy `npm run demo:ack -- --skip-ack=` | Cho **chính** `NV-KD-003` tự xác nhận. Kết quả: `✓ NV-KD-003 Đặng Văn Khoa: 19.5/22 công`. |
 | 10 | Tab 1 (QL KD) → xác nhận công phòng KD | "Phòng chỉ xác nhận được khi **từng nhân viên** đã xác nhận. Chạy sớm sẽ bị chặn: `EMPLOYEE_ACKNOWLEDGEMENT_PENDING`." |
 | 11 | Chạy `npm run demo:confirm` | Bấm hộ phòng KT; phòng KD vừa xác nhận tay xong nên sẽ in `đã xác nhận`. Cả 2 phòng xong → kỳ chuyển `READY_TO_CLOSE`. |
 | 12 | Tab 2 (HR) → chốt kỳ + chạy lương | Hoặc `npm run demo:close`. Bốn bước: tạo bảng lương → tính → khóa → phát hành. |
-| 13 | Mở 1 phiếu lương bất kỳ | So sánh với kỳ 9: `NV-KD-003` 20/22 công (nghỉ không lương 2 ngày + vắng không phép), `NV-KD-002` 21.5/22 nên gross thấp hơn `NV-KD-001` dù có OT. Đây là phần "ăn điểm" — số liệu khớp nhau qua 4 tầng: chấm công → bảng công → snapshot → phiếu lương. |
+| 13 | Mở 1 phiếu lương bất kỳ | So sánh với kỳ 9: `NV-KD-003` 19.5/22 công (2 ngày nghỉ không lương + 1 ngày vắng không phép), `NV-KD-002` 21.5/22 nên gross thấp hơn `NV-KD-001` dù có OT. Đây là phần "ăn điểm" — số liệu khớp nhau qua 4 tầng: chấm công → bảng công → snapshot → phiếu lương. |
 
 **⚠️ Vì sao bước 8 phải có `--skip-ack`:** mặc định `demo:ack` bỏ qua **cả 2** mã `NV-KD-002, NV-KD-003`. Chạy trơn thì cả 2 chưa được ack, và **bước 10–11 sẽ hỏng** — đã thử thật (blocker đã duyệt hết trước đó):
 
 ```
-▶ Nhân viên xác nhận bảng công kỳ 2026-10 (tự xác nhận khi demo: NV-KD-002, NV-KD-003)
-  ✓ NV-KD-001 ... ✓ QL-KT-001        ← 6 người được ack
-  · NV-KD-002 Vũ Thị Mai: để tự xác nhận khi demo
+▶ Nhân viên xác nhận bảng công kỳ 2026-10 (tự xác nhận khi demo: NV-KD-003)
+  ✓ NV-KD-001 Phạm Hoàng Nam: 21/22 công
+  ✓ NV-KD-002 Vũ Thị Mai: 21.5/22 công     ← nếu đã bấm tay ở bước 7 thì in "đã xác nhận trước đó"
   · NV-KD-003 Đặng Văn Khoa: để tự xác nhận khi demo
+  ✓ NV-KT-001 Lê Quốc Bảo: 22/22 công
+  ✓ NV-KT-002 Hoàng Minh Tuấn: 21/22 công
+  ✓ NV-KT-003 Bùi Phương Thảo: 21/22 công
+  ✓ QL-KD-001 Trần Quốc Hưng: 22/22 công
+  ✓ QL-KT-001 Nguyễn Thành Long: 22/22 công
 
 ▶ Quản lý xác nhận công phòng ban kỳ 2026-10
   ✗ Phòng Kinh doanh: EMPLOYEE_ACKNOWLEDGEMENT_PENDING
   ✓ Phòng Kỹ thuật đã xác nhận
 ```
+
+> Chạy `demo:ack` **ngay sau seed** (chưa gỡ blocker) sẽ thấy `✗ NV-KD-001/NV-KT-001: còn ngày chưa xử lý (blocker)` — đúng ràng buộc (1) ở §5.2: blocker phải xong trước khi ack.
 
 Lúc đó HR vẫn không chốt được kỳ. Chỉ định rõ `--skip-ack=NV-KD-003` ở bước 8 (và ack nốt `NV-KD-003` ở bước 9).
 
@@ -220,7 +243,7 @@ Lúc đó HR vẫn không chốt được kỳ. Chỉ định rõ `--skip-ack=NV
 
 **Vì sao cần bước 9 riêng:** xác nhận phòng ban đòi **100% nhân viên** của phòng đã ack — đó chính là cơ chế sinh ra `EMPLOYEE_ACKNOWLEDGEMENT_PENDING` ở trên. Nên `NV-KD-003` phải ack xong thì bước 10 mới bấm được.
 
-**Câu chốt:** `npm run verify:demo` → in ra "Đã tính lại 326 ngày công bằng calculator, 32 yêu cầu, 15 kết quả OT" và `✓ Dữ liệu nhất quán`. Chứng minh không có số nào ghi tay.
+**Câu chốt:** `npm run verify:demo` → in ra "Đã tính lại 334 ngày công bằng calculator, 45 yêu cầu, 28 kết quả OT" và `✓ Dữ liệu nhất quán`. Chứng minh không có số nào ghi tay.
 
 ### 5.4. Nếu muốn sinh viên tự bấm xác nhận rồi script chạy nốt
 
@@ -241,7 +264,23 @@ Nhưng **không nhảy được sang `demo:confirm`** khi mới 1/8 người ack
 
 Muốn cả phòng xác nhận được thì phải ack đủ người của phòng đó trước.
 
-### 5.5. Phương án dự phòng khi có sự cố
+### 5.5. Demo tạo đơn OT ngày lễ / cuối tuần (làm tay trên app)
+
+Bộ seed để sẵn **người đã chấm công ngày lễ/cuối tuần nhưng chưa khai OT**, để thao tác tạo đơn diễn ra ngay trên app:
+
+| Tài khoản | Ngày | Bản chất ngày | Đăng nhập | Kết quả sau khi QL duyệt |
+|---|---|---|---|---|
+| `nv.ky.thuat.2@anphat.local` (NV-KT-002) | **31/10** | `PUBLIC_HOLIDAY` rơi thứ Bảy | QL Kỹ thuật duyệt | OT lễ **300%**, 540 phút |
+| `nv.kinh-doanh.1@anphat.local` (NV-KD-001) | **01/11** | `WEEKLY_OFF` (Chủ nhật) | QL Kinh doanh duyệt | OT cuối tuần **200%**, 240 phút |
+
+Cả hai đều đang ở kỳ `2026-11` (`OPEN`) nên tạo đơn không bị chặn bởi chốt kỳ. Lưu ý khi thao tác:
+
+- Ngày **31/10** đã quá hạn khai thường (`RETROACTIVE_GRACE_DAYS = 1`), nên form OT sẽ **bắt buộc nhập lý do bổ sung** (`OVERTIME_RETROACTIVE_REASON_REQUIRED`) — đúng nghiệp vụ, nói rõ cho người xem đây là khai bổ sung sau ca.
+- Ngày **01/11** vẫn trong hạn khai thường → nộp thẳng, không cần lý do bổ sung.
+- OT không được chồng lên ca hành chính: ngày lễ/cuối tuần `scheduledIntervals` rỗng nên toàn bộ thời gian làm việc đều tính OT (`OVERTIME_OVERLAPS_SCHEDULE` không kích hoạt).
+- Nếu muốn demo lại từ đầu: `npm run seed:demo:reset` xoá các đơn OT tạo tay.
+
+### 5.6. Phương án dự phòng khi có sự cố
 
 | Sự cố | Xử lý |
 |---|---|
