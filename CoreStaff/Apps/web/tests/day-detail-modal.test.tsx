@@ -143,5 +143,41 @@ describe('DayDetailModal & Work Credit Calculation', () => {
     expect(container.textContent).toContain('0 công');
     expect(container.textContent).toContain('Tạm tính');
   });
-});
 
+  test('dynamically applies workCreditPolicy ratios and minutes', async () => {
+    const day: DayAttendance = {
+      id: 'day-custom-policy',
+      workDate: '2026-10-06',
+      shiftName: 'Ca Hành Chính',
+      shiftHours: '08:00 – 17:30',
+      workplace: 'Văn phòng CoreStaff',
+      workplaceAddress: '',
+      status: 'COMPLETED',
+      availableAction: 'NONE',
+      attendanceMethod: 'GPS',
+      workingMinutes: 420,
+      totalWorkingMinutes: 420,
+    };
+
+    const policy = { fullDayMinimumRatio: 0.875, halfDayMinimumRatio: 0.5 };
+    const credit = calculateDayWorkCredit(day, 'ATTENDED', policy);
+    expect(credit.credit).toBe(1);
+    expect(credit.fullPercentStr).toBe('87.5%');
+    expect(credit.fullMinMinutes).toBe(420);
+    expect(credit.halfPercentStr).toBe('50%');
+    expect(credit.halfMinMinutes).toBe(240);
+
+    await act(async () => {
+      root.render(<DayDetailModal isOpen={true} onClose={() => {}} day={day} workCreditPolicy={policy} />);
+    });
+
+    const accordionBtn = container.querySelector<HTMLButtonElement>('button:has(svg.lucide-calculator)')
+      || Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Chi tiết quy đổi công'));
+    await act(async () => {
+      accordionBtn!.click();
+    });
+
+    expect(container.textContent).toContain('Tiêu chuẩn 1.0 công: ≥ 87.5% ca (420 phút)');
+    expect(container.textContent).toContain('Tiêu chuẩn 0.5 công: ≥ 50% ca (240 phút)');
+  });
+});

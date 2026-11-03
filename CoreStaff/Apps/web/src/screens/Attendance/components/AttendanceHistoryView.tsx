@@ -5,7 +5,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { DayAttendance, AttendanceMethod } from '../types';
-import { DayDetailModal } from './DayDetailModal';
+import { DayDetailModal, type WorkCreditPolicyInfo } from './DayDetailModal';
 import { resolveApiBase, apiUrl } from '../../../config/api';
 import { getAttendanceHistory } from '../../../services/attendance.service';
 import { getAttendanceHistoryStatus, hasPartialDayLeave } from '../historyStatus';
@@ -34,11 +34,12 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
     otDays: 0,
     otMinutes: 0,
   });
+  const [workCreditPolicy, setWorkCreditPolicy] = useState<WorkCreditPolicyInfo | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // Bộ nhớ đệm phía Client theo từng tháng để chuyển tháng tức thì (0ms)
-  const monthCache = useRef<Map<string, { days: DayAttendance[]; summary: typeof summary }>>(new Map());
+  const monthCache = useRef<Map<string, { days: DayAttendance[]; summary: typeof summary; workCreditPolicy: WorkCreditPolicyInfo | null }>>(new Map());
 
   const fetchHistory = useCallback(async (month: string) => {
     // 1. Kiểm tra cache trước: Nếu đã tải tháng này rồi thì nạp ngay không để user phải chờ
@@ -46,6 +47,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
     if (cached) {
       setDays(cached.days);
       setSummary(cached.summary);
+      setWorkCreditPolicy(cached.workCreditPolicy);
       setIsLoading(false);
     } else {
       setIsLoading(true);
@@ -133,11 +135,13 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         };
       }
 
+      const fetchedPolicy: WorkCreditPolicyInfo | null = res?.workCreditPolicy || null;
+      setWorkCreditPolicy(fetchedPolicy);
       setDays(mappedDays);
       setSummary(calculatedSummary);
 
       // Lưu vào cache
-      monthCache.current.set(month, { days: mappedDays, summary: calculatedSummary });
+      monthCache.current.set(month, { days: mappedDays, summary: calculatedSummary, workCreditPolicy: fetchedPolicy });
     } catch (err: any) {
       console.error('Failed to fetch attendance history:', err);
       setError(err?.message || 'Không thể tải lịch sử chấm công');
@@ -416,6 +420,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
         isOpen={Boolean(activeDetailDay)}
         onClose={() => setActiveDetailDay(null)}
         day={activeDetailDay}
+        workCreditPolicy={workCreditPolicy}
       />
     </div>
   );
