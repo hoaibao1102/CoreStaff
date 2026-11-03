@@ -114,13 +114,15 @@ export function TimesheetReviewScreen({
   const [blockerRowsError, setBlockerRowsError] = useState<string | null>(null);
   const [detailBlocker, setDetailBlocker] = useState<PeriodBlockerRow | null>(null);
 
-  // Load periods list
+  // Load periods list (skip when periodId is directly provided in embedded mode)
   useEffect(() => {
-    loadPeriods();
+    if (!embedded) {
+      loadPeriods();
+    }
     if (userRole === 'DEPARTMENT_MANAGER') {
       loadManagerContext();
     }
-  }, [organizationId, userRole]);
+  }, [organizationId, userRole, embedded]);
 
   async function loadManagerContext() {
     try {
@@ -131,15 +133,23 @@ export function TimesheetReviewScreen({
     }
   }
 
-  // Auto-select period when periodId is provided from parent dialog
+  // When periodId is provided (e.g. from modal Dialog), immediately load detail without waiting for periods list
   useEffect(() => {
-    if (periodId && periods.length > 0) {
+    if (periodId) {
+      void loadPeriodDetail(periodId);
+    }
+  }, [periodId]);
+
+  // Auto-select period when periodId is provided from parent dialog in standalone view
+  useEffect(() => {
+    if (!periodId || embedded) return;
+    if (periods.length > 0) {
       const period = periods.find(p => p._id === periodId);
       if (period) {
-        loadPeriodDetail(period._id);
+        void loadPeriodDetail(period._id);
       }
     }
-  }, [periodId, periods]);
+  }, [periodId, periods, embedded]);
 
   // An approved attendance correction changes blockers and the live draft
   // summary. Refresh the open review automatically for HR/managers instead of
@@ -188,14 +198,12 @@ export function TimesheetReviewScreen({
     setPreviewData(null);
     setPreviewDepartmentId(null);
     try {
-      const period = await hrRequest<Period>(apiBase, `/api/hr/timesheet-periods/${periodId}`);
+      // Parallel fetch: retrieve period metadata and review stats simultaneously
+      const [period, statsData] = await Promise.all([
+        hrRequest<Period>(apiBase, `/api/hr/timesheet-periods/${periodId}`),
+        hrRequest<SummaryStats>(apiBase, `/api/hr/timesheet-periods/${periodId}/review-stats`),
+      ]);
       setSelectedPeriod(period);
-
-      // Load summary stats
-      const statsData = await hrRequest<SummaryStats>(
-        apiBase,
-        `/api/hr/timesheet-periods/${periodId}/review-stats`,
-      );
       setStats(statsData);
     } catch (err) {
       setStats(null);
@@ -384,10 +392,33 @@ export function TimesheetReviewScreen({
         </Button>
       </div>}
 
-      {/* Loading State */}
-      {loading && !selectedPeriod && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      {/* Loading Skeleton State */}
+      {loading && (
+        <div className="space-y-6 py-2">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-950">Đang rà soát và tải dữ liệu kỳ công…</p>
+                <p className="text-xs text-blue-700">Đang phân tích bảng công, tỷ lệ hoàn tất và phân loại lỗi chặn.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card p-6 shadow-sm animate-pulse">
+            <div className="h-6 w-48 bg-muted rounded mb-2" />
+            <div className="h-4 w-72 bg-muted/60 rounded" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="h-28 rounded-xl bg-card border p-4 shadow-sm animate-pulse" />
+            <div className="h-28 rounded-xl bg-card border p-4 shadow-sm animate-pulse" />
+            <div className="h-28 rounded-xl bg-card border p-4 shadow-sm animate-pulse" />
+          </div>
+
+          <div className="h-44 rounded-xl bg-card border p-4 shadow-sm animate-pulse flex items-center justify-center text-xs text-muted-foreground">
+            Đang tải danh mục lỗi chặn…
+          </div>
         </div>
       )}
 

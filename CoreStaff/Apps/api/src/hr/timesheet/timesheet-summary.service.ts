@@ -851,6 +851,27 @@ export class TimesheetSummaryService {
     return this.excludeHrUsers([...new Set([...assignedUserIds, ...profileUserIds])]);
   }
 
+  /**
+   * Fast resolution of attendance-eligible user IDs without running heavy work-credit calculations.
+   */
+  async getEligibleEmployeeUserIds(
+    organizationId: string,
+    departmentId?: string,
+  ): Promise<string[]> {
+    if (departmentId) {
+      return this.resolveDepartmentEmployeeIds(organizationId, departmentId);
+    }
+    const activeProfiles = await this.employeeProfileModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        employmentStatus: { $in: ['ACTIVE', 'PROBATION'] },
+      }, { userId: 1 })
+      .lean();
+    return this.excludeHrUsers(
+      activeProfiles.map((profile) => String(profile.userId)),
+    );
+  }
+
   private async excludeHrUsers(userIds: string[], session?: ClientSession): Promise<string[]> {
     if (!userIds.length) return [];
     const query = this.userModel.find({
