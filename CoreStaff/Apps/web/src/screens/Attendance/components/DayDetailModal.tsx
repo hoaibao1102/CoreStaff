@@ -6,10 +6,19 @@ import { Badge } from '../../../components/badge';
 import { AppLink } from '../../../components/AppLink';
 import { getAttendanceHistoryStatus, hasPartialDayLeave, type AttendanceHistoryStatus } from '../historyStatus';
 
+export interface WorkCreditPolicyInfo {
+  halfDayMinimumRatio?: number;
+  fullDayMinimumRatio?: number;
+  paidLeaveCreditEnabled?: boolean;
+  incompleteDayRule?: string;
+  businessReference?: string;
+}
+
 export interface DayDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   day: DayAttendance | null;
+  workCreditPolicy?: WorkCreditPolicyInfo | null;
 }
 
 function getStatusBadge(status: string) {
@@ -20,6 +29,8 @@ function getStatusBadge(status: string) {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-700">Đang làm việc</Badge>;
     case 'PENDING_APPROVAL':
       return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Chờ duyệt</Badge>;
+    case 'CLARIFICATION_REQUESTED':
+      return <Badge variant="secondary" className="bg-amber-100 text-amber-900 border border-amber-300 font-semibold">Cần giải trình</Badge>;
     case 'LATE':
       return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Đi trễ</Badge>;
     case 'EARLY_LEAVE':
@@ -41,11 +52,21 @@ export interface DayWorkCreditDetail {
   leaveMinutes: number;
   ratioPercent: number;
   ruleExplanation: string;
+  fullPercentStr: string;
+  halfPercentStr: string;
+  fullMinMinutes: number;
+  halfMinMinutes: number;
+}
+
+function formatPercent(val: number): string {
+  const pct = Math.round(val * 1000) / 10;
+  return Number.isInteger(pct) ? `${pct}%` : `${pct}%`;
 }
 
 export function calculateDayWorkCredit(
   day: DayAttendance,
   historyStatus: AttendanceHistoryStatus,
+  policy?: WorkCreditPolicyInfo | null,
 ): DayWorkCreditDetail {
   const obligationMinutes = day.attendanceRequirements?.requiredWorkingMinutes ?? 480;
   const leaveMinutes = day.attendanceRequirements?.approvedLeaveMinutes ?? 0;
@@ -57,6 +78,21 @@ export function calculateDayWorkCredit(
     const diffMs = new Date(day.checkOut.recordedAt).getTime() - new Date(day.checkIn.recordedAt).getTime();
     workedMinutes = Math.max(0, Math.floor(diffMs / 60000));
   }
+
+  const fullDayRatio = typeof policy?.fullDayMinimumRatio === 'number' ? policy.fullDayMinimumRatio : 0.875;
+  const halfDayRatio = typeof policy?.halfDayMinimumRatio === 'number' ? policy.halfDayMinimumRatio : 0.5;
+
+  const fullPercentStr = formatPercent(fullDayRatio);
+  const halfPercentStr = formatPercent(halfDayRatio);
+  const fullMinMinutes = Math.round(obligationMinutes * fullDayRatio);
+  const halfMinMinutes = Math.round(obligationMinutes * halfDayRatio);
+
+  const policyMeta = {
+    fullPercentStr,
+    halfPercentStr,
+    fullMinMinutes,
+    halfMinMinutes,
+  };
 
   // 1. Ngày nghỉ tuần
   if (day.workdayType === 'WEEKLY_OFF') {
@@ -70,6 +106,7 @@ export function calculateDayWorkCredit(
       leaveMinutes: 0,
       ratioPercent: 0,
       ruleExplanation: 'Ngày nghỉ hàng tuần theo quy định, không phát sinh nghĩa vụ làm việc.',
+      ...policyMeta,
     };
   }
 
@@ -85,6 +122,7 @@ export function calculateDayWorkCredit(
       leaveMinutes,
       ratioPercent: 100,
       ruleExplanation: 'Nghỉ lễ theo quy định Nhà nước, được hưởng nguyên lương (1.0 ngày công).',
+      ...policyMeta,
     };
   }
 
@@ -100,6 +138,7 @@ export function calculateDayWorkCredit(
       leaveMinutes: obligationMinutes,
       ratioPercent: 100,
       ruleExplanation: 'Nghỉ phép hưởng lương đã được duyệt, tính đủ 1.0 ngày công.',
+      ...policyMeta,
     };
   }
 
@@ -115,6 +154,7 @@ export function calculateDayWorkCredit(
       leaveMinutes: 0,
       ratioPercent: 0,
       ruleExplanation: 'Nghỉ không hưởng lương theo đơn đề nghị đã phê duyệt.',
+      ...policyMeta,
     };
   }
 
@@ -130,6 +170,7 @@ export function calculateDayWorkCredit(
       leaveMinutes: 0,
       ratioPercent: 0,
       ruleExplanation: 'Đã xác nhận vắng (không tính công do thiếu mốc chấm công và không giải trình).',
+      ...policyMeta,
     };
   }
 
@@ -145,6 +186,7 @@ export function calculateDayWorkCredit(
       leaveMinutes,
       ratioPercent: obligationMinutes > 0 ? Math.min(100, Math.round((workedMinutes / obligationMinutes) * 100)) : 0,
       ruleExplanation: 'Chưa đủ 2 mốc check-in và check-out. Theo chính sách công ty, ngày công tạm tính là 0 công cho đến khi gửi đơn Xác nhận công và được Quản lý duyệt.',
+      ...policyMeta,
     };
   }
 
@@ -160,6 +202,7 @@ export function calculateDayWorkCredit(
       leaveMinutes,
       ratioPercent: obligationMinutes > 0 ? Math.min(100, Math.round((workedMinutes / obligationMinutes) * 100)) : 0,
       ruleExplanation: 'Ca làm việc đang diễn ra. Ngày công sẽ được chốt sau khi bạn hoàn tất check-out.',
+      ...policyMeta,
     };
   }
 
@@ -168,7 +211,7 @@ export function calculateDayWorkCredit(
   const ratio = obligationMinutes > 0 ? creditedMinutes / obligationMinutes : 0;
   const ratioPercent = Math.min(100, Math.round(ratio * 100));
 
-  if (ratio >= 0.9) {
+  if (ratio >= fullDayRatio - 0.0001) {
     return {
       credit: 1,
       label: '1.0 công',
@@ -178,11 +221,12 @@ export function calculateDayWorkCredit(
       workedMinutes,
       leaveMinutes,
       ratioPercent,
-      ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca quy định (yêu cầu tối thiểu 90%), được ghi nhận trọn vẹn 1.0 ngày công.`,
+      ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca quy định (yêu cầu tối thiểu ${fullPercentStr}), được ghi nhận trọn vẹn 1.0 ngày công.`,
+      ...policyMeta,
     };
   }
 
-  if (ratio >= 0.5) {
+  if (ratio >= halfDayRatio - 0.0001) {
     return {
       credit: 0.5,
       label: '0.5 công',
@@ -192,7 +236,8 @@ export function calculateDayWorkCredit(
       workedMinutes,
       leaveMinutes,
       ratioPercent,
-      ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca quy định (từ 50% đến dưới 90%), được ghi nhận 0.5 ngày công.`,
+      ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca quy định (từ ${halfPercentStr} đến dưới ${fullPercentStr}), được ghi nhận 0.5 ngày công.`,
+      ...policyMeta,
     };
   }
 
@@ -205,17 +250,18 @@ export function calculateDayWorkCredit(
     workedMinutes,
     leaveMinutes,
     ratioPercent,
-    ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca (dưới 50%), không đủ điều kiện ghi nhận ngày công.`,
+    ruleExplanation: `Thời gian làm việc đạt ${ratioPercent}% ca (dưới ${halfPercentStr}), không đủ điều kiện ghi nhận ngày công.`,
+    ...policyMeta,
   };
 }
 
-export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
+export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDetailModalProps) {
   const [showCreditDetail, setShowCreditDetail] = useState(false);
 
   if (!isOpen || !day) return null;
   const historyStatus = getAttendanceHistoryStatus(day);
   const hasPartialLeave = hasPartialDayLeave(day);
-  const creditDetail = calculateDayWorkCredit(day, historyStatus);
+  const creditDetail = calculateDayWorkCredit(day, historyStatus, workCreditPolicy);
 
   const adjustmentType = day.checkInAt || day.checkIn?.recordedAt ? 'CHECK_OUT' : 'CHECK_IN';
   const adjustmentHref = `/app/ot?${new URLSearchParams({
@@ -398,8 +444,8 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
               <div className="rounded-lg bg-background p-2.5 border border-border/80 text-[11px] space-y-1.5">
                 <p className="font-medium text-foreground">{creditDetail.ruleExplanation}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1 border-t border-border/60">
-                  <div>• Tiêu chuẩn 1.0 công: ≥ 90% ca ({Math.round(creditDetail.obligationMinutes * 0.9)} phút)</div>
-                  <div>• Tiêu chuẩn 0.5 công: ≥ 50% ca ({Math.round(creditDetail.obligationMinutes * 0.5)} phút)</div>
+                  <div>• Tiêu chuẩn 1.0 công: ≥ {creditDetail.fullPercentStr} ca ({creditDetail.fullMinMinutes} phút)</div>
+                  <div>• Tiêu chuẩn 0.5 công: ≥ {creditDetail.halfPercentStr} ca ({creditDetail.halfMinMinutes} phút)</div>
                 </div>
               </div>
 
@@ -421,6 +467,27 @@ export function DayDetailModal({ isOpen, onClose, day }: DayDetailModalProps) {
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
             <p className="font-semibold">Ngày này đã được xác nhận vắng và không tính công.</p>
             <p className="mt-1">Lý do: {day.resolution.reason}</p>
+          </div>
+        )}
+
+        {((day as any).overallApprovalStatus === 'CLARIFICATION_REQUESTED' || (day as any).status === 'CLARIFICATION_REQUESTED') && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 space-y-2 text-xs text-amber-950">
+            <div className="flex items-center gap-2 font-bold text-amber-900">
+              <AlertCircle className="size-4 text-amber-700 shrink-0" />
+              <span>Yêu cầu giải trình chấm công</span>
+            </div>
+            <p className="text-amber-800">
+              Ngày công này đang thiếu mốc chấm công và cần bạn phản hồi giải trình kèm mốc giờ làm việc thực tế cho Quản lý.
+            </p>
+            <div className="pt-1">
+              <AppLink
+                href={`/app/ot?type=ATTENDANCE&workDate=${day.workDate}`}
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs"
+              >
+                Giải trình ngay →
+              </AppLink>
+            </div>
           </div>
         )}
 

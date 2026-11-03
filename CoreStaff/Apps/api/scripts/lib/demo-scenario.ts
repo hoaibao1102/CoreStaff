@@ -152,6 +152,9 @@ export const SITES: Record<SiteKey, { address: string; latitude: number; longitu
 export const HOLIDAYS = [
   { date: '2026-09-01', name: 'Nghỉ lễ Quốc khánh 2/9 (ngày liền kề)' },
   { date: '2026-09-02', name: 'Lễ Quốc khánh 2/9' },
+  // Ngày lễ công ty rơi đúng thứ Bảy: vẫn là PUBLIC_HOLIDAY (OT 300%), không
+  // phải WEEKLY_OFF (200%) — đúng thứ tự ưu tiên lịch của hệ thống.
+  { date: '2026-10-31', name: 'Nghỉ lễ kỷ niệm thành lập Công ty An Phát (rơi vào thứ Bảy)' },
 ];
 
 // ─── Thói quen bấm giờ (ngày bình thường) ───────────────────────────────────
@@ -213,8 +216,11 @@ const day = (inTime: string | null, outTime: string | null, extra: Partial<Overr
 export const DAY_OVERRIDES: Record<string, Override> = {
   // ── Tháng 9 ────────────────────────────────────────────────────────────────
   '2026-09-02|NV-KT-001': day('07:56:10', '17:08:40', { story: 'Trực vận hành hệ thống ngày Quốc khánh (OT ngày lễ 300%)' }),
+  '2026-09-02|NV-KT-002': day('08:03:10', '12:06:40', { story: 'Trực hỗ trợ buổi sáng ngày Quốc khánh, CHƯA khai OT (giờ làm ngoài lịch không ai đặt)' }),
+  '2026-09-02|NV-KT-003': day('07:58:30', '17:12:10', { story: 'Trực vận hành hệ thống ngày Quốc khánh (OT ngày lễ 300%)' }),
   '2026-09-04|NV-KD-001': { in: null, out: null, workMode: 'IN_OFFICE', story: 'Quên chấm công cả ngày (điện thoại hết pin) → giải trình, QL duyệt' },
   '2026-09-08|NV-KD-002': day('08:26:40', '17:05:12', { story: 'Đi muộn (kẹt xe)' }),
+  '2026-09-08|NV-KT-003': day('07:52:12', '19:02:40', { story: 'Hỗ trợ khách hàng ngoài giờ (OT 150%)' }),
   '2026-09-09|NV-KT-003': day('07:58:20', null, { story: 'Quên chấm công ra → giải trình, QL duyệt' }),
   '2026-09-10|NV-KT-002': day('07:49:05', '19:42:15', { story: 'Làm thêm giờ ngày thường hỗ trợ khách hàng (OT 150%)' }),
   '2026-09-11|NV-KD-002': day('07:51:30', '12:03:10', { story: 'Nghỉ phép buổi chiều, làm buổi sáng' }),
@@ -225,8 +231,12 @@ export const DAY_OVERRIDES: Record<string, Override> = {
     workMode: 'OUT_OFFICE', story: 'Công tác tại khách hàng — chấm công selfie, QL duyệt',
   },
   '2026-09-16|NV-KD-002': day('08:41:02', '17:10:44', { story: 'Đi muộn' }),
+  '2026-09-16|NV-KT-002': day('07:54:40', null, { story: 'Vào làm rồi về giữa giờ, không đơn, không giải trình → QL xử lý vắng không phép' }),
+  '2026-09-17|NV-KD-001': day('07:47:30', '12:02:15', { story: 'Nghỉ phép buổi chiều, làm buổi sáng' }),
   '2026-09-18|NV-KD-003': day('08:07:33', null, { story: 'Vào làm rồi tự ý rời văn phòng, không đơn, không giải trình → vắng không phép' }),
   '2026-09-22|NV-KD-002': day('07:58:15', '16:30:00', { story: 'Về sớm 30 phút' }),
+  '2026-09-22|NV-KT-002': day('07:49:20', '19:12:35', { story: 'Ứng trực sự cố đồng bộ dữ liệu cho khách hàng (OT 150%)' }),
+  '2026-09-20|NV-KD-001': day('07:58:40', '11:02:40', { story: 'Chủ nhật đi cùng khách hàng khai trương showroom (OT cuối tuần 200%)' }),
   '2026-09-23|NV-KT-002': {
     in: { time: '07:57:30', method: 'SELFIE', note: 'Điện thoại không bắt được Wi-Fi văn phòng, chụp selfie tại quầy lễ tân' },
     out: { time: '17:09:20', method: 'WIFI' },
@@ -238,6 +248,7 @@ export const DAY_OVERRIDES: Record<string, Override> = {
   '2026-09-26|NV-KT-003': day('07:58:44', '17:11:02', { story: 'Thứ Bảy triển khai ERP cho khách hàng (OT cuối tuần 200%)' }),
   '2026-09-29|QL-KT-001': day('08:22:30', '17:52:10', { story: 'Đi muộn' }),
   '2026-09-30|NV-KD-003': day('08:18:05', '17:12:40', { story: 'Đi muộn' }),
+  '2026-09-30|NV-KD-002': day('07:53:24', '19:20:15', { story: 'Chốt số liệu báo cáo quý (OT 150%)' }),
 
   // ── Tháng 10 ───────────────────────────────────────────────────────────────
   '2026-10-05|NV-KD-002': day('08:23:18', '17:06:02', { story: 'Đi muộn' }),
@@ -248,29 +259,44 @@ export const DAY_OVERRIDES: Record<string, Override> = {
     out: { time: '17:25:48', method: 'SELFIE', site: 'MINH_PHAT_BD', note: 'Hoàn tất khảo sát kho' },
     workMode: 'OUT_OFFICE', story: 'Công tác Bình Dương — selfie, QL duyệt',
   },
+  '2026-10-12|NV-KD-002': day('13:02:40', '17:06:20', { story: 'Nghỉ phép buổi sáng, làm ca chiều' }),
+  '2026-10-13|NV-KT-002': day('07:55:10', null, { story: 'Vào làm rồi về giữa giờ, không đơn, không giải trình → QL xử lý vắng không phép' }),
   '2026-10-14|NV-KT-001': day('07:58:02', '20:38:40', { story: 'Release v2.3 ngoài giờ (OT 150%)' }),
   '2026-10-15|NV-KD-002': {
     in: { time: '08:10:05', method: 'SELFIE', site: 'DONG_A_BT', note: 'Gặp khách hàng Đông Á ký phụ lục hợp đồng' },
     out: { time: '17:18:30', method: 'SELFIE', site: 'DONG_A_BT', note: 'Kết thúc làm việc tại khách hàng' },
     workMode: 'OUT_OFFICE', story: 'DEMO: selfie công tác chưa duyệt → giữ lại cho QL KD duyệt tay. ẢNH MINH HỌA: seed chỉ ghi metadata, chưa upload ảnh lên storage.',
   },
+  '2026-10-15|NV-KD-003': day('07:52:10', '12:03:40', { story: 'Nghỉ không lương buổi chiều, làm buổi sáng' }),
   '2026-10-16|NV-KT-003': day('08:31:50', '17:20:05', { story: 'Đi muộn' }),
+  '2026-10-16|NV-KT-001': day('07:55:40', '12:04:10', { story: 'Nghỉ phép buổi chiều, làm buổi sáng' }),
   '2026-10-19|NV-KT-001': { in: null, out: null, workMode: 'IN_OFFICE', story: 'Quên điện thoại ở nhà, không chấm công cả ngày → giải trình CHỜ duyệt (script bổ sung xử lý)' },
   '2026-10-20|NV-KT-002': day('07:54:12', null, { story: 'Quên chấm công ra → giải trình CHỜ duyệt (script bổ sung xử lý)' }),
   '2026-10-21|NV-KD-003': day('07:57:40', null, { story: 'DEMO: quên chấm ra, đã gửi giải trình CHỜ QL KD duyệt' }),
+  '2026-10-21|NV-KD-002': day('07:52:35', '19:18:40', { story: 'Rà soát hợp đồng khung với đối tác (OT 150%)' }),
   '2026-10-22|NV-KT-002': day('07:47:33', '19:36:20', { story: 'Fix lỗi khẩn module thanh toán (OT 150%)' }),
   '2026-10-23|NV-KD-002': day('13:40:00', '16:30:00', { story: 'Nghỉ phép buổi sáng + vào ca chiều muộn 25 phút + về sớm 30 phút → 0,5 công' }),
   '2026-10-24|NV-KT-001': day('07:54:30', '17:08:10', { story: 'Thứ Bảy chuyển hệ thống sang data center mới (OT 200%)' }),
   '2026-10-24|NV-KT-003': day('07:57:05', '17:05:42', { story: 'Thứ Bảy chuyển hệ thống sang data center mới (OT 200%)' }),
   '2026-10-26|QL-KT-001': day('07:52:18', '16:45:00', { story: 'Về sớm 15 phút' }),
   '2026-10-27|NV-KD-001': day('07:48:10', '12:01:30', { story: 'Nghỉ phép buổi chiều, làm buổi sáng' }),
+  '2026-10-27|NV-KD-003': day('07:56:05', null, { story: 'Quên chấm công ra → giải trình, QL duyệt' }),
   '2026-10-28|NV-KT-003': day('08:03:25', null, { story: 'DEMO: vào làm rồi về giữa giờ, không đơn, không giải trình → xử lý vắng không phép' }),
   '2026-10-29|NV-KD-001': day('07:46:05', '19:11:35', { story: 'Hoàn thiện báo giá dự án (OT 150%)' }),
+  '2026-10-29|NV-KT-001': day('13:03:40', '17:08:15', { story: 'Nghỉ phép buổi sáng, làm ca chiều' }),
   '2026-10-30|NV-KD-001': day('07:50:12', null, { story: 'Quên chấm công ra, CHƯA giải trình (script bổ sung xử lý)' }),
   '2026-10-30|NV-KD-002': day('07:56:40', '18:42:05', { story: 'Ở lại làm báo cáo tháng — OT đã gửi, CHƯA duyệt' }),
+  // Thứ Bảy nhưng là ngày lễ công ty: OT 300%, không phải 200%.
+  // KT-003 đã khai + duyệt; KT-002 đi trực nhưng KHÔNG khai OT → demo tạo đơn
+  // OT ngày lễ ngay trên app, rồi QL KD/KT duyệt tại chỗ.
+  '2026-10-31|NV-KT-002': day('07:56:10', '17:09:40', { story: 'Trực hỗ trợ ngày lễ thành lập công ty — CHƯA khai OT (demo tạo đơn)' }),
+  '2026-10-31|NV-KT-003': day('08:01:25', '17:12:05', { story: 'Trực vận hành ngày lễ thành lập công ty (OT lễ 300%)' }),
 
   // ── Tháng 11 (kỳ hiện tại — chỉ để demo OT, kỳ chưa rà soát) ───────────────
   '2026-11-01|NV-KT-001': day('07:58:20', '17:06:45', { story: 'Chủ nhật trực bảo trì máy chủ (OT cuối tuần 200%)' }),
+  '2026-11-01|NV-KD-001': day('07:52:10', '12:06:40', { story: 'Chủ nhật dựng gian hàng hội chợ cho khách hàng — CHƯA khai OT (demo tạo đơn OT cuối tuần trên app)' }),
+  '2026-11-01|NV-KT-002': day('08:02:15', '17:10:30', { story: 'Chủ nhật trực bảo trì máy chủ (OT cuối tuần 200%) — khai OT, CHƯA duyệt' }),
+  '2026-11-01|NV-KD-002': day('08:05:40', '17:03:20', { story: 'Chủ nhật làm thêm sự kiện khách hàng (OT cuối tuần 200%)' }),
 };
 
 export function planFor(code: EmployeeCode, date: string, isWorkday: boolean): DayPlan | null {
@@ -304,15 +330,33 @@ export const LEAVES: LeaveSpec[] = [
     reason: 'Nghỉ phép năm giải quyết việc gia đình', submitAt: ['2026-09-15', '09:30'], approveAt: ['2026-09-15', '11:05'], approveComment: 'Đồng ý', applyAt: ['2026-09-16', '08:45'] },
   { code: 'NV-KT-002', startDate: '2026-09-28', endDate: '2026-09-29', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
     reason: 'Nghỉ phép năm về quê dự đám cưới em gái', submitAt: ['2026-09-21', '08:55'], approveAt: ['2026-09-21', '10:20'], approveComment: 'Đồng ý, nhớ bàn giao ticket cho Bảo', applyAt: ['2026-09-22', '09:10'] },
+  { code: 'NV-KD-001', startDate: '2026-09-17', endDate: '2026-09-17', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.AFTERNOON_HALF,
+    reason: 'Đưa mẹ đi khám bệnh buổi chiều', submitAt: ['2026-09-14', '09:20'], approveAt: ['2026-09-14', '11:40'], approveComment: 'Đồng ý', applyAt: ['2026-09-15', '08:30'] },
+  { code: 'NV-KT-002', startDate: '2026-09-18', endDate: '2026-09-18', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
+    reason: 'Nghỉ phép năm lo thủ tục nhà đất', submitAt: ['2026-09-14', '14:05'], approveAt: ['2026-09-14', '16:20'], approveComment: 'Đồng ý', applyAt: ['2026-09-15', '10:15'] },
+  { code: 'NV-KT-003', startDate: '2026-09-24', endDate: '2026-09-24', leaveType: LeaveType.UNPAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
+    reason: 'Việc gia đình gấp, tạm nghỉ không lương một ngày', submitAt: ['2026-09-21', '15:40'], approveAt: ['2026-09-22', '08:20'], approveComment: 'Duyệt nghỉ không lương', applyAt: ['2026-09-22', '09:30'] },
 
   { code: 'NV-KT-001', startDate: '2026-10-09', endDate: '2026-10-09', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
     reason: 'Nghỉ phép năm đưa bố đi tái khám', submitAt: ['2026-10-05', '09:40'], approveAt: ['2026-10-05', '13:30'], approveComment: 'Đồng ý', applyAt: ['2026-10-06', '08:40'] },
   { code: 'NV-KD-003', startDate: '2026-10-12', endDate: '2026-10-13', leaveType: LeaveType.UNPAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
     reason: 'Về quê lo việc gia đình (thử việc, xin nghỉ không lương)', submitAt: ['2026-10-07', '15:20'], approveAt: ['2026-10-08', '08:35'], approveComment: 'Duyệt nghỉ không lương 2 ngày', applyAt: ['2026-10-08', '10:00'] },
+  { code: 'NV-KD-002', startDate: '2026-10-12', endDate: '2026-10-12', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.MORNING_HALF,
+    reason: 'Đưa con đi khám bệnh buổi sáng', submitAt: ['2026-10-08', '10:10'], approveAt: ['2026-10-08', '14:05'], approveComment: 'Đồng ý, chiều vào bù khách hàng', applyAt: ['2026-10-09', '08:40'] },
+  { code: 'NV-KT-003', startDate: '2026-10-15', endDate: '2026-10-15', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
+    reason: 'Nghỉ phép năm dự lễ tốt nghiệp của em trai', submitAt: ['2026-10-09', '09:15'], approveAt: ['2026-10-09', '11:35'], approveComment: 'Đồng ý', applyAt: ['2026-10-12', '08:45'] },
+  { code: 'NV-KD-003', startDate: '2026-10-15', endDate: '2026-10-15', leaveType: LeaveType.UNPAID_LEAVE, durationType: LeaveDurationType.AFTERNOON_HALF,
+    reason: 'Đi khám sức khỏe định kỳ buổi chiều (thử việc, trừ vào lương)', submitAt: ['2026-10-12', '16:20'], approveAt: ['2026-10-13', '08:30'], approveComment: 'Duyệt nghỉ không lương buổi chiều', applyAt: ['2026-10-13', '10:10'] },
+  { code: 'NV-KT-001', startDate: '2026-10-16', endDate: '2026-10-16', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.AFTERNOON_HALF,
+    reason: 'Nghỉ phép buổi chiều đưa bố đi khám định kỳ', submitAt: ['2026-10-12', '09:30'], approveAt: ['2026-10-12', '13:50'], approveComment: 'Đồng ý', applyAt: ['2026-10-13', '08:35'] },
+  { code: 'NV-KD-001', startDate: '2026-10-20', endDate: '2026-10-20', leaveType: LeaveType.UNPAID_LEAVE, durationType: LeaveDurationType.FULL_DAY,
+    reason: 'Giải quyết việc riêng, xin nghỉ không lương một ngày', submitAt: ['2026-10-15', '14:10'], approveAt: ['2026-10-15', '16:45'], approveComment: 'Duyệt nghỉ không lương', applyAt: ['2026-10-16', '08:35'] },
   { code: 'NV-KD-002', startDate: '2026-10-23', endDate: '2026-10-23', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.MORNING_HALF,
     reason: 'Khám sức khỏe định kỳ tại bệnh viện buổi sáng', submitAt: ['2026-10-19', '10:00'], approveAt: ['2026-10-19', '15:10'], approveComment: 'Đồng ý', applyAt: ['2026-10-20', '09:00'] },
   { code: 'NV-KD-001', startDate: '2026-10-27', endDate: '2026-10-27', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.AFTERNOON_HALF,
     reason: 'Nghỉ buổi chiều làm thủ tục vay mua nhà tại ngân hàng', submitAt: ['2026-10-22', '11:25'], approveAt: ['2026-10-22', '14:00'], approveComment: 'Đồng ý', applyAt: ['2026-10-23', '08:30'] },
+  { code: 'NV-KT-001', startDate: '2026-10-29', endDate: '2026-10-29', leaveType: LeaveType.PAID_LEAVE, durationType: LeaveDurationType.MORNING_HALF,
+    reason: 'Đưa con đi tiêm chủng buổi sáng', submitAt: ['2026-10-23', '09:05'], approveAt: ['2026-10-23', '11:20'], approveComment: 'Đồng ý', applyAt: ['2026-10-26', '08:40'] },
 ];
 
 /** Đơn tháng 11 (tạo theo ngày tham chiếu): 1 đơn đã duyệt, 1 đơn chờ QL duyệt để demo. */
@@ -331,17 +375,31 @@ export interface OtSpec {
 export const OVERTIMES: OtSpec[] = [
   { code: 'NV-KT-001', date: '2026-09-02', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Trực vận hành hệ thống dịp nghỉ lễ Quốc khánh theo phân công',
     workDescription: 'Giám sát hệ thống, xử lý cảnh báo, sao lưu dữ liệu định kỳ', fileAt: ['2026-09-02', '17:20'], approveAt: ['2026-09-03', '08:40'], approveComment: 'Xác nhận lịch trực lễ' },
+  // Cùng ngày lễ 02/09: NV-KT-003 có đơn OT được duyệt; NV-KT-002 cũng đi trực
+  // nhưng KHÔNG khai OT → ngày lễ vừa có vừa không có yêu cầu, đúng dữ liệu thật.
+  { code: 'NV-KT-003', date: '2026-09-02', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Trực vận hành hệ thống dịp nghỉ lễ Quốc khánh theo phân công',
+    workDescription: 'Trực ca cùng anh Bảo, theo dõi cảnh báo hạ tầng và sao lưu', fileAt: ['2026-09-02', '17:24'], approveAt: ['2026-09-03', '08:46'], approveComment: 'Xác nhận lịch trực lễ' },
+  { code: 'NV-KT-003', date: '2026-09-08', windows: [['17:30', '19:00']], reason: 'Hỗ trợ khách hàng kiểm thử bản cập nhật ngoài giờ',
+    workDescription: 'Chạy kiểm thử nghiệm thu, ghi nhận lỗi cho đội phát triển', fileAt: ['2026-09-08', '19:10'], approveAt: ['2026-09-09', '08:35'], approveComment: 'Đồng ý' },
   { code: 'NV-KT-002', date: '2026-09-10', windows: [['17:30', '19:30']], reason: 'Hỗ trợ khách hàng ABC xử lý sự cố đồng bộ dữ liệu',
     workDescription: 'Khôi phục job đồng bộ, đối soát dữ liệu đơn hàng', fileAt: ['2026-09-10', '19:50'], approveAt: ['2026-09-11', '08:52'], approveComment: 'Đồng ý' },
+  { code: 'NV-KT-002', date: '2026-09-22', windows: [['17:30', '19:00']], reason: 'Ứng trực sự cố đồng bộ dữ liệu kho khách hàng',
+    workDescription: 'Chạy lại job, kiểm tra đối soát tồn kho, xác nhận với khách hàng', fileAt: ['2026-09-22', '19:20'], approveAt: ['2026-09-23', '08:40'], approveComment: 'Đồng ý' },
+  { code: 'NV-KD-001', date: '2026-09-20', windows: [['08:00', '11:00']], reason: 'Chủ nhật hỗ trợ khách hàng khai trương showroom',
+    workDescription: 'Trưng bày sản phẩm, hướng dẫn khách tham quan gian hàng', fileAt: ['2026-09-20', '11:15'], approveAt: ['2026-09-21', '08:30'], approveComment: 'Đã phân công' },
   { code: 'NV-KD-001', date: '2026-09-24', windows: [['17:30', '19:00']], reason: 'Chuẩn bị hồ sơ dự thầu gói thiết bị cho khách hàng Minh Phát',
     workDescription: 'Hoàn thiện bảng giá, catalogue và hồ sơ năng lực', fileAt: ['2026-09-24', '19:10'], approveAt: ['2026-09-25', '08:46'], approveComment: 'Đồng ý' },
   { code: 'NV-KT-001', date: '2026-09-26', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Triển khai nâng cấp ERP cho khách hàng ngoài giờ hành chính',
     workDescription: 'Cài đặt bản nâng cấp, chuyển dữ liệu và kiểm thử', fileAt: ['2026-09-26', '17:20'], approveAt: ['2026-09-28', '08:30'], approveComment: 'Đã phân công' },
   { code: 'NV-KT-003', date: '2026-09-26', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Triển khai nâng cấp ERP cho khách hàng ngoài giờ hành chính',
     workDescription: 'Kiểm thử nghiệp vụ, hướng dẫn người dùng khách hàng', fileAt: ['2026-09-26', '17:25'], approveAt: ['2026-09-28', '08:32'], approveComment: 'Đã phân công' },
+  { code: 'NV-KD-002', date: '2026-09-30', windows: [['17:30', '19:00']], reason: 'Chốt số liệu báo cáo quý III gửi ban giám đốc',
+    workDescription: 'Đối soát doanh số quý, lập báo cáo tổng hợp', fileAt: ['2026-09-30', '19:30'], approveAt: ['2026-10-01', '08:35'], approveComment: 'Đồng ý' },
 
   { code: 'NV-KT-001', date: '2026-10-14', windows: [['17:30', '20:30']], reason: 'Triển khai bản phát hành v2.3 lên môi trường production',
     workDescription: 'Deploy, chạy migration, theo dõi hệ thống sau phát hành', fileAt: ['2026-10-14', '20:45'], approveAt: ['2026-10-15', '08:40'], approveComment: 'Đồng ý' },
+  { code: 'NV-KD-002', date: '2026-10-21', windows: [['17:30', '19:00']], reason: 'Rà soát hợp đồng khung với đối tác chiến lược',
+    workDescription: 'Đối chiếu điều khoản, lập bảng tóm tắt gửi trưởng phòng', fileAt: ['2026-10-21', '19:25'], approveAt: ['2026-10-22', '08:40'], approveComment: 'Đồng ý' },
   { code: 'NV-KT-002', date: '2026-10-22', windows: [['17:30', '19:30']], reason: 'Sửa lỗi khẩn cấp module thanh toán cho khách hàng',
     workDescription: 'Hotfix lỗi trùng giao dịch, kiểm thử hồi quy', fileAt: ['2026-10-22', '19:40'], approveAt: ['2026-10-23', '08:31'], approveComment: 'Đồng ý' },
   { code: 'NV-KT-001', date: '2026-10-24', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Di chuyển hệ thống sang data center mới',
@@ -353,10 +411,19 @@ export const OVERTIMES: OtSpec[] = [
   // Đã gửi nhưng QL chưa duyệt → chưa được tính lương cho tới khi duyệt.
   { code: 'NV-KD-002', date: '2026-10-30', windows: [['17:30', '18:30']], reason: 'Tổng hợp báo cáo doanh số tháng 10 gửi ban giám đốc',
     workDescription: 'Đối soát doanh số, lập báo cáo tháng', fileAt: ['2026-10-30', '18:50'] },
+  // Ngày lễ công ty rơi vào thứ Bảy: OT 300% (lễ thắng cuối tuần), vẫn có
+  // trường hợp đã duyệt (KT-003) và trường hợp đi làm KHÔNG khai OT (KT-002)
+  // để buổi demo thao tác tạo đơn OT ngày lễ ngay trên app.
+  { code: 'NV-KT-003', date: '2026-10-31', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Trực vận hành ngày lễ kỷ niệm thành lập công ty',
+    workDescription: 'Giám sát dịch vụ, xử lý cảnh báo, sao lưu dữ liệu', fileAt: ['2026-10-31', '17:20'], approveAt: ['2026-10-31', '18:10'], approveComment: 'Xác nhận lịch trực lễ' },
 
   // Tháng 11 — OT gần ngày demo, kỳ hiện tại chưa rà soát (chỉ để xem màn hình OT).
   { code: 'NV-KT-001', date: '2026-11-01', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Trực bảo trì máy chủ định kỳ ngày Chủ nhật',
-    workDescription: 'Cập nhật bản vá bảo mật, kiểm tra sao lưu, khởi động lại dịch vụ', fileAt: ['2026-11-01', '17:25'], approveAt: ['2026-11-02', '08:35'], approveComment: 'Xác nhận lịch trực bảo trì' },
+    workDescription: 'Cập nhật bản vá bảo mật, kiểm tra sao lưu, khởi động lại dịch vụ', fileAt: ['2026-11-01', '17:25'], approveAt: ['2026-11-01', '18:40'], approveComment: 'Xác nhận lịch trực bảo trì' },
+  { code: 'NV-KD-002', date: '2026-11-01', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Chủ nhật tổ chức sự kiện tri ân khách hàng',
+    workDescription: 'Đón tiếp khách, trưng bày sản phẩm, tổng kết sự kiện', fileAt: ['2026-11-01', '17:20'], approveAt: ['2026-11-01', '18:55'], approveComment: 'Đã phân công' },
+  { code: 'NV-KT-002', date: '2026-11-01', windows: [['08:00', '12:00'], ['13:00', '17:00']], reason: 'Chủ nhật trực bảo trì máy chủ cùng anh Bảo',
+    workDescription: 'Kiểm tra sao lưu, cập nhật bản vá bảo mật', fileAt: ['2026-11-01', '18:30'] },
 ];
 
 export interface ConfirmationSpec { code: EmployeeCode; date: string; reason: string; fileAt: At; approveAt?: At }
@@ -377,6 +444,10 @@ export const CONFIRMATIONS: ConfirmationSpec[] = [
   // DEMO: QL Kinh doanh duyệt trực tiếp trong buổi bảo vệ.
   { code: 'NV-KD-003', date: '2026-10-21', reason: 'Quên chấm công ra do đi gặp khách hàng ở Thủ Đức rồi về thẳng nhà lúc 17h30, đã báo anh Hưng qua Zalo',
     fileAt: ['2026-10-22', '09:03'] },
+  // Đã duyệt trong seed — để tài khoản KD-003 có nhiều hơn một ngày vắng/giải
+  // trình trong tháng, không đụng tới 2 vướng cố ý giữ cho demo tay.
+  { code: 'NV-KD-003', date: '2026-10-27', reason: 'Quên bấm ra ca, thực tế rời văn phòng lúc 17h20 sau khi dọn hồ sơ khách hàng',
+    fileAt: ['2026-10-28', '08:20'], approveAt: ['2026-10-28', '09:05'] },
 ];
 
 export interface SelfieApprovalSpec { code: EmployeeCode; date: string; at: At; comment?: string }
@@ -391,6 +462,10 @@ export interface ForfeitSpec { code: EmployeeCode; date: string; at: At; reason:
 export const FORFEITS: ForfeitSpec[] = [
   { code: 'NV-KD-003', date: '2026-09-18', at: ['2026-09-21', '10:05'],
     reason: 'Rời văn phòng từ 10h không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },
+  { code: 'NV-KT-002', date: '2026-09-16', at: ['2026-09-18', '09:20'],
+    reason: 'Rời văn phòng từ giữa giờ không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },
+  { code: 'NV-KT-002', date: '2026-10-13', at: ['2026-10-14', '08:40'],
+    reason: 'Rời văn phòng từ giữa giờ không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },
   // Tháng 10: QL Kỹ thuật xử lý ngay trong lúc seed, để kỳ 10 chỉ còn vướng ở phòng KD.
   { code: 'NV-KT-003', date: '2026-10-28', at: ['2026-10-30', '09:15'],
     reason: 'Rời văn phòng từ giữa giờ không báo cáo, không có đơn xin nghỉ và không giải trình — tính vắng không phép theo nội quy' },

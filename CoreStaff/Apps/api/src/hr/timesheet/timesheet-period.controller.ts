@@ -208,6 +208,23 @@ export class TimesheetPeriodController {
 		return { success: true, data };
 	}
 
+	@Roles('HR', 'DEPARTMENT_MANAGER')
+	@Post(':id/days/:dayId/request-explanation')
+	@ApiOperation({ summary: 'Request explanation from employee for missing punch.' })
+	async requestExplanationForMissingPunch(
+		@Tenant() organizationId: string | null,
+		@Param('id') id: string,
+		@Param('dayId') dayId: string,
+		@CurrentUser() user: any,
+		@Body() dto: { note?: string },
+	) {
+		const data = await this.service.requestExplanationForMissingPunch(
+			requireOrganizationId(organizationId), id, dayId,
+			{ userId: String(user._id ?? user.id), role: user.role }, dto?.note,
+		);
+		return { success: true, data };
+	}
+
 	@Roles('HR')
 	@Patch(':id/status')
 	@ApiOperation({ summary: 'Update period status with state machine validation (TASK-072).' })

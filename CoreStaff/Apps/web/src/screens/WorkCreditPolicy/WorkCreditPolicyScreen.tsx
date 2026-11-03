@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, MoreHorizontal, Pencil, Plus, RotateCcw, Scale, Sparkles } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Scale, Sparkles } from 'lucide-react';
+import { AppLink } from '@/components/AppLink';
 import { Alert, AlertDescription } from '@/components/alert';
 import { Button } from '@/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/dialog';
@@ -397,6 +398,21 @@ export function WorkCreditPolicyScreen({ apiBase }: { apiBase: string | null }) 
           Thay đổi có thể làm mất hiệu lực xác nhận ở các kỳ mở giao với khoảng hiệu lực; cần kiểm tra lại trước chốt. Dữ liệu đã chốt dùng snapshot đã lưu và không tự đổi. Chỉ lưu chính sách đã được doanh nghiệp phê duyệt.
         </AlertDescription>
       </Alert>
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-xs sm:text-sm text-blue-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <Info className="size-4 text-blue-600 shrink-0" />
+          <span>
+            <strong>Hạn mức xác nhận công:</strong> Số lượt nhân viên được xác nhận công trong tháng (mặc định 3 lượt/tháng) được cấu hình tại mục Chính sách tuân thủ lao động.
+          </span>
+        </div>
+        <AppLink
+          href="/hr/policies/labor-compliance"
+          className="font-semibold text-blue-700 hover:text-blue-800 shrink-0 underline"
+        >
+          Cấu hình hạn mức →
+        </AppLink>
+      </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
         {failed ? (

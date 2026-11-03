@@ -18,7 +18,7 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'AttendanceDay',required:false,index:true}) attendanceDayId?:string;
  @Prop({type:'ObjectId',ref:'Evidence',required:false}) evidenceId?:string;
  @Prop({type:Object,required:false}) metadata?:Record<string,any>;
- @Prop({enum:['ATTENDANCE_CONFIRMATION','MANUAL_ADJUSTMENT','SELFIE']}) source?:string;
+ @Prop({enum:['ATTENDANCE_CONFIRMATION','MANUAL_ADJUSTMENT','SELFIE','HR_MISSING_PUNCH_EXPLANATION']}) source?:string;
  @Prop() confirmationSlotActive?:boolean;
  @Prop() confirmationMonthKey?:string;
  @Prop({maxlength:128}) confirmationIdempotencyKey?:string;
@@ -29,6 +29,9 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'User'}) reviewedBy?:string;
  @Prop({maxlength:1000}) reviewComment?:string;
  @Prop({type:Date}) reviewedAt?:Date;
+ @Prop({type:Boolean,default:false}) isSelfApproved?:boolean;
+ @Prop({type:String,maxlength:64}) auditTag?:string;
+ @Prop({type:String,maxlength:500}) auditNote?:string;
  /**
   * TASK-068 §15.11 additions for `type:'OVERTIME'`. All optional: existing web
   * payloads and existing rows stay valid, and `ATTENDANCE` requests ignore them.

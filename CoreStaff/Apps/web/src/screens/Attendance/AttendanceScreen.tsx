@@ -40,6 +40,8 @@ import {
   checkOut as apiCheckOut,
 } from '../../services/attendance.service';
 import { getSocket } from '../../services/socket';
+import { getMyRequests, type ManagerRequest } from '../../services/manager.service';
+import { AppLink } from '../../components/AppLink';
 
 function dataUrlToFile(dataUrl: string, filename: string): File {
   const arr = dataUrl.split(',');
@@ -233,6 +235,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ResultBannerProps | null>(null);
+  const [clarificationCount, setClarificationCount] = useState(0);
 
   // Modals & Camera
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
@@ -257,6 +260,9 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     setLoadError(null);
     try {
       const todayData = await getTodayAttendance(apiBase);
+      getMyRequests(apiBase).then((reqs: ManagerRequest[]) => {
+        setClarificationCount(reqs.filter(r => r.status === 'CLARIFICATION_REQUESTED').length);
+      }).catch(() => {});
       if (!todayData?.assignment) throw new Error('ATTENDANCE_RESPONSE_INVALID');
       const isOutOffice = todayData.assignment.workplaceType === 'OUT_OFFICE';
 
@@ -710,6 +716,28 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
           </div>
         ) : (
           <>
+            {clarificationCount > 0 && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-4 text-sm text-amber-950 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-xs sm:text-sm">
+                      ⚠️ Bạn có {clarificationCount} ngày công cần giải trình mốc chấm công theo yêu cầu từ HR
+                    </p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      Vui lòng gửi giải trình kèm mốc giờ làm việc thực tế sớm để quản lý kịp thời chốt công cho bạn.
+                    </p>
+                  </div>
+                </div>
+                <AppLink
+                  href="/app/ot"
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shrink-0 self-start sm:self-auto shadow-xs text-center"
+                >
+                  Giải trình ngay →
+                </AppLink>
+              </div>
+            )}
+
             {/* Banner Thông báo trạng thái Phê duyệt của Quản lý */}
             <ApprovalStatusNotification
               status={attendanceRecord.overallApprovalStatus}

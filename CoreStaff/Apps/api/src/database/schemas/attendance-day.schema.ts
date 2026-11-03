@@ -13,6 +13,7 @@ export type AttendanceDayDocument = AttendanceDay & Document;
 export enum AttendanceEndpointSource {
   OBSERVED = 'OBSERVED',
   CONFIRMED_SCHEDULE = 'CONFIRMED_SCHEDULE',
+  CONFIRMED_ACTUAL = 'CONFIRMED_ACTUAL',
   MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
   LEGACY_UNKNOWN = 'LEGACY_UNKNOWN',
 }

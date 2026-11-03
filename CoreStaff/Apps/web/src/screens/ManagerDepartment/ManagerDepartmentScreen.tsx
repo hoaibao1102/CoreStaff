@@ -49,10 +49,10 @@ import { hrErrorMessage } from '@/services/hrService';
 import { fetchAddressFromCoords } from '../Attendance/verification/useLocation';
 import { formatMinutes } from '../Policies/policies.ui';
 import { getSocket } from '@/services/socket';
+import { formatVN } from '@/lib/datetime';
 
 function formatDate(v?: string | Date) {
-  if (!v) return '—';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(new Date(v));
+  return formatVN(v);
 }
 
 function formatTime(v?: string | Date) {
@@ -403,7 +403,21 @@ function ApprovalTab({
               <TableBody>
                 {shown.map((r) => (
                   <TableRow key={r._id}>
-                    <TableCell className="font-medium">{getEmployeeLabel(r)}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{getEmployeeLabel(r)}</span>
+                        {r.isSelfRequest && (
+                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-[10px] font-medium">
+                            Đơn của bạn
+                          </Badge>
+                        )}
+                        {r.isSelfApproved && (
+                          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-300 text-[10px] font-medium">
+                            Tự duyệt [Audit]
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {r.type === 'OVERTIME' ? (
                         <Badge variant="outline" className="border-indigo-300 text-indigo-700 bg-indigo-50">
@@ -435,7 +449,19 @@ function ApprovalTab({
               <Card key={r._id}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base">{getEmployeeLabel(r)}</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-1.5 flex-wrap">
+                      <span>{getEmployeeLabel(r)}</span>
+                      {r.isSelfRequest && (
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-[10px] font-medium">
+                          Đơn của bạn
+                        </Badge>
+                      )}
+                      {r.isSelfApproved && (
+                        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-300 text-[10px] font-medium">
+                          Tự duyệt [Audit]
+                        </Badge>
+                      )}
+                    </CardTitle>
                     <Status value={r.status} />
                   </div>
                 </CardHeader>
@@ -536,9 +562,10 @@ function DecisionDialog({
       setWarnings(violations);
 
       if (a === 'approve') {
+        const auditSuffix = isSelfRequest ? ' (Đã gắn nhãn Kiểm toán [TỰ DUYỆT])' : '';
         toast.success(
-          'Phê duyệt thành công',
-          `Đã phê duyệt yêu cầu ${request.type === 'OVERTIME' ? 'OT' : 'chấm công'} của ${employee || 'nhân viên'}.`
+          `Phê duyệt thành công${auditSuffix}`,
+          `Đã phê duyệt yêu cầu ${request.type === 'OVERTIME' ? 'OT' : isConfirmation ? 'xác nhận công' : isAdjustment ? 'điều chỉnh công' : 'chấm công'} của ${employee || 'nhân viên'}.`
         );
       } else if (a === 'request-clarification') {
         toast.warning(
@@ -612,6 +639,10 @@ function DecisionDialog({
   const isOt = request.type === 'OVERTIME';
   const isSelfie = managerRequestKind(request) === 'SELFIE';
   const isAdjustment = managerRequestKind(request) === 'MANUAL';
+  const isSelfRequest = Boolean(request.isSelfRequest || (confirmationDetail as any)?.isSelfRequest || (confirmationDetail as any)?.isSelfApproval);
+  const isSelfApproved = Boolean(request.isSelfApproved || (confirmationDetail as any)?.isSelfApproved);
+  const isPeriodClosed = request.period?.canMutate === false || (request.period?.status === 'CLOSED');
+  const showClarification = !isAdjustment && !isConfirmation;
 
   return (
     <>
@@ -643,6 +674,42 @@ function DecisionDialog({
           </DialogHeader>
 
           <div className="space-y-4 overflow-y-auto p-4 sm:p-6 max-h-[calc(90vh-140px)]">
+            {isPeriodClosed && (
+              <div className="rounded-xl border border-rose-300 bg-rose-50/90 p-3.5 text-xs text-rose-950 flex items-start gap-2.5">
+                <AlertCircle className="size-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-rose-950">Kỳ công đã khóa hoặc đã tính lương:</p>
+                  <p className="leading-relaxed">
+                    Kỳ công của ngày làm việc này đã được chốt sổ hoặc phát hành bảng lương. Dữ liệu công đã khóa và không thể phê duyệt điều chỉnh.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isSelfRequest && request.status === 'PENDING' && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 text-xs text-amber-950 flex items-start gap-2.5">
+                <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-amber-950">Lưu ý kiểm toán phân quyền (Audit Trail):</p>
+                  <p className="leading-relaxed">
+                    Bạn đang xem xét yêu cầu của chính mình. Khi phê duyệt, hệ thống sẽ tự động gắn nhãn <strong className="text-amber-900 font-bold">[TỰ DUYỆT]</strong> và lưu vết kiểm toán để phòng Nhân sự (HR) hậu kiểm.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isSelfApproved && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/90 p-3.5 text-xs text-blue-950 flex items-start gap-2.5">
+                <CheckCircle2 className="size-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-blue-950">Đơn đã được Quản lý tự duyệt:</p>
+                  <p className="leading-relaxed">
+                    Hệ thống đã ghi nhận nhật ký kiểm toán [SELF_APPROVED] để đối soát công lương cuối kỳ.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Lý do / Ghi chú */}
             <div className="rounded-xl border bg-muted/40 p-4">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -736,8 +803,15 @@ function DecisionDialog({
                   Phân loại yêu cầu
                 </span>
                 <p className="text-sm font-medium text-blue-950">
-                  {request.metadata?.actionType === 'CHECK_IN' ? 'Bổ sung check-in' : request.metadata?.actionType === 'CHECK_OUT' ? 'Bổ sung check-out' : 'Điều chỉnh / giải trình công'}
-                  {request.requestedStart ? ` lúc ${new Date(request.requestedStart).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}.
+                  {request.source === 'HR_MISSING_PUNCH_EXPLANATION'
+                    ? 'Giải trình bổ sung công (HR yêu cầu)'
+                    : request.metadata?.actionType === 'CHECK_IN'
+                    ? 'Bổ sung check-in'
+                    : request.metadata?.actionType === 'CHECK_OUT'
+                    ? 'Bổ sung check-out'
+                    : 'Điều chỉnh / giải trình công'}
+                  {request.requestedStart ? ` · Giờ vào: ${new Date(request.requestedStart).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}` : ''}
+                  {request.requestedEnd ? ` · Giờ ra đề nghị: ${new Date(request.requestedEnd).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}` : ''}.
                 </p>
                 <p className="text-xs text-blue-800">Duyệt yêu cầu sẽ ghi mốc giờ này vào bảng công của nhân viên.</p>
               </div>
@@ -768,12 +842,12 @@ function DecisionDialog({
 
             {/* Nhận xét / Lý do giải trình khi duyệt hoặc từ chối */}
             <label className="grid gap-2 text-sm font-medium pt-2">
-              <span>Ý kiến phản hồi / Lý do giải trình:</span>
+              <span>Ý kiến phản hồi / Lý do:</span>
               <textarea
                 className="min-h-20 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Bắt buộc nhập ít nhất 10 ký tự khi Từ chối hoặc Yêu cầu giải trình..."
+                placeholder={showClarification ? "Bắt buộc nhập ít nhất 10 ký tự khi Từ chối hoặc Yêu cầu giải trình..." : "Bắt buộc nhập ít nhất 10 ký tự khi Từ chối..."}
               />
             </label>
 
@@ -808,24 +882,26 @@ function DecisionDialog({
           </div>
 
           {request.status === 'PENDING' && (
-            <div className="sticky bottom-0 grid gap-2 border-t bg-background p-4 sm:grid-cols-3">
+            <div className={`sticky bottom-0 grid gap-2 border-t bg-background p-4 ${showClarification ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
               <Button
-                disabled={sending || (isConfirmation && (confirmationBlocked || !confirmationDetail?.confirmation || !canApproveConfirmation(confirmationDetail)))}
+                disabled={sending || isPeriodClosed || (isConfirmation && (confirmationBlocked || !confirmationDetail?.confirmation || !canApproveConfirmation(confirmationDetail)))}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                 onClick={() => act('approve')}
               >
                 <Check className="mr-1.5 size-4" /> {isOt ? 'Phê duyệt OT' : isConfirmation ? 'Duyệt xác nhận công' : isAdjustment ? 'Duyệt điều chỉnh' : 'Phê duyệt công'}
               </Button>
+              {showClarification && (
+                <Button
+                  disabled={sending || isPeriodClosed || reason.trim().length < 10}
+                  variant="outline"
+                  className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                  onClick={() => act('request-clarification')}
+                >
+                  <MessageSquareText className="mr-1.5 size-4" /> Yêu cầu giải trình
+                </Button>
+              )}
               <Button
-                disabled={sending || reason.trim().length < 10}
-                variant="outline"
-                className="text-amber-700 border-amber-300 hover:bg-amber-50"
-                onClick={() => act('request-clarification')}
-              >
-                <MessageSquareText className="mr-1.5 size-4" /> Yêu cầu giải trình
-              </Button>
-              <Button
-                disabled={sending || reason.trim().length < 10}
+                disabled={sending || isPeriodClosed || reason.trim().length < 10}
                 variant="destructive"
                 onClick={() => act('reject')}
               >

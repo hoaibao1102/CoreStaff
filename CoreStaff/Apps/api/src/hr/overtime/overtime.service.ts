@@ -64,7 +64,7 @@ interface ShiftLike {
   breakMinutes?: number;
 }
 
-export interface EndpointProvenance { source: 'OBSERVED' | 'CONFIRMED_SCHEDULE' | 'MANUAL_ADJUSTMENT' | 'LEGACY_UNKNOWN'; eventId?: string; requestId?: string }
+export interface EndpointProvenance { source: 'OBSERVED' | 'CONFIRMED_SCHEDULE' | 'CONFIRMED_ACTUAL' | 'MANUAL_ADJUSTMENT' | 'LEGACY_UNKNOWN'; eventId?: string; requestId?: string }
 
 interface DayContext {
   workDate: string;
@@ -930,7 +930,7 @@ export class OvertimeService {
   assertVerifiedAttendance(context: DayContext): void {
     if (!this.actualInterval(context)) throw new ConflictException('OVERTIME_ATTENDANCE_INCOMPLETE');
     if (!['APPROVED', 'NOT_REQUIRED'].includes(context.overallApprovalStatus ?? '')) throw new ConflictException('OVERTIME_ATTENDANCE_NOT_VERIFIED');
-    if (context.checkInProvenance?.source !== 'OBSERVED' || context.checkOutProvenance?.source !== 'OBSERVED') throw new ConflictException('OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED');
+    const validSources = ['OBSERVED', 'CONFIRMED_ACTUAL', 'MANUAL_ADJUSTMENT']; const inSource = context.checkInProvenance?.source ?? ''; const outSource = context.checkOutProvenance?.source ?? ''; if (!validSources.includes(inSource) || !validSources.includes(outSource)) throw new ConflictException('OVERTIME_ATTENDANCE_SOURCE_UNSUPPORTED');
   }
 
   private async v2Policy(org: string, workDate: string, session?: ClientSession) {

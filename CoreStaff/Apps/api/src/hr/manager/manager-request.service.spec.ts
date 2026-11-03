@@ -233,7 +233,7 @@ describe('ManagerRequestService',()=>{
   await expect(s.decide('o1','manager','adj1','APPROVED',1)).rejects.toThrow('version unavailable');
   expect(periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
  });
- it('forbids self approval',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'manager',departmentId:'d1',status:'PENDING',version:1}]);await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toBeInstanceOf(ForbiddenException);});
+ it('allows self approval with audit log and tags SELF_APPROVED',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'manager',departmentId:'d1',status:'PENDING',version:1}]);const result=await s.decide('o1','manager','1','APPROVED',1);expect(result).toMatchObject({status:'APPROVED',isSelfApproved:true,auditTag:'SELF_APPROVED'});});
  it('rejects a stale decision version',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',status:'PENDING',version:2}]);await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toBeInstanceOf(ConflictException);});
  it('requires a reason for rejection and clarification',async()=>{const s=build([{_id:'1',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',status:'PENDING',version:1}]);await expect(s.decide('o1','manager','1','REJECTED',1,'ngắn')).rejects.toBeInstanceOf(ConflictException);});
 
@@ -281,11 +281,12 @@ describe('ManagerRequestService',()=>{
   await s2.decide('o1','manager','1','REJECTED',1,'Không phù hợp lịch làm');
   expect(ot2.calls).toEqual([]);
  });
- it('refuses self approval before any precheck runs',async()=>{
+ it('allows OT self approval with audit log and runs precheck',async()=>{
   const ot=fakeOt();
   const s=build([{...structuredClone(pendingOt),employeeUserId:'manager'}],['d1'],ot);
-  await expect(s.decide('o1','manager','1','APPROVED',1)).rejects.toBeInstanceOf(ForbiddenException);
-  expect(ot.calls).toEqual([]);
+  const result=await s.decide('o1','manager','1','APPROVED',1);
+  expect(result).toMatchObject({status:'APPROVED',isSelfApproved:true,auditTag:'SELF_APPROVED'});
+  expect(ot.calls).toEqual(['precheck','onApproved']);
  });
  it('derives the retroactive flag and overlap guard when an employee files OT',async()=>{
   const ot=fakeOt({retro:()=>({isRetroactive:true,retroactiveReason:'Báo late vì đi công tác'})});

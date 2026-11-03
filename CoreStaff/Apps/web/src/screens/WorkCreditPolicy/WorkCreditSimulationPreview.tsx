@@ -24,6 +24,36 @@ const reasonText: Record<WorkCreditReasonCode, string> = {
   NO_SCHEDULED_OBLIGATION: 'Không có nghĩa vụ theo lịch; không chia cho 0.',
 };
 
+export function formatMinuteToHourString(mins: number): string {
+  if (mins === 0) return '0 giờ';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} phút`;
+  if (m === 0) return `${h} giờ`;
+  return `${h} giờ ${m} phút`;
+}
+
+export function formatMinuteCompact(mins: number): string {
+  if (mins === 0) return '0h';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}p`;
+  if (m === 0) return `${h}h`;
+  return `${h}h${m.toString().padStart(2, '0')}`;
+}
+
+export function formatRangeHourText(range: { min: number; max: number } | null): string {
+  if (!range) return '—';
+  if (range.min === range.max) return formatMinuteToHourString(range.min);
+  return `${formatMinuteToHourString(range.min)} – ${formatMinuteToHourString(range.max)}`;
+}
+
+export function formatRangeCompact(range: { min: number; max: number } | null): string {
+  if (!range) return '';
+  if (range.min === range.max) return formatMinuteCompact(range.min);
+  return `${formatMinuteCompact(range.min)} – ${formatMinuteCompact(range.max)}`;
+}
+
 type Props = {
   halfPercent: string;
   fullPercent: string;
@@ -301,7 +331,7 @@ export function WorkCreditSimulationPreview({
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <TrendingUp className="size-4 text-primary shrink-0" />
             <p>
-              Mốc tối thiểu nguyên: nửa ngày {ranges.halfMinimumMinutes ?? 'không áp dụng'}; đủ ngày {ranges.fullMinimumMinutes ?? 'không áp dụng'} phút.
+              Mốc tối thiểu nguyên: nửa ngày {ranges.halfMinimumMinutes ?? 'không áp dụng'} phút{ranges.halfMinimumMinutes !== null ? ` (${formatMinuteToHourString(ranges.halfMinimumMinutes)})` : ''}; đủ ngày {ranges.fullMinimumMinutes ?? 'không áp dụng'} phút{ranges.fullMinimumMinutes !== null ? ` (${formatMinuteToHourString(ranges.fullMinimumMinutes)})` : ''}.
             </p>
           </div>
 
@@ -314,6 +344,7 @@ export function WorkCreditSimulationPreview({
                 <tr className="border-b bg-slate-50/50 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <th className="py-2 px-3">Đơn vị công</th>
                   <th className="py-2 px-3">Phút được ghi nhận C</th>
+                  <th className="py-2 px-3">Quy đổi giờ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -334,6 +365,16 @@ export function WorkCreditSimulationPreview({
                     </th>
                     <td className="py-2 px-3 text-slate-600 font-mono">
                       {range ? `${range.min}–${range.max} phút` : 'không có khoảng phút nguyên'}
+                    </td>
+                    <td className="py-2 px-3 text-slate-700">
+                      {range ? (
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="font-medium text-slate-800">{formatRangeHourText(range)}</span>
+                          <span className="text-[11px] text-muted-foreground font-mono">({formatRangeCompact(range)})</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

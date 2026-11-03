@@ -366,9 +366,10 @@ export async function updateKpiPolicy(base: string, id: string, payload: UpdateK
   });
 }
 
-export async function getApplicableKpiPolicy(base: string, departmentId?: string): Promise<KpiPolicy | null> {
+export async function getApplicableKpiPolicy(base: string, departmentId?: string, period?: string): Promise<KpiPolicy | null> {
   const query = new URLSearchParams();
   if (departmentId?.trim()) query.set('departmentId', departmentId.trim());
+  if (period?.trim()) query.set('period', period.trim());
   return hrRequest<KpiPolicy | null>(base, `/api/hr/kpi-policies/applicable${query.size ? `?${query}` : ''}`, { method: 'GET' });
 }
 
