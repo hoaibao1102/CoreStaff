@@ -12,6 +12,7 @@ export class CreateManagerRequestDto{
  @ApiProperty() @Transform(({value})=>typeof value==='string'?value.trim():value) @IsString() @Length(10,1000) reason:string;
  @IsOptional() @IsIn(['ATTENDANCE_CONFIRMATION']) requestKind?:'ATTENDANCE_CONFIRMATION';
  @IsOptional() @IsString() @Length(64,64) previewHash?:string;
+ @IsOptional() @IsDateString() customCheckOutTime?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedStart?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedEnd?:string;
  @ApiProperty({required:false,enum:['CHECK_IN','CHECK_OUT']}) @IsOptional() @IsIn(['CHECK_IN','CHECK_OUT']) adjustmentType?:'CHECK_IN'|'CHECK_OUT';
@@ -25,4 +26,10 @@ export class DecideManagerRequestDto{
  @ApiProperty({required:false}) @IsOptional() @IsString() @Length(10,1000) reason?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() approvedStart?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() approvedEnd?:string;
+}
+export class RespondClarificationDto {
+  @ApiProperty() @Transform(({value})=>typeof value==='string'?value.trim():value) @IsString() @Length(10,1000) reason: string;
+  @ApiProperty({required:false}) @IsOptional() @IsDateString() customCheckInTime?: string;
+  @ApiProperty({required:false}) @IsOptional() @IsDateString() customCheckOutTime?: string;
+  @ApiProperty({required:false}) @IsOptional() @IsInt() @Min(1) expectedVersion?: number;
 }

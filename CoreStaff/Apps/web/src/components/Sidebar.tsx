@@ -96,6 +96,9 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/hr/policies/insurance', label: 'Chính sách bảo hiểm', icon: ShieldCheck },
                         { href: '/hr/policies/enterprise-insurance', label: 'Bảo hiểm doanh nghiệp', icon: ShieldCheck },
                     ]},
+                    { label: 'Hệ thống & kiểm toán', icon: ShieldCheck, children: [
+                        { href: '/hr/audit-logs', label: 'Nhật ký kiểm toán (Audit)', icon: ShieldCheck },
+                    ]},
                 ],
             },
         ];

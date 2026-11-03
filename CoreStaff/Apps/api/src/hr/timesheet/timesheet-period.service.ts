@@ -326,28 +326,52 @@ export class TimesheetPeriodService {
 	): Promise<any> {
 		const period = await this.findById(organizationId, id);
 
-		// While the period is editable, show a live draft aggregation instead of
-		// stale close-time artifacts. HR closing the period still persists the
-		// immutable summaries used by payroll.
-		const summaries = period.status === TimesheetPeriodStatus.CLOSED
-			? await this.summaryService.findByPeriod(id)
-			: await this.summaryService.previewSummariesForDepartment(
-				id,
-				period.period,
-				organizationId,
-			);
-		const snapshots = await this.snapshotService.findByPeriod(id);
-
-		const summariesGenerated = summaries.length;
-		// The summary service owns the attendance-eligible population and excludes
-		// HR-only accounts, which do not clock in/out.
-		const totalEmployees = summariesGenerated;
-		const snapshotsCreated = snapshots.length;
-
-		// Managers only see blockers for departments they manage.
+		// Resolve effective managed departments and scoped employee IDs once.
 		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, opts);
+
+		// Performance optimization:
+		// When the period is CLOSED, read persisted immutable summaries and snapshots directly.
+		// When the period is OPEN/REVIEWING, resolve the eligible employee population in ~5ms
+		// without running the heavy N+1 work-credit engine (which is only needed for full payroll preview).
+		let eligibleEmployeeIds: Set<string>;
+		let totalEmployees: number;
+		let summariesGenerated: number;
+		let snapshotsCreated: number;
+
+		if (period.status === TimesheetPeriodStatus.CLOSED) {
+			const [summaries, snapshots] = await Promise.all([
+				this.summaryService.findByPeriod(id),
+				this.snapshotService.findByPeriod(id),
+			]);
+			const scopedSummaries = scopedEmployeeIds
+				? summaries.filter((summary: any) => scopedEmployeeIds.has(String(summary.userId)))
+				: summaries;
+			const scopedSnapshots = scopedEmployeeIds
+				? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+				: snapshots;
+			eligibleEmployeeIds = new Set(scopedSummaries.map((s: any) => String(s.userId)));
+			totalEmployees = scopedSummaries.length;
+			summariesGenerated = scopedSummaries.length;
+			snapshotsCreated = scopedSnapshots.length;
+		} else {
+			const [eligibleList, snapshots] = await Promise.all([
+				this.summaryService.getEligibleEmployeeUserIds(organizationId),
+				this.snapshotService.findByPeriod(id),
+			]);
+			const filteredList = scopedEmployeeIds
+				? eligibleList.filter((uid) => scopedEmployeeIds.has(uid))
+				: eligibleList;
+			eligibleEmployeeIds = new Set(filteredList);
+			totalEmployees = filteredList.length;
+			summariesGenerated = totalEmployees;
+
+			const scopedSnapshots = scopedEmployeeIds
+				? snapshots.filter((snapshot: any) => scopedEmployeeIds.has(String(snapshot.employeeId ?? snapshot.userId)))
+				: snapshots;
+			snapshotsCreated = scopedSnapshots.length;
+		}
+
 		const blockers = await this.collectBlockers(organizationId, id, scopedEmployeeIds);
-		const eligibleEmployeeIds = new Set(summaries.map((summary: any) => String(summary.userId)));
 		const employeesMissingPunches = new Set(
 			blockers
 				.filter((row) => row.type === 'MISSING_CHECK_IN' || row.type === 'MISSING_CHECK_OUT')
@@ -379,11 +403,17 @@ export class TimesheetPeriodService {
 		const confirmedDepartmentIds = new Set(
 			currentConfirmations.map((confirmation) => String(confirmation.departmentId)),
 		);
-		const departmentConfirmationProgress = requiredDepartments.map((department: any) => ({
+		const managedDeptIds = opts.role === 'DEPARTMENT_MANAGER' && opts.userId
+			? new Set(await this.managerScopeService.getManagedDepartmentIds(organizationId, opts.userId))
+			: null;
+		const allProgress = requiredDepartments.map((department: any) => ({
 			departmentId: String(department._id),
 			departmentName: department.name,
 			confirmed: confirmedDepartmentIds.has(String(department._id)),
 		}));
+		const departmentConfirmationProgress = managedDeptIds
+			? allProgress.filter((d: any) => managedDeptIds.has(d.departmentId))
+			: allProgress;
 
 		return {
 			periodId: id,
@@ -547,6 +577,111 @@ export class TimesheetPeriodService {
 				await this.periodVersionService.bump(organizationId, id, session);
 			});
 			return updated;
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	async requestExplanationForMissingPunch(
+		organizationId: string,
+		id: string,
+		dayId: string,
+		actor: { userId: string; role?: string },
+		note?: string,
+	): Promise<any> {
+		const period = await this.findById(organizationId, id);
+		if (![TimesheetPeriodStatus.OPEN, TimesheetPeriodStatus.REVIEWING].includes(period.status)) {
+			throw new ConflictException('PERIOD_NOT_EDITABLE');
+		}
+		if (!Types.ObjectId.isValid(dayId)) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		const day: any = await this.attendanceDayModel.findOne({
+			_id: new Types.ObjectId(dayId),
+			organizationId: new Types.ObjectId(organizationId),
+			periodId: new Types.ObjectId(id),
+		}).lean();
+		if (!day) throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+
+		const scopedEmployeeIds = await this.resolveScopeEmployeeIds(organizationId, period, actor);
+		if (scopedEmployeeIds && !scopedEmployeeIds.has(String(day.employeeId))) {
+			throw new NotFoundException('ATTENDANCE_DAY_NOT_FOUND');
+		}
+		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') throw new ConflictException('DAY_ALREADY_FORFEITED');
+		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
+
+		const rawNote = note?.trim();
+		const cleanNote = rawNote && rawNote.length >= 10
+			? rawNote
+			: rawNote
+				? `Yêu cầu giải trình: ${rawNote}`
+				: 'HR yêu cầu nhân viên giải trình lý do thiếu mốc chấm công.';
+
+		// Look up employee profile to satisfy ManagerRequest schema requirements (employeeId & departmentId)
+		const profile: any = await this.employeeProfileModel.findOne({
+			organizationId: new Types.ObjectId(organizationId),
+			$or: [
+				{ userId: new Types.ObjectId(day.employeeId) },
+				{ _id: new Types.ObjectId(day.employeeId) },
+			],
+		}).lean();
+
+		const employeeProfileId = profile?._id;
+		const employeeUserId = profile?.userId ?? day.employeeId;
+		let departmentId = profile?.departmentId ?? day.departmentId ?? day.employeeSnapshot?.departmentId;
+		if (!departmentId) {
+			const fallbackDept = await this.departmentModel.findOne({
+				organizationId: new Types.ObjectId(organizationId),
+				active: true,
+			}).select('_id').lean();
+			departmentId = fallbackDept?._id;
+		}
+
+		const session = await this.attendanceDayModel.db.startSession();
+		try {
+			let updatedDay: any;
+			await session.withTransaction(async () => {
+				updatedDay = await this.attendanceDayModel.findOneAndUpdate(
+					{ _id: day._id, organizationId: new Types.ObjectId(organizationId), periodId: new Types.ObjectId(id) },
+					{
+						$set: {
+							overallApprovalStatus: 'CLARIFICATION_REQUESTED',
+						},
+					},
+					{ new: true, session },
+				).lean();
+
+				const existingRequest = await this.managerRequestModel.findOne({
+					organizationId: new Types.ObjectId(organizationId),
+					attendanceDayId: day._id,
+				}).session(session);
+
+				if (existingRequest) {
+					existingRequest.status = 'CLARIFICATION_REQUESTED';
+					existingRequest.reviewComment = cleanNote;
+					existingRequest.reviewedBy = actor.userId;
+					existingRequest.reviewedAt = new Date();
+					await existingRequest.save({ session });
+				} else {
+					await this.managerRequestModel.create([{
+						organizationId: new Types.ObjectId(organizationId),
+						employeeId: employeeProfileId,
+						employeeUserId: employeeUserId,
+						departmentId: departmentId,
+						workDate: new Date(`${day.workDate}T00:00:00.000Z`),
+						type: 'ATTENDANCE',
+						source: 'HR_MISSING_PUNCH_EXPLANATION',
+						status: 'CLARIFICATION_REQUESTED',
+						attendanceDayId: day._id,
+						reason: cleanNote,
+						reviewedBy: actor.userId,
+						reviewedAt: new Date(),
+						version: 1,
+					}], { session });
+				}
+
+				await this.periodVersionService.bump(organizationId, id, session);
+			});
+			return updatedDay;
 		} finally {
 			await session.endSession();
 		}

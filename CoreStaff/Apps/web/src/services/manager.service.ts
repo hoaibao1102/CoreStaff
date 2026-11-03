@@ -44,8 +44,8 @@ export async function getAttendanceConfirmationPreview(base: string, date: strin
   const raw = await hrRequest<ConfirmationWire>(base, `/api/requests/attendance-confirmation-preview?date=${encodeURIComponent(date)}`, { method: 'GET' });
   return normalizeConfirmationPreview(raw);
 }
-export const createAttendanceConfirmation = (base: string, payload: { workDate: string; reason: string; previewHash: string }, key: string) => hrRequest<ManagerRequest>(base, '/api/requests', {
-  method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ requestKind: 'ATTENDANCE_CONFIRMATION', type: 'ATTENDANCE', workDate: payload.workDate, reason: payload.reason, previewHash: payload.previewHash }),
+export const createAttendanceConfirmation = (base: string, payload: { workDate: string; reason: string; previewHash: string; customCheckOutTime?: string }, key: string) => hrRequest<ManagerRequest>(base, '/api/requests', {
+  method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ requestKind: 'ATTENDANCE_CONFIRMATION', type: 'ATTENDANCE', workDate: payload.workDate, reason: payload.reason, previewHash: payload.previewHash, customCheckOutTime: payload.customCheckOutTime }),
 });
 export interface ManagedDepartment { id: string; code: string; name: string }
 export interface ManagerContext { managerUserId: string; managedDepartments: ManagedDepartment[]; defaultDepartmentId: string | null; capabilities: string[] }
@@ -79,6 +79,11 @@ export interface ManagerRequest {
   workDescription?: string;
   isRetroactive?: boolean;
   retroactiveReason?: string;
+  isSelfRequest?: boolean;
+  isSelfApproval?: boolean;
+  isSelfApproved?: boolean;
+  auditTag?: string;
+  auditNote?: string;
   version: number;
   createdAt?: string;
   attendanceDayId?: string;
@@ -153,6 +158,7 @@ export type EmployeeSchedule = OvertimeSchedule;
 export const getMyScheduleForDate = getOvertimeSchedule;
 export function managerRequestKind(request: Pick<ManagerRequest, 'type' | 'requestKind' | 'source' | 'metadata' | 'evidenceId'>) {
   if (request.type === 'OVERTIME') return 'OVERTIME';
+  if (request.source === 'HR_MISSING_PUNCH_EXPLANATION') return 'CLARIFICATION';
   if (request.requestKind === 'ATTENDANCE_CONFIRMATION' || request.source === 'ATTENDANCE_CONFIRMATION' || request.metadata?.adjustmentSource === 'ATTENDANCE_CONFIRMATION') return 'CONFIRMATION';
   if (request.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT') return 'MANUAL';
   return request.evidenceId || request.metadata?.actionType ? 'SELFIE' : 'MANUAL';
@@ -160,7 +166,22 @@ export function managerRequestKind(request: Pick<ManagerRequest, 'type' | 'reque
 export function canApproveConfirmation(request: ManagerRequest) {
   return request.canApprove === true && request.contextValidity?.valid === true && request.period?.canMutate === true;
 }
-export const managerRequestLabel = (request: ManagerRequest) => ({ OVERTIME: 'Làm thêm giờ (OT)', CONFIRMATION: 'Xác nhận công theo lịch', SELFIE: 'Chấm công Selfie', MANUAL: 'Điều chỉnh công (cũ)' }[managerRequestKind(request)]);
+export const managerRequestLabel = (request: ManagerRequest) => ({
+  OVERTIME: 'Làm thêm giờ (OT)',
+  CONFIRMATION: 'Xác nhận công theo lịch',
+  CLARIFICATION: 'Xác nhận công (Giải trình)',
+  SELFIE: 'Chấm công Selfie',
+  MANUAL: 'Điều chỉnh công (cũ)',
+}[managerRequestKind(request)] || 'Yêu cầu');
+
+export const respondRequestClarification = (
+  base: string,
+  id: string,
+  payload: { reason: string; customCheckInTime?: string; customCheckOutTime?: string; expectedVersion?: number }
+) => hrRequest<ManagerRequest>(base, `/api/requests/${encodeURIComponent(id)}/respond-clarification`, {
+  method: 'POST',
+  body: JSON.stringify(payload),
+});
 export async function getManagerRequestDetail(base: string, id: string): Promise<ManagerRequest> {
   const raw = await hrRequest<Omit<ManagerRequest, 'confirmation'> & {confirmation?: ConfirmationWire}>(base, `/api/manager/approvals/${encodeURIComponent(id)}`, { method: 'GET' });
   const confirmation = raw.confirmation && normalizeConfirmationPreview(raw.confirmation);

@@ -91,6 +91,7 @@ export class AttendanceService {
     @Optional() private readonly overtime?: OvertimeService,
     @Optional() @InjectModel('EmployeeDayOverride') private readonly dayOverrides?: Model<EmployeeDayOverrideDocument>,
     @Optional() @InjectModel('LeaveRequest') private readonly leaveRequests?: Model<LeaveRequestDocument>,
+    @Optional() @InjectModel('WorkCreditPolicy') private readonly workCreditPolicies?: Model<any>,
   ) {}
 
   private async appliedLeave(organizationId: Types.ObjectId, employeeId: Types.ObjectId, workDate: string) {
@@ -1172,6 +1173,37 @@ export class AttendanceService {
       };
     });
 
+    // Query active work credit policy for this organization & month
+    let workCreditPolicy: any = null;
+    if (this.workCreditPolicies) {
+      try {
+        const at = new Date(Date.UTC(y, m - 1, 15, 0, 0, 0, 0));
+        const policyDoc = await this.workCreditPolicies.findOne({
+          organizationId: { $in: [organizationId, orgObjectId] },
+          active: true,
+          effectiveFrom: { $lte: at },
+          $or: [{ effectiveTo: null }, { effectiveTo: { $gt: at } }],
+        }).sort({ effectiveFrom: -1 }).lean();
+
+        const matched: any = policyDoc || await this.workCreditPolicies.findOne({
+          organizationId: { $in: [organizationId, orgObjectId] },
+          active: true,
+        }).sort({ effectiveFrom: -1 }).lean();
+
+        if (matched) {
+          workCreditPolicy = {
+            halfDayMinimumRatio: matched.halfDayMinimumRatio,
+            fullDayMinimumRatio: matched.fullDayMinimumRatio,
+            paidLeaveCreditEnabled: matched.paidLeaveCreditEnabled,
+            incompleteDayRule: matched.incompleteDayRule,
+            businessReference: matched.businessReference,
+          };
+        }
+      } catch {
+        // Safe fallback if policy query fails
+      }
+    }
+
     return {
       month: targetMonth,
       totalDays: items.length,
@@ -1184,6 +1216,7 @@ export class AttendanceService {
         otDays: items.filter((d) => Boolean(d.overtime)).length,
       },
       items,
+      workCreditPolicy,
     };
   }
 

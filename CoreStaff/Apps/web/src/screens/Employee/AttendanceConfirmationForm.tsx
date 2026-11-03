@@ -31,6 +31,7 @@ export function confirmationError(error: unknown): string {
     ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED: 'Chỉ có thể gửi xác nhận công cho ngày đã qua.',
     ATTENDANCE_ADJUSTMENT_PAST_DATE_REQUIRED: 'Chỉ có thể điều chỉnh công cho ngày đã qua.',
     NEEDS_MANUAL_REVIEW: 'Dữ liệu chấm công của ngày này cần HR kiểm tra trước khi tạo yêu cầu.',
+    CONTEXT_REQUIRES_REVIEW: 'Ngày công này đã được HR xác nhận vắng không tính công (hoặc đang có xử lý rà soát). Vui lòng liên hệ HR nếu cần mở lại.',
     ATTENDANCE_CONFIRMATION_DISABLED: 'Tính năng xác nhận công hiện chưa được bật. Vui lòng liên hệ HR.',
     ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: 'Thông tin xác nhận công chưa hợp lệ. Vui lòng kiểm tra lại.',
     ATTENDANCE_CONFIRMATION_FLOW_REQUIRED: 'Vui lòng dùng xác nhận công theo lịch, không nhập giờ thủ công.',
@@ -39,7 +40,7 @@ export function confirmationError(error: unknown): string {
   return 'Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.';
 }
 
-export function ConfirmationSummary({ preview: p }: { preview: AttendanceConfirmationPreview }) {
+export function ConfirmationSummary({ preview: p, customCheckOutTime }: { preview: AttendanceConfirmationPreview; customCheckOutTime?: string }) {
   const inSource = confirmationSource(p.existingPunches?.checkInProvenance);
   const outSource = confirmationSource(p.existingPunches?.checkOutProvenance);
   const hasIn = Boolean(p.existingPunches?.checkInAt || (inSource && inSource !== 'LEGACY_UNKNOWN'));
@@ -81,7 +82,11 @@ export function ConfirmationSummary({ preview: p }: { preview: AttendanceConfirm
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-bold text-foreground">
-              {hasIn ? confirmationTime(p.existingPunches?.checkInAt) : confirmationTime(p.proposedChanges?.checkInAt)}
+              {p.existingPunches?.checkInAt
+                ? confirmationTime(p.existingPunches.checkInAt)
+                : hasIn
+                ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Đã chấm')
+                : confirmationTime(p.proposedChanges?.checkInAt)}
             </span>
             <span className="text-xs text-muted-foreground">
               {hasIn ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Giờ thực tế') : 'Đề xuất theo ca'}
@@ -101,10 +106,16 @@ export function ConfirmationSummary({ preview: p }: { preview: AttendanceConfirm
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-bold text-foreground">
-              {hasOut ? confirmationTime(p.existingPunches?.checkOutAt) : confirmationTime(p.proposedChanges?.checkOutAt)}
+              {p.existingPunches?.checkOutAt
+                ? confirmationTime(p.existingPunches.checkOutAt)
+                : customCheckOutTime
+                ? customCheckOutTime
+                : hasOut
+                ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Đã chấm')
+                : confirmationTime(p.proposedChanges?.checkOutAt)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {hasOut ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Giờ thực tế') : 'Giờ tan ca'}
+              {hasOut ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Giờ thực tế') : customCheckOutTime ? 'Tự khai báo thực tế' : 'Giờ tan ca'}
             </span>
           </div>
         </div>
@@ -155,6 +166,8 @@ export function AttendanceConfirmationForm({
   onCancel?: () => void;
 }) {
   const [reason, setReason] = useState('');
+  const [customCheckOutTime, setCustomCheckOutTime] = useState('');
+  const [showCustomCheckOut, setShowCustomCheckOut] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
@@ -191,7 +204,12 @@ export function AttendanceConfirmationForm({
         event.preventDefault();
         if (!canSubmit || !preview || submitting.current) return;
         submitting.current = true; setBusy(true); setError('');
-        const payload = { workDate, reason: reason.trim(), previewHash: preview.previewHash! };
+        const payload: any = {
+          workDate,
+          reason: reason.trim(),
+          previewHash: preview.previewHash!,
+          ...(customCheckOutTime ? { customCheckOutTime: `${workDate}T${customCheckOutTime}:00+07:00` } : {}),
+        };
         const serialized = JSON.stringify(payload);
         if (attempt.current?.payload !== serialized) attempt.current = { payload: serialized, key: crypto.randomUUID() };
         try {
@@ -221,11 +239,52 @@ export function AttendanceConfirmationForm({
           Đang tải xem trước…
         </div>
       ) : preview ? (
-        <ConfirmationSummary preview={preview} />
+        <ConfirmationSummary preview={preview} customCheckOutTime={customCheckOutTime} />
       ) : (
         <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
           {currentResult.error}
         </p>
+      )}
+
+      {preview && !preview.existingPunches?.checkOutAt && (
+        <div className="pt-1">
+          {!showCustomCheckOut ? (
+            <button
+              type="button"
+              onClick={() => setShowCustomCheckOut(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium"
+            >
+              🕒 Hôm nay bạn có làm thêm giờ (OT)? Bấm vào đây để tự nhập giờ ra thực tế
+            </button>
+          ) : (
+            <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  🕒 Giờ ra thực tế (làm căn cứ tính OT)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomCheckOut(false);
+                    setCustomCheckOutTime('');
+                  }}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Hủy, dùng giờ theo ca
+                </button>
+              </div>
+              <input
+                type="time"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={customCheckOutTime}
+                onChange={e => setCustomCheckOutTime(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Nếu hôm nay bạn có làm việc ngoài giờ (OT), vui lòng nhập giờ ra thực tế (ví dụ: 19:30). Mốc này sẽ làm căn cứ để Quản lý duyệt và hệ thống tính đủ giờ OT cho bạn.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       <label className="grid gap-1.5 text-sm font-medium">

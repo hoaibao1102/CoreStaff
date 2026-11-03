@@ -56,6 +56,36 @@ describe('attendance confirmation cutover', () => {
     expect(update[1].$set.checkInAt).toBeUndefined();
     expect(audit.create).toHaveBeenCalledWith([expect.objectContaining({approvalRequestId:'req',actorId:'manager',action:'APPROVED'})],{session});
   });
+  it('allows manager self-approval with audit log and tags SELF_APPROVED', async () => {
+    const query = (v: any) => ({ session: () => ({ lean: async () => v }) });
+    const session: any = { withTransaction: async (fn: any) => fn(), endSession: jest.fn() };
+    const request = { _id: 'self-req', source: 'ATTENDANCE_CONFIRMATION', employeeUserId: 'manager', departmentId: 'dept', status: 'PENDING', version: 1, workDate: new Date('2026-09-14'), confirmationContextHash: 'hash', confirmationMonthKey: '2026-09', confirmationSlotActive: true };
+    const requests = { db: { startSession: async () => session }, findOne: () => query(request), findOneAndUpdate: jest.fn(() => query({ ...request, status: 'APPROVED', isSelfApproved: true, auditTag: 'SELF_APPROVED', version: 2 })) };
+    const days = { findOne: () => query({ _id: 'day', checkInAt: new Date('2026-09-14T01:15:00Z') }), findOneAndUpdate: jest.fn(() => query({ _id: 'day' })) };
+    const notify = { notifyApprovalDecision: jest.fn() };
+    const events = { create: jest.fn(async () => []) }, audit = { create: jest.fn(async () => []) }, periodVersion = { claimForWorkDate: jest.fn(async () => ({ periodId: 'period', version: 2 })) };
+    const scope = { requireReviewDepartment: jest.fn(async () => {}) };
+    const service = new AttendanceConfirmationService({} as any, { requests, days, events, audit, periodVersion, scope, notify });
+    jest.spyOn(service, 'preview').mockResolvedValue({ contextHash: 'hash', blockedReasons: [], snapshot: { shift: { startTime: '08:00', endTime: '17:00', breakMinutes: 60 } }, proposedChanges: { actionType: 'CHECK_OUT', checkInAt: '2026-09-14T01:15:00.000Z', checkOutAt: '2026-09-14T10:00:00.000Z', calculation: { workingMinutes: 465, lateMinutes: 10, earlyMinutes: 0 } }, existingPunches: { checkInAt: '2026-09-14T01:15:00.000Z' }, requiredWorkingIntervals: [{ from: '08:00', to: '12:00' }, { from: '13:00', to: '17:00' }] } as any);
+    const result = await service.decide('org', 'manager', 'self-req', 'APPROVED', 1, 'op');
+    expect(result).toMatchObject({ status: 'APPROVED', isSelfApproved: true, auditTag: 'SELF_APPROVED' });
+    expect(requests.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          isSelfApproved: true,
+          auditTag: 'SELF_APPROVED',
+        }),
+      }),
+      expect.anything(),
+    );
+    expect(audit.create).toHaveBeenCalledWith([expect.objectContaining({
+      approvalRequestId: 'self-req',
+      actorId: 'manager',
+      isSelfApproved: true,
+      auditTag: 'SELF_APPROVED',
+    })], { session });
+  });
   it('provides safe disabled preview and blocks legacy create after cutover',async()=>{
     const service=new AttendanceConfirmationService({findOne:()=>({session:()=>({lean:async()=>({attendanceOvertimeV2Enabled:true})})})} as any);
     await expect(service.assertLegacyCreateAllowed('org')).rejects.toThrow('ATTENDANCE_CONFIRMATION_FLOW_REQUIRED');

@@ -29,6 +29,7 @@ import { AttendanceEventSchema, AttendanceEvent } from './attendance-event.schem
 import { EvidenceSchema, Evidence } from './evidence.schema';
 import { IdempotencyRecordSchema } from './idempotency-record.schema';
 import { ApprovalHistorySchema } from './approval-history.schema';
+import { AuditLogSchema } from './audit-log.schema';
 import { CalendarExceptionSchema } from './calendar-exception.schema';
 import { LeaveRequestSchema } from './leave-request.schema';
 import { EmployeeDayOverrideSchema } from './employee-day-override.schema';
@@ -84,6 +85,7 @@ export const SCHEMA_REGISTRY: Array<{ name: string; schema: Schema }> = [
   { name: 'Evidence', schema: EvidenceSchema },
   { name: 'IdempotencyRecord', schema: IdempotencyRecordSchema },
   { name: 'ApprovalHistory', schema: ApprovalHistorySchema },
+  { name: 'AuditLog', schema: AuditLogSchema },
   { name: 'CalendarException', schema: CalendarExceptionSchema },
   { name: 'LeaveRequest', schema: LeaveRequestSchema },
   { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
@@ -106,6 +108,7 @@ export { EmployeeAssignmentSchema };
 export { InsuranceProfileSchema };
 export { PayrollInputSnapshotSchema };
 export { WorkCreditPolicy, WorkCreditPolicySchema } from './work-credit-policy.schema';
+export { AuditLog, AuditLogSchema } from './audit-log.schema';
 export { InsurancePolicySchema };
 export { EnterpriseInsurancePolicySchema };
 export { InsuranceProfile } from './insurance-profile.schema';

@@ -23,6 +23,7 @@ import { ShiftTemplateModule } from '../hr/shift-template/shift-template.module'
 import { OvertimeModule } from '../hr/overtime/overtime.module';
 import { EmployeeDayOverrideSchema } from '../database/schemas/employee-day-override.schema';
 import { LeaveRequestSchema } from '../database/schemas/leave-request.schema';
+import { WorkCreditPolicySchema } from '../database/schemas/work-credit-policy.schema';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { LeaveRequestSchema } from '../database/schemas/leave-request.schema';
       { name: 'TimesheetPeriod', schema: TimesheetPeriodSchema },
       { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
       { name: 'LeaveRequest', schema: LeaveRequestSchema },
+      { name: 'WorkCreditPolicy', schema: WorkCreditPolicySchema },
     ]),
     StorageModule,
     ShiftTemplateModule,

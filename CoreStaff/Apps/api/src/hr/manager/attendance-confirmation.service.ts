@@ -31,7 +31,8 @@ export class AttendanceConfirmationService {
       await session.withTransaction(async()=>{
         const current=await read(m.requests.findOne({_id:id,organizationId:org,source:'ATTENDANCE_CONFIRMATION'}),session);
         if(!current)throw new ConflictException('REQUEST_NOT_FOUND');
-        if(String(current.employeeUserId)===managerId)throw new ConflictException('SELF_APPROVAL_FORBIDDEN');
+        const isSelfApproved = String(current.employeeUserId) === managerId;
+        const auditNote = isSelfApproved ? 'Quản lý tự duyệt (Self-approved) - Lưu vết kiểm toán cho HR hậu kiểm' : undefined;
         await m.scope.requireReviewDepartment(org,managerId,String(current.departmentId));
         if(current.confirmationDecision?.operationId===operationId){if(current.confirmationDecision.operationHash!==operationHash)throw new ConflictException('REQUEST_STATE_CHANGED');result=current;return;}
         if(current.status!=='PENDING'||current.version!==expectedVersion)throw new ConflictException('REQUEST_STATE_CHANGED');
@@ -44,7 +45,34 @@ export class AttendanceConfirmationService {
           if(blockers.length)throw new ConflictException(blockers[0]);
         }
         const claim=await m.periodVersion.claimForWorkDate(org,workDate,session);
-        const row=await m.requests.findOneAndUpdate({_id:id,organizationId:org,status:'PENDING',version:expectedVersion,confirmationSlotActive:true},{$set:{status,reviewedBy:managerId,reviewedAt:new Date(),reviewComment:reason?.trim(),confirmationSlotActive:status==='APPROVED',confirmationDecision:{operationId,operationHash,audit:{requestId:id,actorId:managerId,reason:reason?.trim(),decidedAt:new Date(),synthetic:status==='APPROVED',before:preview?.existingPunches??current.confirmationSnapshot?.punches,after:preview?{checkInAt:preview.proposedChanges.checkInAt,checkOutAt:preview.proposedChanges.checkOutAt,...preview.proposedChanges.calculation}:undefined,sourceRefs:preview?.snapshot?.source??current.confirmationSnapshot?.source,contextHash:current.confirmationContextHash}}},$inc:{version:1}},{new:true,session}).session(session).lean();
+        const row=await m.requests.findOneAndUpdate({_id:id,organizationId:org,status:'PENDING',version:expectedVersion,confirmationSlotActive:true},{$set:{
+          status,
+          reviewedBy:managerId,
+          reviewedAt:new Date(),
+          reviewComment:reason?.trim(),
+          confirmationSlotActive:status==='APPROVED',
+          isSelfApproved,
+          auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+          auditNote,
+          confirmationDecision:{
+            operationId,
+            operationHash,
+            audit:{
+              requestId:id,
+              actorId:managerId,
+              reason:reason?.trim(),
+              decidedAt:new Date(),
+              synthetic:status==='APPROVED',
+              isSelfApproved,
+              auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+              auditNote,
+              before:preview?.existingPunches??current.confirmationSnapshot?.punches,
+              after:preview?{checkInAt:preview.proposedChanges.checkInAt,checkOutAt:preview.proposedChanges.checkOutAt,...preview.proposedChanges.calculation}:undefined,
+              sourceRefs:preview?.snapshot?.source??current.confirmationSnapshot?.source,
+              contextHash:current.confirmationContextHash
+            }
+          }
+        },$inc:{version:1}},{new:true,session}).session(session).lean();
         if(!row)throw new ConflictException('REQUEST_STATE_CHANGED');
         if(status==='APPROVED'){
           const filter:any={organizationId:org,employeeId:current.employeeUserId,workDate,checkInAt:preview.existingPunches.checkInAt?new Date(preview.existingPunches.checkInAt):null,checkOutAt:preview.existingPunches.checkOutAt?new Date(preview.existingPunches.checkOutAt):null};
@@ -54,9 +82,33 @@ export class AttendanceConfirmationService {
           for(const [field,eventType] of [['checkInAt','CHECK_IN'],['checkOutAt','CHECK_OUT']]){
             if(preview.existingPunches[field])continue;
             const eventId=new Types.ObjectId();
-            set[field]=new Date(preview.proposedChanges[field]);
-            set[field==='checkInAt'?'checkInProvenance':'checkOutProvenance']={source:'CONFIRMED_SCHEDULE',requestId:id,eventId};
-            events.push({_id:eventId,organizationId:org,employeeId:current.employeeUserId,eventType,method:'MANUAL',recordedAt:set[field],approvalStatus:'APPROVED',validationStatus:'VALID',requestId:id,provenance:{source:'CONFIRMED_SCHEDULE',requestId:id,eventId},note:current.reason});
+            const customTime = field === 'checkOutAt' && (current.requestedEnd || current.metadata?.customCheckOutTime) ? new Date(current.requestedEnd || current.metadata.customCheckOutTime) : null;
+            const isActual = Boolean(customTime);
+            set[field]=customTime || new Date(preview.proposedChanges[field]);
+            const source = isActual ? 'CONFIRMED_ACTUAL' : 'CONFIRMED_SCHEDULE';
+            set[field==='checkInAt'?'checkInProvenance':'checkOutProvenance']={source,requestId:id,eventId};
+            events.push({
+              _id:eventId,
+              organizationId:org,
+              employeeId:current.employeeUserId,
+              eventType,
+              method:'MANUAL',
+              recordedAt:set[field],
+              approvalStatus:'APPROVED',
+              validationStatus:'VALID',
+              requestId:id,
+              provenance:{
+                source,
+                requestId:id,
+                eventId,
+                ...(isSelfApproved ? { isSelfApproved: true, auditTag: 'SELF_APPROVED' } : {}),
+              },
+              note: isSelfApproved ? `[TỰ DUYỆT] ${current.reason || ''}`.trim() : current.reason,
+            });
+          }
+          if (set.checkInAt && set.checkOutAt) {
+            const breakMinutes = Number(preview.snapshot?.shift?.breakMinutes ?? 60);
+            set.workingMinutes = Math.max(0, Math.floor((new Date(set.checkOutAt).getTime() - new Date(set.checkInAt).getTime()) / 60000) - breakMinutes);
           }
           const day=await m.days.findOneAndUpdate(filter,{$set:set,$setOnInsert:{organizationId:org,employeeId:current.employeeUserId,workDate}},{new:true,upsert:!before,session}).session(session).lean();
           if(!day)throw new ConflictException('ATTENDANCE_CONFIRMATION_STALE');
@@ -65,7 +117,17 @@ export class AttendanceConfirmationService {
           const released=await m.quotas.updateOne({organizationId:org,employeeUserId:current.employeeUserId,monthKey:current.confirmationMonthKey,usedSlots:{$gt:0}},{$inc:{usedSlots:-1}},{session});
           if(released.modifiedCount!==1)throw new ConflictException('CONFIRMATION_QUOTA_INCONSISTENT');
         }
-        await m.audit.create([{organizationId:org,approvalRequestId:id,actorId:managerId,action:status,previousStatus:'PENDING',newStatus:status,comment:reason}],{session});
+        await m.audit.create([{
+          organizationId:org,
+          approvalRequestId:id,
+          actorId:managerId,
+          action:status,
+          previousStatus:'PENDING',
+          newStatus:status,
+          comment:reason,
+          isSelfApproved,
+          auditTag: isSelfApproved ? 'SELF_APPROVED' : undefined,
+        }],{session});
         result=row;changed=true;
       });
       if(changed){try{m.notify?.notifyApprovalDecision(String(result.employeeUserId),{requestId:id,type:'ATTENDANCE',status,organizationId:org,reviewedBy:managerId,reviewComment:reason,departmentId:String(result.departmentId),workDate:result.workDate});}catch{/* Commit is authoritative. */}}
@@ -75,7 +137,7 @@ export class AttendanceConfirmationService {
 
   async create(org:string,userId:string,dto:any,key?:string) {
     if (!key || key.length>128 || !/^[\x21-\x7e]+$/.test(key)) throw new ConflictException('IDEMPOTENCY_KEY_REQUIRED');
-    const allowed=['requestKind','type','workDate','reason','previewHash'];
+    const allowed=['requestKind','type','workDate','reason','previewHash','customCheckOutTime'];
     if(Object.keys(dto).some(k=>!allowed.includes(k)) || dto.type!=='ATTENDANCE' || dto.requestKind!=='ATTENDANCE_CONFIRMATION' || typeof dto.reason!=='string' || dto.reason.trim().length<10 || dto.reason.trim().length>1000 || typeof dto.previewHash!=='string') throw new ConflictException('ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID');
     const payload={requestKind:dto.requestKind,type:dto.type,workDate:dto.workDate,reason:dto.reason.trim(),previewHash:dto.previewHash};
     const payloadHash=createHash('sha256').update(JSON.stringify(payload)).digest('hex'), m=this.models;
@@ -95,7 +157,7 @@ export class AttendanceConfirmationService {
           await m.quotas.updateOne(quotaIdentity,{$setOnInsert:{...quotaIdentity,usedSlots:0}},{upsert:true,session});
           const slot=await m.quotas.findOneAndUpdate({...quotaIdentity,usedSlots:{$lt:preview.quota.limit}},{$inc:{usedSlots:1}},{new:true,session}).session(session).lean();
           if(!slot)throw new ConflictException('MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
-          const [row]=await m.requests.create([{...identity,employeeId:preview.snapshot.employeeProfileId,departmentId:preview.snapshot.departmentId,type:'ATTENDANCE',workDate:new Date(`${dto.workDate}T00:00:00Z`),reason:payload.reason,status:'PENDING',version:1,confirmationSlotActive:true,confirmationMonthKey:preview.quota.monthKey,confirmationPayloadHash:payloadHash,confirmationContextHash:preview.contextHash,confirmationSnapshot:preview.snapshot,metadata:{adjustmentSource:'ATTENDANCE_CONFIRMATION',actionType:preview.actionType}}],{session});
+          const [row]=await m.requests.create([{...identity,employeeId:preview.snapshot.employeeProfileId,departmentId:preview.snapshot.departmentId,type:'ATTENDANCE',workDate:new Date(`${dto.workDate}T00:00:00Z`),reason:payload.reason,status:'PENDING',version:1,confirmationSlotActive:true,confirmationMonthKey:preview.quota.monthKey,confirmationPayloadHash:payloadHash,confirmationContextHash:preview.contextHash,confirmationSnapshot:preview.snapshot,requestedEnd:dto.customCheckOutTime?new Date(dto.customCheckOutTime):undefined,metadata:{adjustmentSource:'ATTENDANCE_CONFIRMATION',actionType:preview.actionType,customCheckOutTime:dto.customCheckOutTime}}],{session});
           result=row.toObject(); created=true;
         });
         if(created){try{m.notify?.notifyNewRequest(String(result.departmentId),{requestId:String(result._id),type:'ATTENDANCE',departmentId:String(result.departmentId),employeeUserId:userId,reason:result.reason,status:'PENDING',createdAt:result.createdAt??new Date()});}catch{/* REST remains source of truth after commit. */}}
@@ -148,7 +210,17 @@ export class AttendanceConfirmationService {
         }
       }
     }
-    const punches={checkInAt:day?.checkInAt?new Date(day.checkInAt).toISOString():undefined,checkOutAt:day?.checkOutAt?new Date(day.checkOutAt).toISOString():undefined,checkInProvenance:day?.checkInProvenance??{source:'LEGACY_UNKNOWN'},checkOutProvenance:day?.checkOutProvenance??{source:'LEGACY_UNKNOWN'}};
+    let checkInAt = day?.checkInAt ? new Date(day.checkInAt).toISOString() : undefined;
+    let checkOutAt = day?.checkOutAt ? new Date(day.checkOutAt).toISOString() : undefined;
+    if (!checkInAt && day?.checkInProvenance?.eventId && m.events) {
+      const inEvt = await read(m.events.findOne({ _id: day.checkInProvenance.eventId }), session);
+      if (inEvt?.recordedAt) checkInAt = new Date(inEvt.recordedAt).toISOString();
+    }
+    if (!checkOutAt && day?.checkOutProvenance?.eventId && m.events) {
+      const outEvt = await read(m.events.findOne({ _id: day.checkOutProvenance.eventId }), session);
+      if (outEvt?.recordedAt) checkOutAt = new Date(outEvt.recordedAt).toISOString();
+    }
+    const punches={checkInAt,checkOutAt,checkInProvenance:day?.checkInProvenance??{source:'LEGACY_UNKNOWN'},checkOutProvenance:day?.checkOutProvenance??{source:'LEGACY_UNKNOWN'}};
     const proposal=proposeAttendanceConfirmation({workDate,requiredWorkingIntervals,gracePeriodMinutes:shift?.gracePeriodMinutes??0,...punches,blockedReasons:blockedReasons.filter(code=>!['MONTHLY_CONFIRMATION_LIMIT_EXCEEDED','PERIOD_REQUIRED','PERIOD_CLOSED_OR_PAYROLL_CLAIMED','ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED'].includes(code))});
     const policyRef=policy?{id:String(policy._id),version:policy.version,effectiveFrom:policy.effectiveFrom,effectiveTo:policy.effectiveTo,maxMonthlyAttendanceConfirmations:limit}:null;
     if(obligation){delete obligation.source.overtimeResultIds;delete obligation.source.overtimeEvidence;}
