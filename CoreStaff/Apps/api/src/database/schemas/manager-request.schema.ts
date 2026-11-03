@@ -18,7 +18,7 @@ export class ManagerRequest{
  @Prop({type:'ObjectId',ref:'AttendanceDay',required:false,index:true}) attendanceDayId?:string;
  @Prop({type:'ObjectId',ref:'Evidence',required:false}) evidenceId?:string;
  @Prop({type:Object,required:false}) metadata?:Record<string,any>;
- @Prop({enum:['ATTENDANCE_CONFIRMATION','MANUAL_ADJUSTMENT','SELFIE']}) source?:string;
+ @Prop({enum:['ATTENDANCE_CONFIRMATION','MANUAL_ADJUSTMENT','SELFIE','HR_MISSING_PUNCH_EXPLANATION']}) source?:string;
  @Prop() confirmationSlotActive?:boolean;
  @Prop() confirmationMonthKey?:string;
  @Prop({maxlength:128}) confirmationIdempotencyKey?:string;

@@ -292,6 +292,7 @@ export function BlockerDayDetailDialog({
                           placeholder="Ví dụ: Ngày 29 thiếu chấm công ra ca. Vui lòng trình bày lý do để quản lý duyệt."
                           disabled={requestingExplanation}
                         />
+                        <div className="mt-1 text-xs text-amber-700">Tối thiểu 10 ký tự (hoặc để trống để dùng mẫu mặc định).</div>
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button
@@ -305,7 +306,7 @@ export function BlockerDayDetailDialog({
                         <Button
                           type="button"
                           className="bg-blue-600 hover:bg-blue-700 text-white"
-                          disabled={requestingExplanation}
+                          disabled={requestingExplanation || (explanationNote.trim().length > 0 && explanationNote.trim().length < 10)}
                           onClick={handleRequestExplanation}
                         >
                           {requestingExplanation && <Loader2 className="mr-2 size-4 animate-spin" />}

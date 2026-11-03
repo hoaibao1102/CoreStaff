@@ -609,7 +609,32 @@ export class TimesheetPeriodService {
 		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') throw new ConflictException('DAY_ALREADY_FORFEITED');
 		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
 
-		const cleanNote = note?.trim() || 'HR yêu cầu nhân viên giải trình lý do thiếu mốc chấm công.';
+		const rawNote = note?.trim();
+		const cleanNote = rawNote && rawNote.length >= 10
+			? rawNote
+			: rawNote
+				? `Yêu cầu giải trình: ${rawNote}`
+				: 'HR yêu cầu nhân viên giải trình lý do thiếu mốc chấm công.';
+
+		// Look up employee profile to satisfy ManagerRequest schema requirements (employeeId & departmentId)
+		const profile: any = await this.employeeProfileModel.findOne({
+			organizationId: new Types.ObjectId(organizationId),
+			$or: [
+				{ userId: new Types.ObjectId(day.employeeId) },
+				{ _id: new Types.ObjectId(day.employeeId) },
+			],
+		}).lean();
+
+		const employeeProfileId = profile?._id;
+		const employeeUserId = profile?.userId ?? day.employeeId;
+		let departmentId = profile?.departmentId ?? day.departmentId ?? day.employeeSnapshot?.departmentId;
+		if (!departmentId) {
+			const fallbackDept = await this.departmentModel.findOne({
+				organizationId: new Types.ObjectId(organizationId),
+				active: true,
+			}).select('_id').lean();
+			departmentId = fallbackDept?._id;
+		}
 
 		const session = await this.attendanceDayModel.db.startSession();
 		try {
@@ -639,11 +664,11 @@ export class TimesheetPeriodService {
 				} else {
 					await this.managerRequestModel.create([{
 						organizationId: new Types.ObjectId(organizationId),
-						employeeUserId: day.employeeId,
-						departmentId: day.departmentId || day.employeeSnapshot?.departmentId,
-						workDate: day.workDate,
+						employeeId: employeeProfileId,
+						employeeUserId: employeeUserId,
+						departmentId: departmentId,
+						workDate: new Date(`${day.workDate}T00:00:00.000Z`),
 						type: 'ATTENDANCE',
-						requestKind: 'ATTENDANCE_CONFIRMATION',
 						source: 'HR_MISSING_PUNCH_EXPLANATION',
 						status: 'CLARIFICATION_REQUESTED',
 						attendanceDayId: day._id,
