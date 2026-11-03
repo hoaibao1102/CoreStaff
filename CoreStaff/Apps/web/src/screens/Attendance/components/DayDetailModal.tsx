@@ -29,6 +29,8 @@ function getStatusBadge(status: string) {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-700">Đang làm việc</Badge>;
     case 'PENDING_APPROVAL':
       return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Chờ duyệt</Badge>;
+    case 'CLARIFICATION_REQUESTED':
+      return <Badge variant="secondary" className="bg-amber-100 text-amber-900 border border-amber-300 font-semibold">Cần giải trình</Badge>;
     case 'LATE':
       return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Đi trễ</Badge>;
     case 'EARLY_LEAVE':
@@ -465,6 +467,27 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
             <p className="font-semibold">Ngày này đã được xác nhận vắng và không tính công.</p>
             <p className="mt-1">Lý do: {day.resolution.reason}</p>
+          </div>
+        )}
+
+        {((day as any).overallApprovalStatus === 'CLARIFICATION_REQUESTED' || (day as any).status === 'CLARIFICATION_REQUESTED') && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 space-y-2 text-xs text-amber-950">
+            <div className="flex items-center gap-2 font-bold text-amber-900">
+              <AlertCircle className="size-4 text-amber-700 shrink-0" />
+              <span>Yêu cầu giải trình chấm công</span>
+            </div>
+            <p className="text-amber-800">
+              Ngày công này đang thiếu mốc chấm công và cần bạn phản hồi giải trình kèm mốc giờ làm việc thực tế cho Quản lý.
+            </p>
+            <div className="pt-1">
+              <AppLink
+                href={`/app/ot?type=ATTENDANCE&workDate=${day.workDate}`}
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs"
+              >
+                Giải trình ngay →
+              </AppLink>
+            </div>
           </div>
         )}
 

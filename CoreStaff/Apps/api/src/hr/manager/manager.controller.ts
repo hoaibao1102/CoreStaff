@@ -6,7 +6,7 @@ import { CurrentUser, SessionUser, Tenant, requireOrganizationId } from '../../c
 import { ManagerScopeService } from './manager-scope.service';
 import { ManagerAssignmentService } from './manager-assignment.service';
 import { CreateManagerAssignmentDto, UpdateManagerAssignmentDto } from './dto/manager-assignment.dto';
-import { CreateManagerRequestDto, DecideManagerRequestDto } from './dto/manager-request.dto';
+import { CreateManagerRequestDto, DecideManagerRequestDto, RespondClarificationDto } from './dto/manager-request.dto';
 import { ManagerRequestService } from './manager-request.service';
 
 @ApiTags('Department Manager')
@@ -41,6 +41,17 @@ export class ManagerController {
   async mine(@Tenant() org: string | null, @CurrentUser() user: SessionUser) {
     return { success: true, data: await this.requests.listMine(this.org(org), this.uid(user)) };
   }
+
+  @Roles('EMPLOYEE', 'DEPARTMENT_MANAGER') @Post('requests/:id/respond-clarification')
+  async respondClarification(
+    @Tenant() org: string | null,
+    @CurrentUser() user: SessionUser,
+    @Param('id') id: string,
+    @Body() dto: RespondClarificationDto,
+  ) {
+    return { success: true, data: await this.requests.respondClarification(this.org(org), this.uid(user), id, dto) };
+  }
+
 
   @Roles('DEPARTMENT_MANAGER') @Get('manager/approvals')
   async approvals(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Query('type') type?: string, @Query('status') status?: string, @Query('departmentId') departmentId?: string): Promise<any> {

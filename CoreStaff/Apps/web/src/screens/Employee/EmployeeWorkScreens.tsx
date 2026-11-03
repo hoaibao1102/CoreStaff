@@ -3,7 +3,8 @@ import { OvertimeSuggestions } from '../../components/overtime/OvertimeSuggestio
 import { AttendanceConfirmationForm } from './AttendanceConfirmationForm';
 import { confirmationSource, getOvertimePreview, type OvertimePreview, managerRequestLabel } from '../../services/manager.service';
 import { overtimeErrorMessage } from '../../services/overtime.service';
-import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle, AlertCircle } from 'lucide-react';
+import { ClarificationResponseModal } from './components/ClarificationResponseModal';
 import { Alert, AlertDescription } from '../../components/alert';
 import { Input } from '../../components/input';
 import { createMyRequest, createOvertimeRequest, getMyRequests, getMyScheduleForDate, type EmployeeSchedule, type LaborEvaluation, type ManagerRequest, type RequestType } from '../../services/manager.service';
@@ -87,6 +88,7 @@ export function LeaveOvertimeScreen() {
   const submitting = useRef(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [rev, setRev] = useState(0);
+  const [selectedClarification, setSelectedClarification] = useState<ManagerRequest | null>(null);
 
   useEffect(() => {
     resolveApiBase()
@@ -502,6 +504,24 @@ export function LeaveOvertimeScreen() {
         </Dialog>
       )}
 
+      {rows.filter(r => r.status === 'CLARIFICATION_REQUESTED').length > 0 && (
+        <Alert className="border-amber-400 bg-amber-50/90 text-amber-950 shadow-xs">
+          <AlertCircle className="size-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full">
+            <AlertDescription className="text-xs sm:text-sm font-medium">
+              ⚠️ <strong>Bạn có {rows.filter(r => r.status === 'CLARIFICATION_REQUESTED').length} yêu cầu cần giải trình:</strong> Vui lòng phản hồi sớm để Quản lý kịp thời chốt công cho bạn.
+            </AlertDescription>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs shrink-0 self-start sm:self-auto"
+              onClick={() => setSelectedClarification(rows.find(r => r.status === 'CLARIFICATION_REQUESTED') || null)}
+            >
+              Giải trình ngay
+            </Button>
+          </div>
+        </Alert>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {[
           ['Đang chờ duyệt', `${pending} yêu cầu`, Clock3],
@@ -581,10 +601,30 @@ export function LeaveOvertimeScreen() {
                       Ngày {new Date(row.workDate).toLocaleDateString('vi-VN')} · {row.reason}
                     </p>
 
-                    {row.reviewComment && (
+                    {(row.reviewComment || (isClarification && row.reason)) && (
                       <div className="mt-2 rounded-lg bg-muted/60 p-2 text-xs">
-                        <span className="font-semibold text-foreground">Ý kiến Quản lý:</span>{' '}
-                        <span className="italic text-muted-foreground">"{row.reviewComment}"</span>
+                        <span className="font-semibold text-foreground">
+                          {row.source === 'HR_MISSING_PUNCH_EXPLANATION' ? 'Yêu cầu từ HR:' : 'Ý kiến Quản lý:'}
+                        </span>{' '}
+                        <span className="italic text-muted-foreground">
+                          "{row.reviewComment || row.reason}"
+                        </span>
+                      </div>
+                    )}
+
+                    {isClarification && (
+                      <div className="mt-2.5 flex items-center justify-between gap-2 pt-1.5 border-t border-border/40">
+                        <span className="text-xs text-amber-800 font-medium">
+                          Cần bổ sung lý do và mốc giờ làm việc thực tế
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 font-semibold text-xs h-7 px-2.5 shadow-2xs"
+                          onClick={() => setSelectedClarification(row)}
+                        >
+                          Giải trình ngay
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -594,6 +634,18 @@ export function LeaveOvertimeScreen() {
           )}
         </CardContent>
       </Card>
+      {selectedClarification && apiBase && (
+        <ClarificationResponseModal
+          apiBase={apiBase}
+          request={selectedClarification}
+          open={Boolean(selectedClarification)}
+          onClose={() => setSelectedClarification(null)}
+          onSuccess={() => {
+            setSelectedClarification(null);
+            setRev(r => r + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

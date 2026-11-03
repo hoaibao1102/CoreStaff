@@ -803,8 +803,15 @@ function DecisionDialog({
                   Phân loại yêu cầu
                 </span>
                 <p className="text-sm font-medium text-blue-950">
-                  {request.metadata?.actionType === 'CHECK_IN' ? 'Bổ sung check-in' : request.metadata?.actionType === 'CHECK_OUT' ? 'Bổ sung check-out' : 'Điều chỉnh / giải trình công'}
-                  {request.requestedStart ? ` lúc ${new Date(request.requestedStart).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}.
+                  {request.source === 'HR_MISSING_PUNCH_EXPLANATION'
+                    ? 'Giải trình bổ sung công (HR yêu cầu)'
+                    : request.metadata?.actionType === 'CHECK_IN'
+                    ? 'Bổ sung check-in'
+                    : request.metadata?.actionType === 'CHECK_OUT'
+                    ? 'Bổ sung check-out'
+                    : 'Điều chỉnh / giải trình công'}
+                  {request.requestedStart ? ` · Giờ vào: ${new Date(request.requestedStart).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}` : ''}
+                  {request.requestedEnd ? ` · Giờ ra đề nghị: ${new Date(request.requestedEnd).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' })}` : ''}.
                 </p>
                 <p className="text-xs text-blue-800">Duyệt yêu cầu sẽ ghi mốc giờ này vào bảng công của nhân viên.</p>
               </div>

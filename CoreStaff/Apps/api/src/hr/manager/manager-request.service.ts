@@ -2,7 +2,7 @@ import {ConflictException,ForbiddenException,Injectable,NotFoundException,Option
 import {InjectModel} from '@nestjs/mongoose';import {ClientSession,Model} from 'mongoose';
 import {ManagerRequestDocument} from '../../database/schemas/manager-request.schema';
 import {EmployeeProfileDocument} from '../../database/schemas/employee-profile.schema';
-import {CreateManagerRequestDto} from './dto/manager-request.dto';import {ManagerScopeService} from './manager-scope.service';
+import {CreateManagerRequestDto, RespondClarificationDto} from './dto/manager-request.dto';import {ManagerScopeService} from './manager-scope.service';
 import {EventsGateway} from '../../events/events.gateway';
 import {dateOnly} from '../../common/date-only';
 import {AttendanceConfirmationService} from './attendance-confirmation.service';
@@ -161,6 +161,125 @@ export class ManagerRequestService {
   async listMine(org: string, userId: string) {
     return this.requests.find({ organizationId: org, employeeUserId: userId }).sort({ createdAt: -1 }).lean();
   }
+
+  async respondClarification(org: string, userId: string, requestId: string, dto: RespondClarificationDto) {
+    if (!dto.reason || dto.reason.trim().length < 10) {
+      throw new ConflictException('REASON_REQUIRED_MIN_10');
+    }
+    const req = await this.requests.findOne({ _id: requestId, organizationId: org }).lean();
+    if (!req) throw new NotFoundException('REQUEST_NOT_FOUND');
+    const reqEmpUserId = String((req.employeeUserId as any)?._id ?? req.employeeUserId);
+    if (reqEmpUserId !== String(userId)) {
+      throw new ForbiddenException('NOT_REQUEST_OWNER');
+    }
+    if (req.status !== 'CLARIFICATION_REQUESTED') {
+      throw new ConflictException('REQUEST_STATE_CHANGED');
+    }
+    if (dto.expectedVersion && req.version !== dto.expectedVersion) {
+      throw new ConflictException('REQUEST_STATE_CHANGED');
+    }
+
+    const workDateStr = req.workDate ? new Date(req.workDate).toISOString().slice(0, 10) : '';
+    if (this.requests.db && workDateStr) {
+      const date = new Date(req.workDate);
+      const period: any = await this.requests.db.model('TimesheetPeriod').findOne({
+        organizationId: org,
+        active: true,
+        startDate: { $lte: date },
+        endDate: { $gte: date },
+      }).lean();
+      if (period && (period.status === 'CLOSED' || period.payrollRunId != null)) {
+        throw new ConflictException('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+      }
+    }
+
+    const updateSet: any = {
+      status: 'PENDING',
+      reason: dto.reason.trim(),
+    };
+    if (dto.customCheckInTime) {
+      const inDate = new Date(dto.customCheckInTime);
+      if (!Number.isNaN(inDate.getTime())) {
+        updateSet.requestedStart = inDate;
+      }
+    }
+    if (dto.customCheckOutTime) {
+      const outDate = new Date(dto.customCheckOutTime);
+      if (!Number.isNaN(outDate.getTime())) {
+        updateSet.requestedEnd = outDate;
+      }
+    }
+    if (updateSet.requestedStart && updateSet.requestedEnd && updateSet.requestedStart >= updateSet.requestedEnd) {
+      throw new ConflictException('TIME_WINDOW_INVALID');
+    }
+
+    const session = await this.requests.db.startSession();
+    try {
+      let updatedRequest: any;
+      await session.withTransaction(async () => {
+        const query: any = {
+          _id: requestId,
+          organizationId: org,
+          status: 'CLARIFICATION_REQUESTED',
+        };
+        if (dto.expectedVersion) query.version = dto.expectedVersion;
+
+        updatedRequest = await this.requests.findOneAndUpdate(
+          query,
+          {
+            $set: updateSet,
+            $inc: { version: 1 },
+          },
+          { new: true, session },
+        ).lean();
+
+        if (!updatedRequest) throw new ConflictException('REQUEST_STATE_CHANGED');
+
+        if (req.attendanceDayId) {
+          await this.attendanceDays.updateOne(
+            { _id: req.attendanceDayId, organizationId: org },
+            { $set: { overallApprovalStatus: AttendanceApprovalStatus.PENDING } },
+            { session },
+          );
+        } else if (workDateStr) {
+          await this.attendanceDays.updateOne(
+            { organizationId: org, employeeId: userId, workDate: workDateStr },
+            { $set: { overallApprovalStatus: AttendanceApprovalStatus.PENDING } },
+            { session },
+          );
+        }
+      });
+
+      if (workDateStr) {
+        try {
+          await this.periodVersion.bumpForWorkDates(org, [workDateStr]);
+        } catch (bumpErr) {
+          console.warn('[ManagerRequestService] Period bump failed:', bumpErr);
+        }
+      }
+
+      try {
+        if (updatedRequest?.departmentId) {
+          this.eventsGateway?.notifyNewRequest(String(updatedRequest.departmentId), {
+            requestId: String(updatedRequest._id),
+            type: updatedRequest.type,
+            departmentId: String(updatedRequest.departmentId),
+            employeeUserId: userId,
+            reason: updatedRequest.reason,
+            status: 'PENDING',
+            createdAt: updatedRequest.createdAt || new Date(),
+          });
+        }
+      } catch (wsErr) {
+        console.warn('[ManagerRequestService] WebSocket notify failed:', wsErr);
+      }
+
+      return updatedRequest;
+    } finally {
+      await session.endSession();
+    }
+  }
+
 
   async listForManager(org: string, managerId: string, filter: { type?: string; status?: string; departmentId?: string }): Promise<any[]> {
     const ids = await this.scope.getManagedDepartmentIds(org, managerId);
@@ -480,6 +599,8 @@ export class ManagerRequestService {
         if (!fresh || fresh.status !== 'PENDING' || fresh.version !== expectedVersion) throw new ConflictException('REQUEST_STATE_CHANGED');
         if (fresh.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' && status === 'APPROVED') {
           await this.applyAttendanceAdjustment(org, fresh, session);
+        } else if (fresh.source === 'HR_MISSING_PUNCH_EXPLANATION' && status === 'APPROVED') {
+          await this.applyMissingPunchClarificationApproval(org, fresh, managerId, session);
         } else if (fresh.metadata?.adjustmentSource !== 'MANUAL_ADJUSTMENT') {
           const hasSelfieIdentity = fresh.attendanceDayId && fresh.evidenceId && ['CHECK_IN', 'CHECK_OUT'].includes(fresh.metadata?.actionType);
           if (fresh.source === 'SELFIE' || hasSelfieIdentity) {
@@ -654,4 +775,103 @@ export class ManagerRequestService {
       if (day?.checkInAt && recordedAt <= new Date(day.checkInAt)) throw new ConflictException('CHECK_OUT_MUST_BE_AFTER_CHECK_IN');
     }
   }
+
+  private async applyMissingPunchClarificationApproval(org: string, request: any, managerId: string, session: ClientSession) {
+    const workDateVn = request.workDate ? new Date(request.workDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : '';
+    const workDateUtc = dateOnly(new Date(request.workDate).toISOString());
+    const employeeUserId = String(request.employeeUserId?._id ?? request.employeeUserId);
+
+    let day: any = null;
+    if (request.attendanceDayId) {
+      day = await this.attendanceDays.findOne({ _id: request.attendanceDayId, organizationId: org }).session(session);
+    }
+    if (!day) {
+      day = await this.attendanceDays.findOne({ organizationId: org, employeeId: employeeUserId, workDate: { $in: [workDateVn, workDateUtc] } }).session(session);
+    }
+    if (!day) {
+      const value = {
+        organizationId: org,
+        employeeId: employeeUserId,
+        workDate: workDateVn || workDateUtc,
+        attendanceStatus: AttendanceStatus.NOT_CHECKED_IN,
+        overallApprovalStatus: AttendanceApprovalStatus.APPROVED,
+      };
+      day = (await this.attendanceDays.create([value], { session }))[0];
+    }
+
+    const workDate = day.workDate || workDateVn || workDateUtc;
+    const isSelfApproved = String(request.employeeUserId?._id ?? request.employeeUserId) === String(managerId) || Boolean(request.isSelfApproved);
+
+    if (!day.checkInAt) {
+      let recordedAt = request.requestedStart ? new Date(request.requestedStart) : null;
+      if (!recordedAt || isNaN(recordedAt.getTime())) {
+        const timeStr = day.shiftSnapshot?.startTime || '08:00';
+        const [hh, mm] = timeStr.split(':').map(Number);
+        const baseDate = new Date(`${workDate}T00:00:00.000Z`);
+        baseDate.setUTCHours((hh || 8) - 7, mm || 0, 0, 0);
+        recordedAt = baseDate;
+      }
+      day.checkInAt = recordedAt;
+      day.checkInProvenance = { source: 'CONFIRMED_ACTUAL', requestId: String(request._id) };
+
+      const event = {
+        organizationId: org,
+        attendanceDayId: day._id,
+        employeeId: employeeUserId,
+        eventType: AttendanceEventType.CHECK_IN,
+        method: AttendanceMethod.MANUAL,
+        provenance: {
+          source: 'CONFIRMED_ACTUAL',
+          requestId: request._id,
+          ...(isSelfApproved ? { isSelfApproved: true, auditTag: 'SELF_APPROVED' } : {}),
+        },
+        recordedAt,
+        approvalStatus: AttendanceApprovalStatus.APPROVED,
+        validationStatus: 'VALID',
+        note: request.reason,
+      };
+      await this.attendanceEvents.create([event], { session });
+    }
+
+    if (!day.checkOutAt) {
+      let recordedAt = request.requestedEnd ? new Date(request.requestedEnd) : null;
+      if (!recordedAt || isNaN(recordedAt.getTime())) {
+        const timeStr = day.shiftSnapshot?.endTime || '17:00';
+        const [hh, mm] = timeStr.split(':').map(Number);
+        const baseDate = new Date(`${workDate}T00:00:00.000Z`);
+        baseDate.setUTCHours((hh || 17) - 7, mm || 0, 0, 0);
+        recordedAt = baseDate;
+      }
+      day.checkOutAt = recordedAt;
+      day.checkOutProvenance = { source: 'CONFIRMED_ACTUAL', requestId: String(request._id) };
+
+      const event = {
+        organizationId: org,
+        attendanceDayId: day._id,
+        employeeId: employeeUserId,
+        eventType: AttendanceEventType.CHECK_OUT,
+        method: AttendanceMethod.MANUAL,
+        provenance: {
+          source: 'CONFIRMED_ACTUAL',
+          requestId: request._id,
+          ...(isSelfApproved ? { isSelfApproved: true, auditTag: 'SELF_APPROVED' } : {}),
+        },
+        recordedAt,
+        approvalStatus: AttendanceApprovalStatus.APPROVED,
+        validationStatus: 'VALID',
+        note: request.reason,
+      };
+      await this.attendanceEvents.create([event], { session });
+    }
+
+    if (day.checkInAt && day.checkOutAt) {
+      const breakMinutes = Number(day.shiftSnapshot?.breakMinutes ?? 60);
+      day.workingMinutes = Math.max(0, Math.floor((new Date(day.checkOutAt).getTime() - new Date(day.checkInAt).getTime()) / 60000) - breakMinutes);
+      day.attendanceStatus = AttendanceStatus.COMPLETED;
+      day.dayResult = DayResult.PRESENT;
+    }
+    day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
+    await day.save({ session });
+  }
+
 }
