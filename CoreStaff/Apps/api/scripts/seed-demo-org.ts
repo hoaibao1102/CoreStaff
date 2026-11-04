@@ -36,8 +36,10 @@ import {
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
 import type { Connection } from 'mongoose';
 import { createDemoApp, DemoApp, syncDriverClock } from './lib/demo-app';
+import { saveOrgSnapshot } from './lib/demo-snapshot';
 import {
   ACCOUNTS, ACTIVE_PERIOD, CONFIRMATIONS, CURRENT_MONTH_LEAVES, CURRENT_PERIOD, DAY_OVERRIDES, DayPlan, DemoAccount,
+  DEMO_KEEP, DEMO_SKIP_ACK,
   EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, KPI_BASE_AMOUNT, KPI_SCORES, kpiFor, kpiPolicyTiers, LEAVES,
   MANAGER_OF, OFFICE, ORG_NAME, OVERTIMES, planFor, PunchSpec, SELFIE_APPROVALS, SITES,
 } from './lib/demo-scenario';
@@ -737,15 +739,29 @@ async function seed() {
       await at(action.when, action.label, action.run);
     }
     resetVirtualClock();
+    if (connection) {
+      // The replay owns the socket for minutes; re-stamp the heartbeat and warm
+      // the pool so the first post-seed service call does not hit driver buffering.
+      syncDriverClock(connection);
+      await connection.db?.admin().ping().catch(() => undefined);
+    }
     await finalizeStatuses(ctx);
 
     const importDir = path.resolve(__dirname, '..', 'demo-import');
     await generateDemoImportFiles(importDir);
 
     console.log(`[seed:demo] Hoàn tất sau ${Math.round((Date.now() - started) / 1000)} giây.`);
+
+    // Hai điểm chụp cho `demo:rollback --to=…`:
+    //  alt  = ngay sau seed, còn đủ 4 blocker/exceptions cho nhánh alt flow.
+    //  main = sau khi gỡ hộ 3 blocker, chỉ còn selfie NV-KD-002 15/10.
+    await saveOrgSnapshot(demo, ORG_CODE, 'alt');
+    await runDemoFlow(demo, { orgCode: ORG_CODE, step: 'resolve', keep: DEMO_KEEP, skipAck: DEMO_SKIP_ACK, to: 'main' });
+    await saveOrgSnapshot(demo, ORG_CODE, 'main');
+
     if (REHEARSAL) {
       console.log(`\n[seed:demo] Chế độ diễn tập: chạy trọn luồng kỳ ${ACTIVE_PERIOD}...`);
-      await runDemoFlow(demo, { orgCode: ORG_CODE, step: 'all', keep: [], skipAck: [] });
+      await runDemoFlow(demo, { orgCode: ORG_CODE, step: 'all', keep: [], skipAck: [], to: 'main' });
     }
     await printDemoStatus(demo, ORG_CODE);
     printAccounts();

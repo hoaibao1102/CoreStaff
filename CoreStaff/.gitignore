@@ -17,3 +17,5 @@ Apps/mobile/ios/
 # Never commit real credentials — .env files are local-only, see .env.example
 scratch/
 Apps/api/demo-import/
+# Ảnh chụp tenant demo cho `npm run demo:rollback` — dữ liệu local, không commit
+Apps/api/.demo-snapshot/

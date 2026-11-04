@@ -16,18 +16,17 @@ Chạy lệnh reset để đưa toàn bộ dữ liệu 3 kỳ về trạng thái
 ```bash
 npm --prefix CoreStaff/Apps/api run seed:demo:reset
 ```
-Sau reset: kỳ **2026-09** đã chốt & phát lương (để tra cứu lịch sử), kỳ **2026-10** đang ở `REVIEWING` với **4 điểm nghẽn thô**, kỳ **2026-11** mới mở (chưa tới hạn chốt).
+Sau reset: kỳ **2026-09** đã chốt & phát lương (để tra cứu lịch sử), kỳ **2026-10** đang ở `REVIEWING` với **đúng 1 điểm nghẽn**, kỳ **2026-11** mới mở (chưa tới hạn chốt).
 
-4 điểm nghẽn của kỳ 10 ngay sau seed:
+Điểm nghẽn duy nhất của kỳ 10 ngay sau seed (`main`):
 
 | Ngày | Mã NV | Loại | Xử lý trong kịch bản |
 |---|---|---|---|
-| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | **Làm tay** — QL KD duyệt |
-| 21/10 | `NV-KD-003` | Quên chấm ra, đã gửi giải trình | **Làm tay** — QL KD duyệt |
-| 19/10 | `NV-KT-001` | Không có dữ liệu chấm công cả ngày | `demo:resolve` gỡ hộ |
-| 30/10 | `NV-KD-001` | Quên chấm ra, chưa giải trình | `demo:resolve` gỡ hộ |
+| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | **Làm tay** — QL KD duyệt, xong là chốt được kỳ |
 
-> **Mẹo rút gọn:** các thao tác lặp lại nhàm chán đều có script — xem `Docs/DEMO_SEED_GUIDE.md` mục 5.2–5.3 (`demo:resolve`, `demo:ack`, `demo:confirm`, `demo:close`). Kịch bản dưới đây cố ý **không chạy script ngay từ seed**: mở đầu bằng việc chứng minh vấn đề thật, rồi mới xin phép chạy script cho phần không cần giải thích.
+> **Mẹo rút gọn:** các thao tác lặp lại nhàm chán đều có script — xem `Docs/DEMO_SEED_GUIDE.md` mục 5.2–5.3 (`demo:ack`, `demo:confirm`, `demo:close`).
+>
+> **Nhánh alt flow (hội đồng hỏi thêm tình huống):** `npm run demo:rollback -- --to=alt` đưa kỳ 10 về **4 blocker** đủ loại để kể chuyện nghiệp vụ, gồm cả ca "quên chấm ra và **không giải trình** → QL tính vắng không phép" (`NV-KD-001`, 30/10). Demo xong chạy `npm run demo:rollback` để về lại `main` (1 blocker). Mỗi lần mất vài giây, không phải seed lại, và các tab vẫn đăng nhập. Chi tiết: `Docs/DEMO_SEED_GUIDE.md` §3.2 + §5.7.
 
 > ⚠️ **Ảnh selfie không có file thật.** Seed chỉ ghi bản ghi `Evidence`, **không upload ảnh** lên storage. Khi duyệt selfie `NV-KD-002` (Bước 2.5), **không bấm xem ảnh** — sẽ ra ảnh lỗi. Duyệt theo giờ vào/ra và địa điểm hiển thị trong dialog.
 
@@ -41,7 +40,7 @@ Sau reset: kỳ **2026-09** đã chốt & phát lương (để tra cứu lịch 
 | **Quản lý phòng ban (Manager)** | **Web / Laptop** | `quan.ly.kinh-doanh@anphat.local` | Rà soát bảng công phòng ban, kiểm tra blocker, duyệt selfie + giải trình, xác nhận bảng công phòng KD |
 | **Quản trị Nhân sự (HR Admin)** | **Web / Laptop** | `hr@anphat.local` | Giám sát toàn công ty, chốt kỳ công tháng 10, sinh snapshot, chạy tính lương, khóa bảng lương và phát hành phiếu lương |
 
-> **Toàn bộ thao tác tay nằm trong một phòng (KD) và dùng chung một tài khoản quản lý** — không phải đăng xuất/đăng nhập hay chuyển phòng ban giữa các pha.
+> **Toàn bộ thao tác tay nằm trong một phòng (KD), một tài khoản quản lý và một nhân viên** — không phải đăng xuất/đăng nhập hay chuyển phòng ban giữa các pha. Tổng cộng 3 tài khoản: HR, QL KD, `NV-KD-002`.
 
 ---
 
@@ -103,26 +102,16 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 #### Bước 2.2: Trình diễn Cảnh báo Điểm nghẽn (Blockers)
 - **Điểm nhấn giải thích**:
   - Tỷ lệ hoàn thành công chưa đạt 100%.
-  - Bảng blocker hiển thị **4 nhân viên** đang vướng:
-    - `Vũ Thị Mai` (`NV-KD-002`) — **selfie công tác 15/10 chưa duyệt**.
-    - `Đặng Văn Khoa` (`NV-KD-003`) — **thiếu check-out 21/10**, đã gửi giải trình.
-    - `Phạm Hoàng Nam` (`NV-KD-001`) — **thiếu check-out 30/10**, chưa giải trình.
-    - `Lê Quốc Bảo` (`NV-KT-001`) — **không có dữ liệu chấm công cả ngày 19/10**, đã gửi giải trình.
+  - Bảng blocker hiển thị **1 nhân viên** đang vướng: `Vũ Thị Mai` (`NV-KD-002`) — **selfie công tác 15/10 chưa duyệt**.
   - Nếu Quản lý cố tình nhấn xác nhận khi còn blocker: Hệ thống từ chối với mã lỗi `DEPARTMENT_NOT_READY`. Không cho phép gian lận hay làm tròn thiếu căn cứ.
+  - **Muốn kể thêm các ca khác** (thiếu dữ liệu chấm công cả ngày, quên chấm ra chưa giải trình, quên chấm ra đã giải trình): xem "Nhánh alt flow" ở §4, chạy `npm run demo:rollback -- --to=alt`.
 
-#### Bước 2.3: Xin phép chạy script gỡ phần lặp lại
-- Nói với hội đồng: *"Phần còn lại là thao tác lặp lại giống hệt nhau. Em xin phép chạy script đã chuẩn bị để dành thời gian cho phần cần giải thích."*
-- Chạy:
-  ```bash
-  npm --prefix CoreStaff/Apps/api run demo:resolve
-  ```
-- Script gọi đúng service mà Web gọi (không ghi tay vào DB), xử lý: duyệt giải trình `NV-KT-001` (19/10) và tạo giải trình + duyệt cho `NV-KD-001` (30/10). In ra 2 dòng `✓`.
-- Quay lại màn hình rà soát: kỳ 10 giờ còn **đúng 2 blocker**, **cả 2 đều thuộc phòng KD** — dùng cho phần trình diễn tay tiếp theo.
+#### Bước 2.3: (Nhánh alt flow — tuỳ chọn) Trình diễn 4 loại điểm nghẽn
+Chỉ chạy khi hội đồng muốn xem nhiều tình huống. Xem chi tiết ở §4 mục "Nhánh alt flow".
 
-#### Bước 2.4: Duyệt tay 2 vướng còn lại (cùng phòng KD)
+#### Bước 2.4: Duyệt tay vướng còn lại (phòng KD)
 - Mở danh sách yêu cầu (`Manager Requests`), lọc kỳ `2026-10`:
   - **`NV-KD-002` — selfie công tác 15/10** (*"Gặp khách hàng Đông Á ký phụ lục hợp đồng"*): nhấn **"Duyệt đơn"**. ⚠️ Duyệt theo giờ vào `08:10` / ra `17:18` và địa điểm hiển thị, **không bấm xem ảnh** (xem cảnh báo §1.2).
-  - **`NV-KD-003` — giải trình 21/10** (*"Quên chấm công ra do đi gặp khách hàng ở Thủ Đức…"*): nhấn **"Duyệt đơn"**.
 - Quay lại màn hình rà soát kỳ công: **không còn blocker nào**.
 - Giải thích cơ chế: mỗi lần duyệt/từ chối đều **tăng phiên bản kỳ** và **vô hiệu hoá các xác nhận bảng công trước đó** — hệ thống không cho ai xác nhận trên dữ liệu đã đổi.
 
@@ -147,21 +136,18 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
 - Nếu bấm sớm khi còn người chưa xác nhận, hệ thống từ chối với `EMPLOYEE_ACKNOWLEDGEMENT_PENDING` — cho hội đồng thấy đây là **ràng buộc thật**, không phải nút bị ẩn.
 - Bấm hộ các tài khoản còn lại (thao tác lặp, không cần trình diễn):
   ```bash
-  npm --prefix CoreStaff/Apps/api run demo:ack -- --skip-ack=NV-KD-003
+  npm --prefix CoreStaff/Apps/api run demo:ack
   ```
-  Lệnh này ack hộ 6 tài khoản còn lại (kể cả `NV-KD-002` nếu chưa bấm ở Bước 2.6 — sẽ in `đã xác nhận trước đó`), để `NV-KD-003` tự làm tiếp.
-- Cho `NV-KD-003` tự xác nhận (đăng nhập `nv.kinh-doanh.3@anphat.local`, **20/22 công**), hoặc:
-  ```bash
-  npm --prefix CoreStaff/Apps/api run demo:ack -- --skip-ack=
-  ```
+  Lệnh này ack hộ **mọi tài khoản chưa xác nhận**, chỉ chừa đúng `NV-KD-002` (in `· NV-KD-002: để tự xác nhận khi demo`). Nếu `NV-KD-002` đã bấm tay ở Bước 2.6 thì in `đã xác nhận trước đó`.
+- Quay lại bước 2.7: cả 2 phòng giờ đã đủ người ack, nhấn **"Xác nhận bảng công phòng Kinh doanh"** lần nữa để hoàn tất.
 
-> **Vì sao phải có `--skip-ack=NV-KD-003` ở lệnh trên:** mặc định `demo:ack` bỏ qua **cả** `NV-KD-002` và `NV-KD-003`. Chạy trơn thì phòng KD vẫn còn người chưa xác nhận → Bước 3.1 không chốt được kỳ.
+> **Vì sao script chỉ chừa `NV-KD-002`:** mặc định `DEMO_KEEP = DEMO_SKIP_ACK = ['NV-KD-002']`. Truyền `--skip-ack=A,B` nếu muốn để nhiều người tự bấm trên app.
 
 #### Bước 2.8: Xác nhận phòng Kỹ thuật (script, không trình diễn)
 ```bash
 npm --prefix CoreStaff/Apps/api run demo:confirm
 ```
-- Phòng KD vừa xác nhận tay nên in `đã xác nhận`; phòng KT được xác nhận hộ.
+- Phòng KD vừa xác nhận tay nên in `đã xác nhận trước đó`; phòng KT được xác nhận hộ.
 - Khi **cả 2 phòng** xong, kỳ tự chuyển `READY_TO_CLOSE`.
 
 > **Ràng buộc quan trọng:** kỳ chỉ sang `READY_TO_CLOSE` khi **tất cả các phòng ban đang hoạt động** đều đã xác nhận — thiếu 1 phòng là HR vẫn không chốt được. Đây là lý do phải xác nhận cả phòng KT.
@@ -241,12 +227,34 @@ Ba điểm đáng nói khi đọc bảng này:
 
 1. **Nếu thiết bị Android mất kết nối mạng**:
    - Sử dụng điện thoại phát Hotspot Wi-Fi cho laptop và điện thoại chung dải mạng, cập nhật IP máy chủ vào cấu hình API Base (`http://<LAN_IP>:3000`).
-2. **Nếu muốn diễn tập lại từ đầu**:
-   - Chỉ mất đúng 1 lệnh để đưa dữ liệu về ban đầu:
+2. **Nếu muốn diễn tập lại từ đầu, hoặc hội đồng hỏi tình huống khác giữa buổi**:
+   - Một lệnh tua về `main` (đúng 1 blocker), mất vài giây:
      ```bash
-     npm --prefix CoreStaff/Apps/api run seed:demo:reset
+     npm --prefix CoreStaff/Apps/api run demo:rollback
      ```
-   - Lệnh reset chỉ xoá dữ liệu có `organizationId` của tenant `ANPHAT`; không đụng collection chung hay tenant khác.
+   - Để có nhiều blocker/exception cho **nhánh alt flow**:
+     ```bash
+     npm --prefix CoreStaff/Apps/api run demo:rollback -- --to=alt
+     ```
+   - `demo:rollback` dùng ảnh chụp tạo tự động sau lần `seed:demo:reset` gần nhất (`Apps/api/.demo-snapshot/ANPHAT-{main,alt}.json`), giữ nguyên phiên đăng nhập. Muốn gieo lại dữ liệu gốc từ đầu: `npm --prefix CoreStaff/Apps/api run seed:demo:reset` (~3 phút).
+   - Cả ba lệnh chỉ xoá dữ liệu có `organizationId` của tenant `ANPHAT`; không đụng collection chung hay tenant khác.
+
+### 4.0. Nhánh alt flow — demo nhiều điểm nghẽn cho hội đồng
+
+Chạy `npm run demo:rollback -- --to=alt`, rồi mở màn hình rà soát kỳ `2026-10` như Bước 2.2. Kỳ 10 có **4 blocker** — mỗi cái là một câu chuyện nghiệp vụ khác nhau:
+
+| Ngày | Mã NV | Loại | Nói gì khi trình diễn |
+|---|---|---|---|
+| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | Chấm công bằng selfie ở ngoài văn phòng phải qua QL duyệt |
+| 19/10 | `NV-KT-001` | Không có dữ liệu chấm công cả ngày | Quên điện thoại → giải trình bổ sung công |
+| 21/10 | `NV-KD-003` | Quên chấm ra, đã gửi giải trình | Nhân viên tự giải trình, QL duyệt |
+| 30/10 | `NV-KD-001` | Quên chấm ra, **chưa** giải trình | QL tính **vắng không phép** — không ai bù công hộ |
+
+Các ràng buộc hiện ra ngay ở trạng thái này (dùng để chứng minh hệ thống không cho chốt ẩu):
+- `demo:ack` → `✗ ...: còn ngày chưa xử lý (blocker)`.
+- `demo:confirm` → `DEPARTMENT_NOT_READY` (KD) và `MISSING_ATTENDANCE_DAY` (KT).
+
+Xong nhánh alt thì `npm run demo:rollback` để về `main` và tiếp tục kịch bản chính.
 3. **Nếu hội đồng muốn xem nhanh kết quả kỳ chốt hoàn tất**:
    - Cho xem trực tiếp kỳ lịch sử `2026-09` đã chốt và phát hành sẵn với đầy đủ 8 phiếu lương mẫu.
 4. **Nếu muốn chạy nhanh trọn luồng chốt kỳ 2026-10 (không demo tay)**:
