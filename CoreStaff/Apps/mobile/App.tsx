@@ -1,21 +1,31 @@
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { resolveApiBase } from './src/config';
-import { changePassword, forgotPassword, friendlyAuthError, getCurrentUser, login, logout, resetPassword, setSignedOutHandler, type AuthUser } from './src/auth';
+import { getCurrentUser, logout, friendlyAuthError, setSignedOutHandler, type AuthUser } from './src/auth';
 import { BottomTabBar, type BottomTabKey } from './src/components/BottomTabBar';
+import { AppButton, ErrorBanner } from './src/components/ui';
+import { AppIcon } from './src/components/AppIcon';
+import { ChangePasswordScreen, ForgotScreen, LoginScreen, Logo, ResetScreen } from './src/screens/AuthScreens';
 import { OverviewScreen } from './src/screens/OverviewScreen';
 import { AttendanceScreen } from './src/screens/AttendanceScreen';
 import { RequestsScreen } from './src/screens/RequestsScreen';
 import { PayslipsScreen } from './src/screens/PayslipsScreen';
 import { AccountScreen } from './src/screens/AccountScreen';
+import { ManagerApprovalsScreen } from './src/screens/ManagerApprovalsScreen';
+import { ManagerTeamScreen } from './src/screens/ManagerTeamScreen';
+import { getPendingApprovals, getPendingLeaveRequests } from './src/manager-api';
 import { subscribeEmployeeRealtime } from './src/realtime';
+import { colors } from './src/theme';
 
 type Screen = 'login' | 'forgot' | 'reset' | 'change-password' | 'home';
 
 export default function App() {
-  return <SafeAreaProvider><AppContent /></SafeAreaProvider>;
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
+  return <SafeAreaProvider>{fontsLoaded || fontError ? <AppContent /> : <LoadingScreen />}</SafeAreaProvider>;
 }
 
 function AppContent() {
@@ -54,63 +64,49 @@ function AppContent() {
   if (!apiBase || connectionError) return <ConnectionError message={connectionError || 'Không tìm thấy API.'} onRetry={bootstrap} />;
   const clearSession = () => { setUser(null); setForcedPasswordChange(false); setScreen('login'); };
 
+  // Khu vực đã đăng nhập: thanh tab tự xử lý safe-area dưới nên chỉ chừa cạnh trên.
+  if (screen === 'home' && user) {
+    return <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <StatusBar style="dark" />
+      <EmployeeHome user={user} apiBase={apiBase} onChangePassword={() => setScreen('change-password')} onLogout={clearSession} />
+    </SafeAreaView>;
+  }
+
   return <SafeAreaView style={styles.safeArea}>
     <StatusBar style="dark" />
     {screen === 'login' && <LoginScreen apiBase={apiBase} onAuthenticated={(nextUser, forced) => { setUser(nextUser); setForcedPasswordChange(forced); setScreen(forced ? 'change-password' : 'home'); }} onForgot={() => setScreen('forgot')} onReset={() => setScreen('reset')} />}
     {screen === 'forgot' && <ForgotScreen apiBase={apiBase} onBack={() => setScreen('login')} onReset={() => setScreen('reset')} />}
     {screen === 'reset' && <ResetScreen apiBase={apiBase} onBack={() => setScreen('login')} />}
     {screen === 'change-password' && user && <ChangePasswordScreen apiBase={apiBase} forced={forcedPasswordChange} onCancel={forcedPasswordChange ? undefined : () => setScreen('home')} onChanged={() => { setForcedPasswordChange(false); setUser({ ...user, mustChangePassword: false }); setScreen('home'); }} onSessionExpired={clearSession} />}
-    {screen === 'home' && user && <EmployeeHome user={user} apiBase={apiBase} onChangePassword={() => setScreen('change-password')} onLogout={clearSession} />}
   </SafeAreaView>;
 }
 
 function LoadingScreen() {
-  return <SafeAreaView style={styles.center}><Logo large /><ActivityIndicator style={styles.loading} color="#2563eb" size="large" /><Text style={styles.muted}>Đang kết nối hệ thống…</Text><StatusBar style="dark" /></SafeAreaView>;
+  return <View style={styles.center}><Logo large /><ActivityIndicator style={styles.loading} color={colors.primary} size="large" /><Text style={styles.muted}>Đang kết nối hệ thống…</Text><StatusBar style="dark" /></View>;
 }
 
 function ConnectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <SafeAreaView style={styles.center}><View style={styles.errorIcon}><Text style={styles.errorIconText}>!</Text></View><Text style={styles.stateTitle}>Không thể kết nối</Text><Text style={styles.stateMessage}>{message}</Text><PrimaryButton label="Thử kết nối lại" onPress={onRetry} /><StatusBar style="dark" /></SafeAreaView>;
-}
-
-function Logo({ large = false }: { large?: boolean }) {
-  return <View style={styles.logoRow}><View style={[styles.logoMark, large && styles.logoMarkLarge]}><Text style={[styles.logoLetter, large && styles.logoLetterLarge]}>C</Text></View><Text style={[styles.brand, large && styles.brandLarge]}>CoreStaff</Text></View>;
-}
-
-function AuthLayout({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
-  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled"><Logo /><View style={styles.authHeader}><Text style={styles.eyebrow}>{eyebrow}</Text><Text style={styles.authTitle}>{title}</Text><Text style={styles.authDescription}>{description}</Text></View><View style={styles.authCard}>{children}</View><Text style={styles.securityNote}>Phiên đăng nhập được tự động làm mới khi bạn còn dùng; dừng quá 14 ngày thì cần đăng nhập lại.</Text></ScrollView></KeyboardAvoidingView>;
-}
-
-function LoginScreen({ apiBase, onAuthenticated, onForgot, onReset }: { apiBase: string; onAuthenticated: (user: AuthUser, forced: boolean) => void; onForgot: () => void; onReset: () => void }) {
-  const [identifier, setIdentifier] = useState(''); const [password, setPassword] = useState(''); const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  const submit = async () => {
-    if (!identifier.trim() || !password) return setError('Vui lòng nhập email/mã nhân viên và mật khẩu.');
-    setBusy(true); setError(null);
-    try { const result = await login(apiBase, identifier, password); onAuthenticated(result.user, result.mustChangePassword); }
-    catch (err) { setError(friendlyAuthError(err)); } finally { setBusy(false); }
-  };
-  return <AuthLayout eyebrow="ỨNG DỤNG NHÂN VIÊN" title="Chào mừng trở lại" description="Đăng nhập để theo dõi công việc và tài khoản của bạn.">{error && <ErrorBanner message={error} />}<Field label="Email hoặc mã nhân viên" value={identifier} onChangeText={setIdentifier} placeholder="VD: NV-0248" autoCapitalize="none" editable={!busy} /><Field label="Mật khẩu" value={password} onChangeText={setPassword} placeholder="Nhập mật khẩu" secureTextEntry={!visible} editable={!busy} action={visible ? 'Ẩn' : 'Hiện'} onAction={() => setVisible(value => !value)} /><Pressable accessibilityRole="button" onPress={onForgot} disabled={busy} style={({ pressed }) => [styles.textLink, pressed && styles.pressed]}><Text style={styles.linkRight}>Quên mật khẩu?</Text></Pressable><PrimaryButton label="Đăng nhập" loading={busy} disabled={busy} onPress={submit} /><Pressable accessibilityRole="button" onPress={onReset} disabled={busy} style={({ pressed }) => [styles.textLink, pressed && styles.pressed]}><Text style={styles.linkCenter}>Bạn đã có mã đặt lại mật khẩu?</Text></Pressable></AuthLayout>;
-}
-
-function ForgotScreen({ apiBase, onBack, onReset }: { apiBase: string; onBack: () => void; onReset: () => void }) {
-  const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [sent, setSent] = useState(false);
-  const submit = async () => { if (!email.trim()) return setError('Vui lòng nhập email đăng nhập.'); setBusy(true); setError(null); try { await forgotPassword(apiBase, email); setSent(true); } catch (err) { setError(friendlyAuthError(err)); } finally { setBusy(false); } };
-  return <AuthLayout eyebrow="KHÔI PHỤC TÀI KHOẢN" title="Quên mật khẩu" description="Nếu tài khoản tồn tại, hệ thống sẽ gửi hướng dẫn đặt lại mật khẩu.">{error && <ErrorBanner message={error} />}{sent ? <><SuccessBanner message="Yêu cầu đã được tiếp nhận. Hãy kiểm tra email của bạn." /><PrimaryButton label="Nhập mã đặt lại" onPress={onReset} /></> : <><Field label="Email đăng nhập" value={email} onChangeText={setEmail} placeholder="ten@congty.vn" keyboardType="email-address" autoCapitalize="none" editable={!busy} /><PrimaryButton label="Gửi hướng dẫn" loading={busy} disabled={busy} onPress={submit} /></>}<SecondaryButton label="Quay lại đăng nhập" onPress={onBack} /></AuthLayout>;
-}
-
-function ResetScreen({ apiBase, onBack }: { apiBase: string; onBack: () => void }) {
-  const [token, setToken] = useState(''); const [password, setPassword] = useState(''); const [confirm, setConfirm] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [done, setDone] = useState(false);
-  const submit = async () => { if (!token.trim() || !password) return setError('Vui lòng nhập mã đặt lại và mật khẩu mới.'); if (password !== confirm) return setError('Mật khẩu xác nhận chưa khớp.'); setBusy(true); setError(null); try { await resetPassword(apiBase, token, password); setDone(true); } catch (err) { setError(friendlyAuthError(err)); } finally { setBusy(false); } };
-  return <AuthLayout eyebrow="BẢO MẬT TÀI KHOẢN" title="Đặt lại mật khẩu" description="Nhập mã trong email và tạo mật khẩu mới cho tài khoản.">{error && <ErrorBanner message={error} />}{done ? <><SuccessBanner message="Mật khẩu đã được cập nhật. Bạn có thể đăng nhập lại." /><PrimaryButton label="Về trang đăng nhập" onPress={onBack} /></> : <><Field label="Mã đặt lại mật khẩu" value={token} onChangeText={setToken} placeholder="Dán mã từ email" autoCapitalize="none" editable={!busy} /><Field label="Mật khẩu mới" value={password} onChangeText={setPassword} placeholder="Ít nhất 8 ký tự, gồm chữ và số" secureTextEntry editable={!busy} /><Field label="Xác nhận mật khẩu" value={confirm} onChangeText={setConfirm} secureTextEntry editable={!busy} /><PrimaryButton label="Đặt lại mật khẩu" loading={busy} disabled={busy} onPress={submit} /><SecondaryButton label="Hủy và quay lại" onPress={onBack} disabled={busy} /></>}</AuthLayout>;
-}
-
-function ChangePasswordScreen({ apiBase, forced, onCancel, onChanged, onSessionExpired }: { apiBase: string; forced: boolean; onCancel?: () => void; onChanged: () => void; onSessionExpired: () => void }) {
-  const [current, setCurrent] = useState(''); const [next, setNext] = useState(''); const [confirm, setConfirm] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  const submit = async () => { if (!current || !next || !confirm) return setError('Vui lòng nhập đầy đủ các trường mật khẩu.'); if (next !== confirm) return setError('Mật khẩu xác nhận chưa khớp.'); setBusy(true); setError(null); try { await changePassword(apiBase, current, next, confirm); onChanged(); } catch (err: unknown) { setError(friendlyAuthError(err)); if (typeof err === 'object' && err && 'status' in err && err.status === 401) onSessionExpired(); } finally { setBusy(false); } };
-  return <AuthLayout eyebrow={forced ? 'YÊU CẦU BẢO MẬT' : 'TÀI KHOẢN'} title="Đổi mật khẩu" description={forced ? 'Bạn cần đổi mật khẩu tạm thời trước khi tiếp tục.' : 'Cập nhật mật khẩu để bảo vệ tài khoản.'}>{forced && <View style={styles.notice}><Text style={styles.noticeText}>Đây là mật khẩu tạm thời do quản trị viên cấp.</Text></View>}{error && <ErrorBanner message={error} />}<Field label="Mật khẩu hiện tại" value={current} onChangeText={setCurrent} secureTextEntry editable={!busy} /><Field label="Mật khẩu mới" value={next} onChangeText={setNext} placeholder="Ít nhất 8 ký tự, gồm chữ và số" secureTextEntry editable={!busy} /><Field label="Xác nhận mật khẩu mới" value={confirm} onChangeText={setConfirm} secureTextEntry editable={!busy} /><PrimaryButton label="Cập nhật mật khẩu" loading={busy} disabled={busy} onPress={submit} />{onCancel && <SecondaryButton label="Để sau" onPress={onCancel} disabled={busy} />}</AuthLayout>;
+  return <View style={styles.center}>
+    <View style={styles.errorIcon}><AppIcon name="cloud-offline-outline" size={30} color={colors.danger} /></View>
+    <Text accessibilityRole="header" style={styles.stateTitle}>Không thể kết nối</Text>
+    <Text style={styles.stateMessage}>{message}</Text>
+    <View style={styles.stateAction}><AppButton label="Thử kết nối lại" onPress={onRetry} /></View>
+    <StatusBar style="dark" />
+  </View>;
 }
 
 function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: AuthUser; apiBase: string; onChangePassword: () => void; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<BottomTabKey>('overview');
+  const [activeTab, setActiveTabState] = useState<BottomTabKey>('overview');
+  const [showPayslips, setShowPayslips] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const isManager = user.role === 'DEPARTMENT_MANAGER';
+  // Quản lý chỉ có 5 tab, nên các đích của nhân viên được ánh xạ sang nơi tương ứng.
+  const navigate = (tab: BottomTabKey) => {
+    setShowPayslips(false);
+    if (isManager && tab === 'requests') return setActiveTabState('approvals');
+    if (isManager && tab === 'payslips') { setActiveTabState('account'); return setShowPayslips(true); }
+    setActiveTabState(tab);
+  };
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
   const signOut = async () => { setBusy(true); setError(null); try { await logout(apiBase); onLogout(); } catch (err) { setError(friendlyAuthError(err)); } finally { setBusy(false); } };
@@ -126,42 +122,53 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
     });
     return () => subscription.remove();
   }, [isBlockedRole]);
-  if (isBlockedRole) return <View style={styles.center}><View style={styles.errorIcon}><Text style={styles.errorIconText}>!</Text></View><Text style={styles.stateTitle}>Cổng quản trị Web</Text><Text style={styles.stateMessage}>Tài khoản vai trò {user.role === 'HR' ? 'Nhân sự (HR)' : 'Quản trị hệ thống (System Admin)'} cần sử dụng cổng quản trị web.</Text>{error && <ErrorBanner message={error} />}<PrimaryButton label="Đăng xuất" loading={busy} disabled={busy} onPress={signOut} /></View>;
+  useEffect(() => {
+    if (!isManager) return;
+    let cancelled = false;
+    void Promise.allSettled([getPendingApprovals(apiBase), getPendingLeaveRequests(apiBase)]).then(([approvals, leaves]) => {
+      if (cancelled) return;
+      setPendingApprovals((approvals.status === 'fulfilled' ? approvals.value.length : 0) + (leaves.status === 'fulfilled' ? leaves.value.length : 0));
+    });
+    return () => { cancelled = true; };
+  }, [apiBase, isManager, realtimeRevision]);
+  if (isBlockedRole) return <View style={styles.center}>
+    <View style={styles.errorIcon}><AppIcon name="desktop-outline" size={30} color={colors.danger} /></View>
+    <Text accessibilityRole="header" style={styles.stateTitle}>Cổng quản trị Web</Text>
+    <Text style={styles.stateMessage}>Tài khoản vai trò {user.role === 'HR' ? 'Nhân sự (HR)' : 'Quản trị hệ thống (System Admin)'} cần sử dụng cổng quản trị web.</Text>
+    {error ? <ErrorBanner message={error} /> : null}
+    <View style={styles.stateAction}><AppButton label="Đăng xuất" loading={busy} disabled={busy} onPress={() => void signOut()} /></View>
+  </View>;
   return <View style={styles.appShell}>
-    {activeTab === 'overview' && <OverviewScreen user={user} apiBase={apiBase} onNavigate={setActiveTab} realtimeRevision={realtimeRevision} />}
-    {activeTab === 'attendance' && <AttendanceScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-    {activeTab === 'requests' && <RequestsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-    {activeTab === 'payslips' && <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-    {activeTab === 'account' && <AccountScreen user={user} apiBase={apiBase} onOpenPayslips={() => setActiveTab('payslips')} onChangePassword={onChangePassword} onLogout={() => void signOut()} logoutBusy={busy} logoutError={error} realtimeRevision={realtimeRevision} />}
-    <BottomTabBar activeTab={activeTab} onTabPress={setActiveTab} />
+    <View style={styles.flex}>
+      {showPayslips ? <View style={styles.flex}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Quay lại tài khoản" onPress={() => setShowPayslips(false)} style={({ pressed }) => [styles.back, pressed && styles.backPressed]}><AppIcon name="chevron-back" size={20} color={colors.primary} /><Text style={styles.backText}>Tài khoản</Text></Pressable>
+        <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />
+      </View> : <>
+        {activeTab === 'overview' && <OverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} pendingApprovals={isManager ? pendingApprovals : undefined} />}
+        {activeTab === 'attendance' && <AttendanceScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {activeTab === 'requests' && !isManager && <RequestsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {activeTab === 'payslips' && !isManager && <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {activeTab === 'approvals' && isManager && <ManagerApprovalsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} onCountChange={setPendingApprovals} />}
+        {activeTab === 'team' && isManager && <ManagerTeamScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {activeTab === 'account' && <AccountScreen user={user} apiBase={apiBase} onOpenPayslips={() => navigate('payslips')} onChangePassword={onChangePassword} onLogout={() => void signOut()} logoutBusy={busy} logoutError={error} realtimeRevision={realtimeRevision} />}
+      </>}
+    </View>
+    <BottomTabBar activeTab={showPayslips ? 'account' : activeTab} onTabPress={navigate} manager={isManager} badges={isManager ? { approvals: pendingApprovals } : undefined} />
   </View>;
 }
 
-function ScreenHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <View style={styles.screenHeader}><Text style={styles.homeEyebrow}>{eyebrow}</Text><Text style={styles.screenTitle}>{title}</Text><Text style={styles.screenDescription}>{description}</Text></View>; }
-function QuickAction({ title, description, onPress }: { title: string; description: string; onPress: () => void }) { return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}><View style={styles.quickIcon}><Text style={styles.quickIconText}>{title.slice(0, 1)}</Text></View><Text style={styles.quickTitle}>{title}</Text><Text style={styles.quickDescription}>{description}</Text><Text style={styles.quickLink}>Mở tính năng  →</Text></Pressable>; }
-function FeatureScreen({ eyebrow, title, description, action, onAction }: { eyebrow: string; title: string; description: string; action: string; onAction: () => void }) { return <ScrollView style={styles.home} contentContainerStyle={styles.featureContent}><ScreenHeader eyebrow={eyebrow} title={title} description={description} /><View style={styles.emptyCard}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>C</Text></View><Text style={styles.emptyTitle}>Sắp ra mắt</Text><Text style={styles.emptyDescription}>Đội ngũ CoreStaff đang chuẩn bị trải nghiệm này cho phiên bản tiếp theo.</Text><PrimaryButton label={action} onPress={onAction} /></View></ScrollView>; }
-
-function Field({ label, action, onAction, ...inputProps }: React.ComponentProps<typeof TextInput> & { label: string; action?: string; onAction?: () => void }) { return <View style={styles.field}><View style={styles.fieldHeader}><Text style={styles.label}>{label}</Text>{action && <Pressable accessibilityRole="button" accessibilityLabel={`${action} mật khẩu`} hitSlop={10} onPress={onAction} style={({ pressed }) => pressed && styles.pressed}><Text style={styles.fieldAction}>{action}</Text></Pressable>}</View><TextInput accessibilityLabel={inputProps.accessibilityLabel || label} style={styles.input} placeholderTextColor="#94a3b8" {...inputProps} /></View>; }
-function PrimaryButton({ label, loading, disabled, onPress }: ButtonProps) { return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.primaryButton, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{label}</Text>}</Pressable>; }
-function SecondaryButton({ label, loading, disabled, danger, onPress }: ButtonProps & { danger?: boolean }) { return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.secondaryButton, danger && styles.dangerButton, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>{loading ? <ActivityIndicator color={danger ? '#dc2626' : '#334155'} /> : <Text style={[styles.secondaryButtonText, danger && styles.dangerText]}>{label}</Text>}</Pressable>; }
-interface ButtonProps { label: string; loading?: boolean; disabled?: boolean; onPress: () => void; }
-function ErrorBanner({ message }: { message: string }) { return <View accessibilityRole="alert" style={styles.errorBanner}><Text style={styles.errorBannerText}>{message}</Text></View>; }
-function SuccessBanner({ message }: { message: string }) { return <View accessibilityRole="alert" style={styles.successBanner}><Text style={styles.successBannerText}>{message}</Text></View>; }
-function InfoRow({ label, value }: { label: string; value: string }) { return <View style={styles.infoRow}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>; }
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 }, safeArea: { flex: 1, backgroundColor: '#f6f8fc' }, center: { flex: 1, backgroundColor: '#f6f8fc', alignItems: 'center', justifyContent: 'center', padding: 28 }, muted: { color: '#64748b', fontSize: 14 }, loading: { marginTop: 34, marginBottom: 12 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 34 }, logoMark: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }, logoMarkLarge: { width: 64, height: 64, borderRadius: 20 }, logoLetter: { color: '#fff', fontSize: 18, fontWeight: '800' }, logoLetterLarge: { fontSize: 32 }, brand: { color: '#0f172a', fontSize: 20, fontWeight: '800' }, brandLarge: { fontSize: 28 },
-  errorIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }, errorIconText: { color: '#dc2626', fontSize: 28, fontWeight: '800' }, stateTitle: { color: '#0f172a', fontSize: 22, fontWeight: '800', textAlign: 'center' }, stateMessage: { color: '#64748b', fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 8, marginBottom: 24, maxWidth: 340 },
-  authScroll: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 42, paddingBottom: 32, justifyContent: 'center' }, authHeader: { marginBottom: 22 }, eyebrow: { color: '#2563eb', fontSize: 11, fontWeight: '800', letterSpacing: 1.4, marginBottom: 8 }, authTitle: { color: '#0f172a', fontSize: 30, lineHeight: 36, fontWeight: '800' }, authDescription: { color: '#64748b', fontSize: 14, lineHeight: 21, marginTop: 8 }, authCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, padding: 20, gap: 16, shadowColor: '#0f172a', shadowOpacity: 0.06, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3 }, securityNote: { color: '#94a3b8', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 20, paddingHorizontal: 20 },
-  field: { gap: 7 }, fieldHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, label: { color: '#334155', fontSize: 13, fontWeight: '700' }, fieldAction: { color: '#2563eb', fontSize: 12, fontWeight: '700' }, input: { height: 50, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 14, backgroundColor: '#fff', color: '#0f172a', fontSize: 15 },
-  primaryButton: { minHeight: 50, borderRadius: 12, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 }, primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' }, secondaryButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 }, secondaryButtonText: { color: '#334155', fontSize: 14, fontWeight: '700' }, dangerButton: { borderColor: '#fecaca' }, dangerText: { color: '#dc2626' }, disabled: { opacity: 0.55 }, pressed: { opacity: 0.78 },
-  textLink: { minHeight: 44, justifyContent: 'center' }, linkRight: { color: '#2563eb', fontSize: 13, fontWeight: '700', textAlign: 'right' }, linkCenter: { color: '#475569', fontSize: 13, fontWeight: '600', textAlign: 'center' }, errorBanner: { borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fef2f2', borderRadius: 12, padding: 12 }, errorBannerText: { color: '#b91c1c', fontSize: 13, lineHeight: 19 }, successBanner: { borderWidth: 1, borderColor: '#bbf7d0', backgroundColor: '#f0fdf4', borderRadius: 12, padding: 12 }, successBannerText: { color: '#166534', fontSize: 13, lineHeight: 19 }, notice: { borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 }, noticeText: { color: '#1e40af', fontSize: 13, lineHeight: 19 },
-  appShell: { flex: 1, backgroundColor: '#f6f8fc' }, home: { flex: 1, backgroundColor: '#f6f8fc' }, homeContent: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 32, gap: 16 }, homeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 16 }, headerCopy: { flex: 1 }, homeEyebrow: { color: '#2563eb', fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }, homeGreeting: { color: '#64748b', fontSize: 14, marginTop: 8 }, homeName: { color: '#0f172a', fontSize: 24, lineHeight: 30, fontWeight: '800' }, avatar: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#1d4ed8', fontSize: 17, fontWeight: '800' },
-  shiftCard: { backgroundColor: '#172554', borderRadius: 20, padding: 20 }, shiftEyebrow: { color: '#93c5fd', fontSize: 10, fontWeight: '800', letterSpacing: 1.2 }, shiftTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 8 }, shiftDescription: { color: '#cbd5e1', fontSize: 13, lineHeight: 20, marginTop: 7 }, statusPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, marginTop: 16 }, statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ade80' }, statusPillText: { color: '#e2e8f0', fontSize: 11, fontWeight: '700' },
-  sectionTitle: { color: '#0f172a', fontSize: 16, fontWeight: '800', marginTop: 4 }, profileCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingHorizontal: 16 }, infoRow: { paddingVertical: 14 }, infoLabel: { color: '#64748b', fontSize: 11, fontWeight: '700', marginBottom: 4 }, infoValue: { color: '#0f172a', fontSize: 14, fontWeight: '600' }, divider: { height: 1, backgroundColor: '#f1f5f9' }, menuRow: { minHeight: 68, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, menuTitle: { color: '#0f172a', fontSize: 14, fontWeight: '700' }, menuDescription: { color: '#64748b', fontSize: 12, marginTop: 3 }, chevron: { color: '#94a3b8', fontSize: 28, fontWeight: '300' }, version: { color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 4 },
-  quickGrid: { flexDirection: 'row', gap: 12 }, quickAction: { flex: 1, minHeight: 156, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16 }, quickIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }, quickIconText: { color: '#1d4ed8', fontSize: 15, fontWeight: '800' }, quickTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800' }, quickDescription: { color: '#64748b', fontSize: 11, lineHeight: 16, marginTop: 4 }, quickLink: { color: '#2563eb', fontSize: 11, fontWeight: '700', marginTop: 12 },
-  profileSummary: { minHeight: 72, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, profileName: { color: '#0f172a', fontSize: 15, fontWeight: '800' }, profileLink: { minHeight: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' }, profileLinkText: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
-  screenHeader: { gap: 7, marginBottom: 6 }, screenTitle: { color: '#0f172a', fontSize: 26, lineHeight: 32, fontWeight: '800' }, screenDescription: { color: '#64748b', fontSize: 14, lineHeight: 21 }, featureContent: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 32 }, emptyCard: { flex: 1, minHeight: 360, marginTop: 24, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, padding: 24, alignItems: 'center', justifyContent: 'center' }, emptyIcon: { width: 56, height: 56, borderRadius: 20, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }, emptyIconText: { color: '#1d4ed8', fontSize: 24, fontWeight: '800' }, emptyTitle: { color: '#0f172a', fontSize: 20, fontWeight: '800' }, emptyDescription: { color: '#64748b', fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 8, marginBottom: 24 },
-  accountHero: { alignItems: 'center', paddingVertical: 8 }, avatarLarge: { width: 76, height: 76, borderRadius: 24, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' }, avatarLargeText: { color: '#1d4ed8', fontSize: 24, fontWeight: '800' }, accountName: { color: '#0f172a', fontSize: 20, fontWeight: '800', marginTop: 12 }, accountCode: { color: '#64748b', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  flex: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  appShell: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 28 },
+  muted: { color: colors.muted, fontSize: 14 },
+  loading: { marginTop: 34, marginBottom: 12 },
+  errorIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  stateTitle: { color: colors.ink, fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  stateMessage: { color: colors.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 8, marginBottom: 24, maxWidth: 340 },
+  stateAction: { alignSelf: 'stretch', maxWidth: 360 },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44, paddingHorizontal: 12, alignSelf: 'flex-start' },
+  backPressed: { opacity: 0.6 },
+  backText: { color: colors.primary, fontSize: 15, fontWeight: '700' },
 });

@@ -146,24 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SecondaryButton(
-            label: 'Đăng nhập tài khoản mẫu (Demo NV-0248)',
-            onPress: () {
-              widget.onAuthenticated(
-                AuthUser(
-                  id: 'usr_demo_0248',
-                  fullName: 'Nguyễn Văn An',
-                  employeeCode: 'NV-0248',
-                  email: 'an.nguyen@corestaff.vn',
-                  role: 'EMPLOYEE',
-                  status: 'ACTIVE',
-                  mustChangePassword: false,
-                ),
-                false,
-              );
-            },
-          ),
         ],
       ),
     );

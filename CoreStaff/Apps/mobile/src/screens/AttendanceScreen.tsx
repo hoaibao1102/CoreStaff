@@ -15,7 +15,9 @@ class PunchError extends Error {}
 async function currentLocation(): Promise<PunchLocation> {
   const permission = await Location.requestForegroundPermissionsAsync();
   if (!permission.granted) throw new PunchError('Cần quyền truy cập vị trí để chấm công. Hãy bật trong Cài đặt.');
-  const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  let fix: Location.LocationObject;
+  try { fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); }
+  catch { throw new PunchError('Không lấy được vị trí. Hãy bật Vị trí và "Độ chính xác vị trí" (Google) trong Cài đặt rồi thử lại.'); }
   return {
     latitude: fix.coords.latitude,
     longitude: fix.coords.longitude,
@@ -40,6 +42,9 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Lỗi của thao tác chấm công tách khỏi lỗi tải dữ liệu: load() chạy lại mỗi khi
+  // app quay về foreground (sau hộp thoại quyền) và không được phép xóa lý do thất bại.
+  const [punchError, setPunchError] = useState<string | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true); setError(null);
@@ -69,7 +74,7 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
     const accepted = async (evidence: Parameters<typeof punch>[0]) => {
       try { await punch(evidence); return true; } catch (err) { if (!isSelfieRequired(err)) throw err; return false; }
     };
-    setSubmitting(true); setError(null); setSuccess(null);
+    setSubmitting(true); setPunchError(null); setSuccess(null);
     try {
       if (outOffice) {
         const selfieUri = await takeSelfie();
@@ -79,10 +84,10 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
         const wifiFirst = today.assignment.hasWifiNetworks !== false;
         const wifi = wifiFirst ? await currentWifi() : {};
         if (!(wifiFirst && await accepted({ wifi }))) {
-          setError('Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…');
+          setPunchError('Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…');
           const location = await currentLocation();
           if (!(await accepted({ location, wifi }))) {
-            setError('Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.');
+            setPunchError('Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.');
             const selfieUri = await takeSelfie();
             if (!selfieUri) return;
             await punch({ location, selfieUri, wifi });
@@ -92,7 +97,7 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
       setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.');
       await load(true);
     } catch (err) {
-      setError(err instanceof PunchError ? err.message : friendlyEmployeeError(err));
+      setPunchError(err instanceof PunchError ? err.message : friendlyEmployeeError(err));
     } finally { setSubmitting(false); }
   };
   const monthLabel = useMemo(() => { const [year, value] = month.split('-'); return `Tháng ${Number(value)}/${year}`; }, [month]);
@@ -109,14 +114,14 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
   };
 
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
-    <ScreenHeader eyebrow="CHẤM CÔNG" title="Ngày làm việc" description="Ghi nhận thời gian và theo dõi công của bạn." />
-    {error && (loading || today || history) ? <ErrorBanner message={error} /> : null}{success ? <SuccessBanner message={success} /> : null}
+    <ScreenHeader title="Chấm công" description="Ghi nhận thời gian và theo dõi công của bạn." />
+    {punchError ? <ErrorBanner message={punchError} /> : null}{error && (loading || today || history) ? <ErrorBanner message={error} /> : null}{success ? <SuccessBanner message={success} /> : null}
     {loading ? <LoadingBlock /> : error && !today && !history ? <ErrorState message={error} onRetry={() => void load()} /> : <>
       <Card dark style={styles.hero}>
         <View style={styles.heroTop}><View style={styles.heroCopy}><Text style={styles.heroLabel}>{today?.assignment.shiftName || 'Ca làm hôm nay'}</Text><Text style={styles.heroHours}>{today?.assignment.shiftHours || '-'}</Text></View><StatusBadge status={today?.attendanceStatus || 'NOT_CHECKED_IN'} label={attendanceLabel(today?.attendanceStatus)} /></View>
         <Text style={styles.workplace}>{today?.assignment.workplaceName}{today?.assignment.address ? ` - ${today.assignment.address}` : ''}</Text>
-        <View style={styles.timeline}><TimelinePoint active label="Vào ca" time={formatTime(today?.checkIn?.recordedAt)} /><View style={[styles.timelineLine, today?.checkOut && styles.timelineLineDone]} /><TimelinePoint active={!!today?.checkOut} label="Ra ca" time={formatTime(today?.checkOut?.recordedAt)} /></View>
-        <AppButton label={actionLabel} loading={submitting} disabled={!today || today.availableAction === 'NONE'} onPress={confirmSubmit} />
+        <View style={styles.timeline}><TimelinePoint active={!!today?.checkIn} label="Vào ca" time={formatTime(today?.checkIn?.recordedAt)} /><View style={[styles.timelineLine, today?.checkOut && styles.timelineLineDone]} /><TimelinePoint active={!!today?.checkOut} label="Ra ca" time={formatTime(today?.checkOut?.recordedAt)} /></View>
+        <AppButton variant="accent" label={actionLabel} loading={submitting} disabled={!today || today.availableAction === 'NONE'} onPress={confirmSubmit} />
         {today?.assignment.workplaceType === 'OUT_OFFICE' ? <Text style={styles.heroNote}>Ca ngoài văn phòng có thể yêu cầu vị trí hoặc selfie theo chính sách công ty.</Text> : null}
       </Card>
       {today?.attendanceRequirements ? <Card style={styles.leaveCard}><Text style={styles.leaveTitle}>Nghỉ phép đã được HR áp dụng</Text><Text style={styles.leaveText}>Thời gian nghỉ: {intervalText(today.attendanceRequirements.approvedLeaveIntervals)} ({formatMinutes(today.attendanceRequirements.approvedLeaveMinutes)})</Text><Text style={styles.leaveText}>Thời gian còn phải làm: {intervalText(today.attendanceRequirements.requiredWorkingIntervals)} ({formatMinutes(today.attendanceRequirements.requiredWorkingMinutes)})</Text><Text style={styles.leaveText}>Khung chấm công hiệu lực: {today.attendanceRequirements.effectiveCheckInTime || '—'} – {today.attendanceRequirements.effectiveCheckOutTime || '—'}</Text></Card> : today?.pendingLeave ? <Card style={styles.pendingCard}><Text style={styles.pendingTitle}>Đơn nghỉ đang chờ xử lý</Text><Text style={styles.pendingText}>{pendingLeaveText(today.pendingLeave.durationType, today.pendingLeave.requestedStart, today.pendingLeave.requestedEnd)}. Ca làm gốc vẫn được áp dụng cho tới khi quản lý duyệt và HR áp dụng.</Text></Card> : null}
@@ -138,10 +143,10 @@ function Summary({ label, value }: { label: string; value: string | number }) { 
 function MonthButton({ label, symbol, disabled, onPress }: { label: string; symbol: string; disabled?: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.monthButton, disabled && styles.monthButtonDisabled, pressed && !disabled && styles.pressed]}><Text style={styles.monthArrow}>{symbol}</Text></Pressable>; }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background }, content: { padding: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.huge, gap: spacing.md }, hero: { padding: spacing.lg }, heroTop: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', justifyContent: 'space-between' }, heroCopy: { flex: 1 }, heroLabel: { color: colors.navySoft, fontSize: 11, fontWeight: '800', letterSpacing: 1 }, heroHours: { color: '#fff', fontSize: 25, fontWeight: '800', marginTop: 6 }, workplace: { color: '#cbd5e1', fontSize: 12, lineHeight: 18, marginTop: spacing.xs }, heroNote: { color: '#bfdbfe', fontSize: 10, lineHeight: 16, textAlign: 'center', marginTop: spacing.sm },
-  timeline: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: spacing.lg }, timelinePoint: { width: 68, alignItems: 'center' }, dot: { width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: '#64748b', backgroundColor: colors.navy }, dotActive: { borderColor: '#86efac', backgroundColor: colors.success }, timelineLine: { flex: 1, height: 2, backgroundColor: '#475569', marginTop: 6 }, timelineLineDone: { backgroundColor: colors.success }, timelineLabel: { color: colors.navySoft, fontSize: 9, fontWeight: '800', marginTop: 7 }, timelineTime: { color: '#fff', fontSize: 14, fontWeight: '800', marginTop: 3 },
-  metricGrid: { flexDirection: 'row', gap: spacing.xs }, metric: { flex: 1, minHeight: 76, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', padding: spacing.xs }, metricValue: { color: colors.ink, fontSize: 14, fontWeight: '800' }, metricLabel: { color: colors.muted, fontSize: 10, marginTop: 4 },
+  screen: { flex: 1, backgroundColor: colors.background }, content: { padding: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.huge + 16, gap: spacing.md }, hero: { padding: spacing.lg }, heroTop: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', justifyContent: 'space-between' }, heroCopy: { flex: 1 }, heroLabel: { color: colors.navySoft, fontSize: 11, fontWeight: '800', letterSpacing: 1 }, heroHours: { color: '#fff', fontSize: 25, fontWeight: '800', marginTop: 6 }, workplace: { color: '#cbd5e1', fontSize: 12, lineHeight: 18, marginTop: spacing.xs }, heroNote: { color: '#a7f3d0', fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: spacing.sm },
+  timeline: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: spacing.lg }, timelinePoint: { width: 68, alignItems: 'center' }, dot: { width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: '#64748b', backgroundColor: colors.navy }, dotActive: { borderColor: '#86efac', backgroundColor: colors.success }, timelineLine: { flex: 1, height: 2, backgroundColor: '#475569', marginTop: 6 }, timelineLineDone: { backgroundColor: colors.success }, timelineLabel: { color: colors.navySoft, fontSize: 11, fontWeight: '800', marginTop: 7 }, timelineTime: { color: '#fff', fontSize: 14, fontWeight: '800', marginTop: 3 },
+  metricGrid: { flexDirection: 'row', gap: spacing.xs }, metric: { flex: 1, minHeight: 76, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', padding: spacing.xs }, metricValue: { color: colors.ink, fontSize: 14, fontWeight: '800' }, metricLabel: { color: colors.muted, fontSize: 11, marginTop: 4 },
   leaveCard: { backgroundColor: colors.successSoft, borderColor: colors.success }, leaveTitle: { color: colors.successText, fontSize: 13, fontWeight: '800' }, leaveText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 }, pendingCard: { backgroundColor: colors.warningSoft }, pendingTitle: { color: colors.warningText, fontSize: 13, fontWeight: '800' }, pendingText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 },
-  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs }, sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' }, monthControl: { flexDirection: 'row', alignItems: 'center', gap: 2 }, monthButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md }, monthButtonDisabled: { opacity: 0.35 }, monthArrow: { color: colors.primary, fontSize: 24, lineHeight: 27, fontWeight: '700' }, monthText: { minWidth: 82, color: colors.inkSoft, fontSize: 12, fontWeight: '800', textAlign: 'center' }, summaryRow: { flexDirection: 'row', backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.sm }, summary: { flex: 1, alignItems: 'center' }, summaryValue: { color: colors.primaryDark, fontSize: 17, fontWeight: '800' }, summaryLabel: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs }, sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' }, monthControl: { flexDirection: 'row', alignItems: 'center', gap: 2 }, monthButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md }, monthButtonDisabled: { opacity: 0.35 }, monthArrow: { color: colors.primary, fontSize: 24, lineHeight: 27, fontWeight: '700' }, monthText: { minWidth: 82, color: colors.inkSoft, fontSize: 12, fontWeight: '800', textAlign: 'center' }, summaryRow: { flexDirection: 'row', backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.sm }, summary: { flex: 1, alignItems: 'center' }, summaryValue: { color: colors.primaryDark, fontSize: 17, fontWeight: '800' }, summaryLabel: { color: colors.muted, fontSize: 11, marginTop: 3 },
   dayCard: { gap: spacing.sm }, dayTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }, dayDate: { color: colors.ink, fontSize: 14, fontWeight: '800' }, dayTimes: { color: colors.muted, fontSize: 12, marginTop: 5 }, dayMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider }, dayMetaText: { color: colors.inkSoft, fontSize: 11, fontWeight: '700' }, warningText: { color: colors.warningText, fontSize: 11, fontWeight: '700' }, earlyText: { color: colors.dangerText, fontSize: 11, fontWeight: '700' }, blueText: { color: colors.primaryDark, fontSize: 11, fontWeight: '700' }, emptyText: { color: colors.muted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.lg }, pressed: { opacity: 0.7 },
 });

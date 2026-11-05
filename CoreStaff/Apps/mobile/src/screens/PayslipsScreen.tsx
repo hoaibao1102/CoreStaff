@@ -38,15 +38,15 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
     contentContainerStyle={styles.content}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
   >
-    <ScreenHeader eyebrow="THU NHẬP" title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />
+    <ScreenHeader title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />
     {error ? <ErrorBanner message={error} /> : null}
     {loading ? <LoadingBlock /> : <>
-      <Card dark style={styles.summaryCard}>
-        <View style={styles.summaryTop}><View><Text style={styles.summaryEyebrow}>KỲ GẦN NHẤT</Text><Text style={styles.summaryPeriod}>{newest ? `Tháng ${newest.periodLabel}` : 'Chưa phát hành'}</Text></View>{unread ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread} mới</Text></View> : null}</View>
+      {newest ? <Card dark style={styles.summaryCard}>
+        <View style={styles.summaryTop}><View><Text style={styles.summaryEyebrow}>KỲ GẦN NHẤT</Text><Text style={styles.summaryPeriod}>Tháng {newest.periodLabel}</Text></View>{unread ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread} mới</Text></View> : null}</View>
         <Text style={styles.summaryLabel}>Thực nhận</Text>
-        <Text style={styles.summaryValue}>{newest ? formatMoney(newest.netSalary) : '—'}</Text>
-        <Text style={styles.summaryMeta}>{newest?.releasedAt ? `Phát hành ${formatDate(newest.releasedAt)}` : 'Phiếu lương mới sẽ xuất hiện tại đây.'}</Text>
-      </Card>
+        <Text style={styles.summaryValue}>{formatMoney(newest.netSalary)}</Text>
+        <Text style={styles.summaryMeta}>{newest.releasedAt ? `Phát hành ${formatDate(newest.releasedAt)}` : 'Chưa phát hành'}</Text>
+      </Card> : null}
 
       <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Lịch sử phiếu lương</Text><Text style={styles.count}>{items.length} kỳ</Text></View>
       {!items.length ? <EmptyState icon="wallet-outline" title="Chưa có phiếu lương" description="Phiếu lương sẽ xuất hiện khi HR phát hành kỳ lương." /> : items.map(item => {
@@ -87,13 +87,13 @@ function statusLabel(status: Payslip['status']) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.huge, gap: spacing.md },
+  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.huge + 16, gap: spacing.md },
   summaryCard: { padding: spacing.lg },
   summaryTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
-  summaryEyebrow: { color: colors.navySoft, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
+  summaryEyebrow: { color: colors.navySoft, fontSize: 11, fontWeight: '800', letterSpacing: 1.1 },
   summaryPeriod: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 6 },
   unreadBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#fff' },
-  unreadText: { color: colors.primaryDark, fontSize: 10, fontWeight: '800' },
+  unreadText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
   summaryLabel: { color: colors.navySoft, fontSize: 11, fontWeight: '700', marginTop: spacing.xl },
   summaryValue: { color: '#fff', fontSize: 30, lineHeight: 38, fontWeight: '800', marginTop: 3 },
   summaryMeta: { color: '#cbd5e1', fontSize: 11, marginTop: spacing.xs },
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   payslipTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
   periodCopy: { flex: 1 },
   period: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  released: { color: colors.muted, fontSize: 10, marginTop: 4 },
+  released: { color: colors.muted, fontSize: 11, marginTop: 4 },
   netRow: { padding: spacing.md, backgroundColor: colors.primarySoft, borderRadius: radius.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   netLabel: { color: colors.primaryDark, fontSize: 11, fontWeight: '800' },
   netValue: { color: colors.primaryDark, fontSize: 18, fontWeight: '800' },

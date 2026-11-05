@@ -100,13 +100,6 @@ class ConnectionErrorScreen extends StatelessWidget {
                   label: 'Thử kết nối lại',
                   onPress: onRetry,
                 ),
-                if (onSkipToDemo != null) ...[
-                  const SizedBox(height: 12),
-                  SecondaryButton(
-                    label: 'Xem trước giao diện (Offline Demo)',
-                    onPress: onSkipToDemo,
-                  ),
-                ],
               ],
             ),
           ),
