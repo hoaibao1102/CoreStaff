@@ -8,6 +8,11 @@ export interface AttendanceEvent {
   recordedAt: string;
   address?: string;
   approvalStatus: string;
+  accuracyMeters?: number;
+  distanceMeters?: number;
+  workplaceName?: string;
+  evidenceUrl?: string;
+  location?: { address?: string; accuracyMeters?: number };
 }
 
 export interface TodayAttendance {
@@ -52,16 +57,28 @@ export interface TodayAttendance {
   };
 }
 
+export interface WorkCreditPolicy {
+  halfDayMinimumRatio?: number;
+  fullDayMinimumRatio?: number;
+}
+
 export interface AttendanceDay {
   _id: string;
   workDate: string;
   attendanceStatus: AttendanceStatus;
+  status?: string;
+  shiftName?: string;
+  workdayType?: 'WEEKLY_OFF' | 'PUBLIC_HOLIDAY' | 'PAID_LEAVE' | 'UNPAID_LEAVE' | string;
+  dayResult?: string;
   workingMinutes?: number;
+  totalWorkingMinutes?: number;
   lateMinutes?: number;
   earlyMinutes?: number;
   checkIn: AttendanceEvent | null;
   checkOut: AttendanceEvent | null;
-  overtime?: { otMinutes?: number; status?: string } | null;
+  resolution?: { type?: string; reason?: string } | null;
+  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[] } | null;
+  overtime?: { otMinutes?: number; status?: string; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
 }
 
 export interface AttendanceHistory {
@@ -76,6 +93,7 @@ export interface AttendanceHistory {
     otDays: number;
   };
   items: AttendanceDay[];
+  workCreditPolicy?: WorkCreditPolicy | null;
 }
 
 export type LeaveStatus = 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'HR_APPLIED';
@@ -161,8 +179,17 @@ export interface Payslip {
   unemploymentInsurance: number;
   pitAmount: number;
   otherDeductions: number;
-  earningBreakdown?: Array<{ label: string; amount: number }>;
+  earningBreakdown?: Array<{ label: string; amount: number; type?: string }>;
+  allowanceBreakdown?: Array<{ label: string; amount: number }>;
+  otBreakdown?: { breakdown?: Array<{ label: string; hours?: number; coefficient?: number; amount: number }> } | null;
   deductionBreakdown?: Array<{ label: string; amount: number }>;
+  taxableIncome?: number;
+  personalDeduction?: number;
+  dependentDeduction?: number;
+  payableWorkingDays?: number;
+  standardWorkingDays?: number;
+  employeeCode?: string;
+  taxCode?: string;
   releasedAt?: string;
 }
 
@@ -208,7 +235,10 @@ export const punchAttendance = (
   }
   const form = new FormData();
   if (action === 'CHECK_IN' && payload.workMode) form.append('workMode', payload.workMode);
-  form.append('selfie', { uri: payload.selfieUri, name: 'selfie.jpg', type: 'image/jpeg' } as unknown as Blob);
+  // Server chỉ nhận jpeg/png/webp: luôn gửi kiểu MIME tường minh, không suy từ đuôi file (ảnh camera có thể không có đuôi).
+  const ext = /\.(png|webp)$/i.exec(payload.selfieUri)?.[1]?.toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  form.append('selfie', { uri: payload.selfieUri, name: `selfie.${ext || 'jpg'}`, type: mime } as unknown as Blob);
   if (payload.location) {
     form.append('latitude', String(payload.location.latitude));
     form.append('longitude', String(payload.location.longitude));
@@ -264,6 +294,8 @@ export function friendlyEmployeeError(error: unknown): string {
     ALREADY_CHECKED_OUT: 'Bạn đã hoàn thành ca hôm nay.',
     NETWORK_NOT_ALLOWED: 'Mạng hiện tại không thuộc mạng công ty.',
     SELFIE_REQUIRED: 'Không xác thực được vị trí công ty. Vui lòng chấm công bằng ảnh selfie.',
+    UNSUPPORTED_FILE_TYPE: 'Ảnh không đúng định dạng (chỉ nhận JPG, PNG hoặc WebP). Vui lòng chụp lại.',
+    FILE_TOO_LARGE: 'Ảnh quá lớn (tối đa 5MB). Vui lòng chụp lại.',
     OUTSIDE_ALLOWED_AREA: 'Bạn đang ở ngoài phạm vi chấm công.',
     LOW_LOCATION_ACCURACY: 'Tín hiệu GPS chưa đủ chính xác. Hãy ra nơi thoáng hơn và thử lại.',
     ATTENDANCE_LOCKED: 'Kỳ công đã khóa, không thể thay đổi.',

@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, TAB_BAR_HEIGHT } from '../theme';
+import { colors } from '../theme';
 import { AppIcon, type AppIconName } from './AppIcon';
 
-export type BottomTabKey = 'overview' | 'requests' | 'attendance' | 'payslips' | 'account' | 'approvals' | 'team';
+export type BottomTabKey = 'overview' | 'requests' | 'attendance' | 'payslips' | 'account' | 'approvals' | 'team' | 'employees' | 'leaves' | 'contracts';
 
 interface BottomTabItem {
   key: BottomTabKey;
@@ -20,6 +20,8 @@ interface BottomTabBarProps {
   badges?: Partial<Record<BottomTabKey, number>>;
   /** Quản lý phòng ban có bộ tab riêng nhưng vẫn giữ 5 tab và tab Chấm công ở giữa. */
   manager?: boolean;
+  /** HR: tab giữa là Nghỉ phép. */
+  hr?: boolean;
 }
 
 /** 5 tab (số lẻ): tab giữa là hành động cốt lõi — Chấm công — nổi lên trên thanh. */
@@ -40,87 +42,94 @@ export const MANAGER_TABS: BottomTabItem[] = [
   { key: 'account', label: 'Tài khoản', icon: 'person-outline', activeIcon: 'person' },
 ];
 
-export function BottomTabBar({ activeTab, onTabPress, badges, manager = false }: BottomTabBarProps) {
+/** HR: tab giữa là Nghỉ phép, việc HR phải xử lý thường xuyên nhất (áp dụng đơn). */
+export const HR_TABS: BottomTabItem[] = [
+  { key: 'overview', label: 'Tổng quan', icon: 'grid-outline', activeIcon: 'grid' },
+  { key: 'employees', label: 'Nhân viên', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'leaves', label: 'Nghỉ phép', icon: 'calendar-outline', activeIcon: 'calendar', primary: true },
+  { key: 'contracts', label: 'Hợp đồng', icon: 'document-text-outline', activeIcon: 'document-text' },
+  { key: 'account', label: 'Tài khoản', icon: 'person-outline', activeIcon: 'person' },
+];
+
+const BAR_HEIGHT = 68;
+const LIFT = 26; // phần nút giữa nhô lên khỏi thanh
+const BUTTON = 66;
+
+export function BottomTabBar({ activeTab, onTabPress, badges, manager = false, hr = false }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const tabs = hr ? HR_TABS : manager ? MANAGER_TABS : EMPLOYEE_TABS;
   return (
-    <View accessibilityRole="tablist" style={[styles.container, { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
-      {(manager ? MANAGER_TABS : EMPLOYEE_TABS).map(tab => {
-        const active = tab.key === activeTab;
-        const badge = badges?.[tab.key] || 0;
-        return (
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityLabel={badge ? `${tab.label}, ${badge} mới` : tab.label}
-            accessibilityState={{ selected: active }}
-            testID={`tab-${tab.key}`}
-            key={tab.key}
-            onPress={() => onTabPress(tab.key)}
-            style={styles.tab}
-          >
-            {({ pressed }) => tab.primary ? (
-              <View style={[styles.primaryWrap, pressed && styles.primaryPressed]}>
-                <View style={[styles.primaryButton, active && styles.primaryButtonActive]}>
-                  <AppIcon name={tab.icon} size={28} color={active ? colors.ink : '#fff'} />
-                </View>
-                <Text numberOfLines={1} style={[styles.label, styles.primaryLabel, active && styles.labelActive]}>{tab.label}</Text>
-              </View>
-            ) : (
-              <View style={[styles.item, pressed && styles.itemPressed]}>
-                <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
-                  <AppIcon name={active ? tab.activeIcon : tab.icon} size={22} color={active ? colors.primary : colors.faint} />
-                  {badge ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text></View> : null}
-                </View>
-                <Text numberOfLines={1} style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
-              </View>
-            )}
-          </Pressable>
-        );
-      })}
+    <View accessibilityRole="tablist" style={{ height: BAR_HEIGHT + LIFT + insets.bottom }}>
+      <View style={[styles.bar, { height: BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }]}>
+        {tabs.map(tab => {
+          const active = tab.key === activeTab;
+          const badge = badges?.[tab.key] || 0;
+          const color = active ? colors.primaryDark : colors.muted;
+          if (tab.primary) {
+            return <Pressable key={tab.key} accessibilityRole="tab" accessibilityLabel={badge ? `${tab.label}, ${badge} mới` : tab.label} accessibilityState={{ selected: active }} testID={`tab-${tab.key}`} onPress={() => onTabPress(tab.key)} style={styles.slot}>
+              <Text numberOfLines={1} style={[styles.primaryLabel, { color: active ? colors.primaryDark : colors.inkSoft }]}>{tab.label}</Text>
+            </Pressable>;
+          }
+          return <Pressable key={tab.key} accessibilityRole="tab" accessibilityLabel={badge ? `${tab.label}, ${badge} mới` : tab.label} accessibilityState={{ selected: active }} testID={`tab-${tab.key}`} onPress={() => onTabPress(tab.key)} style={styles.tab}>
+            <View style={styles.iconWrap}>
+              {/* View riêng, mount mới khi chọn tab: Android làm mất bo góc nếu chỉ đổi màu nền. */}
+              {active ? <View key="pill" style={styles.pill} /> : null}
+              <AppIcon name={active ? tab.activeIcon : tab.icon} size={22} color={color} />
+              {badge ? <View style={styles.badge}><Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text></View> : null}
+            </View>
+            <Text numberOfLines={1} style={[styles.label, { color, fontWeight: active ? '800' : '700' }]}>{tab.label}</Text>
+          </Pressable>;
+        })}
+      </View>
+      {/* Nút giữa đứng độc lập phía trên thanh để bắt chạm chính xác. */}
+      <View pointerEvents="box-none" style={styles.floatRow}>
+        {tabs.map(tab => {
+          if (!tab.primary) return <View key={tab.key} pointerEvents="none" style={styles.floatCell} />;
+          const active = tab.key === activeTab;
+          const badge = badges?.[tab.key] || 0;
+          return <View key={tab.key} pointerEvents="box-none" style={styles.floatCell}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tab.label} onPress={() => onTabPress(tab.key)} style={({ pressed }) => [styles.primaryButton, { backgroundColor: active ? colors.primaryDark : colors.primary, shadowOpacity: active ? 0.55 : 0.38, shadowRadius: active ? 22 : 16 }, pressed && styles.primaryPressed]}>
+              <View style={styles.primaryGlow} />
+              <AppIcon name={tab.activeIcon} size={32} color={colors.surface} />
+              {badge ? <View style={styles.primaryBadge}><Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text></View> : null}
+            </Pressable>
+          </View>;
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 12,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    borderTopWidth: 1, borderTopColor: colors.border,
+    shadowColor: colors.ink, shadowOpacity: 0.1, shadowRadius: 22, shadowOffset: { width: 0, height: -6 },
+    elevation: 16,
   },
-  // Vùng chạm tối thiểu 48dp theo chiều cao cho mọi tab.
-  tab: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
-  item: { alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 56, paddingVertical: 4 },
-  itemPressed: { opacity: 0.6 },
-  iconWrap: { width: 44, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  iconWrapActive: { backgroundColor: colors.primarySoft },
-  label: { color: colors.faint, fontSize: 11, lineHeight: 14, fontWeight: '600' },
-  labelActive: { color: colors.primary, fontWeight: '800' },
-  badge: { position: 'absolute', top: -3, right: 2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#fff' },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  primaryWrap: { alignItems: 'center', marginTop: -30 },
-  primaryPressed: { transform: [{ scale: 0.94 }] },
+  tab: { flex: 1, height: BAR_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  slot: { flex: 1, height: BAR_HEIGHT, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 9 },
+  iconWrap: { width: 44, height: 28, borderRadius: 14, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  pill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 14, backgroundColor: colors.primarySoft },
+  label: { fontSize: 10.5, lineHeight: 14, marginTop: 3 },
+  primaryLabel: { fontSize: 11, lineHeight: 14, fontWeight: '800' },
+  badge: { position: 'absolute', top: -4, right: 0, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: colors.surface, fontSize: 9, fontWeight: '800' },
+  floatRow: { position: 'absolute', left: 0, right: 0, top: 0, flexDirection: 'row' },
+  floatCell: { flex: 1, alignItems: 'center' },
   primaryButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: colors.accentDark,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    width: BUTTON, height: BUTTON, borderRadius: BUTTON / 2,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 5, borderColor: colors.surface,
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+    overflow: 'visible',
   },
-  primaryButtonActive: { backgroundColor: colors.accent },
-  primaryLabel: { marginTop: 3, color: colors.inkSoft, fontWeight: '800' },
+  primaryPressed: { transform: [{ scale: 0.95 }] },
+  // Không có expo-linear-gradient: một mảng sáng góc trên-trái mô phỏng dải chuyển màu.
+  primaryGlow: { position: 'absolute', top: 0, left: 0, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, opacity: 0.14 },
+  primaryBadge: { position: 'absolute', top: -7, right: -7, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface },
 });

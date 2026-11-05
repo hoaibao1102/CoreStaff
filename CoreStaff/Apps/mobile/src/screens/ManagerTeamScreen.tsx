@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { friendlyEmployeeError } from '../employee-api';
 import { getTeam, type TeamMember } from '../manager-api';
-import { Card, EmptyState, ErrorBanner, ErrorState, LoadingBlock, ScreenHeader, StatusBadge, formatTime } from '../components/ui';
+import { Card, EmptyState, ErrorBanner, ErrorState, LoadingBlock, ScreenHeader, StatusBadge, formatTime, initialsOf } from '../components/ui';
 import { AppIcon } from '../components/AppIcon';
 import { colors, radius, spacing } from '../theme';
 
@@ -38,7 +38,7 @@ export function ManagerTeamScreen({ apiBase, realtimeRevision = 0 }: { apiBase: 
   }, [query, team]);
 
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
-    <ScreenHeader title="Phòng ban" description="Tình hình chấm công của nhân viên hôm nay." />
+    <ScreenHeader eyebrow="PHÒNG BAN" title="Phòng ban" description="Tình hình chấm công của nhân viên hôm nay." />
     {error && (loading || team.length > 0) ? <ErrorBanner message={error} /> : null}
     {loading ? <LoadingBlock /> : error && !team.length ? <ErrorState message={error} onRetry={() => void load()} /> : <>
       <View style={styles.stats}>
@@ -61,18 +61,23 @@ function Stat({ value, label, tone }: { value: number; label: string; tone: 'inf
   return <View style={[styles.stat, { backgroundColor: palette[0] }]}><Text style={[styles.statValue, { color: palette[1] }]}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
+const TONE: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = { COMPLETED: 'success', CHECKED_IN: 'info', LOCKED: 'warning' };
+
 function MemberCard({ member }: { member: TeamMember }) {
   const status = statusOf(member);
-  const initials = (member.fullName || member.employeeCode).split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join('').toUpperCase();
+  const name = member.fullName || member.employeeCode || '';
   const attendance = member.todayAttendance;
   return <Card style={styles.member}>
-    <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
+    <View style={styles.avatar}><Text style={styles.avatarText}>{initialsOf(name)}</Text></View>
     <View style={styles.memberCopy}>
-      <Text numberOfLines={1} style={styles.name}>{member.fullName || member.employeeCode}</Text>
-      <Text numberOfLines={1} style={styles.meta}>{member.employeeCode}{member.workplaceName ? ` · ${member.workplaceName}` : ''}</Text>
-      {attendance?.checkInAt ? <Text style={styles.times}>{formatTime(attendance.checkInAt)} - {formatTime(attendance.checkOutAt)}</Text> : null}
+      <View style={styles.nameRow}>
+        <Text numberOfLines={2} style={styles.name}>{name}</Text>
+        <StatusBadge status={status} tone={TONE[status] || 'neutral'} label={STATUS_LABEL[status] || 'Chưa có dữ liệu'} />
+      </View>
+      <Text style={styles.code}>{member.employeeCode}</Text>
+      {member.workplaceName ? <Text style={styles.meta}>{member.workplaceName}</Text> : null}
+      {attendance?.checkInAt ? <Text style={styles.times}>Vào {formatTime(attendance.checkInAt)} · Ra {formatTime(attendance.checkOutAt)}</Text> : null}
     </View>
-    <StatusBadge status={status} label={STATUS_LABEL[status] || 'Chưa có dữ liệu'} />
   </Card>;
 }
 
@@ -83,16 +88,18 @@ const styles = StyleSheet.create({
   stat: { flex: 1, borderRadius: radius.lg, padding: spacing.md, minHeight: 84 },
   statValue: { fontSize: 26, lineHeight: 32, fontWeight: '800' },
   statLabel: { color: colors.inkSoft, fontSize: 12, marginTop: 2 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 48, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.sm },
+  search: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 48, borderWidth: 1, borderColor: colors.borderLight, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.sm },
   searchInput: { flex: 1, minHeight: 46, color: colors.ink, fontSize: 15 },
   listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
   sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   count: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   member: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   memberCopy: { flex: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  code: { color: colors.muted, fontSize: 12, marginTop: 3 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
-  name: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  meta: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  times: { color: colors.inkSoft, fontSize: 12, fontWeight: '600', marginTop: 3 },
+  name: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: '800' },
+  meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
+  times: { color: colors.inkSoft, fontSize: 12, fontWeight: '600', marginTop: 4 },
 });

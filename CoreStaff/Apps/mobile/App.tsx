@@ -17,6 +17,10 @@ import { PayslipsScreen } from './src/screens/PayslipsScreen';
 import { AccountScreen } from './src/screens/AccountScreen';
 import { ManagerApprovalsScreen } from './src/screens/ManagerApprovalsScreen';
 import { ManagerTeamScreen } from './src/screens/ManagerTeamScreen';
+import { HrOverviewScreen } from './src/screens/HrOverviewScreen';
+import { HrEmployeesScreen } from './src/screens/HrEmployeesScreen';
+import { HrLeavesScreen } from './src/screens/HrLeavesScreen';
+import { HrContractsScreen } from './src/screens/HrContractsScreen';
 import { getPendingApprovals, getPendingLeaveRequests } from './src/manager-api';
 import { subscribeEmployeeRealtime } from './src/realtime';
 import { colors } from './src/theme';
@@ -100,9 +104,11 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
   const [showPayslips, setShowPayslips] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const isManager = user.role === 'DEPARTMENT_MANAGER';
+  const isHr = user.role === 'HR';
   // Quản lý chỉ có 5 tab, nên các đích của nhân viên được ánh xạ sang nơi tương ứng.
   const navigate = (tab: BottomTabKey) => {
     setShowPayslips(false);
+    if (isHr && !['overview', 'employees', 'leaves', 'contracts', 'account'].includes(tab)) return;
     if (isManager && tab === 'requests') return setActiveTabState('approvals');
     if (isManager && tab === 'payslips') { setActiveTabState('account'); return setShowPayslips(true); }
     setActiveTabState(tab);
@@ -110,7 +116,8 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
   const signOut = async () => { setBusy(true); setError(null); try { await logout(apiBase); onLogout(); } catch (err) { setError(friendlyAuthError(err)); } finally { setBusy(false); } };
-  const isBlockedRole = user.role === 'HR' || user.role === 'SYSTEM_ADMIN';
+  // SYSTEM_ADMIN dùng cổng quản trị web; HR dùng bộ màn quản trị nhẹ trên mobile.
+  const isBlockedRole = user.role === 'SYSTEM_ADMIN';
   useEffect(() => {
     if (isBlockedRole) return;
     return subscribeEmployeeRealtime(apiBase, () => setRealtimeRevision((value) => value + 1));
@@ -134,7 +141,7 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
   if (isBlockedRole) return <View style={styles.center}>
     <View style={styles.errorIcon}><AppIcon name="desktop-outline" size={30} color={colors.danger} /></View>
     <Text accessibilityRole="header" style={styles.stateTitle}>Cổng quản trị Web</Text>
-    <Text style={styles.stateMessage}>Tài khoản vai trò {user.role === 'HR' ? 'Nhân sự (HR)' : 'Quản trị hệ thống (System Admin)'} cần sử dụng cổng quản trị web.</Text>
+    <Text style={styles.stateMessage}>Tài khoản vai trò Quản trị hệ thống (System Admin) cần sử dụng cổng quản trị web.</Text>
     {error ? <ErrorBanner message={error} /> : null}
     <View style={styles.stateAction}><AppButton label="Đăng xuất" loading={busy} disabled={busy} onPress={() => void signOut()} /></View>
   </View>;
@@ -144,16 +151,20 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
         <Pressable accessibilityRole="button" accessibilityLabel="Quay lại tài khoản" onPress={() => setShowPayslips(false)} style={({ pressed }) => [styles.back, pressed && styles.backPressed]}><AppIcon name="chevron-back" size={20} color={colors.primary} /><Text style={styles.backText}>Tài khoản</Text></Pressable>
         <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />
       </View> : <>
-        {activeTab === 'overview' && <OverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} pendingApprovals={isManager ? pendingApprovals : undefined} />}
-        {activeTab === 'attendance' && <AttendanceScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-        {activeTab === 'requests' && !isManager && <RequestsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-        {activeTab === 'payslips' && !isManager && <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {isHr && activeTab === 'overview' && <HrOverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} />}
+        {isHr && activeTab === 'employees' && <HrEmployeesScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {isHr && activeTab === 'leaves' && <HrLeavesScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {isHr && activeTab === 'contracts' && <HrContractsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {!isHr && activeTab === 'overview' && <OverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} pendingApprovals={isManager ? pendingApprovals : undefined} />}
+        {!isHr && activeTab === 'attendance' && <AttendanceScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {!isHr && activeTab === 'requests' && !isManager && <RequestsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {!isHr && activeTab === 'payslips' && !isManager && <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
         {activeTab === 'approvals' && isManager && <ManagerApprovalsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} onCountChange={setPendingApprovals} />}
         {activeTab === 'team' && isManager && <ManagerTeamScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
         {activeTab === 'account' && <AccountScreen user={user} apiBase={apiBase} onOpenPayslips={() => navigate('payslips')} onChangePassword={onChangePassword} onLogout={() => void signOut()} logoutBusy={busy} logoutError={error} realtimeRevision={realtimeRevision} />}
       </>}
     </View>
-    <BottomTabBar activeTab={showPayslips ? 'account' : activeTab} onTabPress={navigate} manager={isManager} badges={isManager ? { approvals: pendingApprovals } : undefined} />
+    <BottomTabBar activeTab={showPayslips ? 'account' : activeTab} onTabPress={navigate} manager={isManager} hr={isHr} badges={isManager ? { approvals: pendingApprovals } : undefined} />
   </View>;
 }
 

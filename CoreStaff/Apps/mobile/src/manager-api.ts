@@ -49,7 +49,8 @@ export interface ManagerApproval {
   retroactiveReason?: string;
   version: number;
   createdAt?: string;
-  metadata?: { address?: string; workMode?: string; actionType?: string; adjustmentSource?: string; [key: string]: unknown };
+  evidenceId?: string | { _id?: string } | null;
+  metadata?: { address?: string; workMode?: string; actionType?: string; adjustmentSource?: string; accuracyMeters?: number; [key: string]: unknown };
   compliance?: { violations?: Array<{ code: string; severity: string; message: string }> };
 }
 
@@ -85,6 +86,17 @@ export function approvalLabel(item: ManagerApproval) {
   if (isWebOnlyApproval(item)) return 'Xác nhận công theo lịch';
   return item.metadata?.adjustmentSource === 'MANUAL_ADJUSTMENT' ? 'Điều chỉnh công' : 'Chấm công selfie';
 }
+
+/** Id ảnh selfie bằng chứng (evidenceId có thể là chuỗi hoặc object populate). */
+export function approvalEvidenceId(item: ManagerApproval): string | null {
+  const value = item.evidenceId;
+  if (!value) return null;
+  const id = typeof value === 'string' ? value : value._id;
+  return id ? String(id) : null;
+}
+
+/** URL ảnh bằng chứng; endpoint cần cookie phiên (cookie jar native tự gửi kèm). */
+export const evidenceUrl = (base: string, id: string) => `${base.replace(/\/$/, '')}/api/attendance/evidence/${encodeURIComponent(id)}`;
 
 /** Lấy userId từ trường populate hoặc id thô, để ghép tên nhân viên. */
 export function approvalEmployeeKey(item: ManagerApproval): string {

@@ -1,10 +1,10 @@
 /**
- * Design tokens — đồng bộ với web responsive (emerald / slate).
- * Web: nút giữa #3ae39f, tab active #0f766e, nền slate.
- * Tên token giữ nguyên để các màn cũ không vỡ; giá trị đã chuyển sang emerald.
+ * Design tokens — khớp nguyên bảng màu app Flutter (lib/core/theme/app_colors.dart):
+ * xanh dương (blue-600), nền #f6f8fc, thẻ ca làm tối #172554.
+ * Tên token giữ nguyên để mọi màn dùng chung.
  */
 export const colors = {
-  background: '#f8fafc',
+  background: '#f6f8fc',
   surface: '#ffffff',
   surfaceMuted: '#f1f5f9',
   ink: '#0f172a',
@@ -12,25 +12,33 @@ export const colors = {
   muted: '#64748b',
   faint: '#94a3b8',
   border: '#e2e8f0',
+  borderLight: '#cbd5e1',
+  borderDanger: '#fecaca',
   divider: '#f1f5f9',
-  primary: '#0f766e',
-  primaryDark: '#115e59',
-  primarySoft: '#ecfdf5',
-  accent: '#3ae39f',
-  accentDark: '#10b981',
-  navy: '#0f172a',
-  navySoft: '#5eead4',
-  success: '#16a34a',
+  primary: '#2563eb',
+  primaryDark: '#1d4ed8',
+  primaryLight: '#3b82f6',
+  primarySoft: '#dbeafe',
+  // Nút "accent" nằm trên thẻ tối (nút trắng, chữ tối) và glow của nút giữa tab bar.
+  accent: '#ffffff',
+  accentDark: '#2563eb',
+  navy: '#172554',
+  navySoft: '#93c5fd',
+  success: '#4ade80',
+  successDot: '#4ade80',
   successText: '#166534',
   successSoft: '#f0fdf4',
+  successBorder: '#bbf7d0',
   warning: '#d97706',
-  warningText: '#92400e',
+  warningText: '#b45309',
   warningSoft: '#fffbeb',
+  warningBorder: '#fde68a',
   danger: '#dc2626',
   dangerText: '#b91c1c',
   dangerSoft: '#fef2f2',
-  info: '#0369a1',
-  infoSoft: '#f0f9ff',
+  info: '#1e40af',
+  infoSoft: '#eff6ff',
+  infoBorder: '#bfdbfe',
 } as const;
 
 export const spacing = {
