@@ -8,6 +8,11 @@ export interface AttendanceEvent {
   recordedAt: string;
   address?: string;
   approvalStatus: string;
+  accuracyMeters?: number;
+  distanceMeters?: number;
+  workplaceName?: string;
+  evidenceUrl?: string;
+  location?: { address?: string; accuracyMeters?: number };
 }
 
 export interface TodayAttendance {
@@ -52,16 +57,28 @@ export interface TodayAttendance {
   };
 }
 
+export interface WorkCreditPolicy {
+  halfDayMinimumRatio?: number;
+  fullDayMinimumRatio?: number;
+}
+
 export interface AttendanceDay {
   _id: string;
   workDate: string;
   attendanceStatus: AttendanceStatus;
+  status?: string;
+  shiftName?: string;
+  workdayType?: 'WEEKLY_OFF' | 'PUBLIC_HOLIDAY' | 'PAID_LEAVE' | 'UNPAID_LEAVE' | string;
+  dayResult?: string;
   workingMinutes?: number;
+  totalWorkingMinutes?: number;
   lateMinutes?: number;
   earlyMinutes?: number;
   checkIn: AttendanceEvent | null;
   checkOut: AttendanceEvent | null;
-  overtime?: { otMinutes?: number; status?: string } | null;
+  resolution?: { type?: string; reason?: string } | null;
+  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[] } | null;
+  overtime?: { otMinutes?: number; status?: string; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
 }
 
 export interface AttendanceHistory {
@@ -76,6 +93,7 @@ export interface AttendanceHistory {
     otDays: number;
   };
   items: AttendanceDay[];
+  workCreditPolicy?: WorkCreditPolicy | null;
 }
 
 export type LeaveStatus = 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'HR_APPLIED';
@@ -161,8 +179,17 @@ export interface Payslip {
   unemploymentInsurance: number;
   pitAmount: number;
   otherDeductions: number;
-  earningBreakdown?: Array<{ label: string; amount: number }>;
+  earningBreakdown?: Array<{ label: string; amount: number; type?: string }>;
+  allowanceBreakdown?: Array<{ label: string; amount: number }>;
+  otBreakdown?: { breakdown?: Array<{ label: string; hours?: number; coefficient?: number; amount: number }> } | null;
   deductionBreakdown?: Array<{ label: string; amount: number }>;
+  taxableIncome?: number;
+  personalDeduction?: number;
+  dependentDeduction?: number;
+  payableWorkingDays?: number;
+  standardWorkingDays?: number;
+  employeeCode?: string;
+  taxCode?: string;
   releasedAt?: string;
 }
 
@@ -208,7 +235,10 @@ export const punchAttendance = (
   }
   const form = new FormData();
   if (action === 'CHECK_IN' && payload.workMode) form.append('workMode', payload.workMode);
-  form.append('selfie', { uri: payload.selfieUri, name: 'selfie.jpg', type: 'image/jpeg' } as unknown as Blob);
+  // Server chỉ nhận jpeg/png/webp: luôn gửi kiểu MIME tường minh, không suy từ đuôi file (ảnh camera có thể không có đuôi).
+  const ext = /\.(png|webp)$/i.exec(payload.selfieUri)?.[1]?.toLowerCase();
+  const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  form.append('selfie', { uri: payload.selfieUri, name: `selfie.${ext || 'jpg'}`, type: mime } as unknown as Blob);
   if (payload.location) {
     form.append('latitude', String(payload.location.latitude));
     form.append('longitude', String(payload.location.longitude));
@@ -264,10 +294,40 @@ export function friendlyEmployeeError(error: unknown): string {
     ALREADY_CHECKED_OUT: 'Bạn đã hoàn thành ca hôm nay.',
     NETWORK_NOT_ALLOWED: 'Mạng hiện tại không thuộc mạng công ty.',
     SELFIE_REQUIRED: 'Không xác thực được vị trí công ty. Vui lòng chấm công bằng ảnh selfie.',
+    UNSUPPORTED_FILE_TYPE: 'Ảnh không đúng định dạng (chỉ nhận JPG, PNG hoặc WebP). Vui lòng chụp lại.',
+    FILE_TOO_LARGE: 'Ảnh quá lớn (tối đa 5MB). Vui lòng chụp lại.',
     OUTSIDE_ALLOWED_AREA: 'Bạn đang ở ngoài phạm vi chấm công.',
     LOW_LOCATION_ACCURACY: 'Tín hiệu GPS chưa đủ chính xác. Hãy ra nơi thoáng hơn và thử lại.',
     ATTENDANCE_LOCKED: 'Kỳ công đã khóa, không thể thay đổi.',
     LEAVE_DATE_RANGE_INVALID: 'Khoảng ngày nghỉ chưa hợp lệ.',
+    LEAVE_WORK_SCHEDULE_REQUIRED: 'Ngày này bạn không có lịch làm việc (có thể là ngày nghỉ). Hãy chọn ngày khác.',
+    LEAVE_WORK_SCHEDULE_INVALID: 'Lịch làm việc của ngày này chưa hợp lệ. Vui lòng liên hệ HR.',
+    LEAVE_NON_WORKING_DAY: 'Ngày này là ngày nghỉ, không cần xin nghỉ phép.',
+    LEAVE_INTERVAL_OUTSIDE_WORKING_TIME: 'Khoảng giờ xin nghỉ nằm ngoài giờ làm việc của ca.',
+    LEAVE_RANGE_TOO_LARGE: 'Khoảng ngày xin nghỉ quá dài. Hãy chia thành nhiều đơn.',
+    LEAVE_REQUEST_OVERLAP: 'Bạn đã có đơn nghỉ trùng thời gian này.',
+    LEAVE_REQUEST_INTERVAL_INVALID: 'Khoảng giờ xin nghỉ chưa hợp lệ.',
+    LEAVE_DAY_ALREADY_OVERRIDDEN: 'Ngày này đã được HR điều chỉnh, không thể gửi thêm đơn.',
+    REVIEW_REASON_REQUIRED: 'Vui lòng nhập ý kiến xử lý (tối thiểu vài ký tự).',
+    LEAVE_REJECTION_REASON_REQUIRED: 'Vui lòng nhập lý do từ chối (tối thiểu 3 ký tự).',
+    REQUEST_STATE_CHANGED: 'Đơn này vừa được cập nhật ở nơi khác. Hãy kéo để tải lại danh sách.',
+    LEAVE_REQUEST_NOT_PENDING: 'Đơn này đã được xử lý.',
+    LEAVE_REQUEST_ALREADY_DECIDED: 'Đơn này đã được xử lý.',
+    SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt đơn của chính mình.',
+    LEAVE_SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt đơn của chính mình.',
+    DEPARTMENT_SCOPE_VIOLATION: 'Đơn này không thuộc phòng ban bạn phụ trách.',
+    PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công đã khóa hoặc đã chốt lương, không thể thay đổi.',
+    REQUEST_NOT_FOUND: 'Không tìm thấy đơn này.',
+    DEPARTMENT_MANAGER_NOT_FOUND: 'Bạn chưa được gán phụ trách phòng ban nào. Vui lòng liên hệ HR.',
+    OVERTIME_ANNUAL_LIMIT_EXCEEDED: 'Bạn đã vượt giới hạn tăng ca trong năm.',
+    OVERTIME_MONTHLY_LIMIT_EXCEEDED: 'Bạn đã vượt giới hạn tăng ca trong tháng.',
+    OVERTIME_DAILY_LIMIT_EXCEEDED: 'Bạn đã vượt giới hạn tăng ca trong ngày.',
+    OVERTIME_ATTENDANCE_INCOMPLETE: 'Chưa thể đăng ký tăng ca: ngày này bạn chưa có bản ghi chấm công vào/ra hoàn chỉnh.',
+    OVERTIME_ATTENDANCE_NOT_VERIFIED: 'Chấm công của ngày này chưa được xác thực nên chưa thể đăng ký tăng ca.',
+    OVERTIME_BELOW_MINIMUM: 'Thời lượng tăng ca chưa đạt mức tối thiểu theo chính sách.',
+    OVERTIME_FILING_WINDOW_CLOSED: 'Đã quá thời hạn đăng ký tăng ca cho ngày này.',
+    OVERTIME_WINDOW_INVALID: 'Khung giờ tăng ca chưa hợp lệ.',
+    OVERTIME_POLICY_NOT_FOUND: 'Công ty chưa cấu hình chính sách tăng ca. Vui lòng liên hệ HR.',
     OVERTIME_OVERLAPS_SCHEDULE: 'Khung giờ OT đang trùng với ca làm chính.',
     OVERTIME_REQUEST_WINDOW_INVALID: 'Giờ bắt đầu phải sớm hơn giờ kết thúc.',
     OVERTIME_OVERLAP: 'Khung giờ này đang trùng với một đăng ký tăng ca khác.',

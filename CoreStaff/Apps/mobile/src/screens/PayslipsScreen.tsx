@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Card, EmptyState, ErrorBanner, LoadingBlock, ScreenHeader, StatusBadge, formatDate, formatMoney } from '../components/ui';
+import { Card, EmptyState, ErrorBanner, LoadingBlock, ScreenHeader, SectionTitle, StatusBadge, formatDate, formatMoney, formatPeriod } from '../components/ui';
 import { friendlyEmployeeError, getMyPayslips, markPayslipViewed, type Payslip } from '../employee-api';
 import { colors, radius, spacing } from '../theme';
 
@@ -38,17 +38,17 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
     contentContainerStyle={styles.content}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
   >
-    <ScreenHeader eyebrow="THU NHẬP" title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />
+    <ScreenHeader eyebrow="PHIẾU LƯƠNG" title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />
     {error ? <ErrorBanner message={error} /> : null}
     {loading ? <LoadingBlock /> : <>
-      <Card dark style={styles.summaryCard}>
-        <View style={styles.summaryTop}><View><Text style={styles.summaryEyebrow}>KỲ GẦN NHẤT</Text><Text style={styles.summaryPeriod}>{newest ? `Tháng ${newest.periodLabel}` : 'Chưa phát hành'}</Text></View>{unread ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread} mới</Text></View> : null}</View>
+      {newest ? <Card dark style={styles.summaryCard}>
+        <View style={styles.summaryTop}><View><Text style={styles.summaryEyebrow}>KỲ GẦN NHẤT</Text><Text style={styles.summaryPeriod}>Tháng {formatPeriod(newest.periodLabel)}</Text></View>{unread ? <View style={styles.unreadBadge}><Text style={styles.unreadText}>{unread} mới</Text></View> : null}</View>
         <Text style={styles.summaryLabel}>Thực nhận</Text>
-        <Text style={styles.summaryValue}>{newest ? formatMoney(newest.netSalary) : '—'}</Text>
-        <Text style={styles.summaryMeta}>{newest?.releasedAt ? `Phát hành ${formatDate(newest.releasedAt)}` : 'Phiếu lương mới sẽ xuất hiện tại đây.'}</Text>
-      </Card>
+        <Text style={styles.summaryValue}>{formatMoney(newest.netSalary)}</Text>
+        <Text style={styles.summaryMeta}>{newest.releasedAt ? `Phát hành ${formatDate(newest.releasedAt)}` : 'Chưa phát hành'}</Text>
+      </Card> : null}
 
-      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Lịch sử phiếu lương</Text><Text style={styles.count}>{items.length} kỳ</Text></View>
+      <View style={styles.sectionRow}><SectionTitle>Lịch sử phiếu lương</SectionTitle><Text style={styles.count}>{items.length} kỳ</Text></View>
       {!items.length ? <EmptyState icon="wallet-outline" title="Chưa có phiếu lương" description="Phiếu lương sẽ xuất hiện khi HR phát hành kỳ lương." /> : items.map(item => {
         const isExpanded = expanded === item._id;
         return <Pressable
@@ -60,21 +60,52 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
           style={({ pressed }) => pressed && styles.pressed}
         >
           <Card style={styles.payslipCard}>
-            <View style={styles.payslipTop}><View style={styles.periodCopy}><Text style={styles.period}>Kỳ {item.periodLabel}</Text><Text style={styles.released}>{item.releasedAt ? `Phát hành ${formatDate(item.releasedAt)}` : 'Chưa phát hành'}</Text></View><StatusBadge status={item.status} label={statusLabel(item.status)} /></View>
+            <View style={styles.payslipTop}><View style={styles.periodCopy}><Text style={styles.period}>Kỳ {formatPeriod(item.periodLabel)}</Text><Text style={styles.released}>{item.releasedAt ? `Phát hành ${formatDate(item.releasedAt)}` : 'Chưa phát hành'}</Text></View><StatusBadge status={item.status} label={statusLabel(item.status)} /></View>
             <View style={styles.netRow}><Text style={styles.netLabel}>Thực nhận</Text><Text style={styles.netValue}>{formatMoney(item.netSalary)}</Text></View>
-            {isExpanded ? <View style={styles.breakdown}>
-              <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} />
-              <MoneyRow label="Bảo hiểm" value={-(item.socialInsurance + item.healthInsurance + item.unemploymentInsurance)} />
-              <MoneyRow label="Thuế TNCN" value={-item.pitAmount} />
-              <MoneyRow label="Khấu trừ khác" value={-item.otherDeductions} />
-              <View style={styles.divider} />
-              <MoneyRow label="Thực nhận" value={item.netSalary} strong />
-            </View> : <Text style={styles.expandHint}>Chạm để xem chi tiết</Text>}
+            {isExpanded ? <View style={styles.breakdown}><PayslipDetail item={item} /></View> : <Text style={styles.expandHint}>Chạm để xem chi tiết</Text>}
           </Card>
         </Pressable>;
       })}
     </>}
   </ScrollView>;
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) { return <View style={styles.moneyRow}><Text style={styles.moneyLabel}>{label}</Text><Text style={styles.moneyValue}>{value}</Text></View>; }
+function SubRow({ label, value }: { label: string; value: number }) { return <View style={[styles.moneyRow, styles.subRow]}><Text style={styles.subLabel}>{label}</Text><Text style={styles.subValue}>{formatMoney(value)}</Text></View>; }
+function Head({ children }: { children: string }) { return <Text style={styles.head}>{children}</Text>; }
+
+/** Cấu trúc theo web PayslipPreviewDialog: thu nhập → khấu trừ → thông tin tính thuế → thực nhận. */
+function PayslipDetail({ item }: { item: Payslip }) {
+  const earnings = item.earningBreakdown ?? [];
+  const allowances = item.allowanceBreakdown ?? [];
+  const otLines = item.otBreakdown?.breakdown ?? [];
+  const deductions = item.deductionBreakdown ?? [];
+  const insurance = item.socialInsurance + item.healthInsurance + item.unemploymentInsurance;
+  const otLabel = (l: { label: string; hours?: number; coefficient?: number }) => { const h = l.hours ?? 0; return `${l.label}: ${Number.isInteger(h) ? h : h.toFixed(1)} giờ × hệ số ${l.coefficient}`; };
+  return <>
+    {item.payableWorkingDays != null && item.standardWorkingDays != null ? <InfoRow label="Ngày công tính lương" value={`${item.payableWorkingDays} / ${item.standardWorkingDays} ngày`} /> : null}
+    {item.employeeCode ? <InfoRow label="Mã nhân viên" value={item.employeeCode} /> : null}
+    {item.taxCode ? <InfoRow label="Mã số thuế" value={item.taxCode} /> : null}
+    <View style={styles.divider} />
+    <Head>THU NHẬP</Head>
+    {earnings.length === 0 ? <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} /> : <>
+      {earnings.map((e, idx) => e.type === 'ALLOWANCE' && allowances.length ? <View key={idx} style={styles.group}><MoneyRow label="Phụ cấp" value={e.amount} />{allowances.map((a, k) => <SubRow key={k} label={a.label} value={a.amount} />)}</View>
+        : e.type === 'OVERTIME' && otLines.length ? <View key={idx} style={styles.group}><MoneyRow label={e.label} value={e.amount} />{otLines.map((l, k) => <SubRow key={k} label={otLabel(l)} value={l.amount} />)}</View>
+        : <MoneyRow key={idx} label={e.label} value={e.amount} />)}
+      <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} strong />
+    </>}
+    <View style={styles.divider} />
+    <Head>KHẤU TRỪ</Head>
+    {deductions.length === 0 ? <><MoneyRow label="Bảo hiểm" value={-insurance} /><MoneyRow label="Thuế TNCN" value={-item.pitAmount} /></> : deductions.map((d, idx) => <MoneyRow key={idx} label={d.label} value={-d.amount} />)}
+    {item.otherDeductions > 0 ? <MoneyRow label="Khấu trừ khác" value={-item.otherDeductions} /> : null}
+    <View style={styles.divider} />
+    <Head>THÔNG TIN TÍNH THUẾ</Head>
+    <InfoRow label="Thu nhập chịu thuế" value={formatMoney(item.taxableIncome ?? 0)} />
+    <InfoRow label="Giảm trừ bản thân" value={formatMoney(item.personalDeduction ?? 0)} />
+    <InfoRow label="Giảm trừ người phụ thuộc" value={formatMoney(item.dependentDeduction ?? 0)} />
+    <View style={styles.divider} />
+    <MoneyRow label="Thực nhận" value={item.netSalary} strong />
+  </>;
 }
 
 function MoneyRow({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
@@ -87,16 +118,16 @@ function statusLabel(status: Payslip['status']) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.huge, gap: spacing.md },
-  summaryCard: { padding: spacing.lg },
+  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.huge + 16, gap: spacing.md },
+  summaryCard: { padding: 20, borderRadius: 20 },
   summaryTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
-  summaryEyebrow: { color: colors.navySoft, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
+  summaryEyebrow: { color: colors.navySoft, fontSize: 11, fontWeight: '800', letterSpacing: 1.1 },
   summaryPeriod: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 6 },
   unreadBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#fff' },
-  unreadText: { color: colors.primaryDark, fontSize: 10, fontWeight: '800' },
+  unreadText: { color: colors.primary, fontSize: 11, fontWeight: '800' },
   summaryLabel: { color: colors.navySoft, fontSize: 11, fontWeight: '700', marginTop: spacing.xl },
   summaryValue: { color: '#fff', fontSize: 30, lineHeight: 38, fontWeight: '800', marginTop: 3 },
-  summaryMeta: { color: '#cbd5e1', fontSize: 11, marginTop: spacing.xs },
+  summaryMeta: { color: colors.borderLight, fontSize: 11, marginTop: spacing.xs },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
   sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   count: { color: colors.muted, fontSize: 11, fontWeight: '700' },
@@ -104,7 +135,7 @@ const styles = StyleSheet.create({
   payslipTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
   periodCopy: { flex: 1 },
   period: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  released: { color: colors.muted, fontSize: 10, marginTop: 4 },
+  released: { color: colors.muted, fontSize: 11, marginTop: 4 },
   netRow: { padding: spacing.md, backgroundColor: colors.primarySoft, borderRadius: radius.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   netLabel: { color: colors.primaryDark, fontSize: 11, fontWeight: '800' },
   netValue: { color: colors.primaryDark, fontSize: 18, fontWeight: '800' },
@@ -115,6 +146,9 @@ const styles = StyleSheet.create({
   moneyValue: { color: colors.inkSoft, fontSize: 12, fontWeight: '700' },
   negative: { color: colors.dangerText },
   strong: { color: colors.ink, fontWeight: '800' },
-  divider: { height: 1, backgroundColor: colors.divider },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 4 },
+  head: { color: colors.primaryDark, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.9, marginTop: 2 },
+  group: { gap: spacing.sm },
+  subRow: { paddingLeft: 12 }, subLabel: { flex: 1, color: colors.muted, fontSize: 11, lineHeight: 15 }, subValue: { color: colors.muted, fontSize: 11, fontWeight: '600' },
   pressed: { opacity: 0.74 },
 });

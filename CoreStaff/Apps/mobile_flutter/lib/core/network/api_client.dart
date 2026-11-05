@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import 'api_exception.dart';
@@ -82,6 +84,9 @@ class ApiClient {
     } catch (_) {}
   }
 
+  /// Header Cookie hiện tại, dùng cho kết nối realtime (socket.io).
+  String get cookieHeader => _buildCookieHeader();
+
   String _buildCookieHeader() {
     if (_cookies.isEmpty) return '';
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
@@ -107,6 +112,70 @@ class ApiClient {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Server chỉ nhận jpeg/png/webp theo MIME nên không thể dựa vào đuôi file tạm của camera
+  /// (có thể thiếu đuôi → octet-stream): đọc chữ ký file để chọn đúng loại.
+  Future<http.MultipartFile> _imagePart(String field, String path) async {
+    final bytes = await File(path).readAsBytes();
+    var type = MediaType('image', 'jpeg');
+    var name = 'selfie.jpg';
+    if (bytes.length > 12) {
+      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+        type = MediaType('image', 'png');
+        name = 'selfie.png';
+      } else if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[8] == 0x57 && bytes[9] == 0x45) {
+        type = MediaType('image', 'webp');
+        name = 'selfie.webp';
+      }
+    }
+    return http.MultipartFile.fromBytes(field, bytes, filename: name, contentType: type);
+  }
+
+  /// POST multipart (selfie chấm công). Không tự refresh phiên: 401 ném lỗi để
+  /// màn hình hiển thị, lần gọi JSON kế tiếp sẽ làm mới phiên.
+  Future<T> multipart<T>({
+    required String path,
+    required Map<String, String> fields,
+    required String fileField,
+    required String filePath,
+    Map<String, String>? headers,
+  }) async {
+    await init();
+    final uri = ApiConfig.buildUri(ApiConfig.currentBaseUrl, path);
+    final req = http.MultipartRequest('POST', uri)
+      ..headers['Accept'] = 'application/json'
+      ..headers.addAll(headers ?? const {})
+      ..fields.addAll(fields)
+      ..files.add(await _imagePart(fileField, filePath));
+    final cookieHeader = _buildCookieHeader();
+    if (cookieHeader.isNotEmpty) req.headers['Cookie'] = cookieHeader;
+
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(await req.send());
+    } catch (_) {
+      throw AuthApiException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.', 0);
+    }
+    _saveCookiesFromHeaders(response.headers);
+
+    dynamic data;
+    if (response.body.isNotEmpty) {
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+    }
+    if (response.statusCode >= 400 || (data is Map && data['success'] == false)) {
+      String? code;
+      String? message;
+      if (data is Map && data['error'] is Map) {
+        code = data['error']['code']?.toString();
+        message = data['error']['message']?.toString();
+      }
+      throw AuthApiException(message ?? 'Yêu cầu thất bại (HTTP ${response.statusCode})', response.statusCode, code);
+    }
+    if (data is Map && data.containsKey('data')) return data['data'] as T;
+    return data as T;
   }
 
   Future<T> request<T>({

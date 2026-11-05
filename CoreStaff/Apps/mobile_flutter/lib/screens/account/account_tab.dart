@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/format.dart';
+import '../../services/employee_api.dart';
+import '../../services/hr_api.dart' show employmentTypeLabel;
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/auth_user.dart';
@@ -11,12 +14,15 @@ class AccountTab extends StatefulWidget {
   final AuthUser user;
   final VoidCallback onChangePassword;
   final VoidCallback onLogout;
+  /// Quản lý không có tab Phiếu lương riêng nên mở từ Tài khoản.
+  final VoidCallback? onOpenPayslips;
 
   const AccountTab({
     super.key,
     required this.user,
     required this.onChangePassword,
     required this.onLogout,
+    this.onOpenPayslips,
   });
 
   @override
@@ -26,6 +32,40 @@ class AccountTab extends StatefulWidget {
 class _AccountTabState extends State<AccountTab> {
   bool _loggingOut = false;
   String? _errorMessage;
+  Map? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  /// Hồ sơ nhân sự là thông tin phụ: lỗi thì chỉ ẩn các dòng bổ sung.
+  Future<void> _loadProfile() async {
+    try {
+      final p = await EmployeeApi.instance.myProfile();
+      if (mounted) setState(() => _profile = p);
+    } catch (_) {}
+  }
+
+  Widget _profileRows() {
+    final p = _profile;
+    if (p == null) return const SizedBox.shrink();
+    final rows = <(String, String)>[
+      ('Phòng ban', '${p['departmentName'] ?? ''}'),
+      ('Chức danh', '${p['positionName'] ?? ''}'),
+      ('Quản lý trực tiếp', '${p['managerName'] ?? ''}'),
+      ('Loại hình', p['employmentType'] == null ? '' : employmentTypeLabel('${p['employmentType']}')),
+      ('Ngày vào làm', p['joinDate'] == null ? '' : formatDate('${p['joinDate']}')),
+      ('Số điện thoại', '${p['phone'] ?? ''}'),
+    ].where((r) => r.$2.isNotEmpty).toList();
+    return Column(children: [
+      for (final r in rows) ...[
+        const Divider(color: Color(0xFFF1F5F9), height: 1),
+        _InfoRow(label: r.$1, value: r.$2),
+      ],
+    ]);
+  }
 
   Future<void> _handleSignOut() async {
     final confirm = await showDialog<bool>(
@@ -160,12 +200,39 @@ class _AccountTabState extends State<AccountTab> {
                 const Divider(color: Color(0xFFF1F5F9), height: 1),
                 _InfoRow(
                   label: 'Vai trò',
-                  value: widget.user.role == 'DEPARTMENT_MANAGER' ? 'Quản lý phòng ban' : (widget.user.role == 'EMPLOYEE' ? 'Nhân viên' : widget.user.role),
+                  value: widget.user.role == 'DEPARTMENT_MANAGER' ? 'Quản lý phòng ban' : (widget.user.role == 'EMPLOYEE' ? 'Nhân viên' : (widget.user.role == 'HR' ? 'Nhân sự (HR)' : widget.user.role)),
                 ),
+                _profileRows(),
               ],
             ),
           ),
           const SizedBox(height: 16),
+
+          if (widget.onOpenPayslips != null) ...[
+            Material(
+              color: AppColors.bgSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border, width: 1),
+              ),
+              child: InkWell(
+                onTap: widget.onOpenPayslips,
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Phiếu lương',
+                          style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                      Icon(Icons.chevron_right, color: AppColors.textQuaternary),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // menuRow (Đổi mật khẩu)
           Material(
