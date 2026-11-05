@@ -1,42 +1,27 @@
 import '../core/network/api_client.dart';
-import '../models/auth_user.dart';
+import '../features/auth/data/auth_repository.dart';
+import '../features/auth/data/models/auth_user_dto.dart';
 
-class LoginResult {
-  final AuthUser user;
-  final bool mustChangePassword;
-
-  LoginResult({required this.user, required this.mustChangePassword});
-}
+export '../features/auth/data/models/auth_user_dto.dart' show LoginResult;
 
 class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
 
-  final ApiClient _client = ApiClient.instance;
+  AuthRepository? _authRepository;
+
+  void initialize(AuthRepository repository) {
+    _authRepository = repository;
+  }
+
+  AuthRepository get _repo => _authRepository ?? AuthRepositoryImpl(apiClient: ApiClient.instance);
 
   Future<LoginResult> login(String identifier, String password) async {
-    final data = await _client.request<Map<String, dynamic>>(
-      path: '/api/auth/login',
-      method: 'POST',
-      body: {
-        'identifier': identifier.trim(),
-        'password': password,
-      },
-    );
-
-    final userJson = data['user'] as Map<String, dynamic>;
-    final mustChange = data['mustChangePassword'] == true;
-    final user = AuthUser.fromJson(userJson);
-
-    return LoginResult(user: user, mustChangePassword: mustChange);
+    return _repo.login(identifier: identifier, password: password);
   }
 
   Future<AuthUser> getCurrentUser() async {
-    final data = await _client.request<Map<String, dynamic>>(
-      path: '/api/auth/me',
-      method: 'GET',
-    );
-    return AuthUser.fromJson(data);
+    return _repo.getCurrentUser();
   }
 
   Future<void> changePassword({
@@ -44,46 +29,22 @@ class AuthService {
     required String newPassword,
     required String confirmPassword,
   }) async {
-    await _client.request<dynamic>(
-      path: '/api/auth/change-password',
-      method: 'POST',
-      body: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-        'confirmPassword': confirmPassword,
-      },
+    return _repo.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      confirmPassword: confirmPassword,
     );
   }
 
   Future<void> forgotPassword(String email) async {
-    await _client.request<dynamic>(
-      path: '/api/auth/forgot-password',
-      method: 'POST',
-      body: {
-        'email': email.trim(),
-      },
-    );
+    return _repo.forgotPassword(email);
   }
 
   Future<void> resetPassword(String token, String newPassword) async {
-    await _client.request<dynamic>(
-      path: '/api/auth/reset-password',
-      method: 'POST',
-      body: {
-        'token': token.trim(),
-        'newPassword': newPassword,
-      },
-    );
+    return _repo.resetPassword(token: token, newPassword: newPassword);
   }
 
   Future<void> logout() async {
-    try {
-      await _client.request<dynamic>(
-        path: '/api/auth/logout',
-        method: 'POST',
-      );
-    } finally {
-      await _client.clearCookies();
-    }
+    return _repo.logout();
   }
 }

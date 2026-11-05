@@ -66,5 +66,15 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Ứng dụng cần quyền vị trí để xác thực chấm công tại nơi làm việc.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Ứng dụng cần quyền vị trí để xác thực chấm công tại nơi làm việc.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần sử dụng camera để chụp ảnh selfie xác thực chấm công.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ứng dụng cần truy cập thư viện ảnh để đính kèm minh chứng.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Đọc tên và địa chỉ access point của Wi-Fi công ty để xác thực chấm công.</string>
 </dict>
 </plist>

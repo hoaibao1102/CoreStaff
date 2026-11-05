@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'app_constants.dart';
 
 class HealthResponse {
   final String status;
@@ -9,7 +9,7 @@ class HealthResponse {
   final String mongo;
   final String timezone;
 
-  HealthResponse({
+  const HealthResponse({
     required this.status,
     required this.service,
     required this.mongo,
@@ -24,65 +24,115 @@ class HealthResponse {
       timezone: json['timezone']?.toString() ?? '',
     );
   }
+
+  bool get isValid =>
+      status == 'ok' &&
+      service == 'corestaff-api' &&
+      (mongo == 'configured' || mongo == 'missing') &&
+      timezone.trim().isNotEmpty;
 }
 
 class ApiConfig {
-  static const String defaultRemoteUrl = 'http://10.87.51.1:3000';
+  ApiConfig._();
+
+  static String _activeBaseUrl = AppConstants.defaultRemoteUrl;
+
+  static String get currentBaseUrl => _activeBaseUrl;
+
+  static void setBaseUrl(String url) {
+    _activeBaseUrl = stripSlash(url);
+  }
+
+  static String stripSlash(String url) {
+    return url.replaceAll(RegExp(r'/+$'), '');
+  }
 
   static String get fallbackLocalUrl {
-    if (kIsWeb) return 'http://localhost:3000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
+    if (!kIsWeb && Platform.isAndroid) {
+      return AppConstants.androidEmulatorLocalUrl;
+    }
+    return AppConstants.standardLocalUrl;
   }
 
-  static String currentBaseUrl = defaultRemoteUrl;
-
-  static String stripSlash(String url) => url.replaceAll(RegExp(r'/+$'), '');
-
-  static Uri buildUri(String baseUrl, String path) {
-    final cleanBase = stripSlash(baseUrl);
+  static String apiUrl(String base, String path) {
+    final cleanBase = stripSlash(base);
     final cleanPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$cleanBase$cleanPath');
+    return '$cleanBase$cleanPath';
   }
 
-  static Future<HealthResponse> checkHealth(String baseUrl, {Duration timeout = const Duration(seconds: 4)}) async {
-    final uri = buildUri(baseUrl, '/api/healthz');
-    final response = await http.get(uri).timeout(timeout);
-    if (response.statusCode != 200) {
-      throw Exception('Kiểm tra kết nối API thất bại (HTTP ${response.statusCode}).');
+  static Uri buildUri(String base, String path, [Map<String, dynamic>? queryParameters]) {
+    final fullUrl = apiUrl(base, path);
+    final parsed = Uri.parse(fullUrl);
+    if (queryParameters != null && queryParameters.isNotEmpty) {
+      return parsed.replace(
+        queryParameters: queryParameters.map((k, v) => MapEntry(k, v.toString())),
+      );
     }
-    final dynamic body = jsonDecode(response.body);
-    if (body is! Map<String, dynamic> || body['status'] != 'ok' || body['service'] != 'corestaff-api') {
-      throw Exception('Phản hồi kiểm tra kết nối API không hợp lệ.');
-    }
-    return HealthResponse.fromJson(body);
+    return parsed;
   }
 
-  /// Dev: thử API remote, hỏng thì fallback local (Android emulator -> 10.0.2.2)
+  /// Probes the public health endpoint using a dedicated Dio client.
+  static Future<HealthResponse> getHealth(String base, {Duration? timeout}) async {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: timeout ?? AppConstants.healthTimeout,
+        receiveTimeout: timeout ?? AppConstants.healthTimeout,
+      ),
+    );
+
+    try {
+      final uri = apiUrl(base, '/api/healthz');
+      final response = await dio.get<Map<String, dynamic>>(uri);
+      if (response.statusCode != 200 || response.data == null) {
+        throw Exception('Kiểm tra kết nối API thất bại (HTTP ${response.statusCode}).');
+      }
+
+      final health = HealthResponse.fromJson(response.data!);
+      if (!health.isValid) {
+        throw Exception('Phản hồi kiểm tra kết nối API không hợp lệ.');
+      }
+      return health;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Hết thời gian chờ kết nối API. Vui lòng thử lại.');
+      }
+      throw Exception('Không thể kết nối đến máy chủ: ${e.message}');
+    }
+  }
+
+  /// In dev: probes remote API; falls back to local dev emulator if remote fails.
+  /// In release: strictly uses remote API.
   static Future<String> resolveApiBase() async {
-    if (kReleaseMode) {
-      currentBaseUrl = defaultRemoteUrl;
-      await checkHealth(currentBaseUrl);
+    if (!kDebugMode) {
+      final health = await getHealth(AppConstants.defaultRemoteUrl);
+      if (!health.isValid) throw Exception('API production không khả dụng.');
+      setBaseUrl(AppConstants.defaultRemoteUrl);
       return currentBaseUrl;
     }
 
     try {
-      await checkHealth(defaultRemoteUrl, timeout: const Duration(seconds: 2));
-      currentBaseUrl = defaultRemoteUrl;
-      return currentBaseUrl;
-    } catch (_) {
-      // 1. Thử qua reverse port hoặc máy tính cục bộ
-      try {
-        await checkHealth('http://localhost:3000', timeout: const Duration(seconds: 2));
-        currentBaseUrl = 'http://localhost:3000';
-        return currentBaseUrl;
-      } catch (_) {
-        // 2. Thử qua Android emulator 10.0.2.2
-        final fallback = fallbackLocalUrl;
-        await checkHealth(fallback, timeout: const Duration(seconds: 2));
-        currentBaseUrl = fallback;
+      final health = await getHealth(AppConstants.defaultRemoteUrl);
+      if (health.isValid) {
+        setBaseUrl(AppConstants.defaultRemoteUrl);
         return currentBaseUrl;
       }
+    } catch (_) {
+      // Remote failed in debug mode, probe local fallback
     }
+
+    try {
+      final localBase = fallbackLocalUrl;
+      final localHealth = await getHealth(localBase);
+      if (localHealth.isValid) {
+        setBaseUrl(localBase);
+        return currentBaseUrl;
+      }
+    } catch (e) {
+      throw Exception('Không thể kết nối máy chủ API (cả remote và local).');
+    }
+
+    setBaseUrl(AppConstants.defaultRemoteUrl);
+    return currentBaseUrl;
   }
 }

@@ -1,204 +1,219 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import '../config/api_config.dart';
-import 'api_exception.dart';
+import '../config/app_constants.dart';
+import '../error/app_exception.dart';
+import 'auth_interceptor.dart';
+import 'cookie_manager.dart';
 
 class ApiClient {
-  ApiClient._();
-  static final ApiClient instance = ApiClient._();
-
-  final Map<String, String> _cookies = {};
-  bool _initialized = false;
-  Future<bool>? _refreshInFlight;
-
-  void Function()? onSignedOut;
-
-  static const Set<String> _noRefreshPaths = {
-    '/api/auth/login',
-    '/api/auth/refresh',
-    '/api/auth/forgot-password',
-    '/api/auth/reset-password',
-  };
-
-  Future<void> init() async {
-    if (_initialized) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final sid = prefs.getString('cookie_sid');
-      final rt = prefs.getString('cookie_rt');
-      if (sid != null && sid.isNotEmpty) _cookies['sid'] = sid;
-      if (rt != null && rt.isNotEmpty) _cookies['rt'] = rt;
-    } catch (_) {}
-    _initialized = true;
-  }
-
-  void _saveCookiesFromHeaders(Map<String, String> headers) {
-    // In http package on some platforms, Set-Cookie can be comma-separated or found in 'set-cookie'
-    final rawSetCookie = headers['set-cookie'] ?? headers['Set-Cookie'];
-    if (rawSetCookie == null || rawSetCookie.isEmpty) return;
-
-    // Parse cookies
-    final parts = rawSetCookie.split(RegExp(r',(?=\s*[a-zA-Z0-9_-]+=)'));
-    for (final part in parts) {
-      final cookiePair = part.split(';').first.trim();
-      final eqIdx = cookiePair.indexOf('=');
-      if (eqIdx > 0) {
-        final key = cookiePair.substring(0, eqIdx).trim();
-        final value = cookiePair.substring(eqIdx + 1).trim();
-        if (value.isEmpty || value.toLowerCase() == 'deleted') {
-          _cookies.remove(key);
-        } else {
-          _cookies[key] = value;
-        }
-      }
+  static ApiClient? _instance;
+  static ApiClient get instance {
+    if (_instance == null) {
+      throw StateError('ApiClient has not been initialized.');
     }
-    _persistCookies();
+    return _instance!;
+  }
+  static set instance(ApiClient client) => _instance = client;
+
+  final Dio dio;
+  final AppCookieManager cookieManager;
+  late final AuthInterceptor _authInterceptor;
+
+  ApiClient({
+    required this.dio,
+    required this.cookieManager,
+    void Function()? onSignedOut,
+  }) {
+    _authInterceptor = AuthInterceptor(
+      cookieManager: cookieManager,
+      clientDio: dio,
+      onSignedOut: onSignedOut,
+    );
+
+    dio.interceptors.add(_authInterceptor);
+    dio.options.connectTimeout = AppConstants.connectTimeout;
+    dio.options.receiveTimeout = AppConstants.receiveTimeout;
+    _instance ??= this;
   }
 
-  Future<void> _persistCookies() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (_cookies.containsKey('sid')) {
-        await prefs.setString('cookie_sid', _cookies['sid']!);
-      } else {
-        await prefs.remove('cookie_sid');
-      }
-      if (_cookies.containsKey('rt')) {
-        await prefs.setString('cookie_rt', _cookies['rt']!);
-      } else {
-        await prefs.remove('cookie_rt');
-      }
-    } catch (_) {}
+  set onSignedOut(void Function()? handler) {
+    _authInterceptor.onSignedOut = handler;
   }
 
-  Future<void> clearCookies() async {
-    _cookies.clear();
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('cookie_sid');
-      await prefs.remove('cookie_rt');
-    } catch (_) {}
-  }
+  void Function()? get onSignedOut => _authInterceptor.onSignedOut;
 
-  String _buildCookieHeader() {
-    if (_cookies.isEmpty) return '';
-    return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
-  }
-
-  Future<bool> tryRefreshSession() {
-    if (_refreshInFlight != null) return _refreshInFlight!;
-
-    _refreshInFlight = _performRefresh().whenComplete(() {
-      _refreshInFlight = null;
-    });
-    return _refreshInFlight!;
-  }
-
-  Future<bool> _performRefresh() async {
-    try {
-      await request<dynamic>(
-        path: '/api/auth/refresh',
-        method: 'POST',
-        allowRefresh: false,
-      );
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  Future<void> clearCookies() => cookieManager.clear();
 
   Future<T> request<T>({
     required String path,
     String method = 'GET',
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
-    bool allowRefresh = true,
+    dynamic body,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
   }) async {
-    await init();
-
-    final uri = ApiConfig.buildUri(ApiConfig.currentBaseUrl, path);
-    final reqHeaders = <String, String>{
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...?headers,
-    };
-
-    final cookieHeader = _buildCookieHeader();
-    if (cookieHeader.isNotEmpty) {
-      reqHeaders['Cookie'] = cookieHeader;
+    final upper = method.toUpperCase();
+    if (upper == 'GET') {
+      return get<T>(path, queryParameters: queryParameters, options: options);
+    } else if (upper == 'POST') {
+      return post<T>(path, data: body, queryParameters: queryParameters, options: options);
+    } else if (upper == 'PUT') {
+      return put<T>(path, data: body, queryParameters: queryParameters, options: options);
+    } else if (upper == 'DELETE') {
+      return delete<T>(path, data: body, queryParameters: queryParameters, options: options);
+    } else {
+      return _execute(() => dio.request(
+            ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+            data: body,
+            queryParameters: queryParameters,
+            options: (options ?? Options()).copyWith(method: upper),
+          ));
     }
+  }
 
-    http.Response response;
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return _execute(() => dio.get(
+          ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+          queryParameters: queryParameters,
+          options: options,
+        ));
+  }
+
+  Future<T> post<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return _execute(() => dio.post(
+          ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+          data: data,
+          queryParameters: queryParameters,
+          options: options,
+        ));
+  }
+
+  Future<T> put<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return _execute(() => dio.put(
+          ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+          data: data,
+          queryParameters: queryParameters,
+          options: options,
+        ));
+  }
+
+  Future<T> delete<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    return _execute(() => dio.delete(
+          ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+          data: data,
+          queryParameters: queryParameters,
+          options: options,
+        ));
+  }
+
+  Future<T> postMultipart<T>(
+    String path, {
+    required FormData formData,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+  }) async {
+    final opts = options ?? Options();
+    opts.contentType = 'multipart/form-data';
+    return _execute(() => dio.post(
+          ApiConfig.apiUrl(ApiConfig.currentBaseUrl, path),
+          data: formData,
+          queryParameters: queryParameters,
+          options: opts,
+        ));
+  }
+
+  Future<T> _execute<T>(Future<Response<dynamic>> Function() request) async {
     try {
-      final bodyStr = body != null ? jsonEncode(body) : null;
-      switch (method.toUpperCase()) {
-        case 'POST':
-          response = await http.post(uri, headers: reqHeaders, body: bodyStr);
-          break;
-        case 'PUT':
-          response = await http.put(uri, headers: reqHeaders, body: bodyStr);
-          break;
-        case 'DELETE':
-          response = await http.delete(uri, headers: reqHeaders, body: bodyStr);
-          break;
-        case 'GET':
-        default:
-          response = await http.get(uri, headers: reqHeaders);
-          break;
-      }
+      final response = await request();
+      return _unwrapResponse<T>(response);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
     } catch (e) {
-      throw AuthApiException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.', 0);
-    }
-
-    _saveCookiesFromHeaders(response.headers);
-
-    // 401 handling with automatic session refresh
-    if (response.statusCode == 401 && allowRefresh && !_noRefreshPaths.contains(path)) {
-      final refreshed = await tryRefreshSession();
-      if (refreshed) {
-        // Retry once with new cookie
-        return request<T>(
-          path: path,
-          method: method,
-          body: body,
-          headers: headers,
-          allowRefresh: false,
-        );
-      } else {
-        await clearCookies();
-        onSignedOut?.call();
-      }
-    }
-
-    dynamic responseData;
-    if (response.body.isNotEmpty) {
-      try {
-        responseData = jsonDecode(response.body);
-      } catch (_) {
-        responseData = null;
-      }
-    }
-
-    if (response.statusCode >= 400 || (responseData is Map && responseData['success'] == false)) {
-      String? code;
-      String? message;
-      if (responseData is Map && responseData['error'] is Map) {
-        code = responseData['error']['code']?.toString();
-        message = responseData['error']['message']?.toString();
-      }
-      throw AuthApiException(
-        message ?? 'Yêu cầu thất bại (HTTP ${response.statusCode})',
-        response.statusCode,
-        code,
+      if (e is AppException) rethrow;
+      throw ApiException(
+        message: 'Lỗi không xác định: ${e.toString()}',
+        statusCode: 500,
       );
     }
+  }
 
-    if (responseData is Map && responseData.containsKey('data')) {
-      return responseData['data'] as T;
+  T _unwrapResponse<T>(Response<dynamic> response) {
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      if (data.containsKey('success') && data['success'] == false) {
+        final error = data['error'] as Map<String, dynamic>?;
+        final code = error?['code']?.toString();
+        final message = error?['message']?.toString() ?? 'Yêu cầu thất bại.';
+        throw ApiException(
+          message: message,
+          statusCode: response.statusCode ?? 400,
+          code: code,
+          rawData: data,
+        );
+      }
+      if (data.containsKey('success') && data['success'] == true && data.containsKey('data')) {
+        return data['data'] as T;
+      }
+    }
+    return data as T;
+  }
+
+  ApiException _handleDioException(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      throw const NetworkException();
     }
 
-    return responseData as T;
+    final response = e.response;
+    final statusCode = response?.statusCode ?? 500;
+    String message = 'Lỗi kết nối máy chủ.';
+    String? code;
+
+    final responseData = response?.data;
+    if (responseData is Map<String, dynamic>) {
+      if (responseData['error'] is Map) {
+        final errObj = responseData['error'] as Map<String, dynamic>;
+        code = errObj['code']?.toString();
+        message = errObj['message']?.toString() ?? message;
+      } else if (responseData['message'] != null) {
+        final rawMsg = responseData['message'];
+        if (rawMsg is List) {
+          message = rawMsg.join(', ');
+        } else {
+          message = rawMsg.toString();
+        }
+      }
+      code ??= responseData['code']?.toString();
+    } else if (response?.statusMessage != null && response!.statusMessage!.isNotEmpty) {
+      message = response.statusMessage!;
+    }
+
+    return ApiException(
+      message: message,
+      statusCode: statusCode,
+      code: code,
+      path: e.requestOptions.path,
+      rawData: responseData,
+    );
   }
 }
