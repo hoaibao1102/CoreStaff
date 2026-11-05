@@ -1,0 +1,2278 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoreStaff — Flutter Mobile Migration Documentation Portal</title>
+  <meta name="description" content="Single Source of Truth & Developer Onboarding Guide for CoreStaff Flutter Mobile Migration">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #eff6ff;
+      --primary-border: #bfdbfe;
+      --navy: #172554;
+      --navy-card: #0f172a;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --text-subtle: #94a3b8;
+      --success: #10b981;
+      --success-bg: #ecfdf5;
+      --success-border: #a7f3d0;
+      --warning: #f59e0b;
+      --warning-bg: #fffbeb;
+      --warning-border: #fde68a;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --info: #0284c7;
+      --info-bg: #f0f9ff;
+      --info-border: #bae6fd;
+      --sidebar-width: 300px;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="dark"] {
+      --bg: #090e17;
+      --surface: #0f172a;
+      --surface-subtle: #1e293b;
+      --border: #1e293b;
+      --border-strong: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
+      --primary-light: #172554;
+      --primary-border: #1e40af;
+      --success-bg: #064e3b;
+      --success-border: #047857;
+      --warning-bg: #78350f;
+      --warning-border: #b45309;
+      --danger-bg: #7f1d1d;
+      --danger-border: #b91c1c;
+      --info-bg: #0c4a6e;
+      --info-border: #0369a1;
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 80px;
+      font-size: 15px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      display: flex;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top mobile bar */
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+    }
+
+    .mobile-menu-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-width);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 40;
+      transition: transform var(--transition);
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+
+    .brand-text span {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .sidebar-search {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-input-wrap {
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 8px 12px 8px 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-border);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-subtle);
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 8px;
+    }
+
+    .nav-group-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 700;
+      color: var(--text-subtle);
+      padding: 12px 12px 6px 12px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      transition: var(--transition);
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover {
+      background: var(--surface-subtle);
+      color: var(--text-main);
+    }
+
+    .nav-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .badge-done { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+    .badge-primary { background: var(--primary-light); color: var(--primary); }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .theme-toggle-btn {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Main Container */
+    .main-wrapper {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .content-container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 40px 32px 100px 32px;
+      width: 100%;
+    }
+
+    /* Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #172554 50%, #1e3a8a 100%);
+      color: #ffffff;
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      margin-bottom: 40px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.4);
+    }
+
+    .hero-banner::after {
+      content: "";
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgba(37,99,235,0.4) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .hero-title {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-subtitle {
+      font-size: 15px;
+      color: #cbd5e1;
+      max-width: 780px;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .hero-stat-card {
+      background: rgba(255, 255, 255, 0.07);
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .hero-stat-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: #60a5fa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hero-stat-label {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    /* Section Styling */
+    section {
+      margin-bottom: 56px;
+      scroll-margin-top: 40px;
+    }
+
+    .section-header {
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-num {
+      background: var(--primary);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.3px;
+    }
+
+    .section-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      max-width: 800px;
+    }
+
+    /* Cards & Panels */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+    }
+
+    .card:hover {
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-main);
+    }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      margin-top: 14px;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      font-weight: 700;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-main);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--surface-subtle);
+    }
+
+    /* Pills & Badges */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .tag-blue { background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-border); }
+    .tag-green { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+    .tag-amber { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
+    .tag-red { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+    .tag-gray { background: var(--surface-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Callouts */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      margin: 16px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      border-left: 4px solid;
+    }
+
+    .callout-info { background: var(--info-bg); border-color: var(--info); color: var(--text-main); }
+    .callout-warning { background: var(--warning-bg); border-color: var(--warning); color: var(--text-main); }
+    .callout-success { background: var(--success-bg); border-color: var(--success); color: var(--text-main); }
+    .callout-danger { background: var(--danger-bg); border-color: var(--danger); color: var(--text-main); }
+
+    .callout-icon { font-size: 18px; line-height: 1; margin-top: 2px; }
+    .callout-content { flex: 1; font-size: 13px; }
+    .callout-content strong { display: block; margin-bottom: 4px; font-size: 14px; }
+
+    /* Reading Guide Steps */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+    }
+
+    .step-list::before {
+      content: "";
+      position: absolute;
+      top: 30px;
+      bottom: 30px;
+      left: 23px;
+      width: 2px;
+      background: var(--border-strong);
+      z-index: 1;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 20px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .step-badge {
+      width: 46px;
+      height: 46px;
+      background: var(--surface);
+      border: 2px solid var(--primary);
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 4px var(--bg);
+    }
+
+    .step-body {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .step-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .step-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      background: var(--surface-subtle);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      color: var(--primary);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      font-weight: 600;
+      transition: var(--transition);
+    }
+
+    .step-path:hover {
+      background: var(--primary-light);
+      border-color: var(--primary-border);
+    }
+
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+      background: var(--surface-subtle);
+      padding: 14px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+    }
+
+    .step-col-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Screen Explorer */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: var(--surface);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      align-items: center;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .filter-btn:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+    }
+
+    .filter-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .screen-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      gap: 18px;
+    }
+
+    .screen-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+      position: relative;
+    }
+
+    .screen-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--primary-border);
+    }
+
+    .screen-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .screen-id {
+      font-family: monospace;
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--primary-border);
+    }
+
+    .screen-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .screen-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      flex: 1;
+    }
+
+    .screen-meta {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .screen-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .meta-label {
+      color: var(--text-subtle);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .meta-val {
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Relationship Map Diagram */
+    .diagram-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+
+    .diagram-tiers {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-width: 760px;
+    }
+
+    .tier-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 16px;
+      align-items: center;
+      background: var(--surface-subtle);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+    }
+
+    .tier-label {
+      font-weight: 800;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-right: 2px solid var(--border-strong);
+      padding-right: 12px;
+    }
+
+    .tier-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .node-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-main);
+      box-shadow: var(--shadow-sm);
+      text-decoration: none;
+      transition: var(--transition);
+    }
+
+    .node-card:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    .node-icon { font-size: 14px; }
+
+    /* Code Blocks */
+    pre {
+      background: var(--navy-card);
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 12px 0;
+      border: 1px solid var(--border);
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      background: var(--surface-subtle);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: inherit;
+    }
+
+    /* Floating Back to Top */
+    .back-to-top {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      text-decoration: none;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition);
+      z-index: 30;
+      cursor: pointer;
+      border: none;
+    }
+
+    .back-to-top.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .mobile-header { display: flex; }
+      .sidebar {
+        transform: translateX(-100%);
+        top: 60px;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .main-wrapper {
+        margin-left: 0;
+        padding-top: 60px;
+      }
+      .content-container {
+        padding: 24px 16px 80px 16px;
+      }
+      .hero-banner {
+        padding: 28px 20px;
+      }
+      .hero-title {
+        font-size: 26px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Mobile Top Bar -->
+  <header class="mobile-header">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div class="brand-logo" style="width: 32px; height: 32px; font-size: 16px;">C</div>
+      <div class="brand-text">
+        <h1 style="font-size: 14px;">CoreStaff Mobile</h1>
+      </div>
+    </div>
+    <button class="mobile-menu-btn" id="menuToggle" aria-label="Toggle navigation">☰ Mục lục</button>
+  </header>
+
+  <!-- Navigation Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-logo">C</div>
+      <div class="brand-text">
+        <h1>CoreStaff Flutter</h1>
+        <span>Migration Portal v1.6.0</span>
+      </div>
+    </div>
+
+    <div class="sidebar-search">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="globalSearch" placeholder="Tìm kiếm nhanh (Ctrl + K)..." autocomplete="off">
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-title">Hành trình Onboarding</div>
+      <a href="#overview" class="nav-item"><span class="node-icon">🏢</span> 01. Tổng quan dự án</a>
+      <a href="#scope" class="nav-item"><span class="node-icon">🛡️</span> 02. Phạm vi & Ranh giới</a>
+      <a href="#reading-path" class="nav-item active"><span class="node-icon">🧭</span> 03. Đọc gì trước? (Start Here) <span class="nav-badge badge-primary">Ưu tiên</span></a>
+      <a href="#work-completed" class="nav-item"><span class="node-icon">✅</span> 04. Việc đã hoàn thành</a>
+      <a href="#doc-map" class="nav-item"><span class="node-icon">🗺️</span> 05. Sơ đồ liên kết tài liệu</a>
+
+      <div class="nav-group-title">Khám phá chi tiết</div>
+      <a href="#screen-explorer" class="nav-item"><span class="node-icon">📱</span> 06. 13 Màn hình (Explorer) <span class="nav-badge badge-done">13/13</span></a>
+      <a href="#roadmap" class="nav-item"><span class="node-icon">🚀</span> 07. Lộ trình 6 Sprint (MIG-01..21) <span class="nav-badge badge-done">100%</span></a>
+      <a href="#progress" class="nav-item"><span class="node-icon">📊</span> 08. Tiến độ & Nghiệm thu</a>
+      <a href="#decisions" class="nav-item"><span class="node-icon">⚖️</span> 09. Quyết định kỹ thuật</a>
+      <a href="#contribute" class="nav-item"><span class="node-icon">🛠️</span> 10. Hướng dẫn đóng góp</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span>CoreStaff Docs</span>
+      <button class="theme-toggle-btn" id="themeToggle">🌓 Giao diện</button>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper">
+    <div class="content-container">
+
+      <!-- Hero Header -->
+      <header class="hero-banner">
+        <div class="hero-eyebrow">🚀 Flutter Mobile Migration • Single Source of Truth</div>
+        <h1 class="hero-title">Cổng Thông Tin & Tài Liệu Di Chuyển Ứng Dụng Di Động CoreStaff</h1>
+        <p class="hero-subtitle">
+          Hướng dẫn toàn diện dành cho Kỹ sư Di động, Kiến trúc sư Phần mềm và Thành viên mới gia nhập đội ngũ CoreStaff. Tìm hiểu toàn bộ tiến trình điều tra, thiết kế, kiến trúc BLoC và hiện thực hóa từ React Native sang Flutter.
+        </p>
+
+        <div class="hero-stats-grid">
+          <div class="hero-stat-card">
+            <div class="hero-stat-value">13 / 13</div>
+            <div class="hero-stat-label">Màn hình đạt 100% Parity</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-value">21 / 21</div>
+            <div class="hero-stat-label">Nhiệm vụ MIG Hoàn Tất</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-value">354 / 354</div>
+            <div class="hero-stat-label">Tests Passed (51 Suites)</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="hero-stat-value">0 Errors</div>
+            <div class="hero-stat-label">Static Analyzer Clean</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- SECTION 01 — PROJECT OVERVIEW -->
+      <section id="overview">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">01</span>
+            <h2 class="section-title">Tổng Quan Dự Án CoreStaff</h2>
+          </div>
+          <span class="tag tag-blue">Enterprise SaaS HR & Payroll</span>
+        </div>
+
+        <div class="card">
+          <p style="margin-bottom: 16px;">
+            <strong>CoreStaff</strong> là hệ sinh thái phần mềm quản trị doanh nghiệp tích hợp dành cho doanh nghiệp vừa và nhỏ (10–50 nhân sự), kết nối tự động giữa <strong>chấm công đa tầng</strong> (Wi-Fi BSSID, GPS Geofencing, Selfie), <strong>đơn từ & tính công động</strong>, <strong>thẩm định bảng công có khóa phiên bản</strong>, và <strong>tính toán bảng lương theo luật lao động Việt Nam</strong> (BHXH, BHYT, BHTN, thuế TNCN lũy tiến).
+          </p>
+
+          <h3 class="card-title" style="margin-top: 20px;">Tại sao di chuyển từ React Native sang Flutter?</h3>
+          <ul style="padding-left: 20px; color: var(--text-muted); font-size: 13.5px; line-height: 1.8;">
+            <li><strong>Hiệu năng & Tối ưu luồng phần cứng:</strong> Đồ họa biên dịch trực tiếp ra mã máy (AOT Native Code) qua Impeller/Skia giúp loại bỏ hoàn toàn hiện tượng nghẽn JS Bridge khi xử lý đồng thời luồng vị trí GPS Haversine, kiểm tra Wi-Fi BSSID và nén ảnh Selfie.</li>
+            <li><strong>Tính nhất quán giao diện pixel-perfect:</strong> Không phụ thuộc vào OEM Native Widgets như React Native, đảm bảo 13 màn hình hiển thị đồng nhất tuyệt đối trên cả Android và iOS.</li>
+            <li><strong>Kiến trúc BLoC & Clean Architecture vững chắc:</strong> Dòng dữ liệu đơn hướng (Unidirectional Data Flow) với kiểm soát trạng thái tường minh, ngăn chặn race-condition khi xoay vòng Session Cookie kép (`sid` và `rt`).</li>
+            <li><strong>Bảo mật phần cứng Native:</strong> Lưu trữ Session Cookie mã hóa thông qua `flutter_secure_storage` (KeyStore/KeyChain), thay thế lưu trữ XML/plist không mã hóa của bản Expo trước đây.</li>
+          </ul>
+
+          <h3 class="card-title" style="margin-top: 24px;">Bản Đồ Phân Công Ứng Dụng Trong Kho Mã Nguồn</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ứng dụng</th>
+                  <th>Vị trí thư mục</th>
+                  <th>Công nghệ</th>
+                  <th>Vai trò & Ranh giới trách nhiệm</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>React Native (Nguồn)</strong></td>
+                  <td><code><a href="../CoreStaff/Apps/mobile">CoreStaff/Apps/mobile</a></code></td>
+                  <td>React Native 0.86, Expo 57, TypeScript</td>
+                  <td>Mã nguồn chuẩn ban đầu. Đóng vai trò là <em>Single Source of Truth về hành vi UX</em>. <strong>NGHIÊM CẤM CHỈNH SỬA (READ-ONLY)</strong>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Flutter Mobile (Mục tiêu)</strong></td>
+                  <td><code><a href="../CoreStaff/Apps/mobile_flutter">CoreStaff/Apps/mobile_flutter</a></code></td>
+                  <td>Flutter 3.x, Dart 3.x, BLoC, Dio</td>
+                  <td>Ứng dụng di động sản xuất thay thế bản React Native. Đạt 100% chức năng cho Employee & Manager.</td>
+                </tr>
+                <tr>
+                  <td><strong>Backend REST API</strong></td>
+                  <td><code><a href="../CoreStaff/Apps/api">CoreStaff/Apps/api</a></code></td>
+                  <td>NestJS, TypeScript, MongoDB Atlas, Socket.io</td>
+                  <td>Hệ thống API và hợp đồng nghiệp vụ cốt lõi, bảo hiểm, thuế, chấm công. <strong>NGHIÊM CẤM CHỈNH SỬA</strong>.</td>
+                </tr>
+                <tr>
+                  <td><strong>Web Portal (Quản trị)</strong></td>
+                  <td><code><a href="../CoreStaff/Apps/web">CoreStaff/Apps/web</a></code></td>
+                  <td>React 18, Vite, TypeScript</td>
+                  <td>Dành cho HR, Quản trị viên và Quản lý duyệt bảng công/đơn từ. <em>Nằm ngoài phạm vi di chuyển di động</em>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 02 — SCOPE AND BOUNDARIES -->
+      <section id="scope">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">02</span>
+            <h2 class="section-title">Phạm Vi & Ranh Giới Bảo Mật</h2>
+          </div>
+          <span class="tag tag-amber">Strict Boundaries</span>
+        </div>
+
+        <div class="card">
+          <div class="callout callout-warning">
+            <span class="callout-icon">⚠️</span>
+            <div class="callout-content">
+              <strong>Ranh giới phân quyền di động nghiêm ngặt</strong>
+              Ứng dụng di động CoreStaff chỉ phục vụ chức năng tự phục vụ cá nhân (Self-Service) cho 2 vai trò: <code>EMPLOYEE</code> và <code>DEPARTMENT_MANAGER</code>. Tuyệt đối không mở rộng sang chức năng quản trị cấp cao trên mobile.
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
+            <div style="background: var(--surface-subtle); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <h4 style="color: var(--success); font-size: 14px; margin-bottom: 8px;">✅ Tính năng Được Duyệt Trên Mobile</h4>
+              <ul style="font-size: 13px; line-height: 1.7; padding-left: 18px; color: var(--text-muted);">
+                <li>Đăng nhập, Quên mật khẩu, Đổi mật khẩu bắt buộc & tự nguyện.</li>
+                <li>Xem ca làm việc hôm nay & bảng điều khiển Cockpit cá nhân.</li>
+                <li>Chấm công đa tầng: Wi-Fi BSSID → GPS Haversine → Chụp ảnh Selfie.</li>
+                <li>Xem lịch sử chấm công theo tháng (giờ công, muộn, về sớm, nghỉ phép).</li>
+                <li>Tạo đơn nghỉ phép (kèm hộp tính công động) & Đăng ký tăng ca.</li>
+                <li>Hủy đơn nghỉ phép cá nhân ở trạng thái chờ duyệt.</li>
+                <li>Tra cứu phiếu lương cá nhân (Gross, Net, BHXH, Thuế TNCN).</li>
+                <li>Xem hồ sơ cá nhân và đăng xuất thu hồi session máy chủ.</li>
+              </ul>
+            </div>
+
+            <div style="background: var(--surface-subtle); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <h4 style="color: var(--danger); font-size: 14px; margin-bottom: 8px;">❌ Tính năng Cấm Đưa Lên Mobile</h4>
+              <ul style="font-size: 13px; line-height: 1.7; padding-left: 18px; color: var(--text-muted);">
+                <li><strong>Không đưa màn hình duyệt của Quản lý lên mobile:</strong> Phê duyệt đơn, đối soát công, xác nhận kỳ công bộ phận là độc quyền của Web Portal.</li>
+                <li><strong>Khóa tài khoản HR & Admin:</strong> Đăng nhập với vai trò <code>HR</code> hoặc <code>SYSTEM_ADMIN</code> sẽ bị chặn tại màn hình cảnh báo (<code>SCR-007</code>) và yêu cầu dùng Web.</li>
+                <li><strong>Không thay đổi backend:</strong> Không được tạo thêm route API mới hoặc sửa schema DB.</li>
+                <li><strong>Không vi phạm bảo mật session:</strong> Không lưu plaintext cookie vào SharedPreferences.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 03 — GUIDED READING PATH -->
+      <section id="reading-path">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">03</span>
+            <h2 class="section-title">Bắt Đầu Từ Đâu? (Start Here — Guided Reading Path)</h2>
+          </div>
+          <span class="tag tag-green">Lộ trình đọc tài liệu chuẩn 11 bước</span>
+        </div>
+
+        <p class="section-desc">
+          Là thành viên mới, bạn <strong>bắt buộc phải đọc các tài liệu theo đúng thứ tự dưới đây</strong> trước khi bắt tay vào đọc hay viết code. Mỗi bước cung cấp nền tảng cần thiết cho bước kế tiếp.
+        </p>
+
+        <div class="step-list" style="margin-top: 24px;">
+
+          <!-- Step 1 -->
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Hiểu Bức Tranh Tổng Thể Dự Án CoreStaff</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Khám phá bài toán nghiệp vụ HR, chấm công, luật lao động và kiến trúc monorepo.</p>
+                </div>
+                <a href="../PROJECT_CONTEXT.md" class="step-path">📄 ../PROJECT_CONTEXT.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Hệ thống đa doanh nghiệp (tenant isolation), 4 vai trò người dùng, chu trình chốt công và luật thuế TNCN, bảo hiểm Việt Nam.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Giúp bạn hiểu rõ vị trí của ứng dụng mobile trong toàn bộ hệ sinh thái CoreStaff trước khi đi sâu vào giao diện.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Hiểu Ứng Dụng Di Động React Native Gốc</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Khám phá trải nghiệm di động ban đầu và tiêu chuẩn giao diện React Native.</p>
+                </div>
+                <a href="../CoreStaff/Docs/MOBILE_DESIGN_MASTER.md" class="step-path">📄 ../CoreStaff/Docs/MOBILE_DESIGN_MASTER.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Triết lý thiết kế mobile-first, vùng chạm ngón tay 44x44px, cấu trúc navigation 5 tab trên React Native và mã nguồn tại <code>Apps/mobile/</code>.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  React Native là chuẩn mực hành vi gốc (Behavioral Gold Standard). Bạn phải biết bản gốc làm gì trước khi đọc bản di chuyển.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="step-item">
+            <div class="step-badge">3</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Nắm Bắt Hệ Thống Thiết Kế Chuẩn Flutter (Design Tokens)</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Nguồn tham chiếu duy nhất về màu sắc, kiểu chữ và nguyên tắc giao diện Flutter.</p>
+                </div>
+                <a href="./FLUTTER_DESIGN_MASTER.md" class="step-path">📄 ./FLUTTER_DESIGN_MASTER.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Hệ thống lớp <code>AppColors</code>, <code>AppTypography</code>, <code>AppSpacing</code>, <code>AppRadius</code> và 7 nguyên tắc UX cốt lõi (Clarity, Zero Jumpiness, Vietnamese First).
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Đảm bảo không bao giờ hardcode mã màu hex hay kích thước pixel tùy ý trong code Flutter.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="step-item">
+            <div class="step-badge">4</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Nắm Rõ Toàn Bộ 13 Màn Hình & Luồng Giao Diện</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Danh mục kiểm toán toàn diện mã nguồn React Native thực tế.</p>
+                </div>
+                <a href="./FLUTTER_SCREEN_INVENTORY.md" class="step-path">📄 ./FLUTTER_SCREEN_INVENTORY.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Bảng danh mục 13 màn hình (SCR-001 đến SCR-013), mã nguồn RN tương ứng, điểm vào/ra, vai trò và đồ thị điều hướng toàn diện.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Xác lập ranh giới chính xác 13 màn hình cần làm, không thiếu và không phát sinh màn hình ngoài phạm vi.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="step-item">
+            <div class="step-badge">5</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Hiểu Độ Bao Phủ & Điểm Lệch Giữa RN Và Thiết Kế</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Báo cáo đối chiếu và các phương án hòa giải (Reconciliation).</p>
+                </div>
+                <a href="./FLUTTER_DESIGN_COVERAGE_AUDIT.md" class="step-path">📄 ./FLUTTER_DESIGN_COVERAGE_AUDIT.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Ma trận phân loại 5 nhóm: MATCHED, PARTIALLY_DOCUMENTED, CONFLICT. Hiểu tại sao tách SCR-004 và SCR-005, giải pháp Native Camera vs Live Viewfinder.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Tránh lặp lại tranh luận hoặc nhầm lẫn giữa thiết kế lý thuyết và hành vi thực tế của mã nguồn.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 6 -->
+          <div class="step-item">
+            <div class="step-badge">6</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Đọc Đặc Tả Kỹ Thuật Chi Tiết 13 Màn Hình</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Quy cách hiện thực hóa từng màn hình: cây widget, trạng thái, mapping API.</p>
+                </div>
+                <a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md" class="step-path">📄 ./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Cấu trúc widget tree, layout SafeArea, trạng thái loading/empty/error, validation rules và tiêu chí nghiệm thu của từng SCR-001..013.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Tài liệu kỹ thuật quan trọng nhất để hiểu sâu cách thức mỗi màn hình được dựng và phản ứng với dữ liệu.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 7 -->
+          <div class="step-item">
+            <div class="step-badge">7</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Khám Phá Danh Mục Widget Tái Sử Dụng</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Bộ sưu tập các thành phần dùng chung trước khi viết màn hình con.</p>
+                </div>
+                <a href="./FLUTTER_COMPONENT_CATALOG.md" class="step-path">📄 ./FLUTTER_COMPONENT_CATALOG.md</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Đặc tả constructor và props của <code>AppCard</code>, <code>AppButton</code>, <code>AppTextField</code>, <code>SegmentedControl</code>, <code>StatusBadge</code>, <code>ScreenHeader</code>.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Tuyệt đối không tự viết lại nút bấm hay ô nhập liệu riêng; phải dùng lại widget trong danh mục để giữ tính nhất quán.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 8 -->
+          <div class="step-item">
+            <div class="step-badge">8</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Nắm Vững Kiến Trúc BLoC & Quyết Định Kỹ Thuật</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Cơ chế Session Cookie, Mutex refresh 401, Haversine GPS, BSSID trên Android 10+.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <a href="./FLUTTER_MIGRATION_ARCHITECTURE.md" class="step-path">📄 Kiến trúc BLoC</a>
+                  <a href="./FLUTTER_SCREEN_DECISIONS.md" class="step-path">📄 Quyết định kỹ thuật</a>
+                </div>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Cơ chế Clean Architecture (Presentation, Domain, Data), HttpOnly Cookie Manager, đơn vị thời gian Asia/Ho_Chi_Minh, và hạn chế phần cứng di động.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Hiểu rõ "tại sao code lại viết như vậy" trước khi đụng vào tầng service, network hoặc BLoC.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 9 -->
+          <div class="step-item">
+            <div class="step-badge">9</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Hiểu Lộ Trình 6 Sprint & Phụ Thuộc (Roadmap)</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Chuỗi thực thi tuần tự từ MIG-01 đến MIG-21.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <a href="./FLUTTER_SCREEN_MIGRATION_ROADMAP.md" class="step-path">📄 Screen Roadmap</a>
+                  <a href="./FLUTTER_MIGRATION_ROADMAP.md" class="step-path">📄 Master Roadmap</a>
+                </div>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Phân chia 6 sprint, nhiệm vụ tiên quyết (dependencies), cửa kiểm soát chất lượng (Quality Gates: Reviewer, Challenger, Auditor).
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Nắm bắt logic phân rã giai đoạn để hiểu thứ tự phụ thuộc giữa các tầng dịch vụ.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 10 -->
+          <div class="step-item">
+            <div class="step-badge">10</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Kiểm Tra Báo Cáo Tiến Độ & Báo Cáo Nghiệm Thu Cuối</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Minh chứng thực tế về kết quả kiểm thử và nghiệm thu 100%.</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <a href="./FLUTTER_MIGRATION_PROGRESS.md" class="step-path">📄 Tiến độ v1.6.0</a>
+                  <a href="./FLUTTER_MIGRATION_FINAL_REPORT.md" class="step-path">📄 Báo cáo nghiệm thu</a>
+                </div>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Xác nhận 21/21 task hoàn tất, 354 test cases vượt qua, ma trận màn hình 13/13 và biên bản độc lập VICTORY CONFIRMED.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Biết chính xác hiện trạng hệ thống để không làm lại những việc đã nghiệm thu.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 11 -->
+          <div class="step-item">
+            <div class="step-badge">11</div>
+            <div class="step-body">
+              <div class="step-header">
+                <div>
+                  <h3 class="step-title">Khám Phá Mã Nguồn Thực Tế `Apps/mobile_flutter`</h3>
+                  <p style="font-size: 13px; color: var(--text-muted);">Kết nối toàn bộ tài liệu lý thuyết với từng dòng mã nguồn Dart thực tế.</p>
+                </div>
+                <a href="../CoreStaff/Apps/mobile_flutter" class="step-path">📁 ../CoreStaff/Apps/mobile_flutter</a>
+              </div>
+              <div class="step-grid">
+                <div>
+                  <div class="step-col-title">🎯 Bạn sẽ học được gì?</div>
+                  Cấu trúc thư mục <code>lib/core/</code>, <code>lib/features/</code>, <code>lib/shared/</code>, bộ test tại <code>test/unit/</code>, <code>test/widget/</code> và chạy thử app.
+                </div>
+                <div>
+                  <div class="step-col-title">💡 Tại sao đọc lúc này?</div>
+                  Đến bước này, bạn đã có đủ 100% ngữ cảnh để đọc code mà không bị bỡ ngỡ trước bất kỳ quy ước kiến trúc nào.
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 04 — WHAT HAS BEEN DONE -->
+      <section id="work-completed">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">04</span>
+            <h2 class="section-title">Tổng Hợp Những Việc Đã Hoàn Thành</h2>
+          </div>
+          <span class="tag tag-green">6 Hạng mục điều tra & hiện thực</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px;">
+          <!-- A -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">🔍</span> A. Điều tra mã nguồn & Kho lưu trữ</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Kiểm toán toàn bộ mã nguồn React Native (`App.tsx`, 6 màn hình chức năng, auth pattern, config). Phân tích cấu trúc Monorepo, hợp đồng REST API tại `Apps/api`, và đánh giá khung sườn Flutter có sẵn.
+            </p>
+            <span class="tag tag-blue">100% Verified</span>
+          </div>
+
+          <!-- B -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">📋</span> B. Kiểm kê danh mục 13 màn hình</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Xác lập chính xác 13 màn hình và luồng giao diện (`SCR-001` đến `SCR-013`). Lập bản đồ đồ thị điều hướng State-driven, các điểm kích hoạt Modal Sheet và Alert Dialogs hệ thống.
+            </p>
+            <span class="tag tag-blue">SCR-001 → SCR-013</span>
+          </div>
+
+          <!-- C -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">⚖️</span> C. Kiểm toán độ bao phủ thiết kế</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Đối chiếu chi tiết từng màn hình giữa React Native và Design Master. Phân loại 5 cấp độ bao phủ và giải quyết các điểm lệch kỹ thuật (tách Quên/Đặt lại mật khẩu, Native camera intent).
+            </p>
+            <span class="tag tag-amber">Gap Reconciliation Resolved</span>
+          </div>
+
+          <!-- D -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">📐</span> D. Đặc tả giao diện chi tiết Flutter</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Xây dựng bộ đặc tả kỹ thuật hoàn chỉnh: layout hierarchy, token styling, các trạng thái loading/empty/error, data mapping và tiêu chí nghiệm thu chặt chẽ cho cả 13 màn hình.
+            </p>
+            <span class="tag tag-blue">13 Detailed Specs</span>
+          </div>
+
+          <!-- E -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">🧩</span> E. Danh mục Widget tái sử dụng</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Thiết kế thư viện component dùng chung chuẩn Material 3: `AppCard`, `AppButton`, `AppTextField`, `SegmentedControl`, `StatusBadge`, `ScreenHeader`, `Banners`.
+            </p>
+            <span class="tag tag-blue">5 Component Groups</span>
+          </div>
+
+          <!-- F -->
+          <div class="card">
+            <h3 class="card-title"><span class="node-icon">🚀</span> F. Hiện thực hóa & Kiểm thử 6 Sprint</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Hoàn tất toàn bộ 21 task (MIG-01 → MIG-21). Thiết lập mạng Dio với mutex làm mới token 401, đa tầng chấm công phần cứng (Wi-Fi, GPS, Selfie), Socket.io realtime và 354 automated tests.
+            </p>
+            <span class="tag tag-green">354/354 Tests Passed</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 05 — DOCUMENT RELATIONSHIP MAP -->
+      <section id="doc-map">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">05</span>
+            <h2 class="section-title">Sơ Đồ Liên Kết & Phân Tầng Tài Liệu</h2>
+          </div>
+          <span class="tag tag-blue">Architectural Document Map</span>
+        </div>
+
+        <p class="section-desc">
+          Tài liệu CoreStaff được tổ chức thành 5 phân tầng kỹ thuật có quan hệ nhân - quả rõ ràng. Tài liệu tầng trên định hình quy tắc và yêu cầu cho tài liệu tầng dưới.
+        </p>
+
+        <div class="diagram-container">
+          <div class="diagram-tiers">
+
+            <!-- Tier 1 -->
+            <div class="tier-row">
+              <div class="tier-label">1. Nguồn Gốc & Ngữ Cảnh</div>
+              <div class="tier-cards">
+                <a href="../PROJECT_CONTEXT.md" class="node-card"><span class="node-icon">📄</span> PROJECT_CONTEXT.md <span class="tag tag-gray">System Master</span></a>
+                <a href="../CoreStaff/Apps/mobile" class="node-card"><span class="node-icon">📱</span> Apps/mobile (RN Code) <span class="tag tag-amber">Behavior Gold Standard</span></a>
+                <a href="../CoreStaff/Docs/MOBILE_DESIGN_MASTER.md" class="node-card"><span class="node-icon">🎨</span> MOBILE_DESIGN_MASTER.md <span class="tag tag-gray">RN Specs</span></a>
+                <a href="../CoreStaff/Apps/api" class="node-card"><span class="node-icon">⚙️</span> Apps/api (Backend) <span class="tag tag-gray">API Contracts</span></a>
+              </div>
+            </div>
+
+            <!-- Tier 2 -->
+            <div class="tier-row">
+              <div class="tier-label">2. Kiểm Toán & Phân Tích</div>
+              <div class="tier-cards">
+                <a href="./FLUTTER_SCREEN_INVENTORY.md" class="node-card"><span class="node-icon">📋</span> FLUTTER_SCREEN_INVENTORY.md <span class="tag tag-blue">13 Screen IDs</span></a>
+                <a href="./FLUTTER_DESIGN_COVERAGE_AUDIT.md" class="node-card"><span class="node-icon">🔍</span> FLUTTER_DESIGN_COVERAGE_AUDIT.md <span class="tag tag-blue">Gap Analysis</span></a>
+                <a href="./FLUTTER_FEATURE_MAPPING.md" class="node-card"><span class="node-icon">🔀</span> FLUTTER_FEATURE_MAPPING.md <span class="tag tag-blue">RN → Flutter Map</span></a>
+              </div>
+            </div>
+
+            <!-- Tier 3 -->
+            <div class="tier-row">
+              <div class="tier-label">3. Quy Chuẩn & Đặc Tả</div>
+              <div class="tier-cards">
+                <a href="./FLUTTER_DESIGN_MASTER.md" class="node-card"><span class="node-icon">🎨</span> FLUTTER_DESIGN_MASTER.md <span class="tag tag-green">Single Source of Truth</span></a>
+                <a href="./FLUTTER_COMPONENT_CATALOG.md" class="node-card"><span class="node-icon">🧩</span> FLUTTER_COMPONENT_CATALOG.md <span class="tag tag-green">Shared Widgets</span></a>
+                <a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md" class="node-card"><span class="node-icon">📐</span> FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md <span class="tag tag-green">13 Tech Specs</span></a>
+                <a href="./FLUTTER_MIGRATION_ARCHITECTURE.md" class="node-card"><span class="node-icon">🏛️</span> FLUTTER_MIGRATION_ARCHITECTURE.md <span class="tag tag-green">BLoC & Clean Arch</span></a>
+                <a href="./FLUTTER_SCREEN_DECISIONS.md" class="node-card"><span class="node-icon">⚖️</span> FLUTTER_SCREEN_DECISIONS.md <span class="tag tag-green">Technical Trade-offs</span></a>
+              </div>
+            </div>
+
+            <!-- Tier 4 -->
+            <div class="tier-row">
+              <div class="tier-label">4. Kế Hoạch & Tiến Độ</div>
+              <div class="tier-cards">
+                <a href="./FLUTTER_SCREEN_MIGRATION_ROADMAP.md" class="node-card"><span class="node-icon">🗺️</span> FLUTTER_SCREEN_MIGRATION_ROADMAP.md <span class="tag tag-amber">Screen Dependencies</span></a>
+                <a href="./FLUTTER_MIGRATION_ROADMAP.md" class="node-card"><span class="node-icon">🚀</span> FLUTTER_MIGRATION_ROADMAP.md <span class="tag tag-amber">Sprint Plan (MIG-01..21)</span></a>
+                <a href="./FLUTTER_MIGRATION_PROGRESS.md" class="node-card"><span class="node-icon">📊</span> FLUTTER_MIGRATION_PROGRESS.md <span class="tag tag-blue">Progress Matrix v1.6.0</span></a>
+              </div>
+            </div>
+
+            <!-- Tier 5 -->
+            <div class="tier-row">
+              <div class="tier-label">5. Mã Nguồn & Nghiệm Thu</div>
+              <div class="tier-cards">
+                <a href="../CoreStaff/Apps/mobile_flutter" class="node-card"><span class="node-icon">📱</span> Apps/mobile_flutter <span class="tag tag-green">Flutter Production Code</span></a>
+                <a href="./FLUTTER_MIGRATION_FINAL_REPORT.md" class="node-card"><span class="node-icon">🏆</span> FLUTTER_MIGRATION_FINAL_REPORT.md <span class="tag tag-green">Final Audit Verified</span></a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 06 — SCREEN EXPLORER -->
+      <section id="screen-explorer">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">06</span>
+            <h2 class="section-title">Khám Phá 13 Màn Hình (Interactive Screen Explorer)</h2>
+          </div>
+          <span class="tag tag-blue">SCR-001 đến SCR-013</span>
+        </div>
+
+        <p class="section-desc">
+          Toàn bộ 13 màn hình và luồng giao diện đã được kiểm toán từ React Native và hiện thực hóa đầy đủ trên Flutter. Sử dụng bộ lọc dưới đây để tra cứu màn hình theo vai trò hoặc danh mục.
+        </p>
+
+        <!-- Filters -->
+        <div class="filter-bar">
+          <div class="filter-group">
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">Danh mục:</span>
+            <button class="filter-btn active" data-filter="all">Tất cả (13)</button>
+            <button class="filter-btn" data-filter="cat-system">Hệ thống & Auth (7)</button>
+            <button class="filter-btn" data-filter="cat-tabs">5 Tab Chính (5)</button>
+            <button class="filter-btn" data-filter="cat-modal">Modal & Flow (1)</button>
+          </div>
+          <div class="filter-group" style="margin-left: auto;">
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">Vai trò:</span>
+            <button class="filter-btn" data-role="all">Tất cả vai trò</button>
+            <button class="filter-btn" data-role="emp">Employee / Manager</button>
+            <button class="filter-btn" data-role="trapped">Blocked (HR/Admin)</button>
+          </div>
+        </div>
+
+        <!-- Screen Grid -->
+        <div class="screen-grid" id="screenGrid">
+
+          <!-- SCR-001 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-001</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Splash / Bootstrap Screen</h3>
+            <p class="screen-desc">Khởi tạo ứng dụng, hiển thị thương hiệu CoreStaff và tự động kiểm tra URL kết nối máy chủ backend (`resolveApiBase`) và thẩm định tính hợp lệ của phiên đăng nhập.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:67-69 (LoadingScreen)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">splash_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Tất cả người dùng</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-001-splash--bootstrap-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-002 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-002</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Connection Error Screen</h3>
+            <p class="screen-desc">Màn hình báo lỗi mất kết nối máy chủ toàn cục khi khởi chạy hoặc rớt mạng kéo dài, đi kèm nút "Thử kết nối lại" để kích hoạt lại luồng bootstrap.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:71-73 (ConnectionError)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">connection_error_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Tất cả người dùng</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-002-connection-error-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-003 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-003</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Login Screen</h3>
+            <p class="screen-desc">Màn hình đăng nhập xác thực tài khoản qua email chuẩn hóa hoặc mã nhân viên, mật khẩu ẩn/hiện, ghi nhớ phiên làm việc và điều hướng khôi phục mật khẩu.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:83-92 (LoginScreen)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">login_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Chưa xác thực</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-003-login-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-004 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-004</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Forgot Password Screen</h3>
+            <p class="screen-desc">Bước 1 của quy trình tự phục hồi tài khoản: Người dùng nhập email đăng ký để hệ thống gửi mã token đặt lại mật khẩu và chuyển tiếp sang bước 2.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:94-98 (ForgotScreen)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">forgot_password_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Quên mật khẩu</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-004-forgot-password-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-005 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-005</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Reset Password Screen</h3>
+            <p class="screen-desc">Bước 2 của quy trình tự phục hồi tài khoản: Nhập mã token xác thực nhận từ email, thiết lập mật khẩu mới (tối thiểu 8 ký tự) và xác nhận mật khẩu.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:100-104 (ResetScreen)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">reset_password_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Có mã đặt lại</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-005-reset-password-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-006 -->
+          <div class="screen-card" data-category="cat-system" data-role="all">
+            <div class="screen-top">
+              <span class="screen-id">SCR-006</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Change Password Screen</h3>
+            <p class="screen-desc">Hỗ trợ 2 chế độ: Đổi mật khẩu bắt buộc lần đầu (khi cờ `mustChangePassword === true`, không có nút Để sau) hoặc đổi tự nguyện từ Tab Tài khoản.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:106-110 (ChangePassword)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">change_password_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">Người dùng đăng nhập</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-006-change-password-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-007 -->
+          <div class="screen-card" data-category="cat-system" data-role="trapped">
+            <div class="screen-top">
+              <span class="screen-id">SCR-007</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Blocked Role Notice Screen</h3>
+            <p class="screen-desc">Cảnh báo phân quyền tự động bẫy các tài khoản vai trò `HR` và `SYSTEM_ADMIN` cố tình truy cập mobile app; hướng dẫn mở Web Portal và cung cấp nút Đăng xuất.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">App.tsx:117-129 (isBlockedRole)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">unauthorized_role_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">HR, SYSTEM_ADMIN</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-007-blocked-role-notice-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-008 -->
+          <div class="screen-card" data-category="cat-tabs" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-008</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Overview Cockpit Tab (Tab 0)</h3>
+            <p class="screen-desc">Bảng điều khiển cá nhân tổng hợp: Lời chào + Avatar 2 chữ cái, Thẻ Hero ca làm hôm nay (vào ca/ra ca), 2 thẻ chú ý (đơn chờ duyệt, phiếu lương mới), và 3 hàng Quick Row.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">OverviewScreen.tsx:1-66</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">overview_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-008-overview-dashboard-tab" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-009 -->
+          <div class="screen-card" data-category="cat-tabs" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-009</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Attendance Tab & Punch (Tab 2)</h3>
+            <p class="screen-desc">Trung tâm chấm công: Xác thực đa tầng (Wi-Fi BSSID → GPS Geofencing → Selfie camera), thẻ trừ giờ nghỉ phép HR áp dụng, lưới 3 chỉ số và lịch sử theo tháng.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">AttendanceScreen.tsx:1-147</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">attendance_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-009-attendance-tab--punch-flow" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-010 -->
+          <div class="screen-card" data-category="cat-tabs" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-010</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Requests Feed Tab (Tab 1)</h3>
+            <p class="screen-desc">Quản lý toàn bộ đơn từ cá nhân: Thẻ hành động nhanh Tạo đơn nghỉ phép / Tăng ca, SegmentedControl 3 tab lọc (`Tất cả`, `Nghỉ phép`, `Tăng ca`), hủy đơn đang chờ duyệt.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">RequestsScreen.tsx:1-53</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">requests_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-010-requests-tab-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-011 -->
+          <div class="screen-card" data-category="cat-modal" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-011</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Request Creation Modal Sheet</h3>
+            <p class="screen-desc">Biểu mẫu cuộn bàn phím tạo mới đơn từ: Hộp tính công động (`ShiftPreviewBox`) debounce 250ms gọi `/preview`, kiểm tra ràng buộc 9 quy tắc, đăng ký tăng ca kèm múi giờ +07:00.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">RequestsScreen.tsx:54-137 (RequestModal)</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">request_creation_modal.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-011-request-creation-modal-sheet" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-012 -->
+          <div class="screen-card" data-category="cat-tabs" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-012</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Payslips Tab Screen (Tab 3)</h3>
+            <p class="screen-desc">Tra cứu thu nhập và phân rã bảng lương: Thẻ Dark tóm tắt kỳ gần nhất, Badge số kỳ lương mới, Accordion Card mở rộng phân rã Gross, BHXH, Thuế TNCN, và Net lương.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">PayslipsScreen.tsx:1-120</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">payslips_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-012-payslips-tab-screen" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+          <!-- SCR-013 -->
+          <div class="screen-card" data-category="cat-tabs" data-role="emp">
+            <div class="screen-top">
+              <span class="screen-id">SCR-013</span>
+              <span class="tag tag-green">COMPLETED</span>
+            </div>
+            <h3 class="screen-name">Account Tab & Profile (Tab 4)</h3>
+            <p class="screen-desc">Hồ sơ cá nhân và cài đặt bảo mật: Hiển thị chức danh, phòng ban, người quản lý trực tiếp, nơi làm việc, ngày gia nhập, liên kết Đổi mật khẩu và Đăng xuất thu hồi session.</p>
+            <div class="screen-meta">
+              <div class="screen-meta-row"><span class="meta-label">RN Source</span><span class="meta-val">AccountScreen.tsx:1-63</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Flutter File</span><span class="meta-val">account_screen.dart</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Vai trò</span><span class="meta-val">EMPLOYEE, MANAGER</span></div>
+              <div class="screen-meta-row"><span class="meta-label">Đặc tả</span><a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md#scr-013-account-tab-screen--logout-flow" class="tag tag-blue">Xem Spec ↗</a></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 07 — MIGRATION ROADMAP VISUALIZATION -->
+      <section id="roadmap">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">07</span>
+            <h2 class="section-title">Lộ Trình Di Chuyển 6 Sprint (MIG-01 → MIG-21)</h2>
+          </div>
+          <span class="tag tag-green">100% Hoàn Thành & Nghiệm Thu</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+
+          <!-- Sprint 1 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 1: Nền Tảng Hạ Tầng & Khung Xác Thực (MIG-01 → MIG-08)</h3>
+              <span class="tag tag-green">COMPLETED • 58 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Thiết lập hệ thống dependencies, token giao diện, Dio HTTP engine quản lý cookie kép (`sid`, `rt`), kiểm tra kết nối (SCR-001, SCR-002), đăng nhập (SCR-003), khôi phục mật khẩu (SCR-004, SCR-005), đổi pass (SCR-006) và shell 5 tab bẫy vai trò HR/Admin (SCR-007).
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-01 (Build/Config), MIG-02 (Design Tokens), MIG-03 (Secure Cookies), MIG-04 (Bootstrap Probe), MIG-05 (Login), MIG-06 (Password Recovery), MIG-07 (Password Change), MIG-08 (5-Tab Shell).
+            </div>
+          </div>
+
+          <!-- Sprint 2 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 2: Tự Phục Vụ Cốt Lõi: Phiếu Lương & Tài Khoản (MIG-09 → MIG-11)</h3>
+              <span class="tag tag-green">COMPLETED • 72 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Hiện thực hóa Tab Tài khoản (SCR-013) kèm thu hồi session đăng xuất và Tab Phiếu lương (SCR-012) với Accordion phân rã Gross/Bảo hiểm/Thuế/Net, cập nhật lạc quan trạng thái đã đọc `VIEWED`.
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-09 (Account Profile & Logout), MIG-10 (Payslip Listing & Breakdown), MIG-11 (Optimistic Read Receipt).
+            </div>
+          </div>
+
+          <!-- Sprint 3 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 3: Quản Lý Đơn Từ & Tính Công Động (MIG-12 → MIG-13)</h3>
+              <span class="tag tag-green">COMPLETED • 83 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Hiện thực hóa Tab Đơn từ (SCR-010) với lọc 3 tab và hủy đơn lạc quan; Modal Sheet tạo đơn (SCR-011) với động cơ debounce 250ms gọi `/preview` tính công và serializing múi giờ +07:00 cho tăng ca.
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-12 (Requests Feed & Filters), MIG-13 (Request Modal & 250ms Debounced Preview Engine).
+            </div>
+          </div>
+
+          <!-- Sprint 4 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 4: Bảng Điều Khiển Tổng Quan & Lịch Sử Công (MIG-14 → MIG-15)</h3>
+              <span class="tag tag-green">COMPLETED • 69 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Bảng điều khiển Cockpit (SCR-008) tổng hợp 4 nguồn API song song có khả năng chống chịu lỗi thành phần; Tab Chấm công (SCR-009) hiển thị ca hôm nay, dòng thời gian chấm công và chuyển tháng lịch sử.
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-14 (Overview Cockpit & Settled Aggregation), MIG-15 (Attendance View & Monthly Calendar).
+            </div>
+          </div>
+
+          <!-- Sprint 5 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 5: Tích Hợp Phần Cứng & Thác Chấm Công Đa Tầng (MIG-16 → MIG-19)</h3>
+              <span class="tag tag-green">COMPLETED • 53 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Kết nối dịch vụ phần cứng thiết bị thật: Wi-Fi BSSID (`network_info_plus`), GPS Geofencing Haversine (`geolocator`), Camera Selfie (`image_picker`), điều phối viên thác chấm công (`PunchCoordinator`) và header UUID v4 `Idempotency-Key`.
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-16 (Wi-Fi BSSID Matching), MIG-17 (GPS Geofencing), MIG-18 (Front Camera Selfie), MIG-19 (Waterfall Cascade Coordinator & Idempotency).
+            </div>
+          </div>
+
+          <!-- Sprint 6 -->
+          <div class="card" style="border-left: 4px solid var(--primary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="font-size: 16px; font-weight: 800; color: var(--primary);">Sprint 6: Đồng Bộ Thời Gian Thực & Vòng Đời Ứng Dụng (MIG-20 → MIG-21)</h3>
+              <span class="tag tag-green">COMPLETED • 19 Tests</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+              <strong>Mục tiêu:</strong> Client Socket.io kết nối namespace `/events` với xác thực cookie, gom sự kiện trượt 300ms làm mới BLoC ngầm (`RealtimeSyncCoordinator`), và giám sát vòng đời app quay lại foreground sau 15s (`AppLifecycleCoordinator`).
+            </p>
+            <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+              Tasks: MIG-20 (Socket.io Client & 300ms Batching), MIG-21 (App Lifecycle Resumption & Full Regression Audit).
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 08 — WHAT HAS BEEN COMPLETED VS WHAT REMAINS -->
+      <section id="progress">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">08</span>
+            <h2 class="section-title">Tiến Độ & Phân Loại Trạng Thái Nghiệm Thu</h2>
+          </div>
+          <span class="tag tag-green">Báo Cáo Nghiệm Thu Độc Lập</span>
+        </div>
+
+        <div class="card">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
+            <div style="background: var(--success-bg); border: 1px solid var(--success-border); padding: 14px; border-radius: var(--radius-md);">
+              <div style="font-size: 24px; font-weight: 800; color: var(--success);">100%</div>
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--success); margin-top: 2px;">COMPLETED (21 Tasks)</div>
+            </div>
+            <div style="background: var(--info-bg); border: 1px solid var(--info-border); padding: 14px; border-radius: var(--radius-md);">
+              <div style="font-size: 24px; font-weight: 800; color: var(--info);">0</div>
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--info); margin-top: 2px;">IN PROGRESS</div>
+            </div>
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border); padding: 14px; border-radius: var(--radius-md);">
+              <div style="font-size: 24px; font-weight: 800; color: var(--text-muted);">0</div>
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-top: 2px;">BLOCKED</div>
+            </div>
+            <div style="background: var(--warning-bg); border: 1px solid var(--warning-border); padding: 14px; border-radius: var(--radius-md);">
+              <div style="font-size: 24px; font-weight: 800; color: var(--warning);">3 Hạng mục</div>
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--warning); margin-top: 2px;">PLANNED / DEPLOYMENT</div>
+            </div>
+          </div>
+
+          <h3 class="card-title">Chi Tiết Trạng Thái Từng Nhóm Hạng Mục</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hạng mục công việc</th>
+                  <th>Căn cứ / Minh chứng</th>
+                  <th>Trạng thái</th>
+                  <th>Hành động cần thực hiện tiếp theo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Kiểm toán & Đặc tả 13 màn hình</strong></td>
+                  <td>`FLUTTER_SCREEN_INVENTORY.md`, `FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md`</td>
+                  <td><span class="tag tag-green">COMPLETED</span></td>
+                  <td>Đã nghiệm thu. Sẵn sàng cho bảo trì hoặc mở rộng P2.</td>
+                </tr>
+                <tr>
+                  <td><strong>Hiện thực hóa 13 màn hình Flutter</strong></td>
+                  <td>`CoreStaff/Apps/mobile_flutter/lib/` (Features, Core, Shared)</td>
+                  <td><span class="tag tag-green">COMPLETED</span></td>
+                  <td>Đã nghiệm thu. Đạt 100% đối xứng chức năng với React Native.</td>
+                </tr>
+                <tr>
+                  <td><strong>Hạ tầng Network & Session Cookie</strong></td>
+                  <td>`cookie_manager.dart`, `secure_storage_service.dart`, `auth_interceptor.dart`</td>
+                  <td><span class="tag tag-green">COMPLETED</span></td>
+                  <td>Đã nghiệm thu. Vượt qua kiểm thử mutex xoay vòng token 401.</td>
+                </tr>
+                <tr>
+                  <td><strong>Tích hợp phần cứng chấm công</strong></td>
+                  <td>`wifi_service.dart`, `location_service.dart`, `camera_service.dart`, `punch_coordinator.dart`</td>
+                  <td><span class="tag tag-green">COMPLETED</span></td>
+                  <td>Đã nghiệm thu. Vượt qua kiểm thử thác đa tầng và UUID v4 Idempotency.</td>
+                </tr>
+                <tr>
+                  <td><strong>Bộ kiểm thử tự động (Unit & Widget)</strong></td>
+                  <td>354 tests passed across 51 test suites, `flutter analyze` 0 issues</td>
+                  <td><span class="tag tag-green">COMPLETED</span></td>
+                  <td>Tích hợp vào CI/CD Pipeline để tự động chạy trên mọi Pull Request.</td>
+                </tr>
+                <tr>
+                  <td><strong>Cấu hình Keystore & Provisioning Profile</strong></td>
+                  <td>`android/app/build.gradle.kts`, `ios/Runner.xcodeproj`</td>
+                  <td><span class="tag tag-amber">PLANNED (CI/CD)</span></td>
+                  <td>Cấu hình key signing sản xuất trước khi phát hành lên Google Play / App Store.</td>
+                </tr>
+                <tr>
+                  <td><strong>Thử nghiệm thực tế Wi-Fi Android 10+</strong></td>
+                  <td>Yêu cầu bật công tắc GPS vật lý trên thiết bị thật để đọc BSSID</td>
+                  <td><span class="tag tag-amber">PLANNED (Device QA)</span></td>
+                  <td>Chạy thử nghiệm trên nhiều dòng điện thoại Android thật (Samsung, Xiaomi, Pixel).</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 09 — IMPORTANT TECHNICAL DECISIONS -->
+      <section id="decisions">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">09</span>
+            <h2 class="section-title">Các Quyết Định Kiến Trúc Cốt Lõi</h2>
+          </div>
+          <span class="tag tag-amber">Must-Read Before Coding</span>
+        </div>
+
+        <p class="section-desc">
+          Những quyết định kỹ thuật dưới đây đã được thảo luận, đánh giá thỏa hiệp (trade-offs) và phê duyệt trong <code>FLUTTER_SCREEN_DECISIONS.md</code>. <strong>Lập trình viên tuyệt đối không tự ý thay đổi mà không có sự đồng thuận của Tech Lead.</strong>
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+
+          <div class="card">
+            <h3 class="card-title">1. Cơ Chế Session Cookie Kép & Mutex Refresh 401</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+              <strong>Quyết định:</strong> Không sử dụng Bearer Token trong Header Authorization. Backend CoreStaff sử dụng 2 HttpOnly Cookie: <code>sid</code> (Session ID, TTL 30 phút) và <code>rt</code> (Refresh Token, TTL 14 ngày). Trên Flutter, <code>AppCookieManager</code> tự động tách header <code>Set-Cookie</code> theo cú pháp chuẩn RFC và lưu trữ an toàn bằng <code>flutter_secure_storage</code>.
+              <br><strong>Cơ chế Khóa Mutex:</strong> Khi nhận mã lỗi HTTP 401, Dio <code>AuthInterceptor</code> khóa tất cả các request song song khác bằng Mutex (Single-flight), gọi duy nhất 1 request tới <code>POST /api/auth/refresh</code>, cập nhật session mới, rồi mới nhả hàng đợi để thử lại các request ban đầu.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">2. Thác Chấm Công Đa Tầng (Multi-Tier Waterfall Cascade)</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+              <strong>Quyết định:</strong>
+              <br>• Với ca làm việc ngoài văn phòng (<code>OUT_OFFICE</code>): Chuyển thẳng sang luồng chụp ảnh Selfie (Branch A).
+              <br>• Với ca làm việc tại văn phòng (<code>IN_OFFICE</code>): Kích hoạt thác 3 tầng tuần tự (Branch B):
+              <br>&nbsp;&nbsp;1. <strong>Tầng 1 (Wi-Fi BSSID):</strong> Đọc địa chỉ MAC Wi-Fi văn phòng. Nếu backend trả về 422 <code>SELFIE_REQUIRED</code>, tự động rơi xuống Tầng 2.
+              <br>&nbsp;&nbsp;2. <strong>Tầng 2 (GPS Geofencing):</strong> Lấy vị trí GPS độ chính xác cao (`LocationAccuracy.high`), tính khoảng cách Haversine. Nếu backend trả về 422 <code>SELFIE_REQUIRED</code>, tiếp tục rơi xuống Tầng 3.
+              <br>&nbsp;&nbsp;3. <strong>Tầng 3 (Chụp ảnh Selfie):</strong> Kích hoạt camera trước để chụp ảnh xác thực ngoại lệ.
+              <br>• <strong>UUID v4 Idempotency-Key:</strong> Mọi lệnh chấm công đều sinh UUID v4 ngẫu nhiên gửi kèm trong header HTTP để chống gửi trùng lặp khi mạng chập chờn.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">3. Chọn Native Camera Intent Thay Vì Custom Live Viewfinder</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+              <strong>Quyết định:</strong> Mặc dù Design Master có ý tưởng về khung Live Camera tròn nhúng trong app, mã nguồn React Native thực tế sử dụng Native Camera Intent (qua <code>ImagePicker.launchCameraAsync</code>). Trên Flutter, nhóm kiến trúc quyết định sử dụng <code>image_picker</code> gọi camera hệ điều hành với ưu tiên camera trước và nén JPEG chất lượng 60%.
+              <br><strong>Lý do:</strong> Đảm bảo tương thích 100% với React Native, chạy mượt mà trên cả thiết bị thật lẫn máy ảo Android Emulator, loại bỏ nguy cơ memory leak từ custom camera controller.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">4. Giới Hạn Wi-Fi BSSID Trên Android 10+ & iOS 13+</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+              <strong>Quyết định:</strong> Android 10+ xếp BSSID vào nhóm dữ liệu nhạy cảm, bắt buộc phải có quyền <code>ACCESS_FINE_LOCATION</code> và người dùng phải bật định vị thiết bị. Nếu người dùng từ chối hoặc máy iOS chưa cấu hình entitlement trả phí, <code>WifiService</code> trả về đối tượng rỗng và <code>PunchCoordinator</code> <strong>tự động chuyển êm ái sang kiểm tra GPS</strong> mà không làm crash app hay chặn người dùng.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">5. Chuẩn Hóa Múi Giờ Việt Nam `Asia/Ho_Chi_Minh` (UTC+7)</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+              <strong>Quyết định:</strong> Toàn bộ thao tác tính toán ngày công, chuyển tháng lịch sử và gửi đăng ký tăng ca bắt buộc phải gắn đuôi múi giờ <code>+07:00</code> (ví dụ: <code>2026-11-05T18:00:00+07:00</code>). Tuyệt đối không dùng <code>DateTime.now().toIso8601String()</code> đơn thuần vì sẽ bị chuyển sang giờ UTC (Z), gây lệch ngày làm việc trên backend NestJS.
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 10 — HOW TO CONTINUE WORKING -->
+      <section id="contribute">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-num">10</span>
+            <h2 class="section-title">Tôi Muốn Đóng Góp — Phải Làm Thế Nào?</h2>
+          </div>
+          <span class="tag tag-green">Developer Action Guide</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+
+          <div class="card">
+            <h3 class="card-title" style="color: var(--primary);">🎯 Hướng Dẫn Theo Nhu Cầu Cụ Thể</h3>
+            
+            <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md);">
+                <strong>1. Nếu bạn muốn hiểu sâu giao diện & thiết kế:</strong>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  Đọc lần lượt: <a href="./FLUTTER_SCREEN_INVENTORY.md">Screen Inventory</a> → <a href="./FLUTTER_DESIGN_MASTER.md">Design Master</a> → <a href="./FLUTTER_SCREEN_DESIGN_SPECIFICATIONS.md">Screen Specs</a> → <a href="./FLUTTER_COMPONENT_CATALOG.md">Component Catalog</a> → Tham chiếu mã nguồn React Native tại <code>Apps/mobile/src/screens/</code>.
+                </p>
+              </div>
+
+              <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md);">
+                <strong>2. Nếu bạn muốn sửa lỗi (Bug Fix) hoặc điều tra sự cố:</strong>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  Mở màn hình Flutter tương ứng trong <code>CoreStaff/Apps/mobile_flutter/lib/features/</code> → Đối chiếu hành vi gốc tại <code>CoreStaff/Apps/mobile/</code> → Đọc hợp đồng backend tại <code>CoreStaff/Apps/api/</code> → Kiểm tra BLoC state và file test tương ứng tại <code>test/unit/</code> → Chạy <code>flutter test</code> để đảm bảo không hồi quy.
+                </p>
+              </div>
+
+              <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md);">
+                <strong>3. Nếu bạn muốn đề xuất thay đổi kiến trúc hoặc logic nghiệp vụ:</strong>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  Tạo đề xuất thảo luận kỹ thuật (RFC). Tuyệt đối không tự ý thay đổi cơ chế cookie session, ranh giới vai trò người dùng, công thức tính toán hoặc logic backend mà không có sự phê duyệt bằng văn bản từ Tech Lead.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title" style="color: var(--danger);">🛑 Quy Tắc An Toàn Mã Nguồn (Golden Rules)</h3>
+            <ul style="padding-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <li><strong>Mã nguồn React Native (`Apps/mobile`) là READ-ONLY:</strong> Chỉ dùng làm đối chứng hành vi; không xóa, không sửa, không thêm code vào thư mục này.</li>
+              <li><strong>Backend API (`Apps/api`) là READ-ONLY:</strong> Mọi thay đổi di động phải tự thích ứng với API hiện có.</li>
+              <li><strong>Giữ bộ test luôn 100% xanh:</strong> Chạy <code>flutter test</code> trước mọi commit; không cho phép commit code làm gãy bất kỳ test case nào trong số 354 tests hiện có.</li>
+              <li><strong>Không hardcode chuỗi thông báo lỗi tiếng Anh:</strong> Mọi thông báo lỗi trả về từ API phải đi qua <code>ErrorResolver.resolveEmployeeError(code, message)</code> để hiển thị tiếng Việt thân thiện.</li>
+              <li><strong>Kỷ luật Git:</strong> Làm việc trên nhánh tính năng (feature branch), đặt tên commit theo chuẩn Conventional Commits (<code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>test:</code>), không tự ý force-push hoặc rebase nhánh chung.</li>
+            </ul>
+          </div>
+
+          <!-- Quick Launch Commands -->
+          <div class="card">
+            <h3 class="card-title">💻 Lệnh Khởi Chạy Nhanh Cho Lập Trình Viên Mới</h3>
+            <pre><code># 1. Khởi động Backend API (Dev Mode với Hot Reload)
+cd CoreStaff
+npm run dev:api
+
+# 2. Khởi chạy Ứng dụng Flutter (Mở cửa sổ dòng lệnh thứ hai)
+cd CoreStaff/Apps/mobile_flutter
+flutter pub get
+flutter run -d windows   # Hoặc: flutter run -d chrome / flutter run (cho Android emulator)
+
+# 3. Chạy phân tích tĩnh & toàn bộ 354 Automated Tests
+flutter analyze
+flutter test --coverage</code></pre>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; color: var(--text-subtle);">
+        <p>CoreStaff Mobile Flutter Migration Portal • Biên soạn và nghiệm thu bởi Antigravity Engineering Team</p>
+        <p style="margin-top: 4px;">Phiên bản tài liệu 1.6.0 • Tháng 11/2026 • Single Source of Truth for Enterprise Mobile</p>
+      </footer>
+
+    </div>
+  </main>
+
+  <!-- Back to Top Button -->
+  <button class="back-to-top" id="backToTop" aria-label="Lên đầu trang">↑</button>
+
+  <!-- Interactive JavaScript -->
+  <script>
+    // Theme Toggle
+    const themeToggleBtn = document.getElementById('themeToggle');
+    const htmlElem = document.documentElement;
+
+    const savedTheme = localStorage.getItem('corestaff_docs_theme') || 
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    htmlElem.setAttribute('data-theme', savedTheme);
+
+    themeToggleBtn.addEventListener('click', () => {
+      const currentTheme = htmlElem.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      htmlElem.setAttribute('data-theme', newTheme);
+      localStorage.setItem('corestaff_docs_theme', newTheme);
+    });
+
+    // Mobile Menu Toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    menuToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.sidebar-nav a').forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 1024) {
+          sidebar.classList.remove('open');
+        }
+      });
+    });
+
+    // Back to top button
+    const backToTop = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 300) {
+        backToTop.classList.add('visible');
+      } else {
+        backToTop.classList.remove('visible');
+      }
+    });
+
+    backToTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active Section Indicator via IntersectionObserver
+    const navLinks = document.querySelectorAll('.sidebar-nav a.nav-item');
+    const sections = document.querySelectorAll('section');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          navLinks.forEach(link => {
+            if (link.getAttribute('href') === '#' + id) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+      });
+    }, { threshold: 0.2 });
+
+    sections.forEach(sec => observer.observe(sec));
+
+    // Screen Explorer Filters
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const screenCards = document.querySelectorAll('.screen-card');
+
+    let currentCategory = 'all';
+    let currentRole = 'all';
+
+    function applyScreenFilters() {
+      screenCards.forEach(card => {
+        const cat = card.getAttribute('data-category');
+        const role = card.getAttribute('data-role');
+
+        const catMatch = (currentCategory === 'all' || cat === currentCategory);
+        const roleMatch = (currentRole === 'all' || role === currentRole || role === 'all');
+
+        if (catMatch && roleMatch) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.filter) {
+          document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentCategory = btn.dataset.filter;
+        } else if (btn.dataset.role) {
+          document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentRole = btn.dataset.role;
+        }
+        applyScreenFilters();
+      });
+    });
+
+    // Global Search Filter
+    const globalSearch = document.getElementById('globalSearch');
+
+    globalSearch.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      if (!query) {
+        screenCards.forEach(card => card.style.display = 'flex');
+        return;
+      }
+
+      screenCards.forEach(card => {
+        const text = card.innerText.toLowerCase();
+        if (text.includes(query)) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+
+    // Keyboard shortcut (Ctrl+K or /) to focus search
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey && e.key === 'k') || (e.key === '/' && document.activeElement !== globalSearch)) {
+        e.preventDefault();
+        globalSearch.focus();
+        globalSearch.select();
+      }
+    });
+  </script>
+</body>
+</html>
+
