@@ -472,13 +472,13 @@ export const FORFEITS: ForfeitSpec[] = [
 ];
 
 /**
- * Vướng mắc để lại cho người trình bày tự xử lý trên Web/Mobile.
- * Cố ý chỉ chọn tài khoản phòng KD: một quản lý, một phòng ban, không phải đổi tài khoản giữa các phòng.
+ * Vướng mắc DUY NHẤT để lại cho người trình bày tự xử lý trên Web (selfie 15/10):
+ * một quản lý, một phòng ban, một blocker — không phải đổi tài khoản giữa các phòng.
  */
-export const DEMO_KEEP: EmployeeCode[] = ['NV-KD-002', 'NV-KD-003'];
+export const DEMO_KEEP: EmployeeCode[] = ['NV-KD-002'];
 
-/** Tài khoản tự bấm "Xác nhận bảng công" trên app — cùng 2 mã KD ở trên. */
-export const DEMO_SKIP_ACK: EmployeeCode[] = ['NV-KD-002', 'NV-KD-003'];
+/** Tài khoản tự bấm "Xác nhận bảng công" trên app; script `demo:ack` bấm hộ mọi người còn lại. */
+export const DEMO_SKIP_ACK: EmployeeCode[] = ['NV-KD-002'];
 
 // ─── KPI ────────────────────────────────────────────────────────────────────
 /** Bậc KPI — dùng chung cho `KpiPolicy` (seed qua CompensationService) và `kpiFor`. */

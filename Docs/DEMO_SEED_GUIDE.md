@@ -25,7 +25,7 @@ Hướng dẫn sử dụng bộ dữ liệu mẫu (demo tenant **ANPHAT**) phụ
 | `quan.ly.ky.thuat@anphat.local` | Nguyễn Thành Long | `QL-KT-001` | `DEPARTMENT_MANAGER` | Kỹ thuật (KT) | Duyệt công phòng KT, duyệt OT/giải trình; có ngày đi muộn, về sớm |
 | `nv.kinh-doanh.1@anphat.local` | Phạm Hoàng Nam | `NV-KD-001` | `EMPLOYEE` | Kinh doanh (KD) | NV năng suất cao: OT ngày thường, công tác selfie, nghỉ nửa ngày chiều, có ngày quên chấm ra |
 | `nv.kinh-doanh.2@anphat.local` | Vũ Thị Mai | `NV-KD-002` | `EMPLOYEE` | Kinh doanh (KD) | Hay đi muộn/về sớm; nghỉ phép nửa ngày sáng + vào ca chiều muộn (0,5 công); **giữ blocker selfie công tác để demo tay**; **tự bấm xác nhận bảng công khi demo** |
-| `nv.kinh-doanh.3@anphat.local` | Đặng Văn Khoa | `NV-KD-003` | `EMPLOYEE` | Kinh doanh (KD) | **Thử việc 85% lương, chưa đóng BH**; nghỉ không lương; **giữ blocker giải trình để demo tay**; **tự bấm xác nhận bảng công khi demo** |
+| `nv.kinh-doanh.3@anphat.local` | Đặng Văn Khoa | `NV-KD-003` | `EMPLOYEE` | Kinh doanh (KD) | **Thử việc 85% lương, chưa đóng BH**; nghỉ không lương; blocker giải trình 21/10 do `demo:resolve` duyệt hộ (không cần đăng nhập) |
 | `nv.ky.thuat.1@anphat.local` | Lê Quốc Bảo | `NV-KT-001` | `EMPLOYEE` | Kỹ thuật (KT) | OT đủ hệ số (thường 150%, cuối tuần 200%, lễ 300%); nghỉ phép năm; có ngày quên chấm công |
 | `nv.ky.thuat.2@anphat.local` | Hoàng Minh Tuấn | `NV-KT-002` | `EMPLOYEE` | Kỹ thuật (KT) | OT ngày thường; nghỉ phép năm nhiều ngày; quên chấm ra; có đơn nghỉ tháng 11 chờ duyệt |
 | `nv.ky.thuat.3@anphat.local` | Bùi Phương Thảo | `NV-KT-003` | `EMPLOYEE` | Kỹ thuật (KT) | OT cuối tuần 200%; vắng không phép 28/10 (QL đã xử lý sẵn trong seed) |
@@ -40,25 +40,40 @@ Kỳ đã hoàn tất trọn vòng đời để demo tra cứu lịch sử & phi
 - Snapshot chốt lương (`PayrollInputSnapshot`): đủ 8 nhân viên.
 - Bảng lương (`PayrollRun`): `RELEASED`; 8 phiếu lương (`Payslip`) tính từ engine thật (BHXH 8%, BHYT 1.5%, BHTN 1%, thuế TNCN lũy tiến, phụ cấp, thưởng KPI, thưởng chuyên cần).
 
-### 3.2. Kỳ Demo Live — `2026-10` (gieo ở trạng thái `REVIEWING`, còn 4 blocker)
+### 3.2. Kỳ Demo Live — `2026-10` (`REVIEWING`, seed xong còn đúng **1 blocker**)
 
-**Đây là kỳ dùng để demo luồng đầy đủ "từ đầu"** — gỡ vướng → nhân viên xác nhận → QL xác nhận → HR chốt → chạy lương.
+**Đây là kỳ dùng để demo luồng chính "từ đầu"** — duyệt 1 vướng → nhân viên xác nhận → QL xác nhận → HR chốt → chạy lương.
 
-Ngay sau `npm run seed:demo:reset`, kỳ này còn **4 blocker** (trạng thái thô, để trình bày được vấn đề):
+Seed xong (`npm run seed:demo:reset`) tenant ở trạng thái **`main`**: kỳ 10 chỉ còn **đúng 1 blocker**, xử lý xong là chốt được kỳ.
 
 | Ngày | Mã NV | Loại | Cách xử lý |
 |---|---|---|---|
-| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | **Giữ lại** — QL KD duyệt tay |
-| 21/10 | `NV-KD-003` | Quên chấm ra, đã gửi giải trình | **Giữ lại** — QL KD duyệt tay |
-| 19/10 | `NV-KT-001` | Không có dữ liệu chấm công cả ngày | `demo:resolve` duyệt hộ |
-| 30/10 | `NV-KD-001` | Quên chấm ra, chưa giải trình | `demo:resolve` giải trình + duyệt hộ |
+| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | **Làm tay — blocker duy nhất**, QL KD duyệt |
 
-Sau `npm run demo:resolve` (chạy riêng, **không** tự chạy trong seed) kỳ 10 chỉ còn đúng **2 vướng**, cùng phòng KD:
+> Kịch bản demo gói gọn trong **3 tài khoản**: `hr@anphat.local` (chốt kỳ + lương), `quan.ly.kinh-doanh@anphat.local` (duyệt blocker + xác nhận phòng KD), `nv.kinh-doanh.2@anphat.local` (tự xác nhận bảng công). `demo:ack` bấm hộ mọi tài khoản chưa xác nhận, chỉ chừa `NV-KD-002`.
 
-- `NV-KD-002` (15/10): selfie công tác chờ QL KD duyệt.
-- `NV-KD-003` (21/10): quên chấm ra, đã gửi giải trình chờ QL KD duyệt.
+`NV-KD-002` cũng là mã duy nhất **không** được `demo:ack` bấm hộ (`DEMO_KEEP = DEMO_SKIP_ACK = NV-KD-002`), nên toàn bộ thao tác tay chỉ diễn ra trong một phòng ban, với một tài khoản quản lý (`quan.ly.kinh-doanh@anphat.local`) và một nhân viên.
 
-Cả 2 tài khoản này cũng là 2 mã **không** được `demo:ack` bấm hộ (`DEMO_KEEP = DEMO_SKIP_ACK = NV-KD-002, NV-KD-003`), nên toàn bộ thao tác tay chỉ diễn ra trong một phòng ban và với một tài khoản quản lý (`quan.ly.kinh-doanh@anphat.local`).
+#### Nhánh alt flow — nhiều blocker/exception để demo khi hội đồng hỏi
+
+Trạng thái **`alt`** là ngay sau khi replay dữ liệu, trước khi gỡ hộ gì — kỳ 10 còn **4 blocker** đủ loại để kể chuyện nghiệp vụ:
+
+| Ngày | Mã NV | Loại | Nhánh demo |
+|---|---|---|---|
+| 15/10 | `NV-KD-002` | Selfie công tác chưa duyệt | Duyệt selfie / từ chối vì ảnh–vị trí không khớp |
+| 19/10 | `NV-KT-001` | Không có dữ liệu chấm công cả ngày | Giải trình bổ sung công |
+| 21/10 | `NV-KD-003` | Quên chấm ra, đã gửi giải trình | QL duyệt giải trình |
+| 30/10 | `NV-KD-001` | Quên chấm ra, chưa giải trình | QL tính **vắng không phép** (không giải trình) |
+
+```bash
+npm run demo:rollback -- --to=alt   # về 4 blocker
+# ... demo nhánh alt ...
+npm run demo:rollback               # về main (1 blocker) để demo lại kịch bản chính
+```
+
+Ở trạng thái `alt`, thử `demo:ack` sẽ thấy hệ thống chặn đúng ràng buộc: `còn ngày chưa xử lý (blocker)`, và `demo:confirm` trả `DEPARTMENT_NOT_READY` / `MISSING_ATTENDANCE_DAY` — dùng để chứng minh chốt công không thể làm ẩu.
+
+Các vướng ở phòng KT đều được xử lý sẵn bên trong seed (không phải chuyển tài khoản khi demo): giải trình NV-KT-002 (20/10) đã QL duyệt, vắng không phép NV-KT-003 (28/10) đã QL xử lý.
 
 Các vướng ở phòng KT đều được xử lý sẵn bên trong seed (không phải chuyển tài khoản khi demo): giải trình NV-KT-002 (20/10) đã QL duyệt, vắng không phép NV-KT-003 (28/10) đã QL xử lý.
 
@@ -129,7 +144,8 @@ Chạy từ thư mục `CoreStaff/Apps/api` (hoặc thêm tiền tố `npm --pre
 ### 5.1. Gieo & kiểm tra dữ liệu
 
 ```bash
-# Reset và gieo mới toàn bộ dữ liệu demo ANPHAT (3 kỳ: 09 CLOSED+lương, 10 REVIEWING còn 4 blocker, 11 OPEN)
+# Reset và gieo mới toàn bộ dữ liệu demo ANPHAT (3 kỳ: 09 CLOSED+lương, 10 REVIEWING còn 1 blocker, 11 OPEN)
+# Cuối lệnh tự chụp 2 ảnh rollback: "alt" (4 blocker) và "main" (1 blocker)
 npm run seed:demo:reset
 
 # Kiểm tra toàn vẹn: tính lại từng ngày bằng calculator, đối chiếu OT/bảng công/phiếu lương
@@ -156,20 +172,35 @@ npm run demo:resolve
 # Nhân viên xác nhận bảng công kỳ 2026-10
 npm run demo:ack
 
-# Quản lý xác nhận công phòng ban
+# Quản lý xác nhận công các phòng chưa xác nhận
 npm run demo:confirm
 
 # HR chốt kỳ + tạo/tính/khóa/phát hành lương
 npm run demo:close
+
+# Tua tenant về trạng thái "main" (đúng 1 blocker) để demo lại kịch bản chính
+npm run demo:rollback
+
+# Tua tenant về trạng thái "alt" (4 blocker) để demo nhánh phụ cho hội đồng
+npm run demo:rollback -- --to=alt
 
 # Chạy trọn luồng resolve → ack → confirm → close (diễn tập nhanh; --keep/--skip-ack bị bỏ qua ở chế độ này)
 npm run demo:all
 ```
 
 **Tùy chọn (thêm sau lệnh `ts-node-script`):**
-- `--keep=NV-KD-002,NV-KD-003` — tài khoản giữ blocker để demo tay (mặc định đã là 2 mã này, **cùng phòng KD**).
-- `--skip-ack=NV-KD-002,NV-KD-003` — tài khoản sẽ tự bấm "Xác nhận bảng công" trên app khi demo; script không bấm hộ. Mặc định để lại 2 mã KD. Truyền danh sách dài hơn để chỉ ack hộ đúng một người (xem §5.4).
+- `--keep=NV-KD-002` — tài khoản giữ blocker để demo tay (mặc định đúng 1 mã KD).
+- `--skip-ack=NV-KD-002` — tài khoản sẽ tự bấm "Xác nhận bảng công" trên app khi demo; `demo:ack` bấm hộ mọi người còn lại chưa xác nhận. Truyền danh sách dài hơn nếu muốn để nhiều người tự bấm.
 - `--period=2026-10 --org-code=ANPHAT` — đổi kỳ/tenant nếu cần.
+
+**`demo:rollback` hoạt động thế nào:** cuối `seed:demo:reset` script chụp **2 ảnh** vào `Apps/api/.demo-snapshot/` (local, không commit):
+
+- `ANPHAT-alt.json` — ngay sau replay, còn đủ 4 blocker.
+- `ANPHAT-main.json` — sau khi gỡ hộ 3 blocker, còn đúng selfie `NV-KD-002` (trạng thái mặc định của tenant sau seed).
+
+`demo:rollback` xoá dữ liệu tenant rồi nạp lại ảnh chụp được chọn (`--to=main` mặc định, `--to=alt`), **giữ nguyên phiên đăng nhập** (`UserSession` không nằm trong ảnh chụp) nên các tab trình duyệt đã đăng nhập vẫn dùng được. Chạy lại `seed:demo:reset` để làm mới cả 2 ảnh.
+
+**Tốc độ (đo thật, tenant ANPHAT ~1.400 bản ghi):** `demo:rollback` ~**10 giây** (trong đó ~2,5s biên dịch TS, ~3s nạp schema, ~3,5s đọc/ghi Mongo) so với **~260 giây** của `seed:demo:reset`. Script riêng `scripts/demo-rollback.ts` dùng mongoose thuần thay vì boot cả Nest (không boot Nest: nhanh hơn ~7 giây).
 
 > **Ba ràng buộc thật của hệ thống, đã kiểm chứng:** (1) blocker phải xong **trước** khi ack, không thì `TIMESHEET_HAS_UNRESOLVED_DAYS`; (2) `confirmDepartment` đòi **toàn bộ nhân viên của phòng** đã ack (`EMPLOYEE_ACKNOWLEDGEMENT_PENDING`) và phòng không còn blocker (`DEPARTMENT_NOT_READY`); (3) kỳ chỉ sang `READY_TO_CLOSE` khi **cả 2 phòng** đã xác nhận.
 > Mọi thao tác sửa dữ liệu công (duyệt giải trình/OT, xử lý vắng) đều tăng **phiên bản kỳ** và vô hiệu hóa các xác nhận bảng công trước đó — đúng cơ chế của hệ thống. Vì vậy nếu gỡ blocker *sau khi* nhân viên đã xác nhận thì phải xác nhận lại.
@@ -198,41 +229,22 @@ Mật khẩu chung: `Demo123456!`
 
 | # | Việc làm | Nói gì / chứng minh gì |
 |---|---|---|
-| 1 | Tab 1 → màn hình kỳ công `2026-10` | "Kỳ 9 đã chốt và phát hành lương. Nhưng kỳ 10 đang mắc **4 vướng** — đây là lý do HR không thể chốt." Đọc to 4 dòng: selfie chưa duyệt (15/10), thiếu chấm công cả ngày (19/10), quên chấm ra (21/10, 30/10). |
+| 1 | Tab 1 → màn hình kỳ công `2026-10` | "Kỳ 9 đã chốt và phát hành lương. Kỳ 10 còn **1 vướng** — selfie công tác của Vũ Thị Mai (`NV-KD-002`) ngày 15/10 chưa được duyệt." |
 | 2 | Tab 2 (HR) → **thử bấm chốt kỳ** | Hệ thống từ chối. "Ngay cả HR cũng không đóng được — blocker chặn ở tầng service, không phải nút bị ẩn." |
-| 3 | Nhờ giảng viên cho chạy script | `npm run demo:resolve` — "Phần này là thao tác lặp lại nhàm chán, em chạy script để dành thời gian cho phần cần giải thích." |
-| 4 | Tab 1 → danh sách chờ duyệt | Còn đúng **2 vướng**, cả 2 phòng KD. "Hai việc còn lại em làm tay để anh/chị xem luồng thật." |
+| 3 | (Tuỳ chọn, nếu hội đồng muốn xem nhiều ca) | `npm run demo:rollback -- --to=alt` để có 4 blocker rồi quay lại `npm run demo:rollback` — xem §3.2. |
+| 4 | Tab 1 → danh sách chờ duyệt | Còn đúng **1 vướng** — selfie `NV-KD-002` 15/10. "Việc còn lại em làm tay để anh/chị xem luồng thật." |
 | 5 | Duyệt **selfie `NV-KD-002` 15/10** | Duyệt theo giờ/vị trí trong dialog. ⚠️ **Không bấm xem ảnh** — seed chỉ ghi metadata, ảnh sẽ lỗi (§3.2). Nếu bị hỏi, nói đây là dữ liệu minh họa. |
-| 6 | Duyệt **giải trình `NV-KD-003` 21/10** | "Nhân viên tự nộp giải trình, QL duyệt. Hệ thống tự tính lại công ngày đó." |
-| 7 | Tab 3 (NV-KD-002) → "Công của tôi" → Xác nhận | "Nhân viên thấy **21.5/22 công**, xác nhận là đã đồng ý." |
-| 8 | Chạy `npm run demo:ack -- --skip-ack=NV-KD-003` | ⚠️ **Bắt buộc có `--skip-ack`** — xem lưu ý bên dưới. Kết quả: ack hộ 6 người, để `NV-KD-003` chờ (và in `NV-KD-002 đã xác nhận trước đó` nếu đã bấm tay ở bước 7). |
-| 9 | Tab 3 (nếu là `NV-KD-003`) hoặc chạy `npm run demo:ack -- --skip-ack=` | Cho **chính** `NV-KD-003` tự xác nhận. Kết quả: `✓ NV-KD-003 Đặng Văn Khoa: 19.5/22 công`. |
-| 10 | Tab 1 (QL KD) → xác nhận công phòng KD | "Phòng chỉ xác nhận được khi **từng nhân viên** đã xác nhận. Chạy sớm sẽ bị chặn: `EMPLOYEE_ACKNOWLEDGEMENT_PENDING`." |
-| 11 | Chạy `npm run demo:confirm` | Bấm hộ phòng KT; phòng KD vừa xác nhận tay xong nên sẽ in `đã xác nhận`. Cả 2 phòng xong → kỳ chuyển `READY_TO_CLOSE`. |
-| 12 | Tab 2 (HR) → chốt kỳ + chạy lương | Hoặc `npm run demo:close`. Bốn bước: tạo bảng lương → tính → khóa → phát hành. |
-| 13 | Mở 1 phiếu lương bất kỳ | So sánh với kỳ 9: `NV-KD-003` 19.5/22 công (2 ngày nghỉ không lương + 1 ngày vắng không phép), `NV-KD-002` 21.5/22 nên gross thấp hơn `NV-KD-001` dù có OT. Đây là phần "ăn điểm" — số liệu khớp nhau qua 4 tầng: chấm công → bảng công → snapshot → phiếu lương. |
+| 6 | Tab 1 → xác nhận công khi còn người chưa ack (tuỳ chọn) | "Phòng chỉ xác nhận được khi **từng nhân viên** đã xác nhận." Bấm sớm sẽ bị chặn: `EMPLOYEE_ACKNOWLEDGEMENT_PENDING`. |
+| 7 | Chạy `npm run demo:ack` | Ack hộ mọi tài khoản chưa xác nhận, **chỉ chừa `NV-KD-002`** (mặc định `--skip-ack=NV-KD-002`). Kết quả: 7 dòng `✓`, 1 dòng `· NV-KD-002: để tự xác nhận khi demo`. |
+| 8 | Tab 3 (NV-KD-002) → "Công của tôi" → Xác nhận | "Nhân viên thấy **21.5/22 công**, xác nhận là đã đồng ý." |
+| 9 | Tab 1 (QL KD) → xác nhận công phòng KD | Cả 2 phòng giờ đã đủ người ack → hệ thống cho xác nhận. |
+| 10 | Chạy `npm run demo:confirm` | Bấm hộ phòng KT; phòng KD vừa xác nhận tay xong nên sẽ in `đã xác nhận trước đó`. Cả 2 phòng xong → kỳ chuyển `READY_TO_CLOSE`. |
+| 11 | Tab 2 (HR) → chốt kỳ + chạy lương | Hoặc `npm run demo:close`. Bốn bước: tạo bảng lương → tính → khóa → phát hành. |
+| 12 | Mở 1 phiếu lương bất kỳ | So sánh với kỳ 9: `NV-KD-002` 21.5/22 nên gross thấp hơn `NV-KD-001` (22/22) dù có OT. Đây là phần "ăn điểm" — số liệu khớp nhau qua 4 tầng: chấm công → bảng công → snapshot → phiếu lương. |
 
-**⚠️ Vì sao bước 8 phải có `--skip-ack`:** mặc định `demo:ack` bỏ qua **cả 2** mã `NV-KD-002, NV-KD-003`. Chạy trơn thì cả 2 chưa được ack, và **bước 10–11 sẽ hỏng** — đã thử thật (blocker đã duyệt hết trước đó):
+> **Hội đồng hỏi tình huống khác (VD: "nếu nhân viên không giải trình thì sao?"):** chạy `npm run demo:rollback -- --to=alt` — tenant về trạng thái 4 blocker trong vài giây, các tab vẫn đăng nhập. Demo nhánh phụ xong thì `npm run demo:rollback` để về `main`.
 
-```
-▶ Nhân viên xác nhận bảng công kỳ 2026-10 (tự xác nhận khi demo: NV-KD-003)
-  ✓ NV-KD-001 Phạm Hoàng Nam: 21/22 công
-  ✓ NV-KD-002 Vũ Thị Mai: 21.5/22 công     ← nếu đã bấm tay ở bước 7 thì in "đã xác nhận trước đó"
-  · NV-KD-003 Đặng Văn Khoa: để tự xác nhận khi demo
-  ✓ NV-KT-001 Lê Quốc Bảo: 22/22 công
-  ✓ NV-KT-002 Hoàng Minh Tuấn: 21/22 công
-  ✓ NV-KT-003 Bùi Phương Thảo: 21/22 công
-  ✓ QL-KD-001 Trần Quốc Hưng: 22/22 công
-  ✓ QL-KT-001 Nguyễn Thành Long: 22/22 công
-
-▶ Quản lý xác nhận công phòng ban kỳ 2026-10
-  ✗ Phòng Kinh doanh: EMPLOYEE_ACKNOWLEDGEMENT_PENDING
-  ✓ Phòng Kỹ thuật đã xác nhận
-```
-
-> Chạy `demo:ack` **ngay sau seed** (chưa gỡ blocker) sẽ thấy `✗ NV-KD-001/NV-KT-001: còn ngày chưa xử lý (blocker)` — đúng ràng buộc (1) ở §5.2: blocker phải xong trước khi ack.
-
-Lúc đó HR vẫn không chốt được kỳ. Chỉ định rõ `--skip-ack=NV-KD-003` ở bước 8 (và ack nốt `NV-KD-003` ở bước 9).
+> Ở trạng thái `alt` (chưa gỡ blocker), `demo:ack` sẽ in `✗ ...: còn ngày chưa xử lý (blocker)` và `demo:confirm` trả `DEPARTMENT_NOT_READY` / `MISSING_ATTENDANCE_DAY` — đúng ràng buộc (1) ở §5.2, dùng để chứng minh hệ thống không cho chốt ẩu.
 
 **Hai mã lỗi khác nhau, đừng nhầm:**
 
@@ -241,7 +253,7 @@ Lúc đó HR vẫn không chốt được kỳ. Chỉ định rõ `--skip-ack=NV
 | `DEPARTMENT_NOT_READY` | Phòng **còn blocker** (VD selfie NV-KD-002 15/10 chưa duyệt) | Duyệt hết blocker của phòng trước |
 | `EMPLOYEE_ACKNOWLEDGEMENT_PENDING` | Phòng **còn người chưa xác nhận bảng công** | Cho người đó ack (`demo:ack` không skip họ) |
 
-**Vì sao cần bước 9 riêng:** xác nhận phòng ban đòi **100% nhân viên** của phòng đã ack — đó chính là cơ chế sinh ra `EMPLOYEE_ACKNOWLEDGEMENT_PENDING` ở trên. Nên `NV-KD-003` phải ack xong thì bước 10 mới bấm được.
+**Vì sao vẫn cần nhân viên tự bấm:** xác nhận phòng ban đòi **100% nhân viên** của phòng đã ack — đó chính là cơ chế sinh ra `EMPLOYEE_ACKNOWLEDGEMENT_PENDING` ở trên. Nên `NV-KD-002` phải tự ack (bước 8) thì bước 9 mới bấm được.
 
 **Câu chốt:** `npm run verify:demo` → in ra "Đã tính lại 334 ngày công bằng calculator, 45 yêu cầu, 28 kết quả OT" và `✓ Dữ liệu nhất quán`. Chứng minh không có số nào ghi tay.
 
@@ -264,6 +276,17 @@ Nhưng **không nhảy được sang `demo:confirm`** khi mới 1/8 người ack
 
 Muốn cả phòng xác nhận được thì phải ack đủ người của phòng đó trước.
 
+### 5.7. Demo lại / chuyển nhánh giữa buổi
+
+```bash
+npm run demo:rollback               # về "main": đúng 1 blocker (selfie NV-KD-002)
+npm run demo:rollback -- --to=alt   # về "alt": 4 blocker cho nhánh phụ
+```
+
+Mỗi lần mất vài giây thay vì ~3 phút seed, và **không có đơn xác nhận/chốt/lương nào phát sinh** sau điểm chụp. Dùng `--to=alt` khi hội đồng hỏi "nếu nhân viên không giải trình thì sao" (blocker `NV-KD-001` 30/10 → QL tính vắng không phép), rồi quay lại `main` để tiếp tục kịch bản chính.
+
+Ảnh chụp được tạo tự động ở cuối mỗi lần `seed:demo:reset` (kể cả `seed:demo:rehearsal`, chụp `alt` trước khi gỡ hộ), lưu tại `Apps/api/.demo-snapshot/ANPHAT-{main,alt}.json` và **không commit** (xem `CoreStaff/.gitignore`). Phiên đăng nhập (`UserSession`) không nằm trong ảnh chụp nên các tab trình duyệt vẫn dùng được sau rollback.
+
 ### 5.5. Demo tạo đơn OT ngày lễ / cuối tuần (làm tay trên app)
 
 Bộ seed để sẵn **người đã chấm công ngày lễ/cuối tuần nhưng chưa khai OT**, để thao tác tạo đơn diễn ra ngay trên app:
@@ -284,8 +307,9 @@ Cả hai đều đang ở kỳ `2026-11` (`OPEN`) nên tạo đơn không bị c
 
 | Sự cố | Xử lý |
 |---|---|
-| Bấm nhầm nút, dữ liệu hỏng | `npm run seed:demo:reset` (khoảng 3 phút) rồi làm lại từ bước 1. |
-| Đã lỡ chốt kỳ 10 mà muốn demo lại | `npm run seed:demo:reset` — lệnh reset xoá sạch dữ liệu tenant ANPHAT rồi gieo lại. |
+| Bấm nhầm nút, dữ liệu hỏng | `npm run demo:rollback` (vài giây) — về đúng trạng thái sau seed (còn blocker) rồi làm lại từ đầu. |
+| Hội đồng hỏi tình huống khác, cần demo lại | `npm run demo:rollback` — xem §5.7. |
+| Đã lỡ chốt kỳ 10 mà muốn demo lại | `npm run demo:rollback`; dùng `seed:demo:reset` khi cần gieo lại từ dữ liệu gốc hoặc ảnh chụp bị mất. |
 | Cần diễn tập toàn bộ luồng trước hôm bảo vệ | `npm run seed:demo:rehearsal` — seed lại rồi tự chạy hết resolve → ack → confirm → close. |
 | Không kịp làm tay | `npm run demo:all` — chạy trọn chuỗi, dùng khi hết giờ. |
 | Ảnh selfie lỗi | Đã biết trước; bỏ qua, xem cảnh báo §3.2. |

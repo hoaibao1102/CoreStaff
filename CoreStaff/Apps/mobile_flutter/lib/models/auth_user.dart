@@ -20,7 +20,7 @@ class AuthUser {
   });
 
   String get initials {
-    final parts = fullName.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final parts = fullName.trim().split(RegExp(r'\s+')).where((s) => RegExp(r'^\p{L}', unicode: true).hasMatch(s)).toList();
     if (parts.isEmpty) return 'NV';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     final lastTwo = parts.sublist(parts.length - 2);

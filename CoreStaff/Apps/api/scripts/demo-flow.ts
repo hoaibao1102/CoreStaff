@@ -6,18 +6,23 @@
  *   npm run demo:status                 # Xem blocker, đơn chờ duyệt, tiến độ xác nhận
  *   npm run demo:resolve                # Gỡ blocker của mọi tài khoản TRỪ tài khoản demo
  *   npm run demo:ack                    # Nhân viên xác nhận bảng công (trừ --skip-ack)
- *   npm run demo:confirm                # QL xác nhận công phòng ban
+ *   npm run demo:confirm                # QL xác nhận công các phòng chưa xác nhận
  *   npm run demo:close                  # HR chốt kỳ + tạo/tính/khóa/phát hành lương
+ *   npm run demo:rollback               # Về trạng thái "main": còn đúng 1 blocker
+ *   npm run demo:rollback -- --to=alt   # Về trạng thái "alt": đủ 4 blocker để demo nhánh phụ
  *   npm run demo:all                    # Chạy trọn luồng (diễn tập)
  *
- * Tùy chọn: --keep=NV-KD-003,NV-KT-003  (tài khoản giữ blocker để demo tay)
- *           --skip-ack=NV-KD-001        (tài khoản tự bấm "Xác nhận bảng công" khi demo;
- *                                        mặc định NV-KD-001, NV-KT-002)
+ * Seed xong tenant đã ở trạng thái "main": chỉ còn ĐÚNG MỘT blocker cho demo tay
+ * (selfie NV-KD-002 15/10) — tài khoản demo gói gọn: HR + QL KD + 1 nhân viên.
+ *
+ * Tùy chọn: --keep=NV-KD-003             (tài khoản giữ blocker để demo tay; mặc định NV-KD-002)
+ *           --skip-ack=NV-KD-002          (tài khoản tự bấm "Xác nhận bảng công" khi demo)
  *           --period=2026-10 --org-code=ANPHAT
  *
  * Thứ tự đúng khi demo: gỡ blocker (tay + resolve) → ack → confirm → close.
  * Mọi thao tác sửa dữ liệu công (duyệt giải trình, OT, xử lý vắng) làm tăng
  * phiên bản kỳ và vô hiệu các xác nhận bảng công trước đó.
+ * Hội đồng hỏi thêm kịch bản khác giữa buổi: `demo:rollback` rồi demo lại.
  */
 import { ConflictException } from '@nestjs/common';
 import { Types } from 'mongoose';
@@ -25,9 +30,10 @@ import { Role } from '../src/database/schemas/enums';
 import { TimesheetPeriodStatus } from '../src/database/schemas/timesheet-period.schema';
 import { createDemoApp, DemoApp } from './lib/demo-app';
 import { ACTIVE_PERIOD, DEMO_KEEP, DEMO_SKIP_ACK } from './lib/demo-scenario';
+import { restoreOrgSnapshot, SnapshotStage } from './lib/demo-snapshot';
 
-type Step = 'status' | 'resolve' | 'ack' | 'confirm' | 'close' | 'all';
-export interface FlowOptions { orgCode: string; step: Step; keep: string[]; skipAck: string[]; period?: string }
+type Step = 'status' | 'resolve' | 'ack' | 'confirm' | 'close' | 'rollback' | 'all';
+export interface FlowOptions { orgCode: string; step: Step; keep: string[]; skipAck: string[]; period?: string; to: SnapshotStage }
 
 interface People {
   orgId: Types.ObjectId;
@@ -121,24 +127,17 @@ async function resolve(demo: DemoApp, people: People, period: any, keep: Set<str
     } catch (error) { say(`✗ Duyệt giải trình ${code} ${date}: ${errorText(error)}`); }
   }
 
-  // 3. Thiếu chấm công chưa có giải trình: NV tự giải trình rồi QL duyệt;
-  //    tài khoản demo (chỉ ở bước "all") được xử lý như trong buổi demo: tính vắng không phép.
+  // 3. Thiếu chấm công chưa có giải trình: NV tự giải trình rồi QL duyệt.
   ({ blockers, missingDays, pending } = await collectOpenItems(demo, people, period));
   const explained = new Set(pending.filter(r => r.source === 'ATTENDANCE_CONFIRMATION').map(r => `${r.employeeUserId}|${new Date(r.workDate).toISOString().slice(0, 10)}`));
   const punchGaps = [
-    ...blockers.filter(b => b.type === 'MISSING_CHECK_IN' || b.type === 'MISSING_CHECK_OUT').map(b => ({ userId: b.employeeId, date: b.date, dayId: b.attendanceDayId })),
-    ...missingDays.map(d => ({ userId: d.userId, date: d.workDate, dayId: undefined as string | undefined })),
+    ...blockers.filter(b => b.type === 'MISSING_CHECK_IN' || b.type === 'MISSING_CHECK_OUT').map(b => ({ userId: b.employeeId, date: b.date })),
+    ...missingDays.map(d => ({ userId: d.userId, date: d.workDate })),
   ];
   for (const gap of punchGaps) {
     const code = people.codeByUser.get(gap.userId)!;
     if (isKept(gap.userId) || explained.has(`${gap.userId}|${gap.date}`)) continue;
     try {
-      if (DEMO_KEEP.includes(code as any) && gap.dayId && !(await hasConfirmation(demo, people, gap.userId, gap.date))) {
-        await demo.periods.resolveMissingPunchAsAbsent(people.org, String(period._id), gap.dayId, { userId: managerFor(code), role: Role.DEPARTMENT_MANAGER },
-          'Rời văn phòng giữa giờ, không có đơn nghỉ và không giải trình — tính vắng không phép');
-        say(`✓ QL xử lý vắng không phép ${code} ngày ${gap.date}`); done++;
-        continue;
-      }
       const preview: any = await demo.requests.attendanceConfirmationPreview(people.org, gap.userId, gap.date);
       if (!preview.canSubmit) throw new Error(preview.blockedReasons.join(', '));
       const row: any = await demo.requests.createMine(people.org, gap.userId, {
@@ -163,12 +162,6 @@ async function resolve(demo: DemoApp, people: People, period: any, keep: Set<str
   if (!done) say('Không còn mục nào cần xử lý.');
 }
 
-async function hasConfirmation(demo: DemoApp, people: People, userId: string, date: string) {
-  return Boolean(await demo.model('ManagerRequest').exists({
-    organizationId: people.orgId, employeeUserId: new Types.ObjectId(userId), source: 'ATTENDANCE_CONFIRMATION', workDate: new Date(`${date}T00:00:00.000Z`),
-  }));
-}
-
 async function acknowledge(demo: DemoApp, people: People, periodKey: string, skip: Set<string>) {
   let period = await findPeriod(demo, people, periodKey);
   console.log(`\n▶ Nhân viên xác nhận bảng công kỳ ${periodKey}${skip.size ? ` (tự xác nhận khi demo: ${[...skip].join(', ')})` : ''}`);
@@ -178,10 +171,10 @@ async function acknowledge(demo: DemoApp, people: People, periodKey: string, ski
     period = await findPeriod(demo, people, periodKey);
   }
   for (const [code, person] of [...people.byCode.entries()].sort()) {
-    if (skip.has(code)) { say(`· ${code} ${person.fullName}: để tự xác nhận khi demo`); continue; }
     try {
       const review = await demo.reviews.getOwnReview(people.org, String(period._id), person.userId);
-      if (review.state === 'ACKNOWLEDGED') { say(`· ${code} đã xác nhận trước đó`); continue; }
+      if (review.state === 'ACKNOWLEDGED') { say(`· ${code} ${person.fullName}: đã xác nhận trước đó`); continue; }
+      if (skip.has(code)) { say(`· ${code} ${person.fullName}: để tự xác nhận khi demo`); continue; }
       if (review.hasUnresolvedDays) { say(`✗ ${code} ${person.fullName}: còn ngày chưa xử lý (blocker) → chưa thể xác nhận`); continue; }
       await demo.reviews.acknowledge(people.org, String(period._id), person.userId, { expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash });
       say(`✓ ${code} ${person.fullName}: ${review.payableWorkUnits}/${review.standardWorkUnits} công`);
@@ -190,9 +183,12 @@ async function acknowledge(demo: DemoApp, people: People, periodKey: string, ski
 }
 
 async function confirmDepartments(demo: DemoApp, people: People, periodKey: string) {
-  console.log(`\n▶ Quản lý xác nhận công phòng ban kỳ ${periodKey}`);
+  console.log(`\n▶ Quản lý xác nhận công các phòng còn lại kỳ ${periodKey}`);
   for (const [departmentId, managerUserId] of people.managerOfDept) {
     const period = await findPeriod(demo, people, periodKey);
+    const done = await demo.model('DepartmentTimesheetConfirmation')
+      .exists({ organizationId: people.orgId, periodId: period._id, periodVersion: period.version, departmentId });
+    if (done) { say(`· ${people.deptName.get(departmentId)}: đã xác nhận trước đó`); continue; }
     try {
       await demo.periods.confirmDepartment(people.org, String(period._id), managerUserId, { departmentId, expectedPeriodVersion: period.version });
       say(`✓ ${people.deptName.get(departmentId)} đã xác nhận (phiên bản ${period.version})`);
@@ -219,8 +215,13 @@ async function closeAndPay(demo: DemoApp, people: People, periodKey: string) {
 }
 
 export async function runDemoFlow(demo: DemoApp, options: FlowOptions) {
-  const people = await loadPeople(demo, options.orgCode);
   const periodKey = options.period ?? ACTIVE_PERIOD;
+  if (options.step === 'rollback') {
+    console.log(`\n▶ Tua tenant ${options.orgCode} về trạng thái "${options.to}"`);
+    await restoreOrgSnapshot(demo, options.orgCode, options.to);
+    return;
+  }
+  const people = await loadPeople(demo, options.orgCode);
   const keep = new Set(options.step === 'all' ? [] : options.keep);
   const skipAck = new Set(options.step === 'all' ? [] : options.skipAck);
   if (options.step === 'resolve' || options.step === 'all') await resolve(demo, people, await findPeriod(demo, people, periodKey), keep);
@@ -280,10 +281,12 @@ async function main() {
   const arg = (name: string) => args.find(a => a.startsWith(`--${name}=`))?.split('=')[1];
   const list = (name: string, fallback: string[]) => (arg(name) === undefined ? fallback : arg(name)!.split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
   const step = (arg('step') ?? 'status') as Step;
-  if (!['status', 'resolve', 'ack', 'confirm', 'close', 'all'].includes(step)) throw new Error(`--step không hợp lệ: ${step}`);
+  if (!['status', 'resolve', 'ack', 'confirm', 'close', 'rollback', 'all'].includes(step)) throw new Error(`--step không hợp lệ: ${step}`);
+  const to = (arg('to') ?? 'main').toLowerCase() as SnapshotStage;
+  if (!['main', 'alt'].includes(to)) throw new Error(`--to không hợp lệ: ${to} (chọn main | alt)`);
   const demo = await createDemoApp();
   try {
-    const options: FlowOptions = { orgCode: (arg('org-code') ?? 'ANPHAT').toUpperCase(), step, keep: list('keep', DEMO_KEEP), skipAck: list('skip-ack', DEMO_SKIP_ACK), period: arg('period') };
+    const options: FlowOptions = { orgCode: (arg('org-code') ?? 'ANPHAT').toUpperCase(), step, keep: list('keep', DEMO_KEEP), skipAck: list('skip-ack', DEMO_SKIP_ACK), period: arg('period'), to };
     if (step !== 'status') await runDemoFlow(demo, options);
     await printDemoStatus(demo, options.orgCode);
   } finally {
