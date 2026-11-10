@@ -104,9 +104,42 @@ test('phiếu lương là một khung duy nhất, 5 mục xếp trên lưới m�
   // Một tờ phiếu: đúng một vỏ ring bọc ngoài, 5 mục bên trong lưới 12 cột.
   expect(scope().querySelectorAll('div.ring-1')).toHaveLength(1);
   expect(scope().querySelectorAll('.ring-1 section')).toHaveLength(5);
-  expect(scope().querySelectorAll('.ring-1 .grid-cols-12 > div')).toHaveLength(5);
+  // 4 ô lưới cho 5 mục — mục 2 và 3 chung một ô.
+  expect(scope().querySelectorAll('.ring-1 .grid-cols-12 > div')).toHaveLength(4);
   // Không còn sơ đồ công thức 5 khối ở đầu trang.
   expect(scope().innerHTML).not.toContain('Tổng Gross');
+});
+
+test('bố cục A: mục 2+3 xếp chồng cột phải, mục 4+5 ghép hàng dưới', async () => {
+  await render();
+
+  const grid = scope().querySelector('.ring-1 .grid-cols-12');
+  expect(grid).not.toBeNull();
+  expect(grid!.className).toContain('items-start');
+
+  // 4 ô lưới cho 5 mục: mục 2 và 3 dùng chung một ô (xếp chồng) nên cột phải
+  // cao bằng cột trái, không còn khoảng trống dưới mục 2.
+  expect(grid!.children).toHaveLength(4);
+
+  const cells = [...grid!.children];
+  const [left, right] = cells;
+  expect(left.className).toContain('lg:col-span-7');
+  expect(right.className).toContain('lg:col-span-5');
+  expect(right.className).toContain('flex-col');
+  // Thứ tự đọc cột phải trên→dưới vẫn là 2 rồi 3.
+  expect([...right.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
+    'Các khoản giảm trừ thuế',
+    'Thu nhập tính thuế',
+  ]);
+
+  // Hàng dưới: PIT bên trái, Tổng kết bên phải.
+  expect(cells[2].className).toContain('lg:col-span-5');
+  expect(cells[3].className).toContain('lg:col-span-7');
+
+  // Mục 5 nén thành dải: không còn bảng đối soát riêng.
+  expect(cells[3].querySelector('table')).toBeNull();
+  expect(cells[3].textContent).toContain('Tổng khấu trừ');
+  expect(cells[3].textContent).toContain('25.072.500');
 });
 
 test('đối soát lệch thì không khoe "Khớp"', async () => {
@@ -135,8 +168,47 @@ test('mục bảo hiểm ở card 2 gập/mở được phần trích chi tiết
   expect(scope().innerHTML).toContain('1.280.000');
 });
 
-test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế chuyển sang mục 3', async () => {
+test('mục tiền làm thêm giờ gập/mở được chi tiết theo loại ngày', async () => {
+  detail = {
+    ...payslip,
+    otBreakdown: {
+      totalMinutes: 480,
+      totalHours: 8,
+      workingDayMinutes: 300,
+      weeklyOffMinutes: 180,
+      publicHolidayMinutes: 0,
+      hourlyRate: 125_000,
+      overtimeTaxable: false,
+      otPay: 2_000_000,
+      breakdown: [
+        { type: 'WORKING_DAY', label: 'Ngày thường', minutes: 300, hours: 5, coefficient: 1.5, amount: 937_500 },
+        { type: 'WEEKLY_OFF', label: 'Cuối tuần', minutes: 180, hours: 3, coefficient: 2, amount: 750_000 },
+      ],
+    },
+  };
   await render();
+
+  const findToggle = () =>
+    [...scope().querySelectorAll<HTMLButtonElement>('button[aria-expanded]')].find((btn) =>
+      btn.textContent?.includes('Tiền làm thêm giờ'),
+    );
+  const toggle = findToggle();
+  expect(toggle).toBeDefined();
+  // Mặc định gập: chỉ in dòng tổng, chưa in dòng con theo loại ngày.
+  expect(toggle!.getAttribute('aria-expanded')).toBe('false');
+  expect(scope().innerHTML).toContain('2.000.000');
+  expect(scope().innerHTML).not.toContain('937.500');
+
+  await act(async () => toggle!.click());
+
+  expect(findToggle()!.getAttribute('aria-expanded')).toBe('true');
+  expect(scope().innerHTML).toContain('937.500');
+  expect(scope().innerHTML).toContain('750.000');
+  expect(scope().innerHTML).toContain('Ngày thường');
+  expect(scope().innerHTML).toContain('Cuối tuần');
+});
+
+test('mục giảm trừ chỉ liệt kê khoản trừ, thu nhập tính thuế chuyển sang mục 3', async () => {  await render();
   const html = scope().innerHTML;
 
   // Mục 2 chỉ liệt kê khoản trừ; mục 3 in bảng nối số về nguồn và ra kết quả.
@@ -200,6 +272,23 @@ test('trang HR dùng chung bố cục và gọi endpoint HR, không đánh dấu
   expect(scope().querySelector('[role="dialog"]')).not.toBeNull();
   // Endpoint HR chứ không phải self-service.
   expect(calls.map((call) => call.path)).toEqual(['/api/payslips/p1']);
+});
+
+test('phiếu lương in đủ 5 khoản thu nhập kể cả khoản 0 ₫', async () => {
+  // Phiếu cũ: backend cắt khoản 0 khỏi earningBreakdown nên chỉ còn KPI.
+  detail = {
+    ...payslip,
+    earningBreakdown: [{ type: 'KPI_BONUS', label: 'Thưởng KPI', amount: 5_000_000 }],
+  };
+  await render();
+
+  const section = scope().querySelectorAll('.ring-1 section')[0];
+  const html = section.innerHTML;
+  for (const label of ['Lương cơ bản theo công', 'Tổng phụ cấp', 'Thưởng chuyên cần', 'Thưởng KPI', 'Tiền làm thêm giờ']) {
+    expect(html).toContain(label);
+  }
+  // Khoản vắng mặt in 0 ₫, không bị bỏ dòng. (Intl dùng NBSP trước ký hiệu ₫.)
+  expect(section.textContent).toContain('0 ₫');
 });
 
 test('đóng dialog quay về đúng kỳ lương của phiếu', async () => {

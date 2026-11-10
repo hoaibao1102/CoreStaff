@@ -89,19 +89,20 @@ test('§1 GROSS — itemizes every earning component, no OT tax-split block', ()
   expect(html).not.toContain('Miễn thuế TNCN');
 });
 
-test('§1 GROSS — chi tiết lương công và OT in thẳng thành dòng phụ, không cần bấm', () => {
+test('§1 GROSS — chi tiết lương công in thẳng, chi tiết OT thu gọn mặc định', () => {
   const html = renderToStaticMarkup(<GrossEarningsCard payslip={basePayslip} />);
 
-  expect(html).not.toContain('Chi tiết</button>');
+  // Lương công: dòng phụ luôn in, không cần bấm.
   // 20.000.000 ÷ 25 ngày = 800.000/ngày × 20 ngày.
   expect(html).toContain('ngày công chuẩn');
   expect(html).toContain('800.000');
   expect(html).toContain('ngày công thực tế');
-  // 120 phút = 2 giờ × (100.000 × 1.5) và 960 phút = 16 giờ × (100.000 × 3).
-  expect(html).toContain('2 giờ');
-  expect(html).toContain('16 giờ');
-  expect(html).toContain('300.000');
-  expect(html).toContain('4.800.000');
+
+  // OT: dòng cha có nút gập, dòng con theo loại ngày chưa in.
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).not.toContain('2 giờ');
+  expect(html).not.toContain('16 giờ');
+  expect(html).not.toContain('4.800.000');
 });
 
 test('§1 GROSS — thiếu dữ liệu ngày công thì bỏ dòng phụ lương cơ bản', () => {
