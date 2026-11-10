@@ -181,7 +181,7 @@ export interface Payslip {
   otherDeductions: number;
   earningBreakdown?: Array<{ label: string; amount: number; type?: string }>;
   allowanceBreakdown?: Array<{ label: string; amount: number }>;
-  otBreakdown?: { breakdown?: Array<{ label: string; hours?: number; coefficient?: number; amount: number }> } | null;
+  otBreakdown?: { otPay?: number; breakdown?: Array<{ label: string; hours?: number; coefficient?: number; amount: number }> } | null;
   deductionBreakdown?: Array<{ label: string; amount: number }>;
   taxableIncome?: number;
   personalDeduction?: number;
