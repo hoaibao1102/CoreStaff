@@ -95,7 +95,6 @@ async function main() {
   const InsurancePolicy = db.model('InsurancePolicy');
   const WorkCreditPolicy = db.model('WorkCreditPolicy');
   const AttendanceBonusPolicy = db.model('AttendanceBonusPolicy');
-  const KpiPayrollInput = db.model('KpiPayrollInput');
   const TimesheetPeriod = db.model('TimesheetPeriod');
   const AttendanceDay = db.model('AttendanceDay');
   const OvertimeResult = db.model('OvertimeResult');
@@ -235,16 +234,6 @@ async function main() {
     `bonusAmount=${(bonus as any)?.bonusAmount ?? 'n/a'} (expected ${__seedAmounts.attendanceBonus})`,
   );
 
-  const kpi = await KpiPayrollInput.findOne({
-    organizationId,
-    employeeProfileId,
-    period: PERIOD,
-  }).lean();
-  record(
-    'kpi-confirmed',
-    !!kpi && (kpi as any).status === 'CONFIRMED' && (kpi as any).amount === __seedAmounts.kpiBonus,
-    `amount=${(kpi as any)?.amount ?? 'n/a'}`,
-  );
 
   const period: any = await TimesheetPeriod.findOne({ organizationId, period: PERIOD }).lean();
   record(
@@ -323,7 +312,6 @@ async function main() {
     taxableAllowances: __seedAmounts.responsibilityAllowance,
     nonTaxableAllowances: __seedAmounts.mealAllowance,
     attendanceBonus: __seedAmounts.attendanceBonus,
-    kpiBonus: __seedAmounts.kpiBonus,
     otWorkingDayMinutes: __seedAmounts.otWorkingDayMinutes,
     otWeeklyOffMinutes: __seedAmounts.otWeeklyOffMinutes,
     dependentCount: 1,

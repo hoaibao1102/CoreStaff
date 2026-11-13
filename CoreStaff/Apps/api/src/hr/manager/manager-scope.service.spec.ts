@@ -94,7 +94,7 @@ describe('ManagerScopeService', () => {
         { id: 'd2', code: 'QA', name: 'Kiểm thử' },
       ],
       defaultDepartmentId: 'd1',
-      capabilities: ['manager:employees:read', 'manager:approvals:write', 'manager:kpi:draft'],
+      capabilities: ['manager:employees:read', 'manager:approvals:write'],
     });
   });
 

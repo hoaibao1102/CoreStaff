@@ -13,7 +13,6 @@ import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.sc
 const MANAGER_CAPABILITIES = [
   'manager:employees:read',
   'manager:approvals:write',
-  'manager:kpi:draft',
 ] as const;
 
 @Injectable()

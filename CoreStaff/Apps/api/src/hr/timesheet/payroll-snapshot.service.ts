@@ -11,6 +11,7 @@ import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.
 import { EmploymentStatus, InsuranceContributionType } from '../../database/schemas/enums';
 import { calculateInsuranceContributions } from '../insurance-policy/insurance-calculation';
 import { PitService } from '../payroll/pit.service';
+import { NO_KPI_EARNINGS_CONTRACT } from '../payroll/payroll-earnings-contract';
 import { createHash } from 'node:crypto';
 import { canonicalPayloadHash } from '../payroll/payroll-artifact-foundation';
 
@@ -98,8 +99,6 @@ export class PayrollSnapshotService {
     private readonly allowanceModel: Model<any>,
     @InjectModel('AttendanceBonusPolicy')
     private readonly attendanceBonusPolicyModel: Model<any>,
-    @InjectModel('KpiPayrollInput')
-    private readonly kpiPayrollInputModel: Model<any>,
     @InjectModel('InsurancePolicy')
     private readonly insurancePolicyModel: Model<InsurancePolicyDocument>,
     @InjectModel('InsuranceProfile')
@@ -349,13 +348,6 @@ export class PayrollSnapshotService {
       (summary.absentDays ?? 0) === 0 &&
       (summary.incompleteDays ?? 0) === 0;
     const attendanceBonus = qualifiesForAttendanceBonus ? attendanceBonusPolicy?.bonusAmount ?? 0 : 0;
-    const kpiInput: any = await this.kpiPayrollInputModel.findOne({
-      organizationId: new Types.ObjectId(organizationId),
-      employeeProfileId: new Types.ObjectId(summary.employeeProfileId),
-      period: periodKey,
-      status: 'CONFIRMED',
-    }).lean();
-    const kpiBonus = kpiInput?.amount ?? 0;
 
     // Calculate OT pay — hệ số dùng chung ở OVERTIME_RATES (SRS §30D.2)
     const hourlyRate = hourlyRateFor(
@@ -417,7 +409,8 @@ export class PayrollSnapshotService {
       insurancePolicy,
       taxPolicy,
       dependents.length,
-      kpiBonus,
+      0,
+      NO_KPI_EARNINGS_CONTRACT,
       { insuranceSalary, participation, standardWorkingDays, payableWorkingDays },
     );
 
@@ -451,7 +444,7 @@ export class PayrollSnapshotService {
       } : {}),
       totalAllowances,
       attendanceBonus,
-      kpiBonus,
+      earningsContract: NO_KPI_EARNINGS_CONTRACT,
       nonTaxableAllowances,
       allowanceBreakdown,
       otMinutesByType: {
@@ -473,7 +466,7 @@ export class PayrollSnapshotService {
       unemploymentInsurance,
 
       // PIT inputs
-      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + kpiBonus + (overtimeTaxable ? otPay : 0) - socialInsurance - healthInsurance - unemploymentInsurance),
+      taxableEarnings: Math.max(0, proratedBaseSalary + totalAllowances + attendanceBonus + (overtimeTaxable ? otPay : 0) - socialInsurance - healthInsurance - unemploymentInsurance),
       totalDependentDeductions,
       dependentCount: dependents.length,
       taxPolicyVersion: taxPolicy?.version ?? 1,
@@ -522,7 +515,8 @@ export class PayrollSnapshotService {
     insurancePolicy: any,
     taxPolicy: any,
     dependentCount: number,
-    kpiBonus = 0,
+    legacyKpiBonus = 0,
+    earningsContract?: string,
     insurance: {
       insuranceSalary: number;
       participation: {
@@ -569,8 +563,9 @@ export class PayrollSnapshotService {
       String(taxPolicy?.overtimeTaxable ?? false),
       String(taxPolicy?.dependentDeduction ?? 0),
       String(dependentCount),
-      // Thưởng KPI là nguồn tiền riêng, đổi KPI phải làm hash lệch.
-      String(kpiBonus),
+      earningsContract === NO_KPI_EARNINGS_CONTRACT
+        ? NO_KPI_EARNINGS_CONTRACT
+        : String(legacyKpiBonus),
       // Lương đóng bảo hiểm giờ là số DẪN XUẤT (base − phụ cấp) → hash theo input
       // gốc và theo hồ sơ tham gia, để đổi phụ cấp/participation là hash lệch.
       String(insurance.insuranceSalary),
@@ -670,19 +665,14 @@ export class PayrollSnapshotService {
     );
     const profile = await this.employeeProfileModel.findById(snapshot.employeeProfileId).lean();
     const dependentCount = profile?.dependents?.filter((d) => d.status === 'ACTIVE').length ?? 0;
-    const kpiInput: any = await this.kpiPayrollInputModel.findOne({
-      organizationId: snapshot.organizationId,
-      employeeProfileId: snapshot.employeeProfileId,
-      period: snapshot.periodKey,
-      status: 'CONFIRMED',
-    }).lean();
     const currentHash = this.generateSourceHash(
       summary as any,
       salaryProfile,
       insurancePolicy,
       taxPolicy,
       dependentCount,
-      kpiInput?.amount ?? 0,
+      snapshot.kpiBonus ?? 0,
+      snapshot.earningsContract,
     );
 
     return currentHash === snapshot.sourceHash;

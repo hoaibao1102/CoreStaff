@@ -12,7 +12,7 @@ import {
     LogOut,
     ShieldAlert,
     ShieldCheck,
-    Target,
+
     UserRound,
     Users,
     WalletCards,
@@ -84,7 +84,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                         { href: '/hr/salary-profiles', label: 'Hồ sơ lương', icon: WalletCards },
                         { href: '/hr/organization-allowances', label: 'Phụ cấp', icon: WalletCards },
                         { href: '/hr/attendance-bonus-policies', label: 'Thưởng chuyên cần', icon: ClipboardCheck },
-                        { href: '/hr/kpi-inputs', label: 'KPI kỳ lương', icon: Target },
+
                         { href: '/hr/payroll-runs', label: 'Payroll & Payslip', icon: WalletCards },
                     ]},
                     { label: 'Chính sách & bảo hiểm', icon: ShieldCheck, children: [

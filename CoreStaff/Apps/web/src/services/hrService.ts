@@ -408,13 +408,7 @@ export const HR_ERROR_CODES: Record<string, string> = {
     ATTENDANCE_BONUS_TEMPLATE_NOT_FOUND: 'Không tìm thấy mẫu thưởng chuyên cần.',
     ATTENDANCE_BONUS_AMOUNT_INVALID: 'Số tiền thưởng chuyên cần không hợp lệ.',
     ATTENDANCE_BONUS_PERCENTAGE_INVALID: 'Tỷ lệ phần trăm thưởng chuyên cần phải từ 0 đến 100%.',
-    KPI_INPUT_NOT_FOUND: 'Không tìm thấy dữ liệu KPI.',
-    KPI_INPUT_ALREADY_EXISTS: 'Nhân viên này đã có dữ liệu KPI trong kỳ lương được chọn.',
-    KPI_INPUT_CONFIRMED_IMMUTABLE: 'Dữ liệu KPI đã được xác nhận và không thể chỉnh sửa.',
-    KPI_INPUT_NOT_DRAFT: 'Chỉ có thể xác nhận bản ghi KPI ở trạng thái Nháp.',
-    KPI_POLICY_REQUIRED: 'Chưa có chính sách KPI hiệu lực cho kỳ này. Vui lòng thiết lập chính sách trước.',
-    KPI_POLICY_NOT_FOUND: 'Không tìm thấy chính sách KPI áp dụng cho kỳ này.',
-    KPI_TIER_INVALID: 'Thang bậc đánh giá KPI không hợp lệ theo chính sách hiện hành.',
+
 
     // Insurance Profile errors (TASK-038)
     INSURANCE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ tham gia bảo hiểm.',

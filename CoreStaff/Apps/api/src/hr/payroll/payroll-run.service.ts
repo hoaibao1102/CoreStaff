@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { earningsKpiBonus } from './payroll-earnings-contract';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { PayrollRun, PayrollRunDocument, PayrollRunStatus } from '../../database/schemas/payroll-run.schema';
@@ -404,12 +405,12 @@ export class PayrollRunService {
     pitAmount: number;
     netSalary: number;
   }> {
-    // Gross earnings = proratedBaseSalary + allowances + attendanceBonus + kpiBonus + otPay
+    // Historical snapshots may retain KPI; NO_KPI_V2 snapshots always exclude it.
     const grossEarnings =
       snapshot.proratedBaseSalary +
       snapshot.totalAllowances +
       snapshot.attendanceBonus +
-      (snapshot.kpiBonus || 0) +
+      earningsKpiBonus(snapshot) +
       snapshot.otPay; // Tổng OT nhận (đã bao gồm cả phần chịu thuế và không chịu thuế)
 
     // Insurance contributions (from snapshot or recalculate)

@@ -143,7 +143,7 @@ async function main() {
   const AllowanceCatalog = db.model('AllowanceCatalog');
   const AttendanceBonusTemplate = db.model('AttendanceBonusTemplate');
   const AttendanceBonusPolicy = db.model('AttendanceBonusPolicy');
-  const KpiPayrollInput = db.model('KpiPayrollInput');
+
   const InsuranceProfile = db.model('InsuranceProfile');
   const CalendarException = db.model('CalendarException');
   const TimesheetPeriod = db.model('TimesheetPeriod');
@@ -156,7 +156,7 @@ async function main() {
   const PayrollInputSnapshot = db.model('PayrollInputSnapshot');
   const PayrollRun = db.model('PayrollRun');
   const Payslip = db.model("Payslip");
-  const KpiPolicy = db.model("KpiPolicy");
+
   const EmployeeDocument = db.model("EmployeeDocument");
   const ManagerRequest = db.model("ManagerRequest");
   const OvertimeResult = db.model("OvertimeResult");
@@ -467,27 +467,6 @@ async function main() {
     'AttendanceBonusPolicy',
   );
 
-  // ── KPI Policy ───────────────────────────────────────────────────────────
-  const kpiPolicyId = await upsert(
-    KpiPolicy,
-    { organizationId, name: 'Chính sách KPI Flow Software 2026' },
-    {
-      organizationId,
-      name: 'Chính sách KPI Flow Software 2026',
-      policyType: 'GRADE',
-      baseAmount: 1_000_000,
-      tiers: [
-        { name: 'Xuất sắc', percentage: 120, minScore: 90, maxScore: 100, order: 1 },
-        { name: 'Tốt', percentage: 100, minScore: 80, maxScore: 89, order: 2 },
-        { name: 'Đạt', percentage: 80, minScore: 60, maxScore: 79, order: 3 },
-        { name: 'Chưa đạt', percentage: 50, minScore: 0, maxScore: 59, order: 4 },
-      ],
-      effectiveFrom: new Date('2026-01-01'),
-      version: 1,
-      active: true,
-    },
-    'KpiPolicy',
-  );
 
   // ── Policies ──────────────────────────────────────────────────────────────
   await upsert(LaborPolicy, { organizationId, version: 1 }, { organizationId, effectiveFrom: new Date('2026-01-01'), normalDailyMinutes: 480, normalWeeklyMinutes: 2880, maxCombinedDailyMinutes: 720, maxMonthlyOvertimeMinutes: 2400, maxAnnualOvertimeMinutes: 20000, exceptionalAnnualOvertimeMinutes: 24000, warningThresholdPercent: 80, maxRetroactiveFilingDays: 7, probationMinimumRate: 0.85, legalReference: 'BLLĐ 45/2019/QH14', version: 1, active: true }, 'LaborCompliancePolicy');
@@ -527,7 +506,7 @@ async function main() {
     'InsurancePolicy',
   );
 
-  // ── Salary profiles, KPI, insurance profiles ─────────────────────────────
+  // ── Salary and insurance profiles ────────────────────────────────────────
   // Per-employee allowance amounts (PHONE allowance varies by employee)
   const personalAllowancesAmounts: Record<string, number> = {
     'FLOW-CEO-001': 2_000_000,
@@ -566,20 +545,6 @@ async function main() {
       'SalaryProfile',
     );
 
-    // KPI input: derive tier from score to match policy
-    const kpiScore = isProbation ? 75 : 90;
-    const kpiTier = kpiScore >= 90 ? { name: 'Xuất sắc', percentage: 120 }
-      : kpiScore >= 80 ? { name: 'Tốt', percentage: 100 }
-      : kpiScore >= 60 ? { name: 'Đạt', percentage: 80 }
-      : { name: 'Chưa đạt', percentage: 50 };
-    const kpiAmount = Math.round(1_000_000 * (kpiTier.percentage / 100));
-
-    await insertIfMissing(
-      KpiPayrollInput,
-      { organizationId, employeeProfileId: profileId, period: PERIOD },
-      { organizationId, employeeProfileId: profileId, departmentId: deptIds.get(emp.departmentCode), policyId: kpiPolicyId, period: PERIOD, amount: kpiAmount, score: kpiScore, tierName: kpiTier.name, tierPercentage: kpiTier.percentage, baseAmount: 1_000_000, source: 'MANUAL', note: 'Dữ liệu demo KPI', status: isProbation ? 'DRAFT' : 'CONFIRMED', version: 1 },
-      'KpiPayrollInput',
-    );
 
     await insertIfMissing(
       InsuranceProfile,
@@ -853,7 +818,6 @@ async function main() {
       SalaryProfile as any,
       OrganizationAllowance as any,
       AttendanceBonusPolicy as any,
-      KpiPayrollInput as any,
       InsurancePolicy as any,
       InsuranceProfile as any,
       taxPolicyModel as any,

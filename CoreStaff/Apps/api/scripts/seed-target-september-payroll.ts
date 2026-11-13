@@ -14,7 +14,7 @@ import {
   WorkMode,
   WorkdayType,
 } from '../src/database/schemas/enums';
-import { KpiSource, KpiStatus } from '../src/database/schemas/compensation.schema';
+
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
@@ -154,8 +154,7 @@ async function main() {
     const BonusTemplate = db.model<any>('AttendanceBonusTemplate');
     const BonusPolicy = db.model<any>('AttendanceBonusPolicy');
     const SalaryProfile = db.model<any>('SalaryProfile');
-    const KpiPolicy = db.model<any>('KpiPolicy');
-    const KpiInput = db.model<any>('KpiPayrollInput');
+
     const TaxPolicy = db.model<any>('TaxPolicy');
     const InsurancePolicy = db.model<any>('InsurancePolicy');
     const InsuranceProfile = db.model<any>('InsuranceProfile');
@@ -561,80 +560,6 @@ async function main() {
       mark('SalaryProfile', VERIFY ? 'verified' : 'skipped');
     }
 
-    const kpiPolicyId = await createIfMissing(
-      KpiPolicy,
-      { organizationId, name: 'KPI toàn công ty — mức A', effectiveFrom: policyStart },
-      {
-        organizationId,
-        name: 'KPI toàn công ty — mức A',
-        policyType: 'GRADE',
-        baseAmount: 2_000_000,
-        tiers: [{ name: 'A', percentage: 100, minScore: 90, maxScore: 100, order: 1 }],
-        effectiveFrom: policyStart,
-        version: 1,
-        active: true,
-        scope: 'ALL',
-        departmentIds: [],
-      },
-      'KpiPolicy',
-    );
-    const existingKpi: any = await KpiInput.findOne({ organizationId, employeeProfileId: profile._id, period: PERIOD }).lean();
-    if (existingKpi) {
-      if (existingKpi.status !== KpiStatus.CONFIRMED) {
-        if (!APPLY) mark('KpiPayrollInput', 'planned');
-        else {
-          await KpiInput.updateOne(
-            { _id: existingKpi._id, organizationId },
-            {
-              $set: {
-                policyId: kpiPolicyId,
-                departmentId,
-                score: 95,
-                tierName: 'A',
-                tierPercentage: 100,
-                baseAmount: 2_000_000,
-                amount: 2_000_000,
-                source: KpiSource.MANUAL,
-                note: 'KPI tháng 09/2026 đã đánh giá và HR xác nhận.',
-                status: KpiStatus.CONFIRMED,
-                confirmedAt: new Date(),
-                confirmedBy: hrUser._id,
-                evaluatedAt: new Date(),
-                evaluatedBy: hrUser._id,
-              },
-              $inc: { version: 1 },
-            },
-          );
-          mark('KpiPayrollInput', 'updated');
-        }
-      } else mark('KpiPayrollInput', VERIFY ? 'verified' : 'skipped');
-    } else {
-      await createIfMissing(
-        KpiInput,
-        { organizationId, employeeProfileId: profile._id, period: PERIOD },
-        {
-          organizationId,
-          employeeProfileId: profile._id,
-          departmentId,
-          policyId: kpiPolicyId,
-          period: PERIOD,
-          score: 95,
-          tierName: 'A',
-          tierPercentage: 100,
-          baseAmount: 2_000_000,
-          amount: 2_000_000,
-          source: KpiSource.MANUAL,
-          note: 'KPI tháng 09/2026 đã đánh giá và HR xác nhận.',
-          status: KpiStatus.CONFIRMED,
-          version: 1,
-          confirmedAt: new Date(),
-          confirmedBy: hrUser._id,
-          evaluatedAt: new Date(),
-          evaluatedBy: hrUser._id,
-        },
-        'KpiPayrollInput',
-      );
-    }
 
     const attendanceCount = await AttendanceDay.countDocuments({
       organizationId,
@@ -649,9 +574,6 @@ async function main() {
     const assignedSalary: any = APPLY || VERIFY
       ? await SalaryProfile.findById(salary._id).lean()
       : salary;
-    const kpiAfter: any = APPLY || VERIFY
-      ? await KpiInput.findOne({ organizationId, employeeProfileId: profile._id, period: PERIOD }).lean()
-      : existingKpi;
 
     console.log(`\nTarget employee seed ${VERIFY ? 'VERIFY' : APPLY ? 'APPLY' : 'DRY-RUN'}`);
     console.log(`userId=${USER_ID} profileId=${profile._id} organizationId=${organizationId}`);
@@ -661,7 +583,7 @@ async function main() {
     console.log('allowances=' + allowanceSpecs.map((item) => `${item.code}:${item.amount}`).join(', '));
     console.log(`attendanceBonus=1000000 scope=ALL policyId=${bonusPolicyId}`);
     console.log(`taxPolicyId=${taxPolicyId} insurancePolicyId=${insurancePolicyId} insuranceProfileId=${insuranceProfileId}`);
-    console.log(`kpi=${kpiAfter?.status ?? (APPLY ? 'UNKNOWN' : 'CONFIRMED (planned)')} amount=${kpiAfter?.amount ?? 2_000_000}`);
+
     console.log(`salaryAllowanceLinks=${assignedSalary?.organizationAllowanceIds?.length ?? 0}`);
     console.log('managerClosePending=' + String(existingPeriod?.managerSnapshotClosed !== true));
     console.log('\nActions:');
@@ -676,8 +598,7 @@ async function main() {
         attendanceCount !== workdays.length ? `attendance ${attendanceCount}/${workdays.length}` : '',
         missingLinks.length ? `${missingLinks.length} allowance links missing` : '',
         String(assignedSalary?.attendanceBonusPolicyId ?? '') !== String(bonusPolicyId) ? 'attendance bonus not linked' : '',
-        kpiAfter?.status !== KpiStatus.CONFIRMED ? 'KPI not confirmed' : '',
-        Number(kpiAfter?.amount ?? 0) !== 2_000_000 ? 'KPI amount is not 2,000,000' : '',
+
         existingPeriod?.managerSnapshotClosed === true ? 'manager snapshot is already closed' : '',
         !taxPolicyId ? 'tax policy missing' : '',
         !insurancePolicyId ? 'insurance policy missing' : '',

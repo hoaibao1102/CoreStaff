@@ -77,9 +77,20 @@ export class PayrollInputSnapshot {
   @Prop({ required: true, min: 0, default: 0 })
   attendanceBonus: number;
 
-  /** KPI bonus confirmed for the period (KpiPayrollInput). */
-  @Prop({ required: true, min: 0, default: 0 })
-  kpiBonus: number;
+  /**
+   * Legacy KPI amount. New snapshots use `NO_KPI_V2` and leave this unset;
+   * readers retain it only to reproduce historical payroll artifacts.
+   */
+  @Prop({ required: false, min: 0 })
+  kpiBonus?: number;
+
+  /** Earnings dispatch contract. Missing means a historical KPI-capable row. */
+  @Prop({
+    required: false,
+    enum: ['LEGACY_KPI_V1', 'NO_KPI_V2'],
+    default: undefined,
+  })
+  earningsContract?: string;
 
   /** OT minutes by type (frozen from TimesheetSummary). */
   @Prop({ type: Object, required: false })

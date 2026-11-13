@@ -230,8 +230,8 @@ export function getStatusBadgeVariant(status: string): BadgeVariant {
 }
 
 /** Công thức bằng chữ của từng mục — in trong tooltip "?" cho người mới đọc phiếu. */
-const GROSS_FORMULA =
-  'Tổng Gross = Lương cơ bản theo ngày công + Phụ cấp + Thưởng chuyên cần + Thưởng KPI + Tiền làm thêm giờ.';
+const grossFormula = (hasLegacyKpi: boolean) =>
+  `Tổng Gross = Lương cơ bản theo ngày công + Phụ cấp + Thưởng chuyên cần${hasLegacyKpi ? ' + Thưởng KPI' : ''} + Tiền làm thêm giờ.`;
 const TAX_DEDUCTION_FORMULA =
   'Ba khoản này được trừ khỏi Thu nhập chịu thuế (mục 1): Bảo hiểm (BHXH + BHYT + BHTN), Giảm trừ bản thân, '
   + 'Giảm trừ người phụ thuộc. Phần còn lại là Thu nhập tính thuế — in ở đầu mục 3.';
@@ -335,6 +335,7 @@ export function GrossEarningsCard({
   // khỏi `earningBreakdown` (và phiếu cũ sinh trước đây cũng thiếu hẳn dòng), nên
   // không thể dựa vào breakdown để biết kỳ này có những khoản nào.
   const amountOf = (type: string) => summaryRows.find((item) => item.type === type)?.amount ?? 0;
+  const legacyKpiAmount = amountOf('KPI_BONUS');
   // R1: mọi phụ cấp đều chịu thuế nên phần chịu thuế = nguyên số tiền.
   const allowanceRows: GrossRow[] = allowances.length > 0
     // Có breakdown thì in từng loại (kể cả 0 ₫); in thêm dòng gộp là đếm trùng.
@@ -362,12 +363,12 @@ export function GrossEarningsCard({
       amount: amountOf('ATTENDANCE_BONUS'),
       taxable: amountOf('ATTENDANCE_BONUS'),
     },
-    {
+    ...(legacyKpiAmount > 0 ? [{
       key: 'KPI_BONUS',
       label: 'Thưởng KPI',
-      amount: amountOf('KPI_BONUS'),
-      taxable: amountOf('KPI_BONUS'),
-    },
+      amount: legacyKpiAmount,
+      taxable: legacyKpiAmount,
+    }] : []),
     {
       key: 'OVERTIME',
       label: 'Tiền làm thêm giờ',
@@ -474,7 +475,7 @@ export function GrossEarningsCard({
       index={1}
       title="Tổng thu nhập (Gross)"
       subtitle="Các khoản thu nhập cấu thành lương gross của kỳ."
-      formula={showFormula ? GROSS_FORMULA : undefined}
+      formula={showFormula ? grossFormula(legacyKpiAmount > 0) : undefined}
       variant={variant}
     >
       {body}

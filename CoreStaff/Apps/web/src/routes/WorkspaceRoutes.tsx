@@ -124,8 +124,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return <EmployeeDataState status="forbidden" />;
   }
 
-  if (route === '/hr/kpi-inputs' && user.role !== 'HR' && user.role !== 'DEPARTMENT_MANAGER') {
-    return <EmployeeDataState status="forbidden" />;
+  if (route === '/hr/kpi-inputs') {
+    return <EmployeeDataState status="unavailable" description="Tính năng KPI đã ngừng sử dụng." />;
   }
 
   // ── Dashboard / Tổng quan ────────────────────────────────────────────
@@ -239,8 +239,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
             <CompensationScreen apiBase={apiBase} kind="organization-allowances" />
           ) : route === '/hr/attendance-bonus-policies' ? (
             <CompensationScreen apiBase={apiBase} kind="attendance-bonus-policies" />
-          ) : route === '/hr/kpi-inputs' ? (
-            <CompensationScreen apiBase={apiBase} kind="kpi-inputs" userRole={user.role} />
+
           ) : route === '/hr/policies/labor-compliance' ? (
             <LaborCompliancePolicyScreen apiBase={apiBase} />
           ) : route === '/hr/policies/overtime-pay' ? (
@@ -302,8 +301,8 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  if (user.role === 'DEPARTMENT_MANAGER' && (route === '/manager/department' || route === '/manager/approvals' || route === '/hr/kpi-inputs')) {
-    const initialTab = route === '/hr/kpi-inputs' ? 'evaluations' : 'approvals';
+  if (user.role === 'DEPARTMENT_MANAGER' && (route === '/manager/department' || route === '/manager/approvals')) {
+    const initialTab = 'approvals';
     return (
       <WorkspaceShell user={user} currentPath="/manager/department" onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
