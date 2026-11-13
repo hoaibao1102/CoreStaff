@@ -6,6 +6,7 @@ const script = (name: string) => readFileSync(resolve(process.cwd(), 'scripts', 
 describe('payroll E2E script lifecycle contract', () => {
   const seed = script('seed-payroll-e2e.ts');
   const verifier = script('verify-payroll-e2e-seed.ts');
+  const ledger = script('payroll-ledger.ts');
 
   it('seeds an explicit effective work-credit policy without seeding review transitions', () => {
     expect(seed).toContain("const WorkCreditPolicy = db.model('WorkCreditPolicy')");
@@ -51,13 +52,15 @@ describe('payroll E2E script lifecycle contract', () => {
     expect(seed).toContain('personalDeduction: VN_PERSONAL_DEDUCTION');
   });
 
-  it('uses the canonical KPI payroll input fields', () => {
-    expect(seed).toContain('period: PERIOD');
-    expect(seed).toContain('amount: FIXTURE_AMOUNTS.kpiBonus');
-    expect(seed).toContain("source: 'MANUAL'");
-    expect(seed).toContain("status: 'CONFIRMED'");
-    expect(verifier).toContain('period: PERIOD');
-    expect(verifier).toContain('(kpi as any)?.amount');
+  it('does not seed or require KPI inputs for new payroll fixtures', () => {
+    expect(seed).not.toContain("db.model('KpiPayrollInput')");
+    expect(seed).not.toContain('FIXTURE_AMOUNTS.kpiBonus');
+    expect(verifier).not.toContain("db.model('KpiPayrollInput')");
+    expect(verifier).not.toContain("'kpi-confirmed'");
+    expect(verifier).not.toContain('__seedAmounts.kpiBonus');
+    expect(seed).not.toContain('kpiBonus:');
+    expect(verifier).not.toContain('kpiBonus:');
+    expect(ledger).not.toContain('kpiBonus');
   });
 
   it('does not filter insurance policy by a field absent from its schema', () => {

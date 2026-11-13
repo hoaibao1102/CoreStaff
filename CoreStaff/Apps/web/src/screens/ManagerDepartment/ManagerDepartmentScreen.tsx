@@ -34,7 +34,7 @@ import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/tabs';
 import { toast } from '@/components/toast';
-import { CompensationScreen } from '../Compensation/CompensationScreen';
+
 import {
   decideManagerRequest,
   getManagerContext,
@@ -65,7 +65,7 @@ export function ManagerDepartmentScreen({
   initialTab = 'approvals',
 }: {
   apiBase: string | null;
-  initialTab?: 'approvals' | 'employees' | 'evaluations';
+  initialTab?: 'approvals' | 'employees';
 }) {
   const [ctx, setCtx] = useState<ManagerContext | null>(null);
   const [dept, setDept] = useState('');
@@ -186,7 +186,7 @@ export function ManagerDepartmentScreen({
         <div>
           <h1 className="text-2xl font-semibold sm:text-3xl">Quản lý Phòng ban</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Phê duyệt chấm công selfie/OT, theo dõi nhân sự và đánh giá KPI thuộc phạm vi bạn quản lý.
+            Phê duyệt chấm công selfie/OT và theo dõi nhân sự thuộc phạm vi bạn quản lý.
           </p>
         </div>
         {ctx.managedDepartments.length > 1 && (
@@ -221,9 +221,7 @@ export function ManagerDepartmentScreen({
           <TabsTrigger value="employees" className="px-4">
             Nhân sự phòng ban
           </TabsTrigger>
-          <TabsTrigger value="evaluations" className="px-4">
-            Đánh giá nhân sự
-          </TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="approvals">
@@ -239,14 +237,7 @@ export function ManagerDepartmentScreen({
           <DepartmentEmployeesTab apiBase={apiBase} departmentId={dept} />
         </TabsContent>
 
-        <TabsContent value="evaluations">
-          <CompensationScreen
-            apiBase={apiBase}
-            kind="kpi-inputs"
-            userRole="DEPARTMENT_MANAGER"
-            departmentId={dept}
-          />
-        </TabsContent>
+
       </Tabs>
     </div>
   );

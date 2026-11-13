@@ -25,7 +25,7 @@ async function main() {
     const Snapshot = db.model<any>('PayrollInputSnapshot');
     const Salary = db.model<any>('SalaryProfile');
     const Insurance = db.model<any>('InsuranceProfile');
-    const Kpi = db.model<any>('KpiPayrollInput');
+
 
     const anchor: any = await User.findById(ANCHOR_USER_ID).select('_id organizationId fullName').lean();
     if (!anchor?.organizationId) throw new Error('Anchor user not found or has no organization.');
@@ -55,7 +55,6 @@ async function main() {
         snapshots: await Snapshot.countDocuments({ organizationId, periodId: period._id, employeeProfileId: profile._id }),
         salaryProfiles: await Salary.countDocuments({ organizationId, employeeProfileId: profile._id, active: true }),
         insuranceProfiles: await Insurance.countDocuments({ organizationId, employeeId: profile._id }),
-        kpiInputs: await Kpi.countDocuments({ organizationId, employeeProfileId: profile._id, period: PERIOD }),
       });
     }
     const targetEmployees = rows.filter((row) => !row.anchor);

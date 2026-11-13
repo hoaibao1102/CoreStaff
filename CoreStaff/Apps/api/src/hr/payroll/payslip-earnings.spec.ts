@@ -42,6 +42,19 @@ describe('payslip earning breakdown', () => {
     expect(result.allowanceBreakdown.every((item) => item.taxable === true)).toBe(true);
   });
 
+  it('does not expose a KPI line for new NO_KPI_V2 snapshots', () => {
+    const result = buildPayslipEarnings({
+      earningsContract: 'NO_KPI_V2',
+      proratedBaseSalary: 10_000_000,
+      attendanceBonus: 500_000,
+      kpiBonus: 9_000_000,
+      otPay: 0,
+    });
+
+    expect(result.grossEarnings).toBe(10_500_000);
+    expect(result.earningBreakdown.some((item) => item.type === 'KPI_BONUS')).toBe(false);
+  });
+
   it('marks overtime taxable only when the company flag is on (R2)', () => {
     // Cờ là nhị phân và áp cho TOÀN BỘ tiền OT: bật → chịu thuế, tắt → miễn hết.
     const fullyTaxed = buildPayslipEarnings({

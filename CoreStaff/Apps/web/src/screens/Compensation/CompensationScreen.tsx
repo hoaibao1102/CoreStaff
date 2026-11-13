@@ -1,20 +1,16 @@
 import { SalaryProfilesScreen } from './SalaryProfilesScreen';
 import { AllowancesScreen } from './AllowancesScreen';
 import { BonusPoliciesScreen } from './BonusPoliciesScreen';
-import { KpiInputsScreen } from './KpiInputsScreen';
 
-type Kind = 'salary-profiles' | 'organization-allowances' | 'attendance-bonus-policies' | 'kpi-inputs';
+type Kind = 'salary-profiles' | 'organization-allowances' | 'attendance-bonus-policies';
 
 export function CompensationScreen({
   apiBase,
   kind,
-  userRole,
-  departmentId,
 }: {
   apiBase: string | null;
   kind: Kind;
-  userRole?: string;
-  departmentId?: string;
+
 }) {
   if (kind === 'salary-profiles') {
     return <SalaryProfilesScreen apiBase={apiBase} />;
@@ -28,9 +24,6 @@ export function CompensationScreen({
     return <BonusPoliciesScreen apiBase={apiBase} />;
   }
 
-  if (kind === 'kpi-inputs') {
-    return <KpiInputsScreen apiBase={apiBase} userRole={userRole} departmentId={departmentId} />;
-  }
 
   return null;
 }

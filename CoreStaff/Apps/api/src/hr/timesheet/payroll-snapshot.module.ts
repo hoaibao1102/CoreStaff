@@ -6,7 +6,6 @@ import { TimesheetSummary, TimesheetSummarySchema } from '../../database/schemas
 import { EmployeeProfile, EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
 import {
   AttendanceBonusPolicySchema,
-  KpiPayrollInputSchema,
   OrganizationAllowanceSchema,
   SalaryProfileSchema,
 } from '../../database/schemas/compensation.schema';
@@ -23,7 +22,6 @@ import { TaxPolicySchema } from '../../database/schemas/tax-policy.schema';
       { name: 'SalaryProfile', schema: SalaryProfileSchema },
       { name: 'OrganizationAllowance', schema: OrganizationAllowanceSchema },
       { name: 'AttendanceBonusPolicy', schema: AttendanceBonusPolicySchema },
-      { name: 'KpiPayrollInput', schema: KpiPayrollInputSchema },
       { name: 'InsurancePolicy', schema: InsurancePolicySchema },
       { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
       { name: 'TaxPolicy', schema: TaxPolicySchema },

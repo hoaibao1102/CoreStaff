@@ -245,7 +245,7 @@ for (const role of ['HR', 'EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN']) {
     await expect(nav.locator('a[href="/hr/employees"]')).toHaveCount(role === 'HR' ? 1 : 0);
     await expect(nav.locator('a[href="/manager/department"]')).toHaveCount(role === 'DEPARTMENT_MANAGER' ? 1 : 0);
     await expect(nav.locator('a[href="/manager/approvals"]')).toHaveCount(0);
-    await expect(nav.locator('a[href="/hr/kpi-inputs"]')).toHaveCount(role === 'HR' ? 1 : 0);
+    await expect(nav.locator('a[href="/hr/kpi-inputs"]')).toHaveCount(0);
     await expect(nav.locator('a[href="/platform/organizations"]')).toHaveCount(role === 'SYSTEM_ADMIN' ? 1 : 0);
     if (role !== 'SYSTEM_ADMIN') await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', role === 'HR' ? '/hr/employees' : '/app/attendance/history');
     if (role === 'HR') {

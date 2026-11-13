@@ -43,7 +43,6 @@ async function main() {
       db.model('SalaryProfile') as any,
       db.model('OrganizationAllowance') as any,
       db.model('AttendanceBonusPolicy') as any,
-      db.model('KpiPayrollInput') as any,
       db.model('InsurancePolicy') as any,
       db.model('InsuranceProfile') as any,
       db.model('TaxPolicy') as any,
@@ -89,7 +88,7 @@ async function main() {
         nonTaxableAllowances: targetSnapshot.nonTaxableAllowances,
         allowanceBreakdown: targetSnapshot.allowanceBreakdown,
         attendanceBonus: targetSnapshot.attendanceBonus,
-        kpiBonus: targetSnapshot.kpiBonus,
+        earningsContract: targetSnapshot.earningsContract,
         contributionBase: targetSnapshot.contributionBase,
         socialInsurance: targetSnapshot.socialInsurance,
         healthInsurance: targetSnapshot.healthInsurance,
@@ -104,7 +103,7 @@ async function main() {
     if (targetSummary.otWorkingDayMinutes !== 120 || targetSummary.otPublicHolidayMinutes !== 960 || targetSummary.totalOvertimeMinutes !== 1080) {
       throw new Error('Target overtime summary is inconsistent.');
     }
-    if (targetSnapshot.proratedBaseSalary !== 16_000_000 || targetSnapshot.totalAllowances !== 3_130_000 || targetSnapshot.attendanceBonus !== 1_000_000 || targetSnapshot.kpiBonus !== 2_000_000) {
+    if (targetSnapshot.proratedBaseSalary !== 16_000_000 || targetSnapshot.totalAllowances !== 3_130_000 || targetSnapshot.attendanceBonus !== 1_000_000 || targetSnapshot.earningsContract !== 'NO_KPI_V2') {
       throw new Error('Target compensation snapshot is incomplete.');
     }
   } finally {

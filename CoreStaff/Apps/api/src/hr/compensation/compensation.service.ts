@@ -1,14 +1,13 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
-  AllowanceCatalog, AttendanceBonusPolicy, AttendanceBonusTemplate, KpiPayrollInput, KpiPolicy,
-  KpiStatus, LaborCompliancePolicy, OrganizationAllowance, SalaryProfile,
+  AllowanceCatalog, AttendanceBonusPolicy, AttendanceBonusTemplate,
+  LaborCompliancePolicy, OrganizationAllowance, SalaryProfile,
 } from '../../database/schemas/compensation.schema';
 import { EmployeeProfile } from '../../database/schemas/employee-profile.schema';
-import { assertNoEffectiveOverlap, calculateProbationRate, evaluateAttendanceBonus, resolveConfirmedKpiAmount } from './compensation-domain';
-import { CreateAllowanceDto, CreateBonusPolicyDto, CreateKpiInputDto, CreateKpiPolicyDto, CreateSalaryProfileDto, UpdateAllowanceDto, UpdateBonusPolicyDto, UpdateKpiInputDto, UpdateKpiPolicyDto, UpdateSalaryProfileDto } from './dto/compensation.dto';
-import { ManagerScopeService } from '../manager/manager-scope.service';
+import { assertNoEffectiveOverlap, calculateProbationRate, evaluateAttendanceBonus } from './compensation-domain';
+import { CreateAllowanceDto, CreateBonusPolicyDto, CreateSalaryProfileDto, UpdateAllowanceDto, UpdateBonusPolicyDto, UpdateSalaryProfileDto } from './dto/compensation.dto';
 import { deriveInsuranceSalary } from '../timesheet/payroll-snapshot.service';
 
 const duplicate = (e: unknown, code: string): never => {
@@ -26,10 +25,7 @@ export class CompensationService {
     @InjectModel('OrganizationAllowance') private readonly allowances: Model<OrganizationAllowance>,
     @InjectModel('AttendanceBonusTemplate') private readonly bonusTemplates: Model<AttendanceBonusTemplate>,
     @InjectModel('AttendanceBonusPolicy') private readonly bonusPolicies: Model<AttendanceBonusPolicy>,
-    @InjectModel('KpiPayrollInput') private readonly kpis: Model<KpiPayrollInput>,
-    @InjectModel('KpiPolicy') private readonly kpiPolicies: Model<KpiPolicy>,
     @InjectModel('EmployeeProfile') private readonly employees: Model<EmployeeProfile>,
-    private readonly managerScope: ManagerScopeService,
   ) {}
 
   private async assertEmployee(org: string, id: string) {
@@ -157,182 +153,5 @@ export class CompensationService {
     const row = await this.bonusPolicies.findOne({ _id: id, organizationId: org, active: true }).lean();
     if (!row) throw new NotFoundException('ATTENDANCE_BONUS_POLICY_NOT_FOUND');
     return evaluateAttendanceBonus(row, metrics ?? {});
-  }
-
-  // ── KPI Policies ────────────────────────────────────────────────────────
-  async createKpiPolicy(org: string, dto: CreateKpiPolicyDto) {
-    const start = date(dto.effectiveFrom);
-    const end = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
-    const row = await this.kpiPolicies.create({
-      ...dto,
-      organizationId: org,
-      effectiveFrom: start,
-      effectiveTo: end,
-    });
-    return row.toObject();
-  }
-
-  async listKpiPolicies(org: string, activeOnly = false) {
-    const filter: any = { organizationId: org };
-    if (activeOnly) filter.active = true;
-    return this.kpiPolicies.find(filter).sort({ effectiveFrom: -1 }).lean();
-  }
-
-  async updateKpiPolicy(org: string, id: string, dto: UpdateKpiPolicyDto) {
-    const setPayload: any = { ...dto };
-    if (dto.effectiveFrom) setPayload.effectiveFrom = date(dto.effectiveFrom);
-    if (dto.effectiveTo !== undefined) setPayload.effectiveTo = dto.effectiveTo ? date(dto.effectiveTo) : undefined;
-    const row = await this.kpiPolicies.findOneAndUpdate(
-      { _id: id, organizationId: org },
-      { $set: setPayload, $inc: { version: 1 } },
-      { new: true }
-    ).lean();
-    if (!row) throw new NotFoundException('KPI_POLICY_NOT_FOUND');
-    return row;
-  }
-
-  async getApplicableKpiPolicy(org: string, departmentId?: string, periodOrDate?: string | Date) {
-    let refDate = new Date();
-    if (typeof periodOrDate === 'string' && /^\d{4}-\d{2}$/.test(periodOrDate)) {
-      refDate = new Date(`${periodOrDate}-28T00:00:00.000Z`);
-    } else if (periodOrDate instanceof Date) {
-      refDate = periodOrDate;
-    }
-    if (departmentId) {
-      const deptPolicy = await this.kpiPolicies.findOne({
-        organizationId: org,
-        active: true,
-        scope: 'DEPARTMENT',
-        departmentIds: departmentId,
-        effectiveFrom: { $lte: refDate },
-        $or: [{ effectiveTo: null }, { effectiveTo: { $gt: refDate } }],
-      }).sort({ effectiveFrom: -1 }).lean();
-      if (deptPolicy) return deptPolicy;
-    }
-
-    const allPolicy = await this.kpiPolicies.findOne({
-      organizationId: org,
-      active: true,
-      scope: 'ALL',
-      effectiveFrom: { $lte: refDate },
-      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: refDate } }],
-    }).sort({ effectiveFrom: -1 }).lean();
-
-    return allPolicy ?? null;
-  }
-
-  // ── KPI Inputs ──────────────────────────────────────────────────────────
-  async listKpis(org: string, period?: string, actor?: { role: string; id: string }, departmentId?: string) {
-    const filter: any = { organizationId: org, ...(period && { period }) };
-
-    if (actor?.role === 'DEPARTMENT_MANAGER') {
-      const managedIds = await this.managerScope.getManagedDepartmentIds(org, actor.id);
-      if (departmentId) await this.managerScope.requireDepartment(org, actor.id, departmentId);
-      const scope = departmentId ? [departmentId] : managedIds;
-      if (!scope.length) return [];
-      const deptEmps = await this.employees.find({ organizationId: org, departmentId: { $in: scope } }).select('_id').lean();
-      filter.employeeProfileId = { $in: deptEmps.map(e => e._id) };
-    } else if (departmentId) {
-      const deptEmps = await this.employees.find({ organizationId: org, departmentId }).select('_id').lean();
-      filter.employeeProfileId = { $in: deptEmps.map(e => e._id) };
-    }
-
-    const list = await this.kpis.find(filter).sort({ period: -1 }).lean();
-    if (!list.length) return [];
-    const empIds = [...new Set(list.map(k => k.employeeProfileId))];
-    const empDocs = await this.employees.find({ organizationId: org, _id: { $in: empIds } }).select('_id employeeCode departmentId').lean();
-    const empMap = new Map(empDocs.map(e => [String(e._id), e]));
-    return list.map(item => {
-      const emp = empMap.get(String(item.employeeProfileId));
-      return {
-        ...item,
-        employeeCode: emp?.employeeCode ?? null,
-        departmentId: emp?.departmentId ? String(emp.departmentId) : null,
-      };
-    });
-  }
-
-  async createKpi(org: string, dto: CreateKpiInputDto, actorId?: string, actorRole?: string) {
-    const emp = await this.employees.findOne({ _id: dto.employeeId, organizationId: org }).lean();
-    if (!emp) throw new NotFoundException('EMPLOYEE_PROFILE_NOT_FOUND');
-
-    if (actorRole === 'DEPARTMENT_MANAGER' && actorId) {
-      if (!emp.departmentId) throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
-      await this.managerScope.requireDepartment(org, actorId, String(emp.departmentId));
-    }
-
-    const applicablePolicy = await this.getApplicableKpiPolicy(
-      org,
-      emp.departmentId ? String(emp.departmentId) : undefined,
-      dto.period
-    );
-    if (!applicablePolicy && !dto.policyId) {
-      throw new ConflictException('KPI_POLICY_REQUIRED');
-    }
-
-    let finalAmount = dto.amount;
-    const baseAmt = dto.baseAmount !== undefined ? dto.baseAmount : applicablePolicy?.baseAmount;
-    if (baseAmt !== undefined && dto.tierPercentage !== undefined) {
-      finalAmount = Math.round((baseAmt * dto.tierPercentage) / 100);
-    }
-
-    try {
-      const row = await this.kpis.create({
-        ...dto,
-        policyId: dto.policyId || applicablePolicy?._id,
-        baseAmount: baseAmt,
-        amount: finalAmount,
-        departmentId: emp.departmentId,
-        employeeProfileId: dto.employeeId,
-        organizationId: org,
-        evaluatedBy: actorId,
-        evaluatedAt: new Date(),
-      });
-      return row.toObject();
-    } catch (e) {
-      return duplicate(e, 'KPI_INPUT_ALREADY_EXISTS');
-    }
-  }
-
-  async updateKpi(org: string, id: string, dto: UpdateKpiInputDto, actorId?: string, actorRole?: string) {
-    const old = await this.kpis.findOne({ _id: id, organizationId: org }).lean();
-    if (!old) throw new NotFoundException('KPI_INPUT_NOT_FOUND');
-    if (old.status === KpiStatus.CONFIRMED) throw new ConflictException('KPI_INPUT_CONFIRMED_IMMUTABLE');
-
-    if (actorRole === 'DEPARTMENT_MANAGER' && actorId) {
-      if (!old.departmentId) throw new ForbiddenException('CANNOT_EVALUATE_EMPLOYEE_OUTSIDE_DEPARTMENT');
-      await this.managerScope.requireDepartment(org, actorId, String(old.departmentId));
-    }
-
-    const setPayload: any = { ...dto };
-    if (dto.baseAmount !== undefined && dto.tierPercentage !== undefined) {
-      setPayload.amount = Math.round((dto.baseAmount * dto.tierPercentage) / 100);
-    }
-    if (actorId) {
-      setPayload.evaluatedBy = actorId;
-      setPayload.evaluatedAt = new Date();
-    }
-
-    const row = await this.kpis.findOneAndUpdate(
-      { _id: id, organizationId: org },
-      { $set: setPayload, $inc: { version: 1 } },
-      { new: true, runValidators: true }
-    ).lean();
-    return row;
-  }
-
-  async confirmKpi(org: string, id: string, actorId: string) {
-    const row = await this.kpis.findOneAndUpdate(
-      { _id: id, organizationId: org, status: KpiStatus.DRAFT },
-      { $set: { status: KpiStatus.CONFIRMED, confirmedAt: new Date(), confirmedBy: actorId }, $inc: { version: 1 } },
-      { new: true }
-    ).lean();
-    if (!row) throw new ConflictException('KPI_INPUT_NOT_DRAFT');
-    return row;
-  }
-
-  async kpiAmountForSnapshot(org: string, employeeId: string, period: string) {
-    const row = await this.kpis.findOne({ organizationId: org, employeeProfileId: employeeId, period }).lean();
-    return resolveConfirmedKpiAmount(row ?? undefined);
   }
 }

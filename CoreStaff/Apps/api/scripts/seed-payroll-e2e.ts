@@ -80,7 +80,6 @@ const FIXTURE_AMOUNTS = {
   otWorkingDayMinutes: 600,
   otWeeklyOffMinutes: 240,
   attendanceBonus: 1_000_000,
-  kpiBonus: 2_000_000,
   insuranceSocialRate: 0.08,
   insuranceHealthRate: 0.015,
   insuranceUnemploymentRate: 0.01,
@@ -174,7 +173,6 @@ async function main() {
   const AllowanceCatalog = db.model('AllowanceCatalog');
   const OrganizationAllowance = db.model('OrganizationAllowance');
   const SalaryProfile = db.model('SalaryProfile');
-  const KpiPayrollInput = db.model('KpiPayrollInput');
   const InsuranceProfile = db.model('InsuranceProfile');
   const TimesheetPeriod = db.model('TimesheetPeriod');
   const CalendarException = db.model('CalendarException');
@@ -197,7 +195,6 @@ async function main() {
         AttendanceEvent.deleteMany({ organizationId: orgId }),
         OvertimeResult.deleteMany({ organizationId: orgId }),
         ManagerRequest.deleteMany({ organizationId: orgId }),
-        KpiPayrollInput.deleteMany({ organizationId: orgId }),
         SalaryProfile.deleteMany({ organizationId: orgId }),
         InsuranceProfile.deleteMany({ organizationId: orgId }),
         Assignment.deleteMany({ organizationId: orgId }),
@@ -637,25 +634,6 @@ async function main() {
     'SalaryProfile',
   );
 
-  await upsertByQuery(
-    KpiPayrollInput,
-    { organizationId, employeeProfileId: empProfileId, period: PERIOD },
-    {
-      organizationId,
-      employeeProfileId: empProfileId,
-      userId: empUserId,
-      period: PERIOD,
-      score: 95,
-      baseAmount: FIXTURE_AMOUNTS.kpiBonus,
-      amount: FIXTURE_AMOUNTS.kpiBonus,
-      source: 'MANUAL',
-      status: 'CONFIRMED',
-      version: 1,
-      confirmedBy: hrUserId,
-      confirmedAt: new Date(),
-    },
-    'KpiPayrollInput',
-  );
 
   await upsertByQuery(
     InsuranceProfile,
@@ -837,7 +815,6 @@ async function main() {
     taxableAllowances: FIXTURE_AMOUNTS.responsibilityAllowance,
     nonTaxableAllowances: FIXTURE_AMOUNTS.mealAllowance,
     attendanceBonus: FIXTURE_AMOUNTS.attendanceBonus,
-    kpiBonus: FIXTURE_AMOUNTS.kpiBonus,
     otWorkingDayMinutes: FIXTURE_AMOUNTS.otWorkingDayMinutes,
     otWeeklyOffMinutes: FIXTURE_AMOUNTS.otWeeklyOffMinutes,
     dependentCount: 1,
@@ -902,7 +879,6 @@ export const __seedLedger = (overrides: Partial<Parameters<typeof computePayroll
     taxableAllowances: FIXTURE_AMOUNTS.responsibilityAllowance,
     nonTaxableAllowances: FIXTURE_AMOUNTS.mealAllowance,
     attendanceBonus: FIXTURE_AMOUNTS.attendanceBonus,
-    kpiBonus: FIXTURE_AMOUNTS.kpiBonus,
     otWorkingDayMinutes: FIXTURE_AMOUNTS.otWorkingDayMinutes,
     otWeeklyOffMinutes: FIXTURE_AMOUNTS.otWeeklyOffMinutes,
     dependentCount: 1,

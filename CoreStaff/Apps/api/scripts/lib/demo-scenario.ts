@@ -479,30 +479,3 @@ export const DEMO_KEEP: EmployeeCode[] = ['NV-KD-002'];
 
 /** Tài khoản tự bấm "Xác nhận bảng công" trên app; script `demo:ack` bấm hộ mọi người còn lại. */
 export const DEMO_SKIP_ACK: EmployeeCode[] = ['NV-KD-002'];
-
-// ─── KPI ────────────────────────────────────────────────────────────────────
-/** Bậc KPI — dùng chung cho `KpiPolicy` (seed qua CompensationService) và `kpiFor`. */
-export const KPI_TIERS = [
-  { min: 90, name: 'Xuất sắc', percentage: 100 },
-  { min: 80, name: 'Tốt', percentage: 75 },
-  { min: 70, name: 'Đạt', percentage: 50 },
-  { min: 0, name: 'Chưa đạt', percentage: 0 },
-];
-/** Mức KPI cơ sở của công ty (scope ALL) — một chính sách chung cho mọi phòng ban. */
-export const KPI_BASE_AMOUNT = 2_000_000;
-export const KPI_SCORES: Record<string, Partial<Record<EmployeeCode, number>>> = {
-  [HISTORY_PERIOD]: { 'QL-KD-001': 92, 'QL-KT-001': 88, 'NV-KD-001': 95, 'NV-KD-002': 78, 'NV-KD-003': 72, 'NV-KT-001': 91, 'NV-KT-002': 85, 'NV-KT-003': 81 },
-  [ACTIVE_PERIOD]: { 'QL-KD-001': 86, 'QL-KT-001': 93, 'NV-KD-001': 89, 'NV-KD-002': 74, 'NV-KD-003': 68, 'NV-KT-001': 96, 'NV-KT-002': 90, 'NV-KT-003': 79 },
-};
-/** Bậc KPI đúng hình dạng `KpiPolicy.tiers` (khoảng điểm liền kề, không chồng lấn). */
-export function kpiPolicyTiers() {
-  return KPI_TIERS.map((tier, index) => ({
-    name: tier.name, percentage: tier.percentage, minScore: tier.min,
-    maxScore: index === 0 ? 100 : KPI_TIERS[index - 1].min - 1, order: index + 1,
-  }));
-}
-
-export function kpiFor(score: number) {
-  const tier = KPI_TIERS.find(row => score >= row.min)!;
-  return { score, tierName: tier.name, tierPercentage: tier.percentage, baseAmount: KPI_BASE_AMOUNT, amount: Math.round(KPI_BASE_AMOUNT * tier.percentage / 100) };
-}

@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import { PayrollSnapshotService } from './payroll-snapshot.service';
 
 describe('payroll snapshot evidence hashing', () => {
-  const service = new PayrollSnapshotService(...Array(10).fill({}) as [any, any, any, any, any, any, any, any, any, any]);
+  const service = new PayrollSnapshotService(...Array(9).fill({}) as [any, any, any, any, any, any, any, any, any]);
   const hash = (summary: any) => (service as any).generateSourceHash(summary, null, null, null, 0);
   const summary = { periodId: 'period', employeeProfileId: 'profile', totalDays: 1, workingDays: 1,
     totalWorkingMinutes: 480, otWorkingDayMinutes: 60, otWeeklyOffMinutes: 0, otPublicHolidayMinutes: 0 };

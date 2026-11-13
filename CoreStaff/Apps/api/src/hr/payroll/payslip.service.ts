@@ -10,6 +10,7 @@ import { InsuranceService } from './insurance.service';
 import { OVERTIME_RATES, computeOvertimePay } from '../timesheet/payroll-snapshot.service';
 import { PitService } from './pit.service';
 import { EventsGateway } from '../../events/events.gateway';
+import { earningsKpiBonus } from './payroll-earnings-contract';
 
 type EarningItem = { type: string; label: string; amount: number; taxable: boolean };
 
@@ -30,11 +31,12 @@ export function buildPayslipEarnings(snapshot: any): {
   const totalAllowances = allowanceBreakdown.length
     ? allowanceBreakdown.reduce((sum, item) => sum + item.amount, 0)
     : snapshot.totalAllowances || 0;
+  const historicalKpiBonus = earningsKpiBonus(snapshot);
   const earningBreakdown: EarningItem[] = [
     { type: 'BASE_SALARY', label: 'Lương cơ bản theo công', amount: snapshot.proratedBaseSalary || 0, taxable: true },
     ...(totalAllowances > 0 ? [{ type: 'ALLOWANCE', label: 'Tổng phụ cấp', amount: totalAllowances, taxable: true }] : []),
     ...(snapshot.attendanceBonus > 0 ? [{ type: 'ATTENDANCE_BONUS', label: 'Thưởng chuyên cần', amount: snapshot.attendanceBonus, taxable: true }] : []),
-    ...(snapshot.kpiBonus > 0 ? [{ type: 'KPI_BONUS', label: 'Thưởng KPI', amount: snapshot.kpiBonus, taxable: true }] : []),
+    ...(historicalKpiBonus > 0 ? [{ type: 'KPI_BONUS', label: 'Thưởng KPI', amount: historicalKpiBonus, taxable: true }] : []),
     ...(snapshot.otPay > 0 ? [{ type: 'OVERTIME', label: 'Tiền làm thêm giờ', amount: snapshot.otPay, taxable: snapshot.overtimeTaxable === true }] : []),
   ];
   return {

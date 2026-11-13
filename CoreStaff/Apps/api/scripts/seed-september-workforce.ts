@@ -17,7 +17,7 @@ import {
   WorkMode,
   WorkdayType,
 } from '../src/database/schemas/enums';
-import { KpiSource, KpiStatus } from '../src/database/schemas/compensation.schema';
+
 import { scenarioForIndex, standardWorkdays, type WorkforceScenario } from './lib/september-workforce-fixtures';
 import { TimesheetSummaryService } from '../src/hr/timesheet/timesheet-summary.service';
 
@@ -81,8 +81,7 @@ async function main() {
     const OvertimeResult = db.model('OvertimeResult');
     const Salary = db.model('SalaryProfile');
     const InsuranceProfile = db.model('InsuranceProfile');
-    const KpiInput = db.model('KpiPayrollInput');
-    const KpiPolicy = db.model('KpiPolicy');
+
     const TimesheetSummary = db.model('TimesheetSummary');
     const Snapshot = db.model('PayrollInputSnapshot');
     const PayrollRun = db.model('PayrollRun');
@@ -127,9 +126,7 @@ async function main() {
 
     const anchorSalary: any = await Salary.findOne({ organizationId, employeeProfileId: anchorProfile._id, active: true }).lean();
     const anchorInsurance: any = await InsuranceProfile.findOne({ organizationId, employeeId: anchorProfile._id }).lean();
-    const anchorKpi: any = await KpiInput.findOne({ organizationId, employeeProfileId: anchorProfile._id, period: PERIOD }).lean();
-    const kpiPolicy: any = anchorKpi?.policyId ? await KpiPolicy.findById(anchorKpi.policyId).lean() : await KpiPolicy.findOne({ organizationId, active: true }).lean();
-    if (!anchorSalary || !anchorInsurance || !kpiPolicy) throw new Error('Anchor compensation prerequisites are incomplete.');
+    if (!anchorSalary || !anchorInsurance) throw new Error('Anchor compensation prerequisites are incomplete.');
 
     const targets: TargetContext[] = [];
     for (let index = 0; index < targetProfiles.length; index++) {
@@ -179,12 +176,6 @@ async function main() {
         mark('InsuranceProfile', APPLY ? 'created' : 'planned');
       } else mark('InsuranceProfile', VERIFY ? 'verified' : 'skipped');
 
-      const kpi: any = await KpiInput.findOne({ organizationId, employeeProfileId: profile._id, period: PERIOD }).lean();
-      if (!kpi) {
-        const values = { organizationId, employeeProfileId: profile._id, departmentId, policyId: kpiPolicy._id, period: PERIOD, score: 90, tierName: 'A', tierPercentage: 100, baseAmount: kpiPolicy.baseAmount ?? 2_000_000, amount: kpiPolicy.baseAmount ?? 2_000_000, source: KpiSource.MANUAL, note: 'KPI demo tháng 09/2026.', status: KpiStatus.CONFIRMED, version: 1, confirmedAt: new Date(), confirmedBy: hr._id, evaluatedAt: new Date(), evaluatedBy: hr._id };
-        if (APPLY) await KpiInput.create(values);
-        mark('KpiPayrollInput', APPLY ? 'created' : 'planned');
-      } else mark('KpiPayrollInput', VERIFY ? 'verified' : 'skipped');
 
       targets.push({ profile, user, assignment, scenario: scenarioForIndex(index) });
     }

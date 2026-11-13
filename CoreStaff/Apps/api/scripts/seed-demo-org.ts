@@ -40,7 +40,7 @@ import { saveOrgSnapshot } from './lib/demo-snapshot';
 import {
   ACCOUNTS, ACTIVE_PERIOD, CONFIRMATIONS, CURRENT_MONTH_LEAVES, CURRENT_PERIOD, DAY_OVERRIDES, DayPlan, DemoAccount,
   DEMO_KEEP, DEMO_SKIP_ACK,
-  EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, KPI_BASE_AMOUNT, KPI_SCORES, kpiFor, kpiPolicyTiers, LEAVES,
+  EmployeeCode, FORFEITS, hash01, HISTORY_PERIOD, HOLIDAYS, LEAVES,
   MANAGER_OF, OFFICE, ORG_NAME, OVERTIMES, planFor, PunchSpec, SELFIE_APPROVALS, SITES,
 } from './lib/demo-scenario';
 import { printDemoStatus, runDemoFlow } from './demo-flow';
@@ -374,17 +374,6 @@ async function seedMasterData(ctx: Ctx) {
     });
   }
 
-  // Chính sách KPI công ty (một bậc chung, áp cho mọi phòng ban) — HR khai qua
-  // CompensationService, đúng endpoint màn hình Lương → Chính sách KPI.
-  const kpiPolicyAt = vn('2025-12-26', '10:20');
-  await at(kpiPolicyAt, 'Khai báo chính sách KPI', async () => {
-    const row: any = await demo.compensation.createKpiPolicy(ctx.org, {
-      name: 'Chính sách KPI An Phát 2026', policyType: 'GRADE', baseAmount: KPI_BASE_AMOUNT,
-      tiers: kpiPolicyTiers(),
-      effectiveFrom: '2026-01-01', scope: 'ALL',
-    });
-    ctx.ids.set('kpi-policy', String(row._id));
-  });
 
   // Bảo hiểm doanh nghiệp (tự nguyện, công ty chịu phí) — HR khai qua service thật.
   await at(vn('2025-12-26', '10:30'), 'Khai báo bảo hiểm doanh nghiệp', () =>
@@ -414,22 +403,6 @@ async function createPeriod(ctx: Ctx, period: string, createdAt: Date) {
   ctx.periods.set(period, row._id);
 }
 
-async function seedKpi(ctx: Ctx, period: string) {
-  const [y, mth] = period.split('-').map(Number);
-  const last = new Date(Date.UTC(y, mth, 0)).toISOString().slice(0, 10);
-  for (const acc of EMPLOYEE_ACCOUNTS) {
-    const score = KPI_SCORES[period]?.[acc.code];
-    if (score === undefined) continue;
-    const kpi = kpiFor(score);
-    await createWithClock(ctx.demo.model('KpiPayrollInput'), vn(last, '17:30'), {
-      organizationId: ctx.orgId, employeeProfileId: ctx.profiles.get(acc.code), departmentId: ctx.depts.get(acc.dept),
-      policyId: ctx.ids.get('kpi-policy'), period,
-      ...kpi, source: 'MANUAL', note: `Đánh giá KPI tháng ${period.slice(5)}/${period.slice(0, 4)}`, status: 'CONFIRMED', version: 1,
-      evaluatedBy: ctx.users.get(MANAGER_OF[acc.dept]), evaluatedAt: vn(last, '15:00'),
-      confirmedBy: ctx.users.get('HR-001'), confirmedAt: vn(last, '17:30'),
-    });
-  }
-}
 
 /** Một ngày chấm công, đúng hình dạng mà AttendanceService.checkIn/checkOut ghi. */
 async function insertPunchesForDate(ctx: Ctx, date: string) {
@@ -582,8 +555,7 @@ function buildTimeline(ctx: Ctx): Action[] {
   push(vn('2026-08-31', '16:00'), `Tạo kỳ công ${HISTORY_PERIOD}`, () => createPeriod(ctx, HISTORY_PERIOD, vn('2026-08-31', '16:00')));
   push(vn('2026-09-30', '16:00'), `Tạo kỳ công ${ACTIVE_PERIOD}`, () => createPeriod(ctx, ACTIVE_PERIOD, vn('2026-09-30', '16:00')));
   push(vn('2026-10-31', '16:00'), `Tạo kỳ công ${CURRENT_PERIOD}`, () => createPeriod(ctx, CURRENT_PERIOD, vn('2026-10-31', '16:00')));
-  push(vn('2026-09-30', '17:30'), `KPI ${HISTORY_PERIOD}`, () => seedKpi(ctx, HISTORY_PERIOD));
-  push(vn('2026-10-31', '17:30'), `KPI ${ACTIVE_PERIOD}`, () => seedKpi(ctx, ACTIVE_PERIOD));
+
 
   for (const date of enumerateDates(`${HISTORY_PERIOD}-01`, REFERENCE_DATE)) {
     push(vn(date, '05:00'), `Chấm công ${date}`, () => insertPunchesForDate(ctx, date));
@@ -790,18 +762,7 @@ async function verify() {
     const problems: string[] = [];
     if (org.attendanceOvertimeV2Enabled !== true) problems.push('Organization chưa bật attendanceOvertimeV2Enabled');
 
-    // Chính sách công ty: KPI (scope ALL) + bảo hiểm doanh nghiệp phải có bản ghi hiệu lực
-    // tại ngày tham chiếu, và mọi KpiPayrollInput đã xác nhận phải trỏ đúng policy.
-    const kpiPolicies: any[] = await demo.model('KpiPolicy').find({ organizationId: orgId, active: true }).lean();
-    const kpiPolicy = kpiPolicies.find(p => p.scope === 'ALL' && p.effectiveFrom <= new Date(`${REFERENCE_DATE}T23:59:59Z`));
-    if (!kpiPolicy) problems.push('Thiếu KpiPolicy hiệu lực (scope ALL)');
-    else {
-      const inputs: any[] = await demo.model('KpiPayrollInput').find({ organizationId: orgId, status: 'CONFIRMED' }).lean();
-      for (const input of inputs) {
-        if (String(input.policyId ?? '') !== String(kpiPolicy._id)) problems.push(`KpiPayrollInput ${input.period}/${input.employeeProfileId} không trỏ tới KpiPolicy`);
-        else if (input.amount !== Math.round((input.baseAmount ?? 0) * (input.tierPercentage ?? 0) / 100)) problems.push(`KpiPayrollInput ${input.period}/${input.employeeProfileId} lệch bậc: ${input.amount}`);
-      }
-    }
+
     const enterprisePolicies: any[] = await demo.model('EnterpriseInsurancePolicy').find({ organizationId: orgId }).lean();
     if (!enterprisePolicies.length) problems.push('Thiếu EnterpriseInsurancePolicy');
 
@@ -851,7 +812,7 @@ async function verify() {
     const enterprise = enterprisePolicies[0];
     console.log(`\n─── VERIFY [${ORG_CODE}] ───`);
     console.log(`Đã tính lại ${recomputed} ngày công bằng calculator, ${requests.length} yêu cầu, ${results.length} kết quả OT.`);
-    if (kpiPolicy) console.log(`KpiPolicy: ${kpiPolicy.name} (scope ${kpiPolicy.scope}) — mức cơ sở ${fmtMoney(kpiPolicy.baseAmount)} đ, ${kpiPolicy.tiers.length} bậc, hiệu lực ${new Date(kpiPolicy.effectiveFrom).toISOString().slice(0, 10)}`);
+
     if (enterprise) console.log(`EnterpriseInsurancePolicy: ${enterprise.provider} — chịu phí ${enterprise.costBearer}, hiệu lực ${new Date(enterprise.effectiveFrom).toISOString().slice(0, 10)}`);
     await printDemoStatus(demo, ORG_CODE);
     if (problems.length) {

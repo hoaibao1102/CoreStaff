@@ -5,7 +5,7 @@
  * Output matches the canonical contract:
  *
  *   grossEarnings    = proratedBase + taxableAllow + nonTaxableAllow
- *                      + totalOtPay + attendanceBonus + kpiBonus
+ *                      + totalOtPay + attendanceBonus
  *   employeeInsurance = contributionBase × (BHXH+BHYT+BHTN rates)
  *   taxableIncome    = gross − nonTaxableAllow − exemptOtPremium
  *                      − employeeInsurance − personalDed − dependentDed
@@ -152,7 +152,6 @@ export interface PayrollLedgerInput {
   taxableAllowances: number;
   nonTaxableAllowances: number;
   attendanceBonus: number;
-  kpiBonus: number;
   otWorkingDayMinutes: number;
   otWeeklyOffMinutes: number;
   dependentCount: number;
@@ -166,7 +165,6 @@ export interface PayrollLedger {
   taxableAllowances: number;
   nonTaxableAllowances: number;
   attendanceBonus: number;
-  kpiBonus: number;
   otWorkingDayMinutes: number;
   otWeeklyOffMinutes: number;
   otBaseTaxable: number;
@@ -201,14 +199,12 @@ export function computePayrollLedger(input: PayrollLedgerInput): PayrollLedger {
     input.taxableAllowances +
     input.nonTaxableAllowances +
     totalOtPay +
-    input.attendanceBonus +
-    input.kpiBonus;
+    input.attendanceBonus;
   const taxableGrossForPit =
     proratedBaseSalary +
     input.taxableAllowances +
     otBaseTaxable +
-    input.attendanceBonus +
-    input.kpiBonus;
+    input.attendanceBonus;
   const personalDeduction = input.personalDeduction ?? VN_PERSONAL_DEDUCTION;
   const dependentDeduction = input.dependentDeduction ?? VN_DEPENDENT_DEDUCTION;
   const pit = computePit({
@@ -225,7 +221,6 @@ export function computePayrollLedger(input: PayrollLedgerInput): PayrollLedger {
     taxableAllowances: input.taxableAllowances,
     nonTaxableAllowances: input.nonTaxableAllowances,
     attendanceBonus: input.attendanceBonus,
-    kpiBonus: input.kpiBonus,
     otWorkingDayMinutes: input.otWorkingDayMinutes,
     otWeeklyOffMinutes: input.otWeeklyOffMinutes,
     otBaseTaxable,

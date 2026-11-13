@@ -100,7 +100,7 @@ function PayslipDetail({ item }: { item: Payslip }) {
       ? allowances.map((a, k) => <MoneyRow key={k} label={a.label} value={a.amount} />)
       : <MoneyRow label="Tổng phụ cấp" value={amountOf('ALLOWANCE')} />}
     <MoneyRow label="Thưởng chuyên cần" value={amountOf('ATTENDANCE_BONUS')} />
-    <MoneyRow label="Thưởng KPI" value={amountOf('KPI_BONUS')} />
+    {amountOf('KPI_BONUS') > 0 ? <MoneyRow label="Thưởng KPI" value={amountOf('KPI_BONUS')} /> : null}
     <View style={styles.group}>
       {otLines.length ? (
         <Pressable

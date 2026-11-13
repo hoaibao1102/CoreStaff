@@ -3,25 +3,22 @@ import { resolveEnv, hasMongoUri } from '../src/config/env';
 import { OrganizationSchema } from '../src/database/schemas/organization.schema';
 import { EmployeeProfileSchema } from '../src/database/schemas/employee-profile.schema';
 import { PositionSchema } from '../src/database/schemas/position.schema';
-import { UserSchema } from '../src/database/schemas/user.schema';
+
 import {
   AllowanceCatalogSchema,
   AttendanceBonusPolicySchema,
   AttendanceBonusTemplateSchema,
-  KpiPayrollInputSchema,
-  KpiSource,
-  KpiStatus,
   LaborCompliancePolicySchema,
   OrganizationAllowanceSchema,
   OvertimePayPolicySchema,
   SalaryProfileSchema,
 } from '../src/database/schemas/compensation.schema';
-import { EmploymentStatus, Role } from '../src/database/schemas/enums';
+import { EmploymentStatus } from '../src/database/schemas/enums';
 
 const APPLY = process.argv.includes('--apply');
 const EFFECTIVE_FROM = new Date('2026-09-01T00:00:00.000Z');
 const POLICY_FROM = new Date('2026-01-01T00:00:00.000Z');
-const KPI_PERIOD = '2026-09';
+
 
 /**
  * TASK-036/037 seed configuration (SRS §30B.1, §30D.2) — Vietnam reference:
@@ -63,15 +60,6 @@ const salaryByPosition: Record<string, number> = {
   SLS: 14_000_000,
 };
 
-const kpiByPosition: Record<string, number> = {
-  DLEAD: 4_000_000,
-  DEV: 2_500_000,
-  QA: 2_000_000,
-  ACC: 1_500_000,
-  OPS: 1_200_000,
-  SLM: 3_500_000,
-  SLS: 2_000_000,
-};
 
 interface Summary { planned: number; created: number; skipped: number }
 const summary = new Map<string, Summary>();
@@ -99,14 +87,13 @@ async function main() {
   const Org = db.model('Organization', OrganizationSchema);
   const Profile = db.model('EmployeeProfile', EmployeeProfileSchema);
   const Position = db.model('Position', PositionSchema);
-  const User = db.model('User', UserSchema);
+
   const LaborPolicy = db.model('LaborCompliancePolicy', LaborCompliancePolicySchema);
   const Catalog = db.model('AllowanceCatalog', AllowanceCatalogSchema);
   const Allowance = db.model('OrganizationAllowance', OrganizationAllowanceSchema);
   const BonusTemplate = db.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
   const BonusPolicy = db.model('AttendanceBonusPolicy', AttendanceBonusPolicySchema);
   const Salary = db.model('SalaryProfile', SalaryProfileSchema);
-  const Kpi = db.model('KpiPayrollInput', KpiPayrollInputSchema);
   const OvertimePolicy = db.model('OvertimePayPolicy', OvertimePayPolicySchema);
 
   const catalogRows = [
@@ -186,8 +173,6 @@ async function main() {
     const positions = await Position.find({ organizationId }).select('_id code').lean();
     const positionCode = new Map(positions.map(p => [String(p._id), p.code]));
     const profiles = await Profile.find({ organizationId }).select('_id userId employeeCode employmentStatus positionId').sort({ employeeCode: 1 }).lean();
-    const hrUser = await User.findOne({ organizationId, role: Role.HR }).select('_id').lean();
-
     for (const profile of profiles) {
       const posCode = positionCode.get(String(profile.positionId)) ?? 'STAFF';
       const baseSalary = salaryByPosition[posCode] ?? (String(profile.employeeCode).startsWith('HR-') ? 20_000_000 : 12_000_000);
@@ -211,20 +196,6 @@ async function main() {
         'SalaryProfile',
       );
 
-      const status = isProbation ? KpiStatus.DRAFT : KpiStatus.CONFIRMED;
-      const amount = kpiByPosition[posCode] ?? (String(profile.employeeCode).startsWith('HR-') ? 2_500_000 : 1_000_000);
-      await insertIfMissing(
-        Kpi,
-        { organizationId, employeeProfileId: profile._id, period: KPI_PERIOD },
-        {
-          organizationId, employeeProfileId: profile._id, period: KPI_PERIOD,
-          score: isProbation ? 75 : 90, amount, source: KpiSource.MANUAL,
-          note: isProbation ? 'Dữ liệu demo — chờ HR xác nhận' : 'Dữ liệu demo đã xác nhận',
-          status, version: status === KpiStatus.CONFIRMED ? 2 : 1,
-          ...(status === KpiStatus.CONFIRMED && hrUser ? { confirmedAt: new Date(), confirmedBy: hrUser._id } : {}),
-        },
-        'KpiPayrollInput',
-      );
     }
   }
 
