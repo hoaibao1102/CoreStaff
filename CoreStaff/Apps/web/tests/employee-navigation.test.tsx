@@ -118,6 +118,10 @@ async function input(element: HTMLInputElement, value: string) {
 }
 
 async function signIn() {
+  const landingBtn = container.querySelector<HTMLElement>('[data-testid="landing-login-btn"]');
+  if (landingBtn) {
+    await act(async () => landingBtn.click());
+  }
   await input(container.querySelector<HTMLInputElement>('input[autocomplete="username"]')!, ' user@example.test ');
   await input(container.querySelector<HTMLInputElement>('input[autocomplete="current-password"]')!, 'TestPassword1');
   await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));

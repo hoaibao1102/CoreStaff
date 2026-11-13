@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { AuthLayout } from '../../components/AuthLayout';
 
 interface LoginScreenProps {
@@ -7,12 +7,13 @@ interface LoginScreenProps {
   error?: string | null;
   onLogin: (identifier: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
+  onBackToLanding?: () => void;
 }
 
 const inputClass =
   'h-11 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/20';
 
-export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword }: LoginScreenProps) {
+export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword, onBackToLanding }: LoginScreenProps) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +35,16 @@ export function LoginScreen({ disabled = false, error, onLogin, onForgotPassword
       title="Đăng nhập CoreStaff"
       subtitle="Sử dụng email hoặc mã nhân viên được cấp để truy cập hệ thống."
     >
+      {onBackToLanding && (
+        <button
+          type="button"
+          onClick={onBackToLanding}
+          className="mb-4 -mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <ArrowLeft size={14} aria-hidden="true" />
+          <span>← Quay lại trang chủ</span>
+        </button>
+      )}
       <form className="grid gap-4" onSubmit={submit}>
         <label className="grid gap-2">
           <span className="text-xs font-semibold text-foreground">Email hoặc mã nhân viên</span>

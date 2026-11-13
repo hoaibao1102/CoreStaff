@@ -1,21 +1,32 @@
 # FULL SYSTEM LOGIC AUDIT — CoreStaff
 
-**Audit date:** 2026-11-03 (UTC+07:00)  
-**Audited revision:** `feat/policy` — `ab08ce339fe9953f86146d7514a9c3b69b67517e`  
-**Audit mode:** static source trace + safe local verification; production source was not modified  
+**Original audit date:** 2026-11-03 (UTC+07:00)
+
+**Refresh date:** 2026-11-13 (UTC+07:00)
+
+**Current audited revision:** `fix_all` — `6a77eb4e0cc298f117cf35a6456611191f928039`
+
+**Previous baseline:** `feat/policy` — `ab08ce339fe9953f86146d7514a9c3b69b67517e`
+
+**Audit mode:** finding-by-finding static source revalidation + safe local verification; production source and data were not modified
+
 **QC verdict:** **NO-GO / NOT READY FOR PRODUCTION**
 
 > **Meaning of “Confirmed Bug”:** the faulty path or violated invariant is confirmed from the audited source/configuration or from a repeatable local command. It does **not** mean the defect has been observed in production data. Runtime incidence remains unknown unless explicitly stated.
 
+> **Refresh status:** `STILL PRESENT` means the defect remains reachable in the current revision; `PARTIAL` means some safeguards exist but the invariant is not fully enforced; `UNVERIFIED` means the refresh did not produce enough current evidence to change the prior classification. Old line numbers and old test totals are historical evidence only unless repeated in the refresh evidence section.
+
 ## 1. Executive Summary
 
-CoreStaff has a substantial automated test base and several strong controls: session-derived tenant context, DTO whitelisting, private evidence download paths, transaction-backed attendance/close flows, canonical period projections, immutable summary/snapshot identities and 137 passing Mongo replica-set integration tests. These controls do not offset the release-blocking defects found in payroll tenant isolation, period-state bypasses, payroll atomicity, unpublished payslip exposure, closed-period mutation, authorization lifecycle and cross-origin security.
+CoreStaff has a substantial automated test base and several strong controls: session-derived tenant context, DTO whitelisting, private evidence download paths, transaction-backed attendance/close flows, canonical period projections and immutable summary/snapshot identities. The previous baseline recorded 137 passing Mongo replica-set integration tests, but that result was not rerun during this refresh and is not current evidence for revision `6a77eb4`. The controls still do not offset the release-blocking defects found in payroll tenant isolation, period-state bypasses, payroll atomicity, unpublished payslip exposure, closed-period mutation, authorization lifecycle and cross-origin security.
 
 The most severe issue class is **payroll trust-boundary failure**. Several payroll-run, payslip and export operations load resources by global ObjectId without the caller's `organizationId`. A tenant HR user who learns another tenant's ID can reach foreign salary data or mutate a foreign payroll run. The payroll lifecycle also updates `TimesheetPeriod`, `PayrollRun` and `Payslip` in separate commits, so failures can leave contradictory financial state.
 
 The second severe class is **workflow bypass**. The generic timesheet status endpoint can set `READY_TO_CLOSE → CLOSED` and `CLOSED → REVIEWING` without the authoritative close/reopen workflows. Leave approval/application can write facts for dates in a closed period because the invalidation helper silently ignores closed periods. Employees can read `GENERATED` payslips before release.
 
-The third severe class is **security/session lifecycle**. HTTP and Socket.IO reflect/accept every origin while production cookies use `SameSite=None`; there is no centralized CSRF control. Manager compatibility scope can survive assignment revocation, login lockout is not enforced for `ACTIVE` users, and already-connected sockets are not disconnected after logout/password reset/account or tenant revocation.
+The third severe class is **security/session lifecycle**. HTTP and Socket.IO still reflect/accept every origin while production cookies use `SameSite=None`; there is no centralized CSRF control. Manager compatibility scope can survive assignment revocation, login lockout is not enforced for `ACTIVE` users, and already-connected sockets are not disconnected after logout/password reset/account or tenant revocation.
+
+The KPI feature has been retired from new payroll artifacts under the `NO_KPI_V2` earnings contract while legacy artifacts remain readable. This is a completed compatibility change, but it does not remediate payroll tenant isolation, lifecycle atomicity, unpublished payslip access or authorization findings in this report.
 
 ### Finding totals after deduplication by root cause
 
@@ -26,6 +37,18 @@ The third severe class is **security/session lifecycle**. HTTP and Socket.IO ref
 | **Needs Verification** | 0 | 2 | 3 | 0 | **5** |
 
 The counts above do not double-count the same payroll tenant or transaction defect reported independently by backend, security and database audit streams.
+
+### Refresh disposition at `6a77eb4`
+
+| Group | Current disposition |
+|---|---|
+| Critical | `AUD-C01`–`AUD-C07` and `AUD-C09`: **STILL PRESENT**; `AUD-C08`: **PARTIAL** |
+| High | `AUD-H01`–`AUD-H18`: prior findings remain actionable after source revalidation; none is closed by this refresh |
+| Medium | `AUD-M01`–`AUD-M09`: prior findings remain actionable; `AUD-M10`: **PARTIAL** because the Flutter gate is now blocked by Windows symlink/Developer Mode prerequisites before the prior analyze/test result can be reproduced |
+| Risks | `RISK-DEP01` remains open with a refreshed count of **26** production-tree advisories; other risks remain open pending their named runtime/infrastructure evidence |
+| Needs verification | `NV-01`–`NV-05` remain open; no production/staging or disposable database verification was performed in this refresh |
+
+The classification totals remain a root-cause inventory, not a claim that all 37 bugs were dynamically reproduced on the refreshed revision. Status above is the authoritative current disposition.
 
 ## 2. Audit Scope & Coverage
 
@@ -47,8 +70,8 @@ The counts above do not double-count the same payroll tenant or transaction defe
 
 - The audit did not perform a statement-by-statement review of every one of the 855 tracked `CoreStaff/**` files. Generated native Flutter host files, static assets, historical seed variants and low-risk presentational code were inventoried but not fully traced.
 - No production/staging database, real tenant data, production indexes, migration, seed, `ensure-indexes`, S3 bucket, email provider, reverse proxy, CDN, Vercel deployment, geocoding provider or live WebSocket cluster was accessed.
-- Browser E2E with mocked routes could not start because one Playwright spec has a parse error. Real-backend browser E2E was not available.
-- No Android/iOS device execution, process-death cookie test, camera/GPS/Wi-Fi test or Flutter release build was performed.
+- Browser E2E could not start because one Playwright spec still has a parse error. `playwright test --list` collected zero tests. Real-backend browser E2E was not available.
+- No Android/iOS device execution, process-death cookie test, camera/GPS/Wi-Fi test or Flutter release build was performed. The refreshed Flutter gate was blocked before analyze/test because Windows Developer Mode/symlink support is unavailable.
 - No backup/restore, disaster recovery, primary stepdown, ambiguous transaction commit or multi-instance Socket.IO test was performed.
 - The untracked file `Docs/PLAN_ATTENDANCE_CLARIFICATION_FLOW.md` appeared during the audit and was not created, read as authoritative, modified or deleted by this audit.
 
@@ -158,15 +181,15 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 | Bug ID | Module / location | Description & root cause | Reproduction scenario | Expected / actual | Impact | Recommended fix | Verification |
 |---|---|---|---|---|---|---|---|
-| **AUD-C01** | Timesheet; `timesheet-period.controller.ts:228-248`, `timesheet-period.service.ts:803-848`, authoritative flows `887-1043` | Generic `updateStatus()` permits close/reopen transitions and uses ID-only last-write update. It bypasses blockers, confirmations, summaries, snapshots, version bump, payroll claim and reason. | HR PATCHes status from `READY_TO_CLOSE` to `CLOSED`, or `CLOSED` to `REVIEWING`. | Expected only `/close`/`/reopen`; actual direct state update. | Invalid period state and missing financial artifacts. | Forbid transitions into/out of CLOSED in generic endpoint; use tenant-scoped version CAS and specialized workflows only. | HTTP tests for forbidden generic transitions; concurrent close/reopen with artifact reconciliation. |
-| **AUD-C02** | Payroll; `payroll-run.controller.ts:44-73`, `payroll-run.service.ts:183-197,290-385,453-455` | Calculate/recalculate/lock/release load run with `findById`; caller tenant is never passed. Later CAS trusts the foreign row's tenant. | HR tenant A calls lifecycle endpoint with tenant B run ID. | Expected indistinguishable 404; actual foreign run can be mutated. | Cross-tenant payroll integrity breach. | Pass caller `organizationId` into every mutation and scope every dependent query/CAS. | Two-tenant integration tests for all four mutations and unchanged foreign artifacts. |
-| **AUD-C03** | Payslip/export; `payslip.controller.ts:87-120`, `payslip.service.ts:347-380,475-528`, `payroll-export.controller.ts:14-52`, `payroll-export.service.ts:27-68,162-225` | List, summary, release and export treat payrollRunId as a global capability and omit tenant filters. | HR A requests B's run list/summary/CSV/XLSX/release. | Expected 404; actual foreign salary data or release transition. | Cross-tenant disclosure of salary/tax/insurance and foreign release. | Tenant-scope run, payslip, employee, department and position queries; consolidate release path. | Same/foreign/unknown ID matrix for every format/action. |
-| **AUD-C04** | Payslip; `payslip.service.ts:389-456` | Employee self-service explicitly includes `GENERATED` and can mark it `VIEWED` before release. | Calculate payroll but do not release; employee calls `/payslips/me`. | Expected only `RELEASED|VIEWED`; actual generated draft is visible/mutable. | Premature salary disclosure; VIEWED may block recalculation. | Exclude GENERATED; mark viewed only from RELEASED and verify owning run release state. | Calculate→hidden; release→visible; direct pre-release ID rejected. |
-| **AUD-C05** | Leave/period; `leave.service.ts:158-193,215-281`, `period-version.service.ts:108-137` | Approval/application relies on a bump helper that excludes CLOSED periods instead of rejecting the write. | Close period, then approve/apply leave covering it. | Expected atomic rejection until reopen; actual leave/attendance mutation can commit. | Closed snapshot and source facts diverge. | Claim each affected period/date in the same transaction and fail on CLOSED/payroll-claimed state. | Replica-set tests for create/approve/apply against CLOSED and claimed periods. |
-| **AUD-C06** | Payroll/PIT; `payroll-run.service.ts:219-230,421-432`, `pit.service.ts:47-78,296-304`, `payslip.service.ts:139-190` | Calculation resolves live insurance policy, dependents/profile and PIT policy after close despite frozen snapshot fields. | Close period, edit dependent or policy, then calculate/recalculate. | Expected identical result from bound snapshot; actual result can change with live master data. | Non-reproducible payroll and broken audit lineage. | Freeze all PIT/insurance inputs and use pure calculators over snapshot payload only. | Mutate live data after close; output/hash must remain byte-identical. |
-| **AUD-C07** | Payroll create; `payroll-run.service.ts:90-128` | Period is claimed before sequence calculation/PayrollRun insert, outside a transaction. | Inject insert failure or crash after claim. | Expected both rollback; actual dangling `payrollRunId` claim. | Period stuck; reopen/retry blocked. | Transactional claim+insert; atomic sequence/counter; recovery reconciler for existing dangling claims. | Fault injection after claim and concurrent create. |
-| **AUD-C08** | Payroll lifecycle; `payroll-run.service.ts:228-276,305-385`, `payslip.service.ts:347-386` | Payslips, run and period transition in separate writes; a second release implementation lacks CAS/transaction. | Fail between any two writes or run two releases concurrently. | Expected one all-or-nothing idempotent transition; actual partial committed state. | Financial state disagreement and false error responses after commit. | One transactional orchestration with expected versions and transactional outbox. | Failpoint after each write; one winner under concurrency; exactly one notification event. |
-| **AUD-C09** | HTTP/socket security; `configure-app.ts:6-8`, `events.gateway.ts:16-23`, `session-cookies.ts:20-26` | Every Origin is reflected/accepted with credentials and `SameSite=None`; no centralized CSRF/Origin gate. | Malicious HTTPS origin sends credentialed mutation or opens `/events`. | Expected allowlisted origin + CSRF proof; actual ambient cookie is accepted cross-site. | Cross-site state changes and live HR/payroll event disclosure. | Exact production allowlist, CSRF token/Origin/Sec-Fetch-Site checks, socket ticket/origin validation. | Hostile-origin HTTP and WebSocket negative tests covering all unsafe methods/uploads. |
+| **AUD-C01 — STILL PRESENT** | Timesheet; refreshed evidence `timesheet-period.controller.ts:228-248`, `timesheet-period.service.ts:806-848`, authoritative flows `887-1043` | Generic `updateStatus()` permits close/reopen transitions and uses ID-only last-write update. It bypasses blockers, confirmations, summaries, snapshots, version bump, payroll claim and reason. | HR PATCHes status from `READY_TO_CLOSE` to `CLOSED`, or `CLOSED` to `REVIEWING`. | Expected only `/close`/`/reopen`; actual direct state update. | Invalid period state and missing financial artifacts. | Forbid transitions into/out of CLOSED in generic endpoint; use tenant-scoped version CAS and specialized workflows only. | HTTP tests for forbidden generic transitions; concurrent close/reopen with artifact reconciliation. |
+| **AUD-C02 — STILL PRESENT** | Payroll; refreshed evidence `payroll-run.controller.ts:44-73`, `payroll-run.service.ts:184-190,291-297,333-334,362-363,454-455` | Calculate/recalculate/lock/release load run with global `findById`; caller tenant is never passed. Later CAS trusts the foreign row's tenant. | HR tenant A calls lifecycle endpoint with tenant B run ID. | Expected indistinguishable 404; actual foreign run can be mutated. | Cross-tenant payroll integrity breach. | Pass caller `organizationId` into every mutation and scope every dependent query/CAS. | Two-tenant integration tests for all four mutations and unchanged foreign artifacts. |
+| **AUD-C03 — STILL PRESENT** | Payslip/export; refreshed evidence `payslip.controller.ts:87-120`, `payslip.service.ts:349-383,477-528`, `payroll-export.controller.ts:14-52`, `payroll-export.service.ts:27-68,162-225` | List, summary, release and export treat payrollRunId as a global capability and omit tenant filters. HR payslip detail has a tenant filter, but the other paths remain unscoped. | HR A requests B's run list/summary/CSV/XLSX/release. | Expected 404; actual foreign salary data or release transition. | Cross-tenant disclosure of salary/tax/insurance and foreign release. | Tenant-scope run, payslip, employee, department and position queries; consolidate release path. | Same/foreign/unknown ID matrix for every format/action. |
+| **AUD-C04 — STILL PRESENT** | Payslip; `payslip.service.ts:389-456` | Employee self-service includes `GENERATED` and can mark it `VIEWED` before release. | Calculate payroll but do not release; employee calls `/payslips/me`. | Expected only `RELEASED|VIEWED`; actual generated draft is visible/mutable. | Premature salary disclosure; VIEWED may block recalculation. | Hide only unpublished `GENERATED` artifacts from employee list/detail; keep `RELEASED` visible and allow the owning employee to transition `RELEASED → VIEWED`. Verify the owning run is released. | Calculate→hidden; release→visible; opening released payslip→VIEWED; direct pre-release ID rejected. |
+| **AUD-C05 — STILL PRESENT** | Leave/period; `leave.service.ts:158-193,215-281`, `period-version.service.ts:108-137` | Approval/application relies on a bump helper that excludes CLOSED periods instead of rejecting the write. | Close period, then approve/apply leave covering it. | Expected atomic rejection until reopen; actual leave/attendance mutation can commit. | Closed snapshot and source facts diverge. | Claim each affected period/date in the same transaction and fail on CLOSED/payroll-claimed state. | Replica-set tests for create/approve/apply against CLOSED and claimed periods. |
+| **AUD-C06 — STILL PRESENT** | Payroll/PIT; refreshed evidence includes live reads in `payroll-run.service.ts:220,425`; related paths remain in PIT/payslip services | Calculation resolves live insurance policy, dependents/profile and PIT policy after close despite frozen snapshot fields. | Close period, edit dependent or policy, then calculate/recalculate. | Expected identical result from bound snapshot; actual result can change with live master data. | Non-reproducible payroll and broken audit lineage. | Freeze all PIT/insurance inputs and use pure calculators over snapshot payload only. | Mutate live data after close; output/hash must remain byte-identical. |
+| **AUD-C07 — STILL PRESENT** | Payroll create; refreshed evidence starts at `payroll-run.service.ts:91` | Period is claimed before sequence calculation/PayrollRun insert, outside a transaction. | Inject insert failure or crash after claim. | Expected both rollback; actual dangling `payrollRunId` claim. | Period stuck; reopen/retry blocked. | Transactional claim+insert; atomic sequence/counter; recovery reconciler for existing dangling claims. | Fault injection after claim and concurrent create. |
+| **AUD-C08 — PARTIAL** | Payroll lifecycle; `payroll-run.service.ts:228-276,305-385`, `payslip.service.ts:347-386` | CAS and cleanup exist on some paths, but payslips, run, period, audit and notification are not one transaction; duplicate release orchestration remains. | Fail between writes or run two releases concurrently. | Expected one all-or-nothing idempotent transition; actual partial committed state remains possible. | Financial state disagreement and false error responses after commit. | One transactional orchestration with expected versions and transactional outbox. | Failpoint after each write; one winner under concurrency; exactly one notification event. |
+| **AUD-C09 — STILL PRESENT** | HTTP/socket security; refreshed evidence `configure-app.ts:7`, `events.gateway.ts:16`; cookie policy in `session-cookies.ts` | Every Origin is reflected/accepted with credentials and `SameSite=None`; no centralized CSRF/Origin gate. | Malicious HTTPS origin sends credentialed mutation or opens `/events`. | Expected allowlisted origin + CSRF proof; actual ambient cookie is accepted cross-site. | Cross-site state changes and live HR/payroll event disclosure. | Exact production allowlist, CSRF token/Origin/Sec-Fetch-Site checks, socket ticket/origin validation. | Hostile-origin HTTP and WebSocket negative tests covering all unsafe methods/uploads. |
 
 ### Confirmed High
 
@@ -204,7 +227,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 | **AUD-M07** | Web date/time; multiple screens including `AttendanceScreen.tsx:220-223`, leave/calendar/KPI/tax screens | Business dates use `toISOString()` UTC and date-only strings are sometimes passed through local `Date`. | Use app 00:30 Vietnam time or non-UTC+7 device. | Expected Vietnam calendar date; actual previous date/month or inconsistent instant. | Wrong leave/policy/calendar/KPI effective date. | Central date-only/business-time helpers; lint ban on `new Date(dateOnly)`/ISO slicing. | Multi-timezone midnight/month-boundary tests. |
 | **AUD-M08** | Web session; `session.ts:1-13`, `App.tsx:88-99`, `auth.ts:47-53` | Logout/session-expiry uses same-window event only; no `storage` listener/BroadcastChannel. | Logout in tab A while tab B displays payroll. | Expected immediate purge; actual tab B retains sensitive screen until API failure. | Stale sensitive data after perceived logout. | Broadcast session events and clear cached state. | Two-tab logout/expiry/account-switch tests. |
 | **AUD-M09** | Web E2E; `e2e/dependents-tax.spec.ts:371` | Regex `/trùng/lấp chồng|đã tồn tại/i` has an unescaped slash, so Playwright cannot parse any suite. | Run `npm run test:e2e --workspace @corestaff/web`. | Expected tests execute; actual SyntaxError before collection. | Browser gate provides zero current evidence. | Correct regex and add parse/list gate in CI. | `playwright test --list`, then full Chrome suite. |
-| **AUD-M10** | Flutter tests/logout; `test/widget_test.dart:16`, `main.dart`, role-block logout path | Test scaffold references nonexistent `MyApp`; analyze/test fail. HR/System Admin role-block logout resets UI without calling server logout. | Run Flutter analyze/test; or logout from role-block and restart. | Expected green test and revoked session; actual compile failure/persisted credentials. | No Flutter regression gate and misleading logout. | Test `CoreStaffApp`; use one logout service path in `finally`; secure credential cleanup. | Analyze/test pass and role-block logout service assertion. |
+| **AUD-M10 — PARTIAL / CURRENTLY BLOCKED** | Flutter tests/logout; `test/widget_test.dart:16`, `main.dart`, role-block logout path | The prior baseline found a nonexistent `MyApp` reference and a role-block logout path that does not call server logout. The refreshed gate could not reach analyze/test because Windows Developer Mode/symlink support is disabled, so the prior source finding remains actionable but was not dynamically reproduced. | Enable symlink support, run Flutter analyze/test; separately exercise role-block logout and restart. | Expected green test and revoked session; current refresh is blocked before test execution and has no evidence that the logout issue is fixed. | No current Flutter regression evidence and possible misleading logout. | Enable the required Windows prerequisite, test `CoreStaffApp`, use one logout service path in `finally`, and secure credential cleanup. | Analyze/test pass and role-block logout service assertion. |
 
 ## 11. Risk Assessment
 
@@ -212,7 +235,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 | ID | Severity | Evidence and risk | Required verification |
 |---|---|---|---|
-| **RISK-DEP01** | High | `npm audit --omit=dev` reports 31 production-tree advisories: 1 critical, 11 high, 18 moderate, 1 low. Installed Express chain includes `proxy-addr@2.0.7`, `multer@2.2.0`, `body-parser@2.3.0`. Registry severity alone does not prove reachability. | Resolve dependency graph and endpoint reachability; upgrade safely; abuse tests for trusted proxy/IP and multipart abort/field-name cases. |
+| **RISK-DEP01** | High | Refreshed `npm audit --omit=dev --json` exits 1 and reports **26 production-tree advisories**. The previous 31-advisory severity breakdown and named package versions are historical and must not be treated as the current dependency inventory. Registry severity alone does not prove reachability. | Parse the refreshed advisory graph and severity breakdown, resolve endpoint reachability, upgrade safely, then run abuse/regression tests for reachable cases. |
 | **RISK-DB01** | High | `syncIndexes()` across all models can drop/create indexes incrementally; production inventory/backfill state is unknown. | Read-only production/staging index diff, duplicate inventory, approved versioned migration and rollback. |
 | **RISK-ARCH01** | High | Vercel serverless adapter coexists with in-memory stateful Socket.IO rooms without shared adapter. | Deployed WebSocket/multi-instance smoke or choose persistent host/shared adapter. |
 | **RISK-FE01** | High | Web attendance generates a new idempotency key for a new click after ambiguous timeout; stale response suppression is absent in attendance/payslip loaders. | Deterministic delayed-response and timeout-after-commit tests. |
@@ -243,7 +266,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 1. Disable or firewall payroll lifecycle/export/payslip-run endpoints until tenant scoping is patched and cross-tenant tests pass.
 2. Disable generic transitions into/out of `CLOSED`; expose only authoritative close/reopen commands.
-3. Stop employee access to `GENERATED` payslips.
+3. Hide unpublished `GENERATED` payslips from employee list/detail and prevent pre-release `VIEWED`; preserve employee access to `RELEASED` and `VIEWED` payslips.
 4. Replace permissive HTTP/Socket.IO origin handling with an exact allowlist and add CSRF protection.
 5. Do not ship Flutter release; do not treat current Playwright lane as passing.
 
@@ -298,7 +321,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 - [ ] Retry after timeout returns prior result without duplicate payslips/events.
 - [ ] Live profile/policy edits after close do not alter calculation.
 - [ ] Missing/duplicate/stale/foreign snapshot sets are rejected.
-- [ ] Employee cannot list/read/view a generated payslip before release.
+- [ ] Employee cannot list/read/view a `GENERATED` payslip before release, but can read a `RELEASED` payslip and transition it to `VIEWED`.
 - [ ] Actor separation rules and immutable audit records are enforced.
 
 ### Security/session
@@ -332,9 +355,9 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 1. Static trace proves reachable code behavior but not that a particular production tenant has already been affected.
 2. Passing unit/integration tests characterize current tested behavior; they do not invalidate uncovered counterexamples listed in this report.
-3. API integration used a disposable one-node in-memory replica set. It did not validate Atlas configuration, production indexes, failover or durability across process/host failure.
-4. Playwright did not execute because test parsing failed. No browser result can be claimed for this revision.
-5. Flutter analyze failed before tests ran; no Flutter runtime/device result can be claimed.
+3. The refreshed audit did not run database integration. The previous baseline used a disposable one-node in-memory replica set; that historical result did not validate Atlas configuration, production indexes, failover or durability across process/host failure.
+4. Playwright did not execute because test parsing failed during `playwright test --list`. No browser result can be claimed for this revision.
+5. The refreshed Flutter command was blocked before analyze/test by missing Windows Developer Mode/symlink support; no Flutter analyze, test, runtime or device result can be claimed for this revision.
 6. Dependency advisories were not promoted to confirmed exploitable application vulnerabilities without reachability analysis.
 7. Business-policy questions requiring HR/legal authority—insurance basis, overtime/leave scope and payroll SoD—remain explicit decision gates.
 8. Deployment controls outside the repository may reduce or increase several risks; none were assumed to exist without evidence.
@@ -343,19 +366,33 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 **NO-GO / NOT READY FOR PRODUCTION.**
 
-There is sufficient evidence to reject production deployment of this revision for multi-tenant HR/payroll use. The blocking reasons are not cosmetic or test-coverage-only: confirmed source paths permit cross-tenant payroll operations, bypass authoritative close/reopen logic, expose unreleased payslips, mutate facts behind a closed period, calculate from live rather than frozen financial inputs, and leave payroll state partially committed.
+There is sufficient refreshed source evidence to reject production deployment of revision `6a77eb4` for multi-tenant HR/payroll use. The blocking reasons are not cosmetic or test-coverage-only: current source paths permit cross-tenant payroll operations, bypass authoritative close/reopen logic, expose unreleased payslips, mutate facts behind a closed period, calculate from live rather than frozen financial inputs, and can leave payroll state partially committed.
 
 A production decision should be reconsidered only after all Critical findings are fixed, the High authorization/transaction issues are closed, cross-tenant and failure-injection tests pass, Playwright and Flutter gates are executable, and production-like database/storage/realtime evidence is collected.
 
-## Verification Evidence Executed During This Audit
+## Verification Evidence
+
+### Refresh evidence — revision `6a77eb4` (2026-11-13)
 
 | Command | Result |
+|---|---|
+| Targeted API regression set | **PASS** — 4 suites / 50 tests |
+| `npx playwright test --list` | **FAIL before collection** — invalid regex at `Apps/web/e2e/dependents-tax.spec.ts:371`; 0 tests collected |
+| `npm audit --omit=dev --json` | Exit 1 — 26 production-tree advisories; reachability and refreshed severity breakdown not established in this report |
+| `npm run lint && npm run build && npm test` | **INCONCLUSIVE** — combined command timed out after 420 seconds; no individual stage may be claimed as pass or fail from this run |
+| Flutter analyze/test gate | **BLOCKED** — Windows Developer Mode/symlink support is disabled; analyze/test did not execute |
+
+No integration database, migration, seed, index synchronization, production/staging system or external provider was accessed during the refresh.
+
+### Historical baseline evidence — revision `ab08ce3` (2026-11-03; not current evidence)
+
+| Command | Historical result |
 |---|---|
 | `npm run lint` | PASS — API and Web TypeScript |
 | `npm run build` | PASS — API + Web; Web warned on 1,450.28 kB main JS chunk |
 | `npm test` | PASS — API 88 suites/1052 tests (1 suite/7 tests skipped); Web 34 suites/256 Jest + 17 Node tests |
 | `npm run test:integration --workspace @corestaff/api` | PASS — 14 suites/137 tests on disposable replica set; repeated duplicate-index warnings; child required SIGKILL after SIGINT timeout |
 | `npm run lint:mobile` | PASS — Expo TypeScript |
-| `npm run test:e2e --workspace @corestaff/web` | **FAIL before collection** — invalid regex at `e2e/dependents-tax.spec.ts:371` |
-| `flutter.bat analyze && flutter.bat test` | **FAIL at analyze** — `test/widget_test.dart:16` references nonexistent `MyApp`; test did not run |
+| `npm run test:e2e --workspace @corestaff/web` | FAIL before collection — invalid regex at `e2e/dependents-tax.spec.ts:371` |
+| `flutter.bat analyze && flutter.bat test` | FAIL at analyze — `test/widget_test.dart:16` referenced nonexistent `MyApp`; test did not run |
 | `npm audit --omit=dev --json` | Exit 1 — 31 production-tree advisories (1 critical/11 high/18 moderate/1 low); reachability not established |

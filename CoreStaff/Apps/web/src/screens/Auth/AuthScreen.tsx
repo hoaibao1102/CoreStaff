@@ -1,8 +1,9 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ChangePasswordScreen } from '@/screens/ChangePassword/ChangePasswordScreen';
 import { ForgotPasswordScreen } from '@/screens/ForgotPassword/ForgotPasswordScreen';
 import { LoginScreen } from '@/screens/Login/LoginScreen';
 import { ResetPasswordScreen } from '@/screens/ResetPassword/ResetPasswordScreen';
+import { LandingScreen } from '@/screens/Landing/LandingScreen';
 import { forgetSession, rememberSession } from '@/lib/session';
 import {
   AuthApiError,
@@ -17,7 +18,16 @@ import {
   resetPassword,
 } from '@/services/auth';
 
-type AuthView = 'login' | 'forgot';
+type AuthView = 'landing' | 'login' | 'forgot';
+
+function resolveInitialAuthView(): AuthView {
+  const pathname = window.location.pathname;
+  if (pathname === '/' || pathname === '/landing' || pathname === '') {
+    return 'landing';
+  }
+  if (pathname === '/forgot-password') return 'forgot';
+  return 'login';
+}
 
 /** Reset link arrives as `/?token=...` or `/reset-password`. */
 function readResetToken(): string | null {
@@ -44,7 +54,7 @@ interface AuthScreenProps {
 }
 
 /**
- * Renders the credential screens (login / forgot / reset / forced password
+ * Renders the landing and credential screens (landing / login / forgot / reset / forced password
  * change) while there is no usable session, and `children` once there is.
  */
 export function AuthScreen({
@@ -56,12 +66,39 @@ export function AuthScreen({
   onSignOut,
   children,
 }: AuthScreenProps) {
-  const [authView, setAuthView] = useState<AuthView>('login');
+  const [authView, setAuthView] = useState<AuthView>(() => resolveInitialAuthView());
   const [resetToken, setResetToken] = useState<string | null>(() => readResetToken());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const disabled = submitting || !apiBase;
   const shownError = error ?? bootError;
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname;
+      if (p === '/login') setAuthView('login');
+      else if (p === '/forgot-password') setAuthView('forgot');
+      else if (p === '/' || p === '/landing') setAuthView('landing');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const goToLogin = () => {
+    setError(null);
+    setAuthView('login');
+    if (window.location.pathname !== '/login') {
+      window.history.pushState(null, '', '/login');
+    }
+  };
+
+  const goToLanding = () => {
+    setError(null);
+    setAuthView('landing');
+    if (window.location.pathname !== '/' && window.location.pathname !== '/landing') {
+      window.history.pushState(null, '', '/');
+    }
+  };
 
   const handleLogin = async (identifier: string, password: string) => {
     if (!apiBase) {
@@ -101,6 +138,7 @@ export function AuthScreen({
   const handleLogout = async () => {
     if (apiBase) await logout(apiBase);
     forgetSession();
+    goToLanding();
     onSignOut();
   };
 
@@ -121,6 +159,7 @@ export function AuthScreen({
     } catch (err: unknown) {
       if (err instanceof AuthApiError && err.status === 401) {
         forgetSession();
+        goToLogin();
         onSignOut();
       }
       setError(friendlyPasswordError(err));
@@ -176,7 +215,7 @@ export function AuthScreen({
     setError(null);
     setAuthView('login');
     if (resetToken !== null) {
-      window.history.replaceState(null, '', '/');
+      window.history.replaceState(null, '', '/login');
       setResetToken(null);
     }
   }
@@ -194,6 +233,10 @@ export function AuthScreen({
   }
 
   if (!user) {
+    if (authView === 'landing') {
+      return <LandingScreen onGoToLogin={goToLogin} />;
+    }
+
     if (authView === 'forgot') {
       return (
         <ForgotPasswordScreen
@@ -214,6 +257,7 @@ export function AuthScreen({
           setAuthView('forgot');
         }}
         onLogin={handleLogin}
+        onBackToLanding={goToLanding}
       />
     );
   }
