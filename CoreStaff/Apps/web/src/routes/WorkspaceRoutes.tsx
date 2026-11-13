@@ -36,6 +36,7 @@ import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
 import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
 import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
+import { LandingScreen } from '../screens/Landing/LandingScreen';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -126,6 +127,23 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
 
   if (route === '/hr/kpi-inputs') {
     return <EmployeeDataState status="unavailable" description="Tính năng KPI đã ngừng sử dụng." />;
+  }
+
+  if (route === '/landing') {
+    const defaultRoute = user.role === 'EMPLOYEE' ? '/app/attendance' : user.role === 'SYSTEM_ADMIN' ? '/platform/organizations' : '/overview';
+    return (
+      <LandingScreen
+        isLoggedIn={true}
+        onGoToLogin={() => {
+          window.history.pushState({}, '', defaultRoute);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }}
+        onGoToApp={() => {
+          window.history.pushState({}, '', defaultRoute);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }}
+      />
+    );
   }
 
   // ── Dashboard / Tổng quan ────────────────────────────────────────────
