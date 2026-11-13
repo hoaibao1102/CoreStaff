@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { getAttendanceHistory, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type PunchLocation, type TodayAttendance } from '../employee-api';
 import { DayDetailSheet } from '../components/DayDetailSheet';
+import { AttendanceCalendar } from '../components/AttendanceCalendar';
 import { currentWifi } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, NoticeBanner, ScreenHeader, SectionTitle, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime, shiftTitle, todayKey } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
@@ -132,27 +133,13 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
       <View style={styles.metricGrid}><Metric label="Giờ làm" value={formatMinutes(today?.workingMinutes)} /><Metric label="Đi muộn" value={formatMinutes(today?.lateMinutes)} /><Metric label="Về sớm" value={formatMinutes(today?.earlyMinutes)} /></View>
       <View style={styles.monthHeader}><SectionTitle>Lịch sử tháng</SectionTitle><View style={styles.monthControl}><MonthButton label="Tháng trước" symbol="‹" onPress={() => changeMonth(-1)} /><Text style={styles.monthText}>{monthLabel}</Text><MonthButton label="Tháng sau" symbol="›" disabled={!canMoveNext} onPress={() => changeMonth(1)} /></View></View>
       {history ? <View style={styles.summaryRow}><Summary label="Ngày công" value={history.summary.workingDays} /><Summary label="Ngày đi muộn" value={history.summary.lateDays} /><Summary label="Tăng ca" value={formatMinutes(history.summary.otMinutes)} /></View> : null}
-      {!history?.items.length ? <Card><Text style={styles.emptyText}>Chưa có dữ liệu chấm công trong tháng này.</Text></Card> : history.items.map(day => <DayCard key={day._id || day.workDate} day={day} onPress={() => setSelectedDay(day)} />)}
+      <AttendanceCalendar month={month} items={history?.items ?? []} onSelect={setSelectedDay} />
+      {!history?.items.length ? <Text style={styles.emptyText}>Chưa có dữ liệu chấm công trong tháng này.</Text> : null}
     </>}
     <DayDetailSheet day={selectedDay} policy={history?.workCreditPolicy} apiBase={apiBase} onClose={() => setSelectedDay(null)} />
   </ScrollView>;
 }
 
-function DayCard({ day, onPress }: { day: AttendanceDay; onPress: () => void }) {
-  const late = day.lateMinutes ?? 0, early = day.earlyMinutes ?? 0, ot = day.overtime?.otMinutes ?? 0;
-  const missedCheckout = day.attendanceStatus === 'CHECKED_IN' && day.workDate < todayKey();
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Xem chi tiết ngày ${formatDate(day.workDate)}`} onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
-    <Card style={styles.dayCard}>
-      <View style={styles.dayTop}><View><Text style={styles.dayDate}>{formatDate(day.workDate)}</Text><Text style={styles.dayTimes}>{formatTime(day.checkIn?.recordedAt)} - {formatTime(day.checkOut?.recordedAt)}</Text></View><StatusBadge status={missedCheckout ? 'PENDING' : day.attendanceStatus} tone={missedCheckout ? 'warning' : undefined} label={missedCheckout ? 'Thiếu giờ ra' : attendanceLabel(day.attendanceStatus)} /></View>
-      <View style={styles.dayMeta}>
-        {day.workingMinutes != null ? <Text style={styles.dayMetaText}>Làm {formatMinutes(day.workingMinutes)}</Text> : null}
-        {late > 0 ? <Text style={styles.warningText}>Muộn {formatMinutes(late)}</Text> : null}
-        {early > 0 ? <Text style={styles.earlyText}>Về sớm {formatMinutes(early)}</Text> : null}
-        {ot > 0 ? <Text style={styles.blueText}>Tăng ca {formatMinutes(ot)}</Text> : null}
-      </View>
-    </Card>
-  </Pressable>;
-}
 function attendanceLabel(status?: string) { return ({ NOT_CHECKED_IN: 'Chưa vào ca', CHECKED_IN: 'Đang trong ca', COMPLETED: 'Hoàn thành', DAY_OFF: 'Ngày nghỉ', LOCKED: 'Đã khóa' } as Record<string, string>)[status || ''] || 'Chưa có dữ liệu'; }
 function intervalText(items: Array<{ from: string; to: string }>) { return items.length ? items.map(item => `${item.from}–${item.to}`).join(', ') : 'Không có'; }
 function pendingLeaveText(duration: string, start?: string, end?: string) { if (duration === 'MORNING_HALF') return 'Nghỉ buổi sáng'; if (duration === 'AFTERNOON_HALF') return 'Nghỉ buổi chiều'; if (duration === 'CUSTOM_HOURS') return `Nghỉ theo giờ${start && end ? ` (${start}–${end})` : ''}`; return 'Nghỉ cả ngày'; }
