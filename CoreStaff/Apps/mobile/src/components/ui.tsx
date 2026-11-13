@@ -1,8 +1,21 @@
 import { useState, type ReactNode } from 'react';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, spacing } from '../theme';
 import { AppIcon, type AppIconName } from './AppIcon';
+
+let cachedDateTimePicker: any = undefined;
+function getNativeDatePicker(): any {
+  if (cachedDateTimePicker !== undefined) return cachedDateTimePicker;
+  try {
+    // Dynamic require để app không bị crash Invariant Violation khi chạy với APK dev-client cũ hoặc Expo Go
+    const mod = require('@react-native-community/datetimepicker');
+    cachedDateTimePicker = mod?.default ?? mod;
+  } catch {
+    cachedDateTimePicker = null;
+  }
+  return cachedDateTimePicker;
+}
 
 export function ScreenHeader({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return <View style={styles.headerRow}><View style={styles.headerCopy}>{eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}<Text accessibilityRole="header" style={styles.title}>{title}</Text>{description ? <Text style={styles.description}>{description}</Text> : null}</View>{action}</View>;
@@ -28,6 +41,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * nên toàn bộ validation phía form giữ nguyên.
  */
 export function DateTimeField({ label, mode, value, onChange, required, disabled, error }: { label: string; mode: 'date' | 'time'; value: string; onChange: (value: string) => void; required?: boolean; disabled?: boolean; error?: string }) {
+  const NativePicker = getNativeDatePicker();
   const [open, setOpen] = useState(false);
   const current = (() => {
     const base = new Date();
@@ -40,6 +54,11 @@ export function DateTimeField({ label, mode, value, onChange, required, disabled
     if (event.type !== 'set' || !picked) return;
     onChange(mode === 'date' ? `${picked.getFullYear()}-${pad(picked.getMonth() + 1)}-${pad(picked.getDate())}` : `${pad(picked.getHours())}:${pad(picked.getMinutes())}`);
   };
+
+  if (!NativePicker) {
+    return <Field label={label} value={value} onChangeText={onChange} placeholder={mode === 'date' ? 'YYYY-MM-DD' : 'HH:mm'} required={required} editable={!disabled} error={error} />;
+  }
+
   const display = mode === 'date' ? formatDate(value) : value || '--:--';
   return <View style={styles.field}>
     <Text style={styles.label}>{label}{required ? <Text style={styles.required}> *</Text> : null}</Text>
@@ -48,7 +67,7 @@ export function DateTimeField({ label, mode, value, onChange, required, disabled
       <AppIcon name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={19} color={colors.muted} />
     </Pressable>
     {error ? <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text> : null}
-    {open ? <DateTimePicker value={current} mode={mode} is24Hour display={mode === 'date' ? 'default' : 'default'} onChange={handle} /> : null}
+    {open ? <NativePicker value={current} mode={mode} is24Hour display={mode === 'date' ? 'default' : 'default'} onChange={handle} /> : null}
   </View>;
 }
 

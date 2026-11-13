@@ -255,6 +255,27 @@ const PIT_BRACKET_TABLE = [
   { bracket: 5, range: 'Trên 100.000.000', rate: 35 },
 ] as const;
 
+/** Dấu "?" giải thích chính sách thuế của tiền tăng ca. Chỉ dòng OT dùng. */
+function TaxMarker({ overtimeTaxable }: { overtimeTaxable: boolean }) {
+  return (
+    <Tooltip
+      content={
+        overtimeTaxable
+          ? 'Chính sách thuế TNCN của công ty: toàn bộ tiền tăng ca chịu thuế.'
+          : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập chịu thuế.'
+      }
+    >
+      <button
+        type="button"
+        aria-label="Chính sách thuế TNCN cho tiền tăng ca"
+        className="ml-1 inline-flex cursor-help align-middle text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <HelpCircle className="size-3.5" aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
+}
+
 export function GrossEarningsCard({
   payslip,
   variant,
@@ -280,7 +301,9 @@ export function GrossEarningsCard({
 
   // Chi tiết OT: giờ × (tiền công 1 giờ × hệ số) = thành tiền.
   const otBreakdown = payslip.otBreakdown;
-  const otLines = (otBreakdown?.breakdown ?? []).filter((line) => line.amount > 0 && line.type !== 'WEEKLY_OFF');
+  // In đủ mọi loại OT backend trả về — bỏ dòng nào thì các dòng con cộng lại
+  // không còn khớp `otPay` ở dòng cha.
+  const otLines = otBreakdown?.breakdown ?? [];
 
   // Dòng phụ giải thích cách ra số tiền, in ngay dưới tên khoản mục.
   const baseDetail = hasBaseDetail
@@ -293,6 +316,9 @@ export function GrossEarningsCard({
   // Số giờ làm thêm cả kỳ — luôn in thành dòng nhỏ dưới tên khoản mục OT.
   const otHours = otBreakdown ? (otBreakdown.totalHours ?? otBreakdown.totalMinutes / 60) : 0;
   const otDetail = otHours > 0 ? `Làm thêm ${formatHours(otHours)} trong kỳ` : undefined;
+  // Dòng chi tiết (OT theo loại ngày) thu gọn mặc định — chỉ xổ khi bấm,
+  // giữ phiếu gọn một trang. Keyed theo `row.key` để thêm dòng khác sau này.
+  const [openRows, setOpenRows] = useState<Record<string, boolean>>({});
 
   type GrossRow = {
     key: string;
@@ -305,51 +331,58 @@ export function GrossEarningsCard({
     taxMarker?: boolean;
     subRows?: Array<{ key: string; label: string; amount: number; taxable: number }>;
   };
-  const rows: GrossRow[] = summaryRows.flatMap((item, idx): GrossRow[] => {
-    // Có breakdown từng loại phụ cấp thì in từng loại, bỏ dòng gộp "Tổng phụ cấp"
-    // (in cả hai là đếm trùng). Không có thì giữ dòng gộp.
-    // R1: mọi phụ cấp đều chịu thuế nên phần chịu thuế = nguyên số tiền.
-    if (item.type === 'ALLOWANCE' && allowances.length > 0) {
-      return allowances.map((allowance, allowanceIdx) => ({
+  // Năm khoản thu nhập là cố định: luôn in đủ kể cả 0 ₫. Backend đã cắt khoản 0
+  // khỏi `earningBreakdown` (và phiếu cũ sinh trước đây cũng thiếu hẳn dòng), nên
+  // không thể dựa vào breakdown để biết kỳ này có những khoản nào.
+  const amountOf = (type: string) => summaryRows.find((item) => item.type === type)?.amount ?? 0;
+  // R1: mọi phụ cấp đều chịu thuế nên phần chịu thuế = nguyên số tiền.
+  const allowanceRows: GrossRow[] = allowances.length > 0
+    // Có breakdown thì in từng loại (kể cả 0 ₫); in thêm dòng gộp là đếm trùng.
+    ? allowances.map((allowance, allowanceIdx) => ({
         key: `ALLOWANCE-${allowance.type}-${allowanceIdx}`,
         label: allowance.label,
         amount: allowance.amount,
         taxable: allowance.amount,
-      }));
-    }
-    const isOvertime = item.type === 'OVERTIME';
-    return [
-      {
-        key: `${item.type}-${idx}`,
-        label: item.label,
-        amount: item.amount,
-        taxable: isOvertime ? taxableOt : item.amount,
-        detail: item.type === 'BASE_SALARY' ? baseDetail : isOvertime ? otDetail : undefined,
-        taxMarker: isOvertime,
-        subRows: isOvertime
-          ? otLines.map((line, lineIdx) => ({
-              key: `${line.type}-${lineIdx}`,
-              label: `${line.label} — ${line.minutes / 60} giờ × (${formatCurrency(otBreakdown?.hourlyRate || 0)} × ${line.coefficient})`,
-              amount: line.amount,
-              taxable: overtimeTaxable ? line.amount : 0,
-            }))
-          : undefined,
-      },
-    ];
-  });
+      }))
+    // Không cấu hình phụ cấp nào thì vẫn giữ dòng tổng để thấy là 0 ₫.
+    : [{ key: 'ALLOWANCE', label: 'Tổng phụ cấp', amount: amountOf('ALLOWANCE'), taxable: amountOf('ALLOWANCE') }];
 
-  // Tiền làm thêm giờ là khoản mục cố định của card 1 — backend cắt dòng này khỏi
-  // earningBreakdown khi otPay = 0 (và phiếu cũ chưa từng có), nên thiếu thì dựng lại.
-  if (!rows.some((row) => row.key.startsWith('OVERTIME'))) {
-    rows.push({
-      key: 'OVERTIME-fallback',
+  const rows: GrossRow[] = [
+    {
+      key: 'BASE_SALARY',
+      label: 'Lương cơ bản theo công',
+      amount: amountOf('BASE_SALARY'),
+      taxable: amountOf('BASE_SALARY'),
+      detail: baseDetail,
+    },
+    ...allowanceRows,
+    {
+      key: 'ATTENDANCE_BONUS',
+      label: 'Thưởng chuyên cần',
+      amount: amountOf('ATTENDANCE_BONUS'),
+      taxable: amountOf('ATTENDANCE_BONUS'),
+    },
+    {
+      key: 'KPI_BONUS',
+      label: 'Thưởng KPI',
+      amount: amountOf('KPI_BONUS'),
+      taxable: amountOf('KPI_BONUS'),
+    },
+    {
+      key: 'OVERTIME',
       label: 'Tiền làm thêm giờ',
-      amount: otBreakdown?.otPay ?? 0,
+      amount: amountOf('OVERTIME') || (otBreakdown?.otPay ?? 0),
       taxable: taxableOt,
       detail: otDetail,
       taxMarker: true,
-    });
-  }
+      subRows: otLines.map((line, lineIdx) => ({
+        key: `${line.type}-${lineIdx}`,
+        label: `${line.label} — ${line.minutes / 60} giờ × (${formatCurrency(otBreakdown?.hourlyRate || 0)} × ${line.coefficient})`,
+        amount: line.amount,
+        taxable: overtimeTaxable ? line.amount : 0,
+      })),
+    },
+  ];
 
   const taxableIncome = payslip.taxableIncome ?? rows.reduce((sum, row) => sum + row.taxable, 0);
 
@@ -363,29 +396,36 @@ export function GrossEarningsCard({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const hasSubRows = (row.subRows?.length ?? 0) > 0;
+          const isOpen = openRows[row.key] === true;
+          return (
           <Fragment key={row.key}>
             <TableRow>
               <TableCell>
-                <span className="font-medium text-foreground">{row.label}</span>
-                {row.taxMarker && (
-                  <Tooltip
-                    content={
-                      overtimeTaxable
-                        ? 'Chính sách thuế TNCN của công ty: toàn bộ tiền tăng ca chịu thuế.'
-                        : 'Chính sách thuế TNCN của công ty: tiền tăng ca được miễn thuế, không vào thu nhập chịu thuế.'
-                    }
+                {hasSubRows ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenRows((current) => ({ ...current, [row.key]: !current[row.key] }))}
+                    aria-expanded={isOpen}
+                    className="-mx-1 flex min-w-0 items-start gap-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
                   >
-                    <button
-                      type="button"
-                      aria-label="Chính sách thuế TNCN cho tiền tăng ca"
-                      className="ml-1 inline-flex cursor-help align-middle text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <HelpCircle className="size-3.5" aria-hidden="true" />
-                    </button>
-                  </Tooltip>
+                    <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">
+                      {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="font-medium text-foreground">{row.label}</span>
+                      {row.taxMarker && <TaxMarker overtimeTaxable={overtimeTaxable} />}
+                      {row.detail && (
+                        <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">{row.detail}</span>
+                      )}
+                    </span>
+                  </button>
+                ) : (
+                  <span className="font-medium text-foreground">{row.label}</span>
                 )}
-                {row.detail && (
+                {!hasSubRows && row.taxMarker && <TaxMarker overtimeTaxable={overtimeTaxable} />}
+                {!hasSubRows && row.detail && (
                   <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">{row.detail}</span>
                 )}
               </TableCell>
@@ -394,7 +434,7 @@ export function GrossEarningsCard({
                 {formatCurrency(row.taxable)}
               </TableCell>
             </TableRow>
-            {row.subRows?.map((subRow) => (
+            {isOpen && row.subRows?.map((subRow) => (
               <TableRow key={subRow.key} className="bg-muted/30 hover:bg-muted/30">
                 <TableCell className="pl-6 text-[11.5px] font-normal text-muted-foreground">{subRow.label}</TableCell>
                 <TableCell className="text-right font-mono text-[11.5px]">{formatCurrency(subRow.amount)}</TableCell>
@@ -404,7 +444,8 @@ export function GrossEarningsCard({
               </TableRow>
             ))}
           </Fragment>
-        ))}
+          );
+        })}
       </TableBody>
       <TableFooter>
         <TableRow className="hover:bg-muted/50">
@@ -469,13 +510,14 @@ export function TaxDeductionsCard({
   // Ba khoản giảm trừ luôn là 3 hàng cố định của card; bảo hiểm gập sẵn,
   // bấm mới xổ ra phần trích BHXH/BHYT/BHTN.
   const [showInsuranceParts, setShowInsuranceParts] = useState(false);
-  const insuranceParts = (
-    [
-      { name: 'BHXH', rate: payslip.socialInsuranceRate, amount: payslip.socialInsurance || 0 },
-      { name: 'BHYT', rate: payslip.healthInsuranceRate, amount: payslip.healthInsurance || 0 },
-      { name: 'BHTN', rate: payslip.unemploymentInsuranceRate, amount: payslip.unemploymentInsurance || 0 },
-    ] as const
-  ).filter((part) => part.amount > 0);
+  // Ba khoản trích luôn đủ mặt khi xổ ra — khoản 0 ₫ vẫn in, để thấy rõ là
+  // kỳ này không trích chứ không phải hệ thống bỏ sót.
+  const insuranceParts = [
+    { name: 'BHXH', rate: payslip.socialInsuranceRate, amount: payslip.socialInsurance || 0 },
+    { name: 'BHYT', rate: payslip.healthInsuranceRate, amount: payslip.healthInsurance || 0 },
+    { name: 'BHTN', rate: payslip.unemploymentInsuranceRate, amount: payslip.unemploymentInsurance || 0 },
+  ] as const;
+  const hasInsurance = totalInsurance > 0;
 
   /** Khoản giảm trừ in dấu trừ khi có tiền; khoản 0 thì không in "−0 ₫". */
   const formatDeduction = (value?: number) => (value ? `-${formatCurrency(value)}` : formatCurrency(0));
@@ -491,7 +533,7 @@ export function TaxDeductionsCard({
       <TableBody>
         <TableRow>
           <TableCell>
-            {insuranceParts.length > 0 ? (
+            {hasInsurance ? (
               <div className="flex items-start gap-1">
                 <button
                   type="button"
@@ -680,48 +722,29 @@ export function NetRecapSection({ payslip, variant, showFormula = false }: {
       formula={showFormula ? 'Tổng thu nhập (Gross) − Bảo hiểm − Thuế TNCN − Khấu trừ khác.' : undefined}
       variant={variant}
     >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Hạng mục đối soát</TableHead>
-            <TableHead className="text-right">Giá trị phát sinh</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell className="text-muted-foreground">Tổng thu nhập (Gross)</TableCell>
-            <TableCell className="text-right font-mono">{formatCurrency(gross)}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="text-muted-foreground">Trích nộp bảo hiểm (người lao động)</TableCell>
-            <TableCell className="text-right font-mono text-destructive">−{formatCurrency(totalInsurance)}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="text-muted-foreground">Thuế TNCN phải nộp</TableCell>
-            <TableCell className="text-right font-mono text-destructive">−{formatCurrency(payslip.pitAmount || 0)}</TableCell>
-          </TableRow>
-          {otherDeductions > 0 && (
-            <TableRow>
-              <TableCell className="text-muted-foreground">Khấu trừ khác</TableCell>
-              <TableCell className="text-right font-mono text-destructive">−{formatCurrency(otherDeductions)}</TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell className="font-semibold text-foreground">Tổng khấu trừ</TableCell>
-            <TableCell className="text-right font-mono font-semibold text-destructive">−{formatCurrency(totalDeductions)}</TableCell>
-          </TableRow>
-          <TableRow className="bg-emerald-50 hover:bg-emerald-50 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/40">
-            <TableCell className="py-2.5 text-[13px] font-bold text-emerald-800 dark:text-emerald-300">
-              Số tiền thực nhận (Net)
-            </TableCell>
-            <TableCell className="py-2.5 text-right font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300">
-              {formatCurrency(netSalary)}
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
+      {/* Dải một hàng thay cho bảng 4 dòng: cùng con số, không lặp lại các khoản
+          đã in ở mục 1/2/4, và không để khoảng trống giữa nhãn với số. */}
+      <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Tổng thu nhập (Gross)</div>
+          <div className="font-mono text-[15px] font-semibold text-foreground">{formatCurrency(gross)}</div>
+        </div>
+        <span className="hidden text-lg font-semibold text-muted-foreground sm:block" aria-hidden="true">−</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Tổng khấu trừ</div>
+          <div className="font-mono text-[15px] font-semibold text-destructive">−{formatCurrency(totalDeductions)}</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            BH {formatCurrency(totalInsurance)} · Thuế {formatCurrency(payslip.pitAmount || 0)} · Khác {formatCurrency(otherDeductions)}
+          </div>
+        </div>
+        <span className="hidden text-lg font-semibold text-muted-foreground sm:block" aria-hidden="true">=</span>
+        <div className="min-w-0 flex-1 rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/40">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+            Số tiền thực nhận (Net)
+          </div>
+          <div className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(netSalary)}</div>
+        </div>
+      </div>
     </PayslipSection>
   );
 }
@@ -730,25 +753,34 @@ export function NetRecapSection({ payslip, variant, showFormula = false }: {
  * Năm mục của một tờ phiếu lương — một nguồn duy nhất cho cả trang nhân viên
  * và trang HR, nên hai bên không thể lệch bố cục.
  *
- * Bố cục: lưới 12 cột, 5 card xếp thành 2 hàng — đủ nội dung cho một trang A4
- * ngang (1123×794) nên dialog không phải cuộn ở màn hình thường.
+ * Bố cục A: ghép card theo chiều cao thật để không còn khoảng trống. `items-start`
+ * một mình chỉ chuyển khoảng trắng từ trong card xuống dưới card, không làm mất nó;
+ * nên mục 2 (ngắn) xếp chồng lên mục 3 ở cột phải, cộng lại vừa đúng chiều cao
+ * mục 1 ở cột trái. Hàng dưới ghép mục 4 với mục 5 (dải một hàng).
+ *
+ *   [ 1 Gross (7)                        ][ 2 Giảm trừ (5) ]
+ *   [                                    ][ 3 Tính thuế (5) ]
+ *   [ 4 PIT (5) ][ 5 Tổng kết (7)                          ]
+ *
+ * Cột phải đọc trên→dưới là 2 rồi 3, nên thứ tự 1→5 vẫn đúng. Toàn tờ cao ~680px,
+ * vừa A4 ngang (1123 x 794 px @96dpi) không phải cuộn.
  */
 export function PayslipSheetItems({ payslip }: { payslip: PayslipRow }) {
   return (
-    <div className="grid grid-cols-12 gap-3">
-      <div className="col-span-12 lg:col-span-5">
+    <div className="grid grid-cols-12 items-start gap-3">
+      {/* h-full: nếu mục 2+3 cộng lại cao hơn mục 1, mục 1 giãn theo hàng lưới
+          thay vì để hở. Chênh lệch thực tế chỉ vài chục px. */}
+      <div className="col-span-12 lg:col-span-7 lg:h-full">
         <GrossEarningsCard payslip={payslip} variant="sheet" showFormula />
       </div>
-      <div className="col-span-12 sm:col-span-6 lg:col-span-3">
+      <div className="col-span-12 flex flex-col gap-3 lg:col-span-5">
         <TaxDeductionsCard payslip={payslip} variant="sheet" showFormula />
-      </div>
-      <div className="col-span-12 sm:col-span-6 lg:col-span-4">
         <TaxableEarningsCard payslip={payslip} variant="sheet" showFormula />
       </div>
-      <div className="col-span-12 lg:col-span-7">
+      <div className="col-span-12 lg:col-span-5">
         <PitTaxDetails payslip={payslip} variant="sheet" showFormula />
       </div>
-      <div className="col-span-12 lg:col-span-5">
+      <div className="col-span-12 lg:col-span-7">
         <NetRecapSection payslip={payslip} variant="sheet" showFormula />
       </div>
     </div>

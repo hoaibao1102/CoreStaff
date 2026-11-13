@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card, EmptyState, ErrorBanner, LoadingBlock, ScreenHeader, SectionTitle, StatusBadge, formatDate, formatMoney, formatPeriod } from '../components/ui';
+import { AppIcon } from '../components/AppIcon';
 import { friendlyEmployeeError, getMyPayslips, markPayslipViewed, type Payslip } from '../employee-api';
 import { colors, radius, spacing } from '../theme';
 
@@ -79,25 +80,52 @@ function PayslipDetail({ item }: { item: Payslip }) {
   const earnings = item.earningBreakdown ?? [];
   const allowances = item.allowanceBreakdown ?? [];
   const otLines = item.otBreakdown?.breakdown ?? [];
-  const deductions = item.deductionBreakdown ?? [];
   const insurance = item.socialInsurance + item.healthInsurance + item.unemploymentInsurance;
   const otLabel = (l: { label: string; hours?: number; coefficient?: number }) => { const h = l.hours ?? 0; return `${l.label}: ${Number.isInteger(h) ? h : h.toFixed(1)} giờ × hệ số ${l.coefficient}`; };
+  // Dòng chi tiết OT thu gọn mặc định — bấm vào "Tiền làm thêm giờ" mới xổ.
+  const [showOtLines, setShowOtLines] = useState(false);
+
+  // Năm khoản thu nhập cố định — backend cắt khoản 0 khỏi `earningBreakdown` nên
+  // thiếu dòng không có nghĩa là không áp dụng. Luôn in đủ, kể cả 0 ₫.
+  const amountOf = (type: string) => earnings.find((e) => e.type === type)?.amount ?? 0;
+
   return <>
     {item.payableWorkingDays != null && item.standardWorkingDays != null ? <InfoRow label="Ngày công tính lương" value={`${item.payableWorkingDays} / ${item.standardWorkingDays} ngày`} /> : null}
     {item.employeeCode ? <InfoRow label="Mã nhân viên" value={item.employeeCode} /> : null}
     {item.taxCode ? <InfoRow label="Mã số thuế" value={item.taxCode} /> : null}
     <View style={styles.divider} />
     <Head>THU NHẬP</Head>
-    {earnings.length === 0 ? <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} /> : <>
-      {earnings.map((e, idx) => e.type === 'ALLOWANCE' && allowances.length ? <View key={idx} style={styles.group}><MoneyRow label="Phụ cấp" value={e.amount} />{allowances.map((a, k) => <SubRow key={k} label={a.label} value={a.amount} />)}</View>
-        : e.type === 'OVERTIME' && otLines.length ? <View key={idx} style={styles.group}><MoneyRow label={e.label} value={e.amount} />{otLines.map((l, k) => <SubRow key={k} label={otLabel(l)} value={l.amount} />)}</View>
-        : <MoneyRow key={idx} label={e.label} value={e.amount} />)}
-      <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} strong />
-    </>}
+    <MoneyRow label="Lương cơ bản theo công" value={amountOf('BASE_SALARY')} />
+    {allowances.length
+      ? allowances.map((a, k) => <MoneyRow key={k} label={a.label} value={a.amount} />)
+      : <MoneyRow label="Tổng phụ cấp" value={amountOf('ALLOWANCE')} />}
+    <MoneyRow label="Thưởng chuyên cần" value={amountOf('ATTENDANCE_BONUS')} />
+    <MoneyRow label="Thưởng KPI" value={amountOf('KPI_BONUS')} />
+    <View style={styles.group}>
+      {otLines.length ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showOtLines }}
+          accessibilityLabel="Tiền làm thêm giờ, chi tiết theo loại ngày"
+          onPress={() => setShowOtLines((open) => !open)}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <MoneyRow label="Tiền làm thêm giờ" value={amountOf('OVERTIME') || (item.otBreakdown?.otPay ?? 0)} chevron={showOtLines ? 'chevron-up' : 'chevron-down'} />
+        </Pressable>
+      ) : (
+        <MoneyRow label="Tiền làm thêm giờ" value={amountOf('OVERTIME') || (item.otBreakdown?.otPay ?? 0)} />
+      )}
+      {showOtLines ? otLines.map((l, k) => <SubRow key={k} label={otLabel(l)} value={l.amount} />) : null}
+    </View>
+    <MoneyRow label="Tổng thu nhập" value={item.grossEarnings} strong />
     <View style={styles.divider} />
     <Head>KHẤU TRỪ</Head>
-    {deductions.length === 0 ? <><MoneyRow label="Bảo hiểm" value={-insurance} /><MoneyRow label="Thuế TNCN" value={-item.pitAmount} /></> : deductions.map((d, idx) => <MoneyRow key={idx} label={d.label} value={-d.amount} />)}
-    {item.otherDeductions > 0 ? <MoneyRow label="Khấu trừ khác" value={-item.otherDeductions} /> : null}
+    <MoneyRow label="Bảo hiểm (BHXH + BHYT + BHTN)" value={-insurance} />
+    <SubRow label="BHXH" value={-(item.socialInsurance || 0)} />
+    <SubRow label="BHYT" value={-(item.healthInsurance || 0)} />
+    <SubRow label="BHTN" value={-(item.unemploymentInsurance || 0)} />
+    <MoneyRow label="Thuế TNCN" value={-(item.pitAmount || 0)} />
+    <MoneyRow label="Khấu trừ khác" value={-(item.otherDeductions || 0)} />
     <View style={styles.divider} />
     <Head>THÔNG TIN TÍNH THUẾ</Head>
     <InfoRow label="Thu nhập chịu thuế" value={formatMoney(item.taxableIncome ?? 0)} />
@@ -108,8 +136,14 @@ function PayslipDetail({ item }: { item: Payslip }) {
   </>;
 }
 
-function MoneyRow({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
-  return <View style={styles.moneyRow}><Text style={[styles.moneyLabel, strong && styles.strong]}>{label}</Text><Text style={[styles.moneyValue, value < 0 && styles.negative, strong && styles.strong]}>{formatMoney(value)}</Text></View>;
+function MoneyRow({ label, value, strong, chevron }: { label: string; value: number; strong?: boolean; chevron?: 'chevron-up' | 'chevron-down' }) {
+  return <View style={styles.moneyRow}>
+    <View style={styles.moneyLabelRow}>
+      <Text style={[styles.moneyLabel, strong && styles.strong]}>{label}</Text>
+      {chevron ? <AppIcon name={chevron} size={16} color={colors.muted} /> : null}
+    </View>
+    <Text style={[styles.moneyValue, value < 0 && styles.negative, strong && styles.strong]}>{formatMoney(value)}</Text>
+  </View>;
 }
 
 function statusLabel(status: Payslip['status']) {
@@ -142,6 +176,7 @@ const styles = StyleSheet.create({
   expandHint: { color: colors.primary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   breakdown: { gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
   moneyRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
+  moneyLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   moneyLabel: { color: colors.muted, fontSize: 12 },
   moneyValue: { color: colors.inkSoft, fontSize: 12, fontWeight: '700' },
   negative: { color: colors.dangerText },
