@@ -882,7 +882,7 @@ export async function deactivatePosition(base: string, id: string): Promise<Posi
 
 export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
 
-export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
+export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; periodStatus?: string; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
 export interface EmployeeTimesheetReview extends TimesheetReviewCard {
     projectionHash: string; standardWorkUnits: number; standardWorkMinutes: number; payableWorkUnits: number;
     hasUnresolvedDays: boolean; canAcknowledge: boolean;

@@ -138,3 +138,29 @@ describe('period read access', () => {
     expect(res.status).not.toBe(403);
   });
 });
+
+describe('employee timesheet review of a closed period', () => {
+  it('keeps the closed month listed, readable and read-only', async () => {
+    const periodId = await createReadyPeriod();
+    await http.post(`/api/hr/timesheet-periods/${periodId}/close`).set('Cookie', hrCookie).expect(201);
+
+    const list = await http.get('/api/hr/timesheet-reviews/my').set('Cookie', employeeCookie);
+    expect(list.status).toBe(200);
+    const card = (list.body.data ?? list.body).find((c: any) => c.periodId === periodId);
+    expect(card).toMatchObject({ periodStatus: 'CLOSED' });
+
+    const review = await http.get(`/api/hr/timesheet-periods/${periodId}/my-review`).set('Cookie', employeeCookie);
+    expect(review.status).toBe(200);
+    const body = review.body.data ?? review.body;
+    expect(body.periodStatus).toBe('CLOSED');
+    expect(body.canAcknowledge).toBe(false);
+
+    const ack = await http.post(`/api/hr/timesheet-periods/${periodId}/my-review/acknowledge`).set('Cookie', employeeCookie)
+      .send({ expectedPeriodVersion: body.periodVersion, projectionHash: body.projectionHash });
+    expect(ack.status).toBe(409);
+    expect(ack.body.error.code).toBe('PERIOD_CLOSED');
+    const dispute = await http.post(`/api/hr/timesheet-periods/${periodId}/my-review/dispute`).set('Cookie', employeeCookie)
+      .send({ expectedPeriodVersion: body.periodVersion, projectionHash: body.projectionHash, reason: 'Sai lệch sau khi chốt kỳ' });
+    expect(dispute.status).toBe(409);
+  });
+});

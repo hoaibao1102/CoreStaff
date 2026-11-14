@@ -1,5 +1,5 @@
 export interface EmployeeTimesheetReviewDto {
-  periodId: string; periodKey: string; periodVersion: number; projectionHash: string;
+  periodId: string; periodKey: string; periodVersion: number; periodStatus?: string; projectionHash: string;
   state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED';
   standardWorkUnits: number; standardWorkMinutes?: number; payableWorkUnits: number;
   hasUnresolvedDays: boolean; canAcknowledge: boolean;
@@ -10,13 +10,13 @@ export interface EmployeeTimesheetReviewDto {
 /** Dedicated allowlist: raw documents and unknown keys never cross this boundary. */
 export function mapEmployeeTimesheetReview(input: any): EmployeeTimesheetReviewDto {
   return {
-    periodId: String(input.periodId), periodKey: input.periodKey, periodVersion: input.periodVersion,
+    periodId: String(input.periodId), periodKey: input.periodKey, periodVersion: input.periodVersion, periodStatus: input.periodStatus,
     projectionHash: input.projectionHash, state: input.state,
     standardWorkUnits: Number(input.standardWorkUnits ?? 0),
     standardWorkMinutes: Number(input.standardWorkMinutes ?? 0),
     payableWorkUnits: Number(input.payableWorkUnits ?? 0),
     hasUnresolvedDays: Boolean(input.hasUnresolvedDays),
-    canAcknowledge: !input.hasUnresolvedDays,
+    canAcknowledge: !input.hasUnresolvedDays && input.periodStatus !== 'CLOSED',
     days: (input.days ?? []).map((day: any) => ({
       workDate: day.workDate,
       checkInAt: day.checkInAt ?? null,
