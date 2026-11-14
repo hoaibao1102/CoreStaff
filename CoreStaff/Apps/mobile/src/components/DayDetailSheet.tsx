@@ -88,7 +88,7 @@ export function DayDetailSheet({ day, policy, apiBase, onClose }: { day: Attenda
         <EventCard title="Giờ ra" event={day.checkOut} apiBase={apiBase} onPhoto={setPhoto} />
 
         {day.overtime ? <View style={styles.ot}>
-          <View style={styles.otHead}><AppIcon name="time-outline" size={16} color={colors.info} /><Text style={styles.otTitle}>{day.overtime.status && day.overtime.status !== 'APPROVED' ? 'Đăng ký tăng ca' : 'Tăng ca được duyệt'}</Text><StatusBadge status={day.overtime.status || 'APPROVED'} label={otStatusLabel(day.overtime.status)} tone={day.overtime.status === 'REJECTED' ? 'danger' : day.overtime.status === 'PENDING' ? 'warning' : 'success'} /></View>
+          <View style={styles.otHead}><AppIcon name="time-outline" size={16} color={colors.info} /><Text style={styles.otTitle}>Tăng ca được duyệt</Text><StatusBadge status="APPROVED" label="Đã duyệt" /></View>
           {day.overtime.overtimeType ? <Text style={styles.otText}>Loại: {otTypeLabel(day.overtime.overtimeType)}</Text> : null}
           <Text style={styles.otTime}>{formatTime(day.overtime.approvedStart ?? day.overtime.requestedStart)} → {formatTime(day.overtime.approvedEnd ?? day.overtime.requestedEnd)}{day.overtime.otMinutes ? ` (${formatMinutes(day.overtime.otMinutes)})` : ''}</Text>
           {day.overtime.reason ? <Text style={styles.otText}>Lý do: {day.overtime.reason}</Text> : null}
@@ -104,7 +104,6 @@ export function DayDetailSheet({ day, policy, apiBase, onClose }: { day: Attenda
   </Modal>;
 }
 
-const otStatusLabel = (status?: string) => ({ PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Từ chối', CANCELLED: 'Đã hủy' } as Record<string, string>)[status || 'APPROVED'] || 'Đã duyệt';
 const otTypeLabel = (type: string) => ({ OT_WORKING_DAY: 'Ngày thường', OT_WEEKLY_OFF: 'Ngày nghỉ tuần', OT_PUBLIC_HOLIDAY: 'Ngày lễ' } as Record<string, string>)[type] || type;
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
