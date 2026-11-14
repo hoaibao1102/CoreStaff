@@ -173,6 +173,7 @@ export function mapAttendanceError(code?: string): string {
     DUPLICATE_REQUEST: 'Thao tác đang được xử lý. Vui lòng không bấm nút nhiều lần.',
     RESOURCE_NOT_FOUND: 'Không tìm thấy dữ liệu yêu cầu.',
     AUTH_SESSION_EXPIRED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+    ASSIGNMENT_OVERLAP: 'Bạn có hai phân công cùng ngày bắt đầu nên chưa xác định được nơi làm việc. Vui lòng liên hệ HR.',
   };
 
   return messages[code] || `Lỗi: ${code}`;
