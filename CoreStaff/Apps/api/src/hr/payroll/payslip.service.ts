@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payslip, PayslipDocument, PayslipStatus } from '../../database/schemas/payslip.schema';
@@ -11,6 +11,7 @@ import { OVERTIME_RATES, computeOvertimePay } from '../timesheet/payroll-snapsho
 import { PitService } from './pit.service';
 import { EventsGateway } from '../../events/events.gateway';
 import { earningsKpiBonus } from './payroll-earnings-contract';
+import { buildPayrollRunTransitionCas } from './payroll-artifact-foundation';
 
 type EarningItem = { type: string; label: string; amount: number; taxable: boolean };
 
@@ -346,45 +347,72 @@ export class PayslipService {
   /**
    * Release payslips for a payroll run (send to employees).
    */
-  async releaseForPayrollRun(payrollRunId: string, userId: string): Promise<void> {
-    const payrollRun = await this.payrollRunModel.findOne({
-      _id: new Types.ObjectId(payrollRunId),
-      status: PayrollRunStatus.LOCKED,
-    });
-
-    if (!payrollRun) {
+  async releaseForPayrollRun(organizationId: string, payrollRunId: string, userId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(payrollRunId) || !Types.ObjectId.isValid(organizationId)) {
       throw new BadRequestException('PAYROLL_RUN_NOT_FOUND_OR_NOT_LOCKED');
     }
+    const orgId = new Types.ObjectId(organizationId);
+    const runObjectId = new Types.ObjectId(payrollRunId);
 
-    const releasedPayslips = await this.payslipModel
-      .find({ payrollRunId: new Types.ObjectId(payrollRunId) })
-      .select({ employeeProfileId: 1 })
-      .lean();
-    const profileIds = releasedPayslips.map((row) => row.employeeProfileId);
-    const profiles = profileIds.length
-      ? await this.employeeProfileModel.find({ _id: { $in: profileIds } }).select({ userId: 1 }).lean()
-      : [];
+    // AUD-C08: payslips, run and period flip to RELEASED in one transaction;
+    // the notification goes out only after it commits.
+    const session = await this.payrollRunModel.db.startSession();
+    let userIds: any[] = [];
+    let periodLabel: string | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const payrollRun = await this.payrollRunModel.findOne({
+          _id: runObjectId,
+          organizationId: orgId,
+          status: PayrollRunStatus.LOCKED,
+        }).session(session);
+        if (!payrollRun) {
+          throw new BadRequestException('PAYROLL_RUN_NOT_FOUND_OR_NOT_LOCKED');
+        }
 
-    // Update all payslips to RELEASED
-    await this.payslipModel.updateMany(
-      { payrollRunId: new Types.ObjectId(payrollRunId) },
-      { $set: { status: PayslipStatus.RELEASED, releasedAt: new Date() } }
-    );
+        const releasedPayslips = await this.payslipModel
+          .find({ payrollRunId: runObjectId, organizationId: orgId })
+          .select({ employeeProfileId: 1 })
+          .session(session)
+          .lean();
+        const profileIds = releasedPayslips.map((row) => row.employeeProfileId);
+        const profiles = profileIds.length
+          ? await this.employeeProfileModel.find({ _id: { $in: profileIds } }).select({ userId: 1 }).session(session).lean()
+          : [];
+        userIds = profiles.map((profile) => profile.userId);
+        periodLabel = payrollRun.periodLabel;
 
-    // Update payroll run status
-    await this.payrollRunModel.findByIdAndUpdate(payrollRunId, {
-      $set: { status: PayrollRunStatus.RELEASED },
-    });
-    // Same period claim update as PayrollRunService.release, so the timesheet
-    // period does not keep reporting LOCKED after the Web release button.
-    await this.payrollRunModel.db?.model('TimesheetPeriod').updateOne(
-      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.LOCKED },
-      { $set: { payrollState: PayrollRunStatus.RELEASED } },
-    );
+        await this.payslipModel.updateMany(
+          { payrollRunId: runObjectId, organizationId: orgId },
+          { $set: { status: PayslipStatus.RELEASED, releasedAt: new Date() } },
+          { session },
+        );
+
+        const cas = buildPayrollRunTransitionCas({
+          runId: payrollRunId,
+          organizationId,
+          expectedStatus: PayrollRunStatus.LOCKED,
+          expectedVersion: payrollRun.version,
+          nextStatus: PayrollRunStatus.RELEASED,
+          at: new Date(),
+        });
+        const released = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true, session });
+        if (!released) throw new ConflictException('PAYROLL_RUN_CAS_CONFLICT');
+
+        const periodUpdated = await this.payrollRunModel.db.model('TimesheetPeriod').findOneAndUpdate(
+          { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.LOCKED },
+          { $set: { payrollState: PayrollRunStatus.RELEASED } },
+          { new: true, session },
+        );
+        if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
+      });
+    } finally {
+      await session.endSession();
+    }
 
     this.eventsGateway?.notifyPayslipReleased(
-      profiles.map((profile) => profile.userId),
-      { payrollRunId, periodLabel: payrollRun.periodLabel, status: PayslipStatus.RELEASED },
+      userIds,
+      { payrollRunId, periodLabel, status: PayslipStatus.RELEASED },
     );
   }
 
@@ -472,17 +500,32 @@ export class PayslipService {
   }
 
   /**
+   * A run id from another tenant must be indistinguishable from an unknown id.
+   */
+  private async assertRunInTenant(organizationId: string, payrollRunId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(payrollRunId) || !Types.ObjectId.isValid(organizationId)) {
+      throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+    }
+    const exists = await this.payrollRunModel.exists({
+      _id: new Types.ObjectId(payrollRunId),
+      organizationId: new Types.ObjectId(organizationId),
+    });
+    if (!exists) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+  }
+
+  /**
    * Get payslips summary for payroll run dashboard.
    */
-  async getSummary(payrollRunId: string): Promise<{
+  async getSummary(organizationId: string, payrollRunId: string): Promise<{
     total: number;
     generated: number;
     released: number;
     viewed: number;
     draft: number;
   }> {
+    await this.assertRunInTenant(organizationId, payrollRunId);
     const counts = await this.payslipModel.aggregate([
-      { $match: { payrollRunId: new Types.ObjectId(payrollRunId) } },
+      { $match: { payrollRunId: new Types.ObjectId(payrollRunId), organizationId: new Types.ObjectId(organizationId) } },
       {
         $group: {
           _id: '$status',
@@ -523,9 +566,10 @@ export class PayslipService {
   /**
    * List all payslips for a payroll run (HR view).
    */
-  async findByPayrollRun(payrollRunId: string): Promise<any[]> {
+  async findByPayrollRun(organizationId: string, payrollRunId: string): Promise<any[]> {
+    await this.assertRunInTenant(organizationId, payrollRunId);
     return this.payslipModel
-      .find({ payrollRunId: new Types.ObjectId(payrollRunId) })
+      .find({ payrollRunId: new Types.ObjectId(payrollRunId), organizationId: new Types.ObjectId(organizationId) })
       .sort({ employeeName: 1 })
       .lean();
   }

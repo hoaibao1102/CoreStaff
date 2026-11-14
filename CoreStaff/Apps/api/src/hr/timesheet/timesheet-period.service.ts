@@ -811,6 +811,18 @@ export class TimesheetPeriodService {
 	): Promise<any> {
 		const period = await this.findById(organizationId, id);
 
+		// Entering or leaving CLOSED carries financial side effects (summaries,
+		// payroll snapshots, version bump, reason). Only /close and /reopen may
+		// do that; this generic endpoint must never short-circuit them.
+		if (
+			newStatus === TimesheetPeriodStatus.CLOSED ||
+			period.status === TimesheetPeriodStatus.CLOSED
+		) {
+			throw new BadRequestException(
+				'USE_CLOSE_OR_REOPEN_WORKFLOW: CLOSED transitions are only allowed via /close and /reopen',
+			);
+		}
+
 		// Validate transition
 		const statusKey = period.status as TimesheetPeriodStatus;
 		const allowed = VALID_TRANSITIONS[statusKey];
@@ -830,21 +842,21 @@ export class TimesheetPeriodService {
 			);
 		}
 
-		const patch: Record<string, unknown> = { status: newStatus };
-
-		// Track close metadata
-		if (newStatus === TimesheetPeriodStatus.CLOSED) {
-			patch.closedBy = userId;
-			patch.closedAt = new Date();
-		}
-
-		const doc = await this.periodModel.findByIdAndUpdate(
-			id,
-			{ $set: patch },
+		// Tenant-scoped compare-and-set on status+version so a concurrent
+		// close/reopen/bump cannot be overwritten by a stale read.
+		const doc = await this.periodModel.findOneAndUpdate(
+			{
+				_id: id,
+				organizationId,
+				active: true,
+				status: period.status,
+				version: period.version,
+			},
+			{ $set: { status: newStatus } },
 			{ new: true, runValidators: true },
 		).lean();
 
-		if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+		if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 		return this.toResponse(doc);
 	}
 

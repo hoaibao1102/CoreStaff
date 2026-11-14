@@ -209,9 +209,9 @@ async function closeAndPay(demo: DemoApp, people: People, periodKey: string) {
     say('✓ Tạo bảng lương (DRAFT)');
   }
   const runId = String(run._id);
-  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'DRAFT') { await demo.payrollRuns.calculate(runId, people.hr); say('✓ Tính lương (CALCULATED)'); }
-  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'CALCULATED') { await demo.payrollRuns.lock(runId, people.hr); say('✓ Khóa bảng lương (LOCKED)'); }
-  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'LOCKED') { await demo.payslips.releaseForPayrollRun(runId, people.hr); say('✓ Phát hành phiếu lương (RELEASED)'); }
+  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'DRAFT') { await demo.payrollRuns.calculate(people.org, runId, people.hr); say('✓ Tính lương (CALCULATED)'); }
+  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'CALCULATED') { await demo.payrollRuns.lock(people.org, runId, people.hr); say('✓ Khóa bảng lương (LOCKED)'); }
+  if ((await demo.model('PayrollRun').findById(runId).lean() as any).status === 'LOCKED') { await demo.payslips.releaseForPayrollRun(people.org, runId, people.hr); say('✓ Phát hành phiếu lương (RELEASED)'); }
 }
 
 export async function runDemoFlow(demo: DemoApp, options: FlowOptions) {

@@ -12,7 +12,7 @@
 import './env-guard';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { clearDatabase, createTestApp, TestApp } from './app-factory';
-import { Fixture, seedTenant, cookieFor, vnToday } from './fixtures';
+import { Fixture, seedTenant, cookieFor, vnToday, collection } from './fixtures';
 
 type Http = ReturnType<TestApp['http']>;
 
@@ -53,6 +53,18 @@ function periodStarting(offsetDays: number) {
   end.setUTCDate(end.getUTCDate() + 30);
   const startDate = start.toISOString().slice(0, 10);
   return createPeriodBody(startDate.slice(0, 7), startDate, end.toISOString().slice(0, 10));
+}
+
+/**
+ * Setup shortcut: put a period in CLOSED directly in the database. The generic
+ * PATCH /status endpoint must not close periods (AUD-C01); the authoritative
+ * path is exercised in close-period.integration.spec.ts.
+ */
+async function forceClosed(periodId: string) {
+  await collection('TimesheetPeriod').updateOne(
+    { _id: periodId as any },
+    { $set: { status: 'CLOSED', closedAt: new Date() } },
+  );
 }
 
 const validPeriod = () => periodStarting(0);
@@ -136,15 +148,7 @@ describe('TASK-072 — Create Period Validations', () => {
     const periodId = createRes.body.data._id;
 
     // Transition to CLOSED
-    await http.patch(`${API_PREFIX}/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
-    await http.patch(`${API_PREFIX}/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'READY_TO_CLOSE' });
-    await http.patch(`${API_PREFIX}/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'CLOSED' });
+    await forceClosed(periodId);
 
     // Now should be able to create next month
     const res = await http.post(API_PREFIX)
@@ -189,7 +193,7 @@ describe('TASK-072 — State Machine Transitions', () => {
     expect(res.body.data.status).toBe('READY_TO_CLOSE');
   });
 
-  it('should transition READY_TO_CLOSE → CLOSED', async () => {
+  it('should reject READY_TO_CLOSE → CLOSED on the generic status endpoint (AUD-C01)', async () => {
     await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
       .set('Cookie', hrCookie)
       .send({ status: 'REVIEWING' });
@@ -201,48 +205,35 @@ describe('TASK-072 — State Machine Transitions', () => {
       .set('Cookie', hrCookie)
       .send({ status: 'CLOSED' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe('CLOSED');
-    expect(res.body.data.closedBy).toBeDefined();
-    expect(res.body.data.closedAt).toBeDefined();
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('USE_CLOSE_OR_REOPEN_WORKFLOW');
+    const stored: any = await collection('TimesheetPeriod').findOne({ _id: periodId as any }).lean();
+    expect(stored.status).toBe('READY_TO_CLOSE');
+    expect(stored.closedAt).toBeUndefined();
   });
 
   it('should reject invalid transition CLOSED → OPEN', async () => {
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'READY_TO_CLOSE' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'CLOSED' });
+    await forceClosed(periodId);
 
     const res = await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
       .set('Cookie', hrCookie)
       .send({ status: 'OPEN' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_TRANSITION');
+    expect(res.body.error.code).toBe('USE_CLOSE_OR_REOPEN_WORKFLOW');
   });
 
-  it('should allow CLOSED → REVIEWING (reopen via status update)', async () => {
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'READY_TO_CLOSE' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'CLOSED' });
+  it('should reject CLOSED → REVIEWING on the generic status endpoint; reopen requires /reopen (AUD-C01)', async () => {
+    await forceClosed(periodId);
 
     const res = await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
       .set('Cookie', hrCookie)
       .send({ status: 'REVIEWING' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe('REVIEWING');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('USE_CLOSE_OR_REOPEN_WORKFLOW');
+    const stored: any = await collection('TimesheetPeriod').findOne({ _id: periodId as any }).lean();
+    expect(stored.status).toBe('CLOSED');
   });
 });
 
@@ -258,15 +249,7 @@ describe('TASK-072 — Reopen Closed Period', () => {
     periodId = res.body.data._id;
 
     // Close it
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'REVIEWING' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'READY_TO_CLOSE' });
-    await http.patch(`/api/hr/timesheet-periods/${periodId}/status`)
-      .set('Cookie', hrCookie)
-      .send({ status: 'CLOSED' });
+    await forceClosed(periodId);
   });
 
   it('should reopen with version increment', async () => {

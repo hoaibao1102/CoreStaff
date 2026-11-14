@@ -210,3 +210,63 @@ describe('PeriodVersionService.bumpForEffectiveWindow', () => {
     expect(filters[0].endDate).toEqual({ $gte: new Date('2026-10-01T00:00:00.000Z') });
   });
 });
+
+describe('PeriodVersionService.claimForWorkDates (AUD-C05)', () => {
+  const session = { inTransaction: () => true } as any;
+  function setup(rowsByDate: Record<string, any[]>, modifiedCount = 1) {
+    const writes: any[] = [];
+    const model = {
+      find: (filter: any) => ({
+        session: () => ({ lean: async () => rowsByDate[filter.startDate.$lte.toISOString().slice(0, 10)] ?? [] }),
+      }),
+      updateOne: async (filter: any, update: any, options: any) => {
+        writes.push({ filter, update, options });
+        return { modifiedCount };
+      },
+    };
+    return { service: new PeriodVersionService(model as any), writes };
+  }
+  const open = { _id: PERIOD, version: 4, status: 'READY_TO_CLOSE' };
+
+  it('rejects a CLOSED period and writes nothing', async () => {
+    const { service, writes } = setup({ '2026-10-05': [{ ...open, status: 'CLOSED' }] });
+    await expect(service.claimForWorkDates(ORG, ['2026-10-05'], session)).rejects.toThrow('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('rejects a payroll-claimed period even when its status is not CLOSED', async () => {
+    const { service, writes } = setup({ '2026-10-05': [{ ...open, status: 'REVIEWING', payrollRunId: 'run-1' }] });
+    await expect(service.claimForWorkDates(ORG, ['2026-10-05'], session)).rejects.toThrow('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('rejects the whole range when any one date falls in a closed period, before bumping the open one', async () => {
+    const { service, writes } = setup({
+      '2026-10-31': [open],
+      '2026-11-01': [{ _id: 'p2', version: 1, status: 'CLOSED' }],
+    });
+    await expect(service.claimForWorkDates(ORG, ['2026-10-31', '2026-11-01'], session)).rejects.toThrow('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('bumps each distinct open period once with a status+version compare-and-set', async () => {
+    const { service, writes } = setup({ '2026-10-05': [open], '2026-10-06': [open] });
+    await expect(service.claimForWorkDates(ORG, ['2026-10-05', '2026-10-06'], session)).resolves.toBe(1);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].filter).toMatchObject({ version: 4, status: 'READY_TO_CLOSE', payrollRunId: { $exists: false } });
+    expect(writes[0].update.$inc).toEqual({ version: 1 });
+    expect(writes[0].options.session).toBe(session);
+  });
+
+  it('throws PERIOD_VERSION_CONFLICT when a concurrent close wins the compare-and-set', async () => {
+    const { service } = setup({ '2026-10-05': [open] }, 0);
+    await expect(service.claimForWorkDates(ORG, ['2026-10-05'], session)).rejects.toThrow('PERIOD_VERSION_CONFLICT');
+  });
+
+  it('allows dates with no covering period and requires a transaction', async () => {
+    const { service, writes } = setup({});
+    await expect(service.claimForWorkDates(ORG, ['2027-01-05'], session)).resolves.toBe(0);
+    expect(writes).toHaveLength(0);
+    await expect(service.claimForWorkDates(ORG, ['2026-10-05'], { inTransaction: () => false } as any)).rejects.toThrow('TRANSACTION_REQUIRED');
+  });
+});

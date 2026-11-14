@@ -45,7 +45,7 @@ export class PayrollRunController {
   @Roles('HR')
   @ApiOperation({ summary: 'Calculate payroll for all employees' })
   async calculate(@CurrentUser() user: any, @Param('id') id: string) {
-    const result = await this.payrollRunService.calculate(id, user.id);
+    const result = await this.payrollRunService.calculate(user.organizationId, id, user.id);
     return { success: true, data: result };
   }
 
@@ -53,7 +53,7 @@ export class PayrollRunController {
   @Roles('HR')
   @ApiOperation({ summary: 'Recalculate an unpublished calculated payroll run' })
   async recalculate(@CurrentUser() user: any, @Param('id') id: string) {
-    const result = await this.payrollRunService.recalculate(id, user.id);
+    const result = await this.payrollRunService.recalculate(user.organizationId, id, user.id);
     return { success: true, data: result };
   }
 
@@ -61,7 +61,7 @@ export class PayrollRunController {
   @Roles('HR')
   @ApiOperation({ summary: 'Lock a calculated payroll run' })
   async lock(@CurrentUser() user: any, @Param('id') id: string) {
-    const run = await this.payrollRunService.lock(id, user.id);
+    const run = await this.payrollRunService.lock(user.organizationId, id, user.id);
     return { success: true, data: run };
   }
 
@@ -69,7 +69,7 @@ export class PayrollRunController {
   @Roles('HR')
   @ApiOperation({ summary: 'Release locked payroll run to employees' })
   async release(@CurrentUser() user: any, @Param('id') id: string) {
-    const run = await this.payrollRunService.release(id, user.id);
+    const run = await this.payrollRunService.release(user.organizationId, id, user.id);
     return { success: true, data: run };
   }
 }

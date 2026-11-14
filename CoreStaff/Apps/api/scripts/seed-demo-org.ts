@@ -666,10 +666,10 @@ function buildTimeline(ctx: Ctx): Action[] {
   push(vn('2026-10-05', '10:00'), `HR tạo & tính bảng lương ${HISTORY_PERIOD}`, async () => {
     const run: any = await ctx.demo.payrollRuns.create({ organizationId: ctx.org, timesheetPeriodId: historyId(), notes: 'Bảng lương tháng 09/2026', userId: hr() });
     ctx.ids.set('run|history', String(run._id));
-    await ctx.demo.payrollRuns.calculate(String(run._id), hr());
+    await ctx.demo.payrollRuns.calculate(ctx.org, String(run._id), hr());
   });
-  push(vn('2026-10-06', '14:30'), `HR khóa bảng lương ${HISTORY_PERIOD}`, () => ctx.demo.payrollRuns.lock(ctx.ids.get('run|history')!, hr()));
-  push(vn('2026-10-09', '16:00'), `HR phát hành phiếu lương ${HISTORY_PERIOD}`, () => ctx.demo.payslips.releaseForPayrollRun(ctx.ids.get('run|history')!, hr()));
+  push(vn('2026-10-06', '14:30'), `HR khóa bảng lương ${HISTORY_PERIOD}`, () => ctx.demo.payrollRuns.lock(ctx.org, ctx.ids.get('run|history')!, hr()));
+  push(vn('2026-10-09', '16:00'), `HR phát hành phiếu lương ${HISTORY_PERIOD}`, () => ctx.demo.payslips.releaseForPayrollRun(ctx.org, ctx.ids.get('run|history')!, hr()));
 
   return actions.sort((a, b) => a.when.getTime() - b.when.getTime());
 }

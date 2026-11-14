@@ -882,9 +882,9 @@ async function main() {
       userId: payrollUserId,
     });
     const runId = String(run._id);
-    const calculated = await payrollRunService.calculate(runId, payrollUserId);
-    await payrollRunService.lock(runId, payrollUserId);
-    await payslipService.releaseForPayrollRun(runId, payrollUserId);
+    const calculated = await payrollRunService.calculate(String(organizationId), runId, payrollUserId);
+    await payrollRunService.lock(String(organizationId), runId, payrollUserId);
+    await payslipService.releaseForPayrollRun(String(organizationId), runId, payrollUserId);
 
     mark('TimesheetSummary', 'created');
     mark('PayrollInputSnapshot', 'created');

@@ -95,38 +95,49 @@ export class PayrollRunService {
       expectedPeriodVersion: period.version,
       runId: String(runId),
     });
-    const claimed = await this.periodModel.findOneAndUpdate(
-      claim.filter,
-      claim.update,
-      { new: true, runValidators: true },
-    );
-    if (!claimed) throw new ConflictException('PAYROLL_PERIOD_CLAIM_CONFLICT');
+    // AUD-C07: the period claim and the PayrollRun insert commit together. A
+    // failure between them used to leave a dangling payrollRunId on the period.
+    const session = await this.payrollRunModel.db.startSession();
+    let payrollRun: any;
+    try {
+      await session.withTransaction(async () => {
+        const claimed = await this.periodModel.findOneAndUpdate(
+          claim.filter,
+          claim.update,
+          { new: true, runValidators: true, session },
+        );
+        if (!claimed) throw new ConflictException('PAYROLL_PERIOD_CLAIM_CONFLICT');
 
-    const runSequence = await this.payrollRunModel.countDocuments({
-      organizationId: new Types.ObjectId(organizationId),
-      timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
-    }) + 1;
-    const payrollRun = await this.payrollRunModel.create({
-      _id: runId,
-      organizationId: new Types.ObjectId(organizationId),
-      timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
-      periodLabel,
-      status: PayrollRunStatus.DRAFT,
-      runDate: new Date(),
-      totalGross: 0,
-      totalNet: 0,
-      totalEmployerCost: 0,
-      processedEmployeeCount: 0,
-      totalEmployeeCount,
-      schemaVersion: 1,
-      sourcePeriodVersion: period.version,
-      sourceSnapshotIds,
-      sourceSnapshotSetHash,
-      runSequence,
-      notes,
-      version: 1,
-      active: true,
-    });
+        const runSequence = await this.payrollRunModel.countDocuments({
+          organizationId: new Types.ObjectId(organizationId),
+          timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
+        }, { session }) + 1;
+        const [created] = await this.payrollRunModel.create([{
+          _id: runId,
+          organizationId: new Types.ObjectId(organizationId),
+          timesheetPeriodId: new Types.ObjectId(timesheetPeriodId),
+          periodLabel,
+          status: PayrollRunStatus.DRAFT,
+          runDate: new Date(),
+          totalGross: 0,
+          totalNet: 0,
+          totalEmployerCost: 0,
+          processedEmployeeCount: 0,
+          totalEmployeeCount,
+          schemaVersion: 1,
+          sourcePeriodVersion: period.version,
+          sourceSnapshotIds,
+          sourceSnapshotSetHash,
+          runSequence,
+          notes,
+          version: 1,
+          active: true,
+        }], { session });
+        payrollRun = created;
+      });
+    } finally {
+      await session.endSession();
+    }
 
     return this.toResponse(payrollRun.toObject());
   }
@@ -181,13 +192,13 @@ export class PayrollRunService {
    * Calculate payroll for all employees in a payroll run.
    * This is the core calculation step that reads from PayrollInputSnapshots.
    */
-  async calculate(payrollRunId: string, userId: string): Promise<{
+  async calculate(organizationId: string, payrollRunId: string, userId: string): Promise<{
     payrollRun: any;
     employeesProcessed: number;
     totalGross: number;
     totalNet: number;
   }> {
-    const payrollRun = await this.findOneRaw(payrollRunId);
+    const payrollRun = await this.findOneRaw(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -277,7 +288,7 @@ export class PayrollRunService {
     if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
 
     return {
-      payrollRun: await this.findOneRaw(payrollRunId),
+      payrollRun: await this.findOneRaw(organizationId, payrollRunId),
       employeesProcessed: processedCount,
       totalGross,
       totalNet,
@@ -288,13 +299,13 @@ export class PayrollRunService {
    * Recalculate an unpublished run from its frozen payroll input snapshots.
    * Locked and released runs remain immutable.
    */
-  async recalculate(payrollRunId: string, userId: string): Promise<{
+  async recalculate(organizationId: string, payrollRunId: string, userId: string): Promise<{
     payrollRun: any;
     employeesProcessed: number;
     totalGross: number;
     totalNet: number;
   }> {
-    const payrollRun = await this.findOneRaw(payrollRunId);
+    const payrollRun = await this.findOneRaw(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -323,15 +334,15 @@ export class PayrollRunService {
       { new: true },
     );
 
-    return this.calculate(payrollRunId, userId);
+    return this.calculate(organizationId, payrollRunId, userId);
   }
 
 
   /**
    * Lock a calculated payroll run (immutable).
    */
-  async lock(payrollRunId: string, userId: string): Promise<any> {
-    const payrollRun = await this.findOneRaw(payrollRunId);
+  async lock(organizationId: string, payrollRunId: string, userId: string): Promise<any> {
+    const payrollRun = await this.findOneRaw(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -344,23 +355,32 @@ export class PayrollRunService {
     const cas = buildPayrollRunTransitionCas({ runId: payrollRunId, organizationId: String(payrollRun.organizationId), expectedStatus: PayrollRunStatus.CALCULATED, expectedVersion: payrollRun.version, nextStatus: PayrollRunStatus.LOCKED, at: new Date() });
     cas.update.$set.lockedBy = new Types.ObjectId(userId);
     cas.update.$set.lockedAt = new Date();
-    const locked = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true });
 
-    if (!locked) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
-    const periodUpdated = await this.periodModel.findOneAndUpdate(
-      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.CALCULATED },
-      { $set: { payrollState: PayrollRunStatus.LOCKED } },
-      { new: true },
-    );
-    if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
+    // AUD-C08: run and period move to LOCKED together or not at all.
+    const session = await this.payrollRunModel.db.startSession();
+    let locked: any;
+    try {
+      await session.withTransaction(async () => {
+        locked = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true, session });
+        if (!locked) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+        const periodUpdated = await this.periodModel.findOneAndUpdate(
+          { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.CALCULATED },
+          { $set: { payrollState: PayrollRunStatus.LOCKED } },
+          { new: true, session },
+        );
+        if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
+      });
+    } finally {
+      await session.endSession();
+    }
     return this.toResponse(locked.toObject());
   }
 
   /**
    * Release a locked payroll run (send payslips to employees).
    */
-  async release(payrollRunId: string, userId: string): Promise<any> {
-    const payrollRun = await this.findOneRaw(payrollRunId);
+  async release(organizationId: string, payrollRunId: string, userId: string): Promise<any> {
+    const payrollRun = await this.findOneRaw(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -370,20 +390,12 @@ export class PayrollRunService {
       throw new BadRequestException('CANNOT_RELEASE_NON_LOCKED');
     }
 
-    const cas = buildPayrollRunTransitionCas({ runId: payrollRunId, organizationId: String(payrollRun.organizationId), expectedStatus: PayrollRunStatus.LOCKED, expectedVersion: payrollRun.version, nextStatus: PayrollRunStatus.RELEASED, at: new Date() });
-    const released = await this.payrollRunModel.findOneAndUpdate(cas.filter, cas.update, { new: true });
-
-    // TODO: Send notifications to employees
-    // await this.notificationService.sendPayslipNotifications(payrollRunId);
-
+    // AUD-C08: one transactional orchestration (payslips + run + period). The
+    // previous copy here flipped the run and period but left payslips GENERATED.
+    await this.payslipService.releaseForPayrollRun(organizationId, payrollRunId, userId);
+    const released = await this.findOneRaw(organizationId, payrollRunId);
     if (!released) throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
-    const periodUpdated = await this.periodModel.findOneAndUpdate(
-      { _id: payrollRun.timesheetPeriodId, payrollRunId: payrollRun._id, payrollState: PayrollRunStatus.LOCKED },
-      { $set: { payrollState: PayrollRunStatus.RELEASED } },
-      { new: true },
-    );
-    if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
-    return this.toResponse(released.toObject());
+    return this.toResponse(released);
   }
 
   /**
@@ -451,8 +463,18 @@ export class PayrollRunService {
 
   // ── Private helpers ────────────────────────────────────────────────────
 
-  private async findOneRaw(id: string): Promise<any> {
-    return this.payrollRunModel.findById(new Types.ObjectId(id)).lean();
+  /**
+   * Tenant-scoped lookup. A run id from another tenant is indistinguishable
+   * from an unknown id (callers throw PAYROLL_RUN_NOT_FOUND on null).
+   */
+  private async findOneRaw(organizationId: string, id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(organizationId)) return null;
+    return this.payrollRunModel
+      .findOne({
+        _id: new Types.ObjectId(id),
+        organizationId: new Types.ObjectId(organizationId),
+      })
+      .lean();
   }
 
   private toResponse(doc: any): any {

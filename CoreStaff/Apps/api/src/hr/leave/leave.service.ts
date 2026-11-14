@@ -189,7 +189,7 @@ export class LeaveService {
           afterData: { status: next, reviewedBy: managerId, reviewedAt },
         }], { session });
         if (approve) {
-          await this.periodVersion.bumpForWorkDates(org, enumerateDates(old.startDate, old.endDate), session);
+          await this.periodVersion.claimForWorkDates(org, enumerateDates(old.startDate, old.endDate), session);
         }
         decided = row;
         employeeId = String(old.employeeId);
@@ -271,7 +271,7 @@ export class LeaveService {
           );
         }
         // TASK-073 — applying leave changes in-period data: bump version + drop old confirmations.
-        await this.periodVersion.bumpForWorkDates(org, dates, session);
+        await this.periodVersion.claimForWorkDates(org, dates, session);
         const row = await this.requests.findOneAndUpdate(
           { _id: id, organizationId: org, status: LeaveRequestStatus.APPROVED },
           { $set: { status: LeaveRequestStatus.HR_APPLIED, appliedBy: hrId, appliedAt: new Date() } },

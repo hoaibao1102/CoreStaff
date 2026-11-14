@@ -21,11 +21,24 @@ export class PayrollExportService {
     @InjectModel('Position') private readonly positionModel: Model<PositionDocument>,
   ) {}
 
+  /** Tenant-scoped run lookup; a foreign run id behaves like an unknown id (404). */
+  private async findRunInTenant(organizationId: string, payrollRunId: string): Promise<any> {
+    if (!Types.ObjectId.isValid(payrollRunId) || !Types.ObjectId.isValid(organizationId)) {
+      throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
+    }
+    return this.payrollRunModel
+      .findOne({
+        _id: new Types.ObjectId(payrollRunId),
+        organizationId: new Types.ObjectId(organizationId),
+      })
+      .lean();
+  }
+
   /**
    * Verify the payroll run exists and is in an exportable state.
    */
-  private async assertExportable(payrollRunId: string): Promise<void> {
-    const payrollRun = await this.payrollRunModel.findById(payrollRunId).lean();
+  private async assertExportable(organizationId: string, payrollRunId: string): Promise<void> {
+    const payrollRun = await this.findRunInTenant(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -39,8 +52,8 @@ export class PayrollExportService {
   /**
    * Export payslips as Excel (.xlsx) for a payroll run.
    */
-  async exportExcel(payrollRunId: string): Promise<{ buffer: Buffer; periodLabel: string }> {
-    const payrollRun = await this.payrollRunModel.findById(payrollRunId).lean();
+  async exportExcel(organizationId: string, payrollRunId: string): Promise<{ buffer: Buffer; periodLabel: string }> {
+    const payrollRun = await this.findRunInTenant(organizationId, payrollRunId);
 
     if (!payrollRun) {
       throw new NotFoundException('PAYROLL_RUN_NOT_FOUND');
@@ -51,7 +64,7 @@ export class PayrollExportService {
     }
 
     const payslips = await this.payslipModel
-      .find({ payrollRunId: new Types.ObjectId(payrollRunId) })
+      .find({ payrollRunId: new Types.ObjectId(payrollRunId), organizationId: new Types.ObjectId(organizationId) })
       .sort({ employeeName: 1 })
       .lean();
 
@@ -159,11 +172,11 @@ export class PayrollExportService {
   /**
    * Export payslips as CSV for a payroll run.
    */
-  async exportCSV(payrollRunId: string): Promise<string> {
-    await this.assertExportable(payrollRunId);
+  async exportCSV(organizationId: string, payrollRunId: string): Promise<string> {
+    await this.assertExportable(organizationId, payrollRunId);
 
     const payslips = await this.payslipModel
-      .find({ payrollRunId: new Types.ObjectId(payrollRunId) })
+      .find({ payrollRunId: new Types.ObjectId(payrollRunId), organizationId: new Types.ObjectId(organizationId) })
       .sort({ employeeName: 1 })
       .lean();
 
@@ -205,11 +218,11 @@ export class PayrollExportService {
   /**
    * Export summary totals for a payroll run.
    */
-  async exportSummaryCSV(payrollRunId: string): Promise<string> {
-    await this.assertExportable(payrollRunId);
+  async exportSummaryCSV(organizationId: string, payrollRunId: string): Promise<string> {
+    await this.assertExportable(organizationId, payrollRunId);
 
     const aggregation = await this.payslipModel.aggregate([
-      { $match: { payrollRunId: new Types.ObjectId(payrollRunId) } },
+      { $match: { payrollRunId: new Types.ObjectId(payrollRunId), organizationId: new Types.ObjectId(organizationId) } },
       {
         $group: {
           _id: null,
