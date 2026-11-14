@@ -68,8 +68,15 @@ export function calculateDayWorkCredit(
   historyStatus: AttendanceHistoryStatus,
   policy?: WorkCreditPolicyInfo | null,
 ): DayWorkCreditDetail {
-  const obligationMinutes = day.attendanceRequirements?.requiredWorkingMinutes ?? 480;
-  const leaveMinutes = day.attendanceRequirements?.approvedLeaveMinutes ?? 0;
+  // Nghỉ nửa buổi/theo giờ: server vẫn gắn workdayType = loại nghỉ, nhưng ngày còn một
+  // phần phải làm. Nghĩa vụ cả ngày = phần còn phải làm + phần được nghỉ, và chỉ nghỉ
+  // có lương mới cộng vào công.
+  const partialLeave = hasPartialDayLeave(day);
+  const requiredMinutes = day.attendanceRequirements?.requiredWorkingMinutes ?? 480;
+  const approvedLeave = day.attendanceRequirements?.approvedLeaveMinutes ?? 0;
+  const leaveTypes = day.attendanceRequirements?.leaveTypes ?? [];
+  const obligationMinutes = partialLeave ? requiredMinutes + approvedLeave : requiredMinutes;
+  const leaveMinutes = leaveTypes.length && !leaveTypes.includes('PAID_LEAVE') ? 0 : approvedLeave;
   let workedMinutes = day.totalWorkingMinutes ?? day.workingMinutes ?? 0;
 
   if (historyStatus === 'FORFEITED') {
@@ -127,7 +134,7 @@ export function calculateDayWorkCredit(
   }
 
   // 3. Nghỉ phép có lương
-  if (day.workdayType === 'PAID_LEAVE') {
+  if (day.workdayType === 'PAID_LEAVE' && !partialLeave) {
     return {
       credit: 1,
       label: '1.0 công',
@@ -143,7 +150,7 @@ export function calculateDayWorkCredit(
   }
 
   // 4. Nghỉ không lương
-  if (day.workdayType === 'UNPAID_LEAVE') {
+  if (day.workdayType === 'UNPAID_LEAVE' && !partialLeave) {
     return {
       credit: 0,
       label: '0 công',
