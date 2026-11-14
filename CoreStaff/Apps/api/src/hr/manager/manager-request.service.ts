@@ -421,8 +421,12 @@ export class ManagerRequestService {
     if ((status === 'REJECTED' || status === 'CLARIFICATION_REQUESTED') && (!reason || reason.trim().length < 10)) {
       throw new ConflictException('REVIEW_REASON_REQUIRED');
     }
-    if (current.type === 'OVERTIME' && status === 'APPROVED' && approvedStart && approvedEnd && new Date(approvedStart) >= new Date(approvedEnd)) {
-      throw new ConflictException('OVERTIME_WINDOW_INVALID');
+    // AUD-M01: an approved window is both endpoints or neither (neither = approve as requested).
+    // A lone endpoint used to be stored and left the interval half-defined.
+    if (current.type === 'OVERTIME' && status === 'APPROVED' && (approvedStart || approvedEnd)) {
+      if (!approvedStart || !approvedEnd || !(new Date(approvedStart) < new Date(approvedEnd))) {
+        throw new ConflictException('OVERTIME_WINDOW_INVALID');
+      }
     }
     if (current.type === 'ATTENDANCE' && this.requests.db) {
       return this.decideAttendance(org, managerId, id, status, expectedVersion, reason, current);

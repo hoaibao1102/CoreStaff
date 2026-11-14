@@ -51,6 +51,17 @@ function fakeOt(overrides:Record<string,any>={}):any{
  };
 }
 describe('ManagerRequestService',()=>{
+ it.each([
+  ['start only',{approvedStart:'2026-09-14T11:00:00.000Z'}],
+  ['end only',{approvedEnd:'2026-09-14T13:00:00.000Z'}],
+  ['reversed',{approvedStart:'2026-09-14T13:00:00.000Z',approvedEnd:'2026-09-14T11:00:00.000Z'}],
+  ['empty window',{approvedStart:'2026-09-14T11:00:00.000Z',approvedEnd:'2026-09-14T11:00:00.000Z'}],
+ ])('rejects an OT approval with an incomplete or invalid approved window (AUD-M01): %s',async(_name,window:any)=>{
+  const row:any={_id:'ot',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',type:'OVERTIME',status:'PENDING',version:1,workDate:new Date('2026-09-14')};
+  const s=build([row]);
+  await expect(s.decide('o1','manager','ot','APPROVED',1,undefined,window.approvedStart,window.approvedEnd)).rejects.toThrow('OVERTIME_WINDOW_INVALID');
+  expect(row.status).toBe('PENDING');
+ });
  it('blocks legacy SELFIE approval in locked period before request decision',async()=>{
   const row={_id:'r',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',type:'ATTENDANCE',status:'PENDING',version:1,workDate:new Date('2026-09-14'),attendanceDayId:'day',metadata:{actionType:'CHECK_IN'}};
   const s=build([row]);
