@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { ClientSession, Types } from 'mongoose';
 import { buildPeriodObligationProjection } from '../timesheet/period-obligation.service';
@@ -32,6 +32,8 @@ export class AttendanceConfirmationService {
         const current=await read(m.requests.findOne({_id:id,organizationId:org,source:'ATTENDANCE_CONFIRMATION'}),session);
         if(!current)throw new ConflictException('REQUEST_NOT_FOUND');
         const isSelfApproved = String(current.employeeUserId) === managerId;
+        // SRS BR-SELF-APPROVAL-01: no self-decision, rejected before any write.
+        if (isSelfApproved) throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
         const auditNote = isSelfApproved ? 'Quản lý tự duyệt (Self-approved) - Lưu vết kiểm toán cho HR hậu kiểm' : undefined;
         await m.scope.requireReviewDepartment(org,managerId,String(current.departmentId));
         if(current.confirmationDecision?.operationId===operationId){if(current.confirmationDecision.operationHash!==operationHash)throw new ConflictException('REQUEST_STATE_CHANGED');result=current;return;}

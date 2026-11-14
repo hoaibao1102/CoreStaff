@@ -408,6 +408,9 @@ export class ManagerRequestService {
       (current.employeeId?._id ?? current.employeeId)
     );
     const isSelfApproved = currentEmpUserId === String(managerId);
+    // SRS BR-SELF-APPROVAL-01 / AC-SELF-APPROVAL-01: a manager or HR user can never
+    // decide a request whose employee is themselves. Rejected before any write.
+    if (isSelfApproved) throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
     const selfApprovalAudit = isSelfApproved
       ? {
           isSelfApproved: true,
