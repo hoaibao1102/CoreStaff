@@ -1,10 +1,18 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/http-exception.filter';
+import { isOriginAllowed, originGate } from './common/origin-policy';
 
 /** Shared HTTP config for local `listen()` and the Vercel serverless handler. */
 export function configureApp(app: INestApplication): void {
-  app.enableCors({ origin: true, credentials: true });
+  // AUD-C09: exact allowlist (CORS_ORIGINS) instead of reflecting every Origin
+  // with credentials, plus an origin gate for unsafe methods.
+  app.enableCors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) =>
+      callback(null, isOriginAllowed(origin)),
+    credentials: true,
+  });
+  app.use(originGate());
   app.setGlobalPrefix('api');
   // Unified error envelope (SRS §16.1) for every thrown HttpException.
   app.useGlobalFilters(new AllExceptionsFilter());

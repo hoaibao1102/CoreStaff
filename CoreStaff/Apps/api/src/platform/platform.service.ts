@@ -10,6 +10,7 @@ import { hashPassword } from '../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../auth/strategies/password-policy';
 import { userFields } from '../database/seed/provision';
 import { CreateOrganizationDto, CreateInitialHrDto } from './dto/platform.dto';
+import { EventsGateway } from '../events/events.gateway';
 
 const DUPLICATE_KEY_ERROR = 11000;
 
@@ -26,6 +27,7 @@ export class PlatformService {
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('UserSession') private readonly sessionModel: Model<UserSessionDocument>,
 		@Optional() @InjectModel('EmployeeProfile') private readonly profileModel?: Model<EmployeeProfileDocument>,
+		@Optional() private readonly eventsGateway?: EventsGateway,
 	) {}
 
 	/**
@@ -223,6 +225,8 @@ export class PlatformService {
 		if (!org) throw new NotFoundException('ORGANIZATION_NOT_FOUND');
 		if (status !== OrganizationStatus.ACTIVE) {
 			await this.sessionModel.updateMany({ organizationId, revokedAt: null }, { revokedAt: new Date() }).exec();
+			// AUD-H07: cut live sockets of a suspended tenant too.
+			this.eventsGateway?.disconnectOrganization(String(organizationId));
 		}
 		return org;
 	}

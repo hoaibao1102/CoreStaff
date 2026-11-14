@@ -102,3 +102,47 @@ describe('EventsGateway scoped domain events', () => {
     expect(emit).toHaveBeenCalledWith('payslip:released', { periodLabel: '2026-10' });
   });
 });
+
+describe('EventsGateway revocation (AUD-H07 / AUD-H08)', () => {
+  it.each(['DISABLED', 'LOCKED'])('refuses a socket for a %s account even with a live session row', async (status) => {
+    const client = socket('sid=valid');
+    await gateway({ user: { _id: 'u1', organizationId: 'o1', role: 'HR', status } }).handleConnection(client);
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+    expect(client.join).not.toHaveBeenCalled();
+  });
+
+  it('fails closed: an error while authorizing disconnects the socket instead of leaving it open', async () => {
+    const client = socket('sid=valid');
+    const g = gateway();
+    (g as any).managerAssignmentModel = { find: () => { throw new Error('db down'); } };
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await g.handleConnection(client);
+    spy.mockRestore();
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('puts an ACTIVE socket in session, user and tenant rooms so it can be revoked', async () => {
+    const client = socket('sid=valid');
+    await gateway().handleConnection(client);
+    const rooms = client.join.mock.calls.map((c: any[]) => c[0]);
+    expect(rooms).toEqual(expect.arrayContaining(['user:u1', `sess:${hashToken('valid')}`, 'org:o1']));
+    expect(client.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('disconnectSession / disconnectUser / disconnectOrganization terminate the matching room', () => {
+    const disconnectSockets = jest.fn();
+    const inRoom = jest.fn(() => ({ disconnectSockets }));
+    const g = gateway();
+    (g as any).server = { in: inRoom };
+    g.disconnectSession('hash1');
+    g.disconnectUser('u1');
+    g.disconnectOrganization('o1');
+    expect(inRoom.mock.calls.map((c: any[]) => c[0])).toEqual(['sess:hash1', 'user:u1', 'org:o1']);
+    expect(disconnectSockets).toHaveBeenCalledTimes(3);
+    expect(disconnectSockets).toHaveBeenCalledWith(true);
+  });
+
+  it('is a no-op when the server is not initialised', () => {
+    expect(() => gateway().disconnectUser('u1')).not.toThrow();
+  });
+});

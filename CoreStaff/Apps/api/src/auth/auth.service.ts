@@ -1,6 +1,7 @@
 import {
 	Injectable,
 	Inject,
+	Optional,
 	BadRequestException,
 	UnauthorizedException,
 	ForbiddenException,
@@ -22,6 +23,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { PasswordResetTokenDocument } from '../database/schemas/password-reset-token.schema';
 import { ResetMailer, RESET_MAILER } from './strategies/reset-mailer';
+import { EventsGateway } from '../events/events.gateway';
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -48,6 +50,7 @@ export class AuthService {
 		@InjectModel('EmployeeProfile') private readonly profileModel: Model<EmployeeProfileDocument>,
 		@InjectModel('Organization') private readonly orgModel: Model<OrganizationDocument>,
 		@Inject(RESET_MAILER) private readonly resetMailer: ResetMailer,
+		@Optional() private readonly eventsGateway?: EventsGateway,
 	) {}
 
 	async login(dto: LoginDto): Promise<{
@@ -64,7 +67,9 @@ export class AuthService {
 			throw new ForbiddenException('AUTH_ACCOUNT_DISABLED'); // SRS §17 → 403
 		}
 
-		if (candidate.status === UserStatus.LOCKED && candidate.lockedUntil && candidate.lockedUntil > new Date()) {
+		// AUD-H06: failed-login lockout only sets `lockedUntil` (status stays ACTIVE),
+		// so enforce the timestamp itself, whatever the status.
+		if (candidate.lockedUntil && candidate.lockedUntil > new Date()) {
 			throw new HttpException('AUTH_ACCOUNT_LOCKED', HttpStatus.LOCKED); // SRS §17 → 423
 		}
 
@@ -204,10 +209,13 @@ export class AuthService {
 	}
 
 	async logout(sessionId: string): Promise<void> {
+		const tokenHash = hashToken(sessionId);
 		await this.sessionModel.updateOne(
-			{ tokenHash: hashToken(sessionId) },
+			{ tokenHash },
 			{ revokedAt: new Date() },
 		);
+		// AUD-H07: a logged-out session must not keep a live realtime channel.
+		this.eventsGateway?.disconnectSession(tokenHash);
 	}
 
 	async getMe(userId: string): Promise<Record<string, unknown>> {
@@ -322,6 +330,7 @@ export class AuthService {
 
 		await this.sessionModel.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: now }).exec();
 		await this.resetTokenModel.updateMany({ userId: user._id, usedAt: null }, { usedAt: now }).exec();
+		this.eventsGateway?.disconnectUser(String(user._id));
 
 		return { success: true };
 	}
@@ -339,15 +348,24 @@ export class AuthService {
 			{ userId, revokedAt: null },
 			{ revokedAt: new Date() },
 		).exec();
+		this.eventsGateway?.disconnectUser(String(userId));
 
 		return { success: true };
 	}
 
 	private async _handleLoginFailure(user: UserDocument): Promise<void> {
-		user.failedLoginCount += 1;
-		if (user.failedLoginCount >= FAILED_LOGIN_THRESHOLD) {
-			user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
-		}
-		await user.save();
+		// AUD-H06: atomic counter. Parallel wrong-password attempts must each be
+		// counted; a read-modify-save would let them overwrite one another.
+		const now = new Date();
+		// A lock that already expired starts a fresh attempt window.
+		await this.userModel.updateOne(
+			{ _id: user._id, lockedUntil: { $lte: now } },
+			{ $set: { failedLoginCount: 0 }, $unset: { lockedUntil: 1 } },
+		).exec();
+		await this.userModel.updateOne({ _id: user._id }, { $inc: { failedLoginCount: 1 } }).exec();
+		await this.userModel.updateOne(
+			{ _id: user._id, failedLoginCount: { $gte: FAILED_LOGIN_THRESHOLD }, lockedUntil: { $exists: false } },
+			{ $set: { lockedUntil: new Date(now.getTime() + LOCK_DURATION_MS) } },
+		).exec();
 	}
 }
