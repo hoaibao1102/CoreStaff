@@ -1,3 +1,4 @@
+import { CalendarExceptionSchema } from '../database/schemas/calendar-exception.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AttendanceController } from './attendance.controller';
@@ -44,6 +45,7 @@ import { WorkCreditPolicySchema } from '../database/schemas/work-credit-policy.s
       { name: 'EmployeeDayOverride', schema: EmployeeDayOverrideSchema },
       { name: 'LeaveRequest', schema: LeaveRequestSchema },
       { name: 'WorkCreditPolicy', schema: WorkCreditPolicySchema },
+      { name: 'CalendarException', schema: CalendarExceptionSchema },
     ]),
     StorageModule,
     ShiftTemplateModule,

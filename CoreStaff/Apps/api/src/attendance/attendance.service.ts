@@ -20,6 +20,7 @@ import {
   AttendanceMethod,
   AttendanceStatus,
   WorkMode,
+  WorkdayType,
 } from '../database/schemas/enums';
 import { HaversineService } from './services/haversine.service';
 import { resolveVerification } from './services/attendance-verification';
@@ -33,6 +34,7 @@ import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../database/sche
 import { PeriodVersionService } from '../hr/timesheet/period-version.service';
 import { EmployeeDayOverrideDocument } from '../database/schemas/employee-day-override.schema';
 import { LeaveRequestDocument } from '../database/schemas/leave-request.schema';
+import { resolveClassification } from '../hr/leave/day-classification.service';
 
 /** File upload type matching Express/Multer used by NestJS controllers */
 interface UploadedFile {
@@ -92,7 +94,38 @@ export class AttendanceService {
     @Optional() @InjectModel('EmployeeDayOverride') private readonly dayOverrides?: Model<EmployeeDayOverrideDocument>,
     @Optional() @InjectModel('LeaveRequest') private readonly leaveRequests?: Model<LeaveRequestDocument>,
     @Optional() @InjectModel('WorkCreditPolicy') private readonly workCreditPolicies?: Model<any>,
+    @Optional() @InjectModel('CalendarException') private readonly calendarExceptions?: Model<any>,
   ) {}
+
+  /**
+   * SRS §9: the day is classified PUBLIC_HOLIDAY -> WEEKLY_OFF/no schedule ->
+   * WORKING_DAY, regardless of when the employee punches. A punch on a rest day
+   * still creates the record (it is the evidence for a weekend OT request) but
+   * must not be counted as an ordinary working day.
+   * Without the calendar model (legacy unit constructors) the old default holds.
+   */
+  private async resolveWorkdayType(
+    organizationId: string,
+    employeeId: string,
+    workDate: string,
+    assignmentShift: any,
+    session?: ClientSession,
+  ): Promise<WorkdayType> {
+    if (!this.calendarExceptions) return WorkdayType.WORKING_DAY;
+    const withSession = <T>(query: any): T => (session ? query.session(session) : query);
+    const [exception, resolvedShift] = await Promise.all([
+      withSession<any>(this.calendarExceptions.findOne({ organizationId, date: workDate })).lean(),
+      this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate, session),
+    ]);
+    const isoWeekday = (() => { const d = new Date(`${workDate}T00:00:00Z`).getUTCDay(); return d === 0 ? 7 : d; })();
+    // A shift pinned on the assignment counts only on the weekdays it declares.
+    const assignmentCoversDay = Boolean(assignmentShift)
+      && (!Array.isArray(assignmentShift.weekdays) || assignmentShift.weekdays.includes(isoWeekday));
+    return resolveClassification({
+      calendarType: exception?.type,
+      hasWorkObligation: Boolean(resolvedShift) || assignmentCoversDay,
+    }).workdayType;
+  }
 
   /**
    * AUD-H03: resolve the assignment that is effective on `workDate`. An active
@@ -537,6 +570,8 @@ export class AttendanceService {
       eventId,
     };
 
+    const workdayType = await this.resolveWorkdayType(organizationId, employeeId, workDate, assignment.shiftTemplateId || assignment.shiftId, session);
+
     // 5. Lưu AttendanceDay
     let day: any = existingDay;
     if (!day) {
@@ -546,6 +581,7 @@ export class AttendanceService {
         workDate,
         periodId: periodId ? new Types.ObjectId(periodId) : undefined,
         workMode: dto.workMode,
+        workdayType,
         attendanceStatus: AttendanceStatus.CHECKED_IN,
         overallApprovalStatus: approvalStatus,
         checkInAt: recordedAt,
@@ -560,6 +596,7 @@ export class AttendanceService {
       }, session);
     } else {
       day.workMode = dto.workMode;
+      day.workdayType = workdayType;
       day.attendanceStatus = AttendanceStatus.CHECKED_IN;
       day.overallApprovalStatus = approvalStatus;
       day.checkInAt = recordedAt;
