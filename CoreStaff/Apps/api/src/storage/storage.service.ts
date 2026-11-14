@@ -58,11 +58,12 @@ export class StorageService {
     const bucket = process.env.S3_BUCKET?.trim();
     if (!bucket || !this.s3) return false;
     if (this.injectedClient) return true;
-    const accessKeyId =
-      process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
-    const secretAccessKey =
-      process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim();
-    return Boolean(accessKeyId && secretAccessKey);
+    // AUD-H14: with no explicit keys the AWS provider chain (IAM role, SSO,
+    // container credentials) resolves them, so bucket + client is enough. Only
+    // a half-specified key pair is a misconfiguration.
+    const hasId = Boolean(process.env.S3_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim());
+    const hasSecret = Boolean(process.env.S3_SECRET_ACCESS_KEY?.trim() || process.env.AWS_SECRET_ACCESS_KEY?.trim());
+    return hasId === hasSecret;
   }
 
   /** Fail loudly, never hang: miss a key-looking 400 instead of a timeout. */

@@ -51,7 +51,8 @@ Everything else is High/Medium hardening and test-gate work. Items marked "sourc
 | `AUD-H03` | **FIXED** | `pickEffectiveAssignment` resolves by work date (future/expired ignored, latest start wins, same-start overlap → 409 `ASSIGNMENT_OVERLAP`) | `assignment-effective.spec.ts` |
 | `AUD-H05` | **FIXED** | `create()` reconciles snapshot employee set against the period's timesheet summaries (incomplete/duplicate/foreign rejected before claim) | `payroll-snapshot-population.spec.ts` |
 | `AUD-H10`, `H11`, `H12` | **FIXED** | Check+insert(+action/role projection) run in one transaction serialized by a per-scope lock document (`common/serialization-lock.ts`); loser retries and sees the winner | `test/concurrency-invariants.integration.spec.ts` (3 cases, all fail on pre-fix code) |
-| `AUD-C04`, `C06`, `H04`, `H09`, `H13`–`H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
+| `AUD-H14` | **FIXED** | `StorageService.isConfigured()` accepts bucket + client so the AWS provider chain (IAM role) works; only a half-specified key pair is rejected | `storage.service.spec.ts` |
+| `AUD-C04`, `C06`, `H04`, `H09`, `H13`, `H15`, `H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
 
 Behavior-change notes: payroll lifecycle method signatures changed (`organizationId` first); seed/demo scripts were updated to match. `AUD-C04` is deliberately untouched pending a product decision.
 
