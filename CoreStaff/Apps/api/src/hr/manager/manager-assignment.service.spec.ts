@@ -14,9 +14,10 @@ function build(rows: Row[], users: Row[], departments: Row[], profiles: Row[] = 
   organizationId: user.organizationId, userId: user._id, employmentStatus: 'ACTIVE',
 }))) {
   const model = {
-    find: jest.fn(() => ({ sort: () => ({ lean: async () => rows }) })),
+    find: jest.fn(() => ({ sort: () => ({ session: () => ({ lean: async () => rows }), lean: async () => rows }) })),
+    db: { startSession: async () => ({ withTransaction: async (fn: any) => fn(), endSession: async () => undefined }), collection: () => ({ updateOne: async () => undefined }) },
     findOne: jest.fn((filter: Row) => q(rows.find(r => matches(r, filter)) ?? null)),
-    create: jest.fn(async (doc: Row) => ({ toObject: () => ({ _id: 'new', active: true, ...doc }) })),
+    create: jest.fn(async ([doc]: Row[]) => [{ toObject: () => ({ _id: 'new', active: true, ...doc }) }]),
     findOneAndUpdate: jest.fn((filter: Row, update: Row) => q((() => { const r=rows.find(x=>String(x._id)===String(filter._id)&&x.organizationId===filter.organizationId); if(!r)return null; Object.assign(r, update.$set); return r; })())),
   };
   const userModel = {

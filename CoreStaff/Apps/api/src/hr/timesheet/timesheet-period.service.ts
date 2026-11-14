@@ -21,6 +21,7 @@ import { EmployeeTimesheetReviewService } from './employee-timesheet-review.serv
 import { UserDocument } from '../../database/schemas/user.schema';
 import { PoliciesService } from '../policies/policies.service';
 import { PeriodObligationService } from './period-obligation.service';
+import { acquireSerializationLock } from '../../common/serialization-lock';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -107,57 +108,67 @@ export class TimesheetPeriodService {
 		const newStartDate = new Date(dto.startDate);
 		const newEndDate = new Date(dto.endDate);
 
-		// Check if there's already an active period (OPEN, REVIEWING, or READY_TO_CLOSE)
-		const existingActivePeriod = await this.periodModel.findOne({
-			organizationId,
-			status: { $in: [
-				TimesheetPeriodStatus.OPEN,
-				TimesheetPeriodStatus.REVIEWING,
-				TimesheetPeriodStatus.READY_TO_CLOSE,
-			]},
-			active: true,
-		});
-
-		if (existingActivePeriod) {
-			throw new BadRequestException(
-				`PERIOD_ALREADY_ACTIVE: Cannot create a new period when there is already an active period (${existingActivePeriod.period} - ${existingActivePeriod.status}). Please close or reopen the existing period first.`
-			);
-		}
-
-		// Check for overlap with any closed periods
-		const allClosedPeriods = await this.periodModel.find({
-			organizationId,
-			status: TimesheetPeriodStatus.CLOSED,
-			active: true,
-		});
-
-		if (allClosedPeriods.length > 0) {
-			dto.validateNoOverlap(
-				newStartDate,
-				newEndDate,
-				allClosedPeriods.map(p => ({
-					startDate: new Date(p.startDate),
-					endDate: new Date(p.endDate),
-					status: p.status,
-				}))
-			);
-		}
-
+		// AUD-H11: the active-slot and overlap checks and the insert share one
+		// transaction serialized per tenant, so two different period keys cannot
+		// both become active.
+		const session = await this.periodModel.db.startSession();
 		try {
-			const doc = await this.periodModel.create({
-				...dto,
-				organizationId,
-				status: TimesheetPeriodStatus.OPEN,
-				startDate: newStartDate,
-				endDate: newEndDate,
+			let created: any;
+			await session.withTransaction(async () => {
+				await acquireSerializationLock(this.periodModel.db, `timesheet-period:${organizationId}`, session);
+
+				// Check if there's already an active period (OPEN, REVIEWING, or READY_TO_CLOSE)
+				const existingActivePeriod = await this.periodModel.findOne({
+					organizationId,
+					status: { $in: [
+						TimesheetPeriodStatus.OPEN,
+						TimesheetPeriodStatus.REVIEWING,
+						TimesheetPeriodStatus.READY_TO_CLOSE,
+					]},
+					active: true,
+				}).session(session);
+
+				if (existingActivePeriod) {
+					throw new BadRequestException(
+						`PERIOD_ALREADY_ACTIVE: Cannot create a new period when there is already an active period (${existingActivePeriod.period} - ${existingActivePeriod.status}). Please close or reopen the existing period first.`
+					);
+				}
+
+				// Check for overlap with any closed periods
+				const allClosedPeriods = await this.periodModel.find({
+					organizationId,
+					status: TimesheetPeriodStatus.CLOSED,
+					active: true,
+				}).session(session);
+
+				if (allClosedPeriods.length > 0) {
+					dto.validateNoOverlap(
+						newStartDate,
+						newEndDate,
+						allClosedPeriods.map(p => ({
+							startDate: new Date(p.startDate),
+							endDate: new Date(p.endDate),
+							status: p.status,
+						}))
+					);
+				}
+
+				[created] = await this.periodModel.create([{
+					...dto,
+					organizationId,
+					status: TimesheetPeriodStatus.OPEN,
+					startDate: newStartDate,
+					endDate: newEndDate,
+				}], { session });
 			});
-			return this.toResponse(doc.toObject());
+			return this.toResponse(created.toObject());
 		} catch (err: any) {
 			if (err.code === DUPLICATE_KEY_ERROR || (err.message && err.message.includes('duplicate key'))) {
 				throw new ConflictException('PERIOD_ALREADY_EXISTS');
 			}
-			if (err instanceof BadRequestException) throw err;
 			throw err;
+		} finally {
+			await session.endSession();
 		}
 	}
 

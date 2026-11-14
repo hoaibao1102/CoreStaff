@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { ClientSession, Model } from 'mongoose';
+import { acquireSerializationLock } from '../../common/serialization-lock';
 import { ManagerAssignmentDocument } from '../../database/schemas/manager-assignment.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
@@ -39,15 +40,23 @@ export class ManagerAssignmentService {
     await this.validateRefs(organizationId, dto.managerUserId, dto.departmentId);
     const from = new Date(dto.effectiveFrom), to = dto.effectiveTo ? new Date(dto.effectiveTo) : undefined;
     if (to && from > to) throw new ConflictException('MANAGER_ASSIGNMENT_DATE_RANGE_INVALID');
-    if (await this.overlaps(organizationId, dto.managerUserId, dto.departmentId, from, to)) {
-      throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
-    }
-    const row = await this.assignments.create({ ...dto, organizationId, createdBy, effectiveFrom: from, effectiveTo: to });
-    await this.users.updateOne(
-      { _id: dto.managerUserId, organizationId, role: 'EMPLOYEE' },
-      { $set: { role: 'DEPARTMENT_MANAGER' } },
-    );
-    return row.toObject();
+    // AUD-H12: overlap check, insert and role projection commit together,
+    // serialized per tenant.
+    return this.serialized(organizationId, async (session) => {
+      if (await this.overlaps(organizationId, dto.managerUserId, dto.departmentId, from, to, undefined, session)) {
+        throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
+      }
+      const [row] = await this.assignments.create(
+        [{ ...dto, organizationId, createdBy, effectiveFrom: from, effectiveTo: to }],
+        { session },
+      );
+      await this.users.updateOne(
+        { _id: dto.managerUserId, organizationId, role: 'EMPLOYEE' },
+        { $set: { role: 'DEPARTMENT_MANAGER' } },
+        { session },
+      );
+      return row.toObject();
+    });
   }
 
   async update(organizationId: string, id: string, dto: UpdateManagerAssignmentDto) {
@@ -59,17 +68,35 @@ export class ManagerAssignmentService {
     const from = dto.effectiveFrom ? new Date(dto.effectiveFrom) : new Date(current.effectiveFrom);
     const to = dto.effectiveTo ? new Date(dto.effectiveTo) : current.effectiveTo ? new Date(current.effectiveTo) : undefined;
     if (to && from > to) throw new ConflictException('MANAGER_ASSIGNMENT_DATE_RANGE_INVALID');
-    if (dto.active !== false && await this.overlaps(organizationId, managerUserId, departmentId, from, to, id)) {
-      throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
-    }
     const patch: Record<string, unknown> = { ...dto, effectiveFrom: from, effectiveTo: to };
-    const row = await this.assignments.findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true }).lean();
-    if (!row) throw new NotFoundException('MANAGER_ASSIGNMENT_NOT_FOUND');
-    await this.users.updateOne(
-      { _id: managerUserId, organizationId, role: 'EMPLOYEE' },
-      { $set: { role: 'DEPARTMENT_MANAGER' } },
-    );
-    return row;
+    return this.serialized(organizationId, async (session) => {
+      if (dto.active !== false && await this.overlaps(organizationId, managerUserId, departmentId, from, to, id, session)) {
+        throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
+      }
+      const row = await this.assignments.findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true, session }).lean();
+      if (!row) throw new NotFoundException('MANAGER_ASSIGNMENT_NOT_FOUND');
+      await this.users.updateOne(
+        { _id: managerUserId, organizationId, role: 'EMPLOYEE' },
+        { $set: { role: 'DEPARTMENT_MANAGER' } },
+        { session },
+      );
+      return row;
+    });
+  }
+
+  private async serialized<T>(organizationId: string, work: (session: ClientSession) => Promise<T>): Promise<T> {
+    const db = this.assignments.db;
+    const session = await db.startSession();
+    try {
+      let result!: T;
+      await session.withTransaction(async () => {
+        await acquireSerializationLock(db, `manager-assignment:${organizationId}`, session);
+        result = await work(session);
+      });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async setActive(organizationId: string, id: string, active: boolean) {
@@ -97,8 +124,9 @@ export class ManagerAssignmentService {
     if (!department) throw new NotFoundException('DEPARTMENT_NOT_FOUND');
   }
 
-  private async overlaps(organizationId: string, managerUserId: string, departmentId: string, from: Date, to?: Date, excludeId?: string) {
-    const rows = await this.assignments.find({ organizationId, managerUserId, departmentId, active: true }).sort({ effectiveFrom: 1 }).lean();
+  private async overlaps(organizationId: string, managerUserId: string, departmentId: string, from: Date, to?: Date, excludeId?: string, session?: ClientSession) {
+    const query = this.assignments.find({ organizationId, managerUserId, departmentId, active: true }).sort({ effectiveFrom: 1 });
+    const rows = await (session ? query.session(session) : query).lean();
     const start = from.getTime(), end = to?.getTime() ?? Number.POSITIVE_INFINITY;
     return rows.some(row => String(row._id) !== String(excludeId ?? '')
       && new Date(row.effectiveFrom).getTime() <= end

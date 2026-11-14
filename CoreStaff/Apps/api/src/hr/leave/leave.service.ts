@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
+import { acquireSerializationLock } from '../../common/serialization-lock';
 import { AttendanceDayDocument } from '../../database/schemas/attendance-day.schema';
 import { CalendarExceptionDocument } from '../../database/schemas/calendar-exception.schema';
 import { EmployeeAssignmentDocument } from '../../database/schemas/assignment.schema';
@@ -90,19 +91,30 @@ export class LeaveService {
     const durationType = dto.durationType ?? LeaveDurationType.FULL_DAY;
     const calculation = await this.preview(org, employeeId, { startDate, endDate, durationType, requestedStart: dto.requestedStart, requestedEnd: dto.requestedEnd });
 
-    const overlapCandidates = await this.requests.find({
-      organizationId: org, employeeId, status: { $in: ACTIVE_LEAVE_STATUSES },
-      startDate: { $lte: endDate }, endDate: { $gte: startDate },
-    }).lean();
-    const overlap = overlapCandidates.some(existing => {
-      if (durationType === LeaveDurationType.FULL_DAY || !existing.durationType || existing.durationType === LeaveDurationType.FULL_DAY) return true;
-      if (existing.startDate !== startDate || existing.endDate !== endDate) return true;
-      return leaveIntervalsOverlap(calculation.requestedStart, calculation.requestedEnd, existing.requestedStart, existing.requestedEnd);
-    });
-    if (overlap) throw new ConflictException('LEAVE_REQUEST_OVERLAP');
+    // AUD-H10: overlap check, request insert and SUBMIT action commit together,
+    // serialized per employee so two concurrent submissions cannot both pass.
+    const session = await this.connection.startSession();
+    let row: any;
+    try {
+      await session.withTransaction(async () => {
+        await acquireSerializationLock(this.connection, `leave:${org}:${employeeId}`, session);
+        const overlapCandidates = await this.requests.find({
+          organizationId: org, employeeId, status: { $in: ACTIVE_LEAVE_STATUSES },
+          startDate: { $lte: endDate }, endDate: { $gte: startDate },
+        }).session(session).lean();
+        const overlap = overlapCandidates.some(existing => {
+          if (durationType === LeaveDurationType.FULL_DAY || !existing.durationType || existing.durationType === LeaveDurationType.FULL_DAY) return true;
+          if (existing.startDate !== startDate || existing.endDate !== endDate) return true;
+          return leaveIntervalsOverlap(calculation.requestedStart, calculation.requestedEnd, existing.requestedStart, existing.requestedEnd);
+        });
+        if (overlap) throw new ConflictException('LEAVE_REQUEST_OVERLAP');
 
-    const row = await this.requests.create({ ...dto, durationType, requestedStart: calculation.requestedStart, requestedEnd: calculation.requestedEnd, calculatedMinutes: calculation.calculatedMinutes, leaveEquivalent: calculation.leaveEquivalent, approvedLeaveIntervals: calculation.days[0]?.approvedLeaveIntervals, requiredWorkingIntervals: calculation.days[0]?.requiredWorkingIntervals, reason: dto.reason.trim(), startDate, endDate, organizationId: org, employeeId, departmentId, status: LeaveRequestStatus.PENDING_MANAGER });
-    await this.actions.create({ organizationId: org, leaveRequestId: row._id, actorId: employeeId, action: 'SUBMIT', previousStatus: 'NONE', newStatus: LeaveRequestStatus.PENDING_MANAGER });
+        [row] = await this.requests.create([{ ...dto, durationType, requestedStart: calculation.requestedStart, requestedEnd: calculation.requestedEnd, calculatedMinutes: calculation.calculatedMinutes, leaveEquivalent: calculation.leaveEquivalent, approvedLeaveIntervals: calculation.days[0]?.approvedLeaveIntervals, requiredWorkingIntervals: calculation.days[0]?.requiredWorkingIntervals, reason: dto.reason.trim(), startDate, endDate, organizationId: org, employeeId, departmentId, status: LeaveRequestStatus.PENDING_MANAGER }], { session });
+        await this.actions.create([{ organizationId: org, leaveRequestId: row._id, actorId: employeeId, action: 'SUBMIT', previousStatus: 'NONE', newStatus: LeaveRequestStatus.PENDING_MANAGER }], { session });
+      });
+    } finally {
+      await session.endSession();
+    }
     this.eventsGateway?.notifyLeaveCreated(org, departmentId, {
       requestId: String(row._id), employeeUserId: employeeId, departmentId: String(departmentId),
       startDate, endDate, leaveType: row.leaveType, status: row.status,
