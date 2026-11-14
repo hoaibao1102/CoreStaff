@@ -79,7 +79,13 @@ export function EmployeeTimesheetReviewScreen({ apiBase, embedded = false }: { a
     try {
       const cards = await listMyTimesheetReviews(apiBase);
       setPeriods(cards);
-      const target = cards.find((card) => card.periodId === preferredPeriodId) ?? cards[0];
+      // Open on the period that actually needs the employee: one that has ended and
+      // is not acknowledged yet. The month in progress is listed first but cannot be
+      // acknowledged (its future days are incomplete), so it must not be the default.
+      // Vietnam calendar date (UTC+7), not the browser's UTC date.
+      const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+      const needsAction = cards.find((card) => card.state === 'PENDING' && card.endDate && card.endDate.slice(0, 10) < today);
+      const target = cards.find((card) => card.periodId === preferredPeriodId) ?? needsAction ?? cards[0];
       setSelectedPeriodId(target?.periodId ?? '');
       setReview(target ? await getMyTimesheetReview(apiBase, target.periodId) : null);
     } catch (caught) {
