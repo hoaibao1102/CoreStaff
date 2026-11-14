@@ -116,7 +116,7 @@ export class PayslipController {
   @Roles('HR')
   @ApiOperation({ summary: 'Release payslips for a payroll run' })
   async release(@CurrentUser() user: any, @Param('payrollRunId') payrollRunId: string) {
-    await this.payslipService.releaseForPayrollRun(user.organizationId, payrollRunId, user.id);
+    await this.payslipService.releaseForPayrollRun(user.organizationId, payrollRunId, String(user._id));
     return { success: true, message: 'PAYSLIPS_RELEASED' };
   }
 }

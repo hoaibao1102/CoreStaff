@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { HrAuditService } from '../audit/hr-audit.service';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus, VALID_TRANSITIONS } from '../../database/schemas/timesheet-period.schema';
 import { CreateTimesheetPeriodDto } from './dto/create-timesheet-period.dto';
 import { ReopenTimesheetPeriodDto } from './dto/reopen-timesheet-period.dto';
@@ -86,6 +87,7 @@ export class TimesheetPeriodService {
 		@Optional() private readonly overtimeService?: OvertimeService,
 		@Optional() private readonly policies?: PoliciesService,
 		@Optional() private readonly obligations?: PeriodObligationService,
+		@Optional() private readonly audit?: HrAuditService,
 	) {}
 
 	/**
@@ -586,6 +588,15 @@ export class TimesheetPeriodService {
 					{ new: true, session },
 				).lean();
 				await this.periodVersionService.bump(organizationId, id, session);
+				await this.audit?.recordForActor(actor.userId, {
+					organizationId,
+					action: 'ATTENDANCE_RESOLUTION',
+					targetType: 'ATTENDANCE_DAY',
+					targetId: String(day._id),
+					targetSummary: `Xử lý vắng không phép ngày ${String(day.workDate).slice(0, 10)}`,
+					reason: normalizedReason,
+					details: { employeeId: String(day.employeeId), periodId: String(id) },
+				}, session);
 			});
 			return updated;
 		} finally {
@@ -691,6 +702,15 @@ export class TimesheetPeriodService {
 				}
 
 				await this.periodVersionService.bump(organizationId, id, session);
+				await this.audit?.recordForActor(actor.userId, {
+					organizationId,
+					action: 'REQUEST_EXPLANATION',
+					targetType: 'ATTENDANCE_DAY',
+					targetId: String(day._id),
+					targetSummary: `Yêu cầu giải trình ngày ${String(day.workDate).slice(0, 10)}`,
+					reason: cleanNote,
+					details: { employeeId: String(employeeProfileId), periodId: String(id) },
+				}, session);
 			});
 			return updatedDay;
 		} finally {
@@ -1000,6 +1020,15 @@ export class TimesheetPeriodService {
 				).lean();
 
 				if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+
+				await this.audit?.recordForActor(userId, {
+					organizationId,
+					action: 'CLOSE_PERIOD',
+					targetType: 'TIMESHEET_PERIOD',
+					targetId: String(id),
+					targetSummary: `Kỳ công ${current.period}`,
+					details: { periodVersion: current.version, summariesCreated, snapshotsCreated },
+				}, session);
 			});
 		} finally {
 			await session.endSession();
@@ -1058,6 +1087,16 @@ export class TimesheetPeriodService {
 
 				if (!doc) throw new ConflictException('TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL');
 				updated = doc;
+
+				await this.audit?.recordForActor(userId, {
+					organizationId,
+					action: 'REOPEN_PERIOD',
+					targetType: 'TIMESHEET_PERIOD',
+					targetId: String(id),
+					targetSummary: `Kỳ công ${period.period}`,
+					reason: dto.reason,
+					details: { fromVersion: period.version, toVersion: doc.version },
+				}, session);
 			});
 		} finally {
 			await session.endSession();

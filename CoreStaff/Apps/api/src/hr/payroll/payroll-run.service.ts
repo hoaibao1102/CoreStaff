@@ -9,6 +9,7 @@ import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas
 import { InsuranceService } from './insurance.service';
 import { PitService } from './pit.service';
 import { PayslipService } from './payslip.service';
+import { HrAuditService } from '../audit/hr-audit.service';
 import {
   buildPayrollRunTransitionCas,
   buildPeriodPayrollClaimCas,
@@ -32,6 +33,7 @@ export class PayrollRunService {
     private readonly pitService: PitService,
     private readonly payslipService: PayslipService,
     @Optional() @InjectModel('TimesheetSummary') private readonly summaryModel?: Model<any>,
+    @Optional() private readonly audit?: HrAuditService,
   ) {}
 
   /**
@@ -181,6 +183,14 @@ export class PayrollRunService {
           active: true,
         }], { session });
         payrollRun = created;
+        await this.audit?.recordForActor(userId, {
+          organizationId,
+          action: 'PAYROLL_CREATE',
+          targetType: 'PAYROLL_RUN',
+          targetId: String(runId),
+          targetSummary: `Bảng lương ${periodLabel}`,
+          details: { timesheetPeriodId, sourcePeriodVersion: period.version, snapshotCount: sourceSnapshotIds.length },
+        }, session);
       });
     } finally {
       await session.endSession();
@@ -335,6 +345,17 @@ export class PayrollRunService {
     );
     if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
 
+    // Calculation commits outside one transaction (AUD-C08, PARTIAL), so the
+    // audit row follows the successful publish instead of joining a session.
+    await this.audit?.recordForActor(userId, {
+      organizationId,
+      action: 'PAYROLL_CALCULATE',
+      targetType: 'PAYROLL_RUN',
+      targetId: String(payrollRunId),
+      targetSummary: `Bảng lương ${payrollRun.periodLabel}`,
+      details: { employeesProcessed: processedCount, totalGross, totalNet },
+    });
+
     return {
       payrollRun: await this.findOneRaw(organizationId, payrollRunId),
       employeesProcessed: processedCount,
@@ -418,6 +439,14 @@ export class PayrollRunService {
           { new: true, session },
         );
         if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
+        await this.audit?.recordForActor(userId, {
+          organizationId,
+          action: 'PAYROLL_LOCK',
+          targetType: 'PAYROLL_RUN',
+          targetId: String(payrollRunId),
+          targetSummary: `Bảng lương ${payrollRun.periodLabel}`,
+          details: { totalGross: locked.totalGross, totalNet: locked.totalNet },
+        }, session);
       });
     } finally {
       await session.endSession();

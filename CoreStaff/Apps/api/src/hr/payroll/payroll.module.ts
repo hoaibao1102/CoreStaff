@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../../auth/auth.module';
+import { HrAuditModule } from '../audit/hr-audit.module';
 import { RolesGuard } from '../../common/rbac.decorator';
 import { PayrollRun, PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
 import { Payslip, PayslipSchema } from '../../database/schemas/payslip.schema';
@@ -28,6 +29,7 @@ import { PayrollSnapshotModule } from '../timesheet/payroll-snapshot.module';
 @Module({
   imports: [
     AuthModule,
+    HrAuditModule,
     TimesheetSummaryModule,
     PayrollSnapshotModule,
     MongooseModule.forFeature([

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { HrAuditService } from '../audit/hr-audit.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payslip, PayslipDocument, PayslipStatus } from '../../database/schemas/payslip.schema';
@@ -64,6 +65,7 @@ export class PayslipService {
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
     @Optional() private readonly eventsGateway?: EventsGateway,
+    @Optional() private readonly audit?: HrAuditService,
   ) {}
 
   /**
@@ -405,6 +407,15 @@ export class PayslipService {
           { new: true, session },
         );
         if (!periodUpdated) throw new ConflictException('PAYROLL_PERIOD_CAS_CONFLICT');
+
+        await this.audit?.recordForActor(userId, {
+          organizationId,
+          action: 'PAYROLL_RELEASE',
+          targetType: 'PAYROLL_RUN',
+          targetId: String(payrollRunId),
+          targetSummary: `Bảng lương ${payrollRun.periodLabel}`,
+          details: { payslipCount: releasedPayslips.length },
+        }, session);
       });
     } finally {
       await session.endSession();
