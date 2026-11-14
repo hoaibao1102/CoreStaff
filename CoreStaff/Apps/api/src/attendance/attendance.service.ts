@@ -94,6 +94,30 @@ export class AttendanceService {
     @Optional() @InjectModel('WorkCreditPolicy') private readonly workCreditPolicies?: Model<any>,
   ) {}
 
+  /**
+   * AUD-H03: resolve the assignment that is effective on `workDate`. An active
+   * flag alone is not enough: a future-dated or expired row must not decide the
+   * workplace, shift or department. Two different rows with the same start date
+   * are ambiguous and fail closed instead of picking an arbitrary one.
+   */
+  private async findEffectiveAssignment(
+    organizationId: Types.ObjectId,
+    ownerIds: Types.ObjectId[],
+    workDate: string,
+  ): Promise<any | null> {
+    const rows: any[] = await this.assignmentModel
+      .find({
+        organizationId,
+        $or: [{ userId: { $in: ownerIds } }, { employeeId: { $in: ownerIds } }],
+        active: true,
+      })
+      .populate('workplaceId')
+      .populate('shiftTemplateId')
+      .populate('departmentId')
+      .lean();
+    return pickEffectiveAssignment(rows, workDate);
+  }
+
   private async appliedLeave(organizationId: Types.ObjectId, employeeId: Types.ObjectId, workDate: string) {
     if (!this.dayOverrides) return null;
     const rows = await this.dayOverrides.find({ organizationId, employeeId, date: workDate }).lean();
@@ -157,16 +181,7 @@ export class AttendanceService {
     }
 
     // 1. Tìm Assignment hiệu lực
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: { $in: possibleEmpIds } }, { employeeId: { $in: possibleEmpIds } }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId')
-      .lean();
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, possibleEmpIds, workDate);
 
     const workplace = assignment?.workplaceId;
     // An explicit employee assignment is more specific than an organization or
@@ -401,15 +416,7 @@ export class AttendanceService {
     }
 
     // 2. Lấy Assignment và Workplace, Shift
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: empObjectId }, { employeeId: empObjectId }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId');
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, [empObjectId], workDate);
 
     if (!assignment) {
       throw new ConflictException('ASSIGNMENT_NOT_CONFIGURED');
@@ -700,15 +707,7 @@ export class AttendanceService {
     }
 
     // 2. Lấy Assignment và Workplace
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: empObjectId }, { employeeId: empObjectId }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId');
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, [empObjectId], workDate);
 
     const workplace = assignment?.workplaceId;
     const shift = day.shiftSnapshot || assignment?.shiftTemplateId || assignment?.shiftId;
@@ -1429,4 +1428,25 @@ export class AttendanceService {
 
     return workplaceAddress || clientAddress || undefined;
   }
+}
+
+const dayKey = (value: unknown): string | null => {
+  if (!value) return null;
+  const text = value instanceof Date ? value.toISOString() : String(value);
+  return text.slice(0, 10);
+};
+
+/** Pure resolver, exported for tests. */
+export function pickEffectiveAssignment(rows: any[], workDate: string): any | null {
+  const effective = rows.filter((row) => {
+    const from = dayKey(row.effectiveFrom);
+    const to = dayKey(row.effectiveTo);
+    return (!from || from <= workDate) && (!to || to >= workDate);
+  });
+  if (effective.length === 0) return null;
+  effective.sort((a, b) => (dayKey(b.effectiveFrom) ?? '').localeCompare(dayKey(a.effectiveFrom) ?? ''));
+  if (effective.length > 1 && (dayKey(effective[0].effectiveFrom) ?? '') === (dayKey(effective[1].effectiveFrom) ?? '')) {
+    throw new ConflictException('ASSIGNMENT_OVERLAP');
+  }
+  return effective[0];
 }

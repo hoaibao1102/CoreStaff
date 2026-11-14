@@ -4,6 +4,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { RolesGuard } from '../../common/rbac.decorator';
 import { PayrollRun, PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
 import { Payslip, PayslipSchema } from '../../database/schemas/payslip.schema';
+import { TimesheetSummarySchema } from '../../database/schemas/timesheet-summary.schema';
 import { PayrollInputSnapshot, PayrollInputSnapshotSchema } from '../../database/schemas/payroll-input-snapshot.schema';
 import { TimesheetPeriod, TimesheetPeriodSchema } from '../../database/schemas/timesheet-period.schema';
 import { EmployeeProfile, EmployeeProfileSchema } from '../../database/schemas/employee-profile.schema';
@@ -35,6 +36,7 @@ import { PayrollSnapshotModule } from '../timesheet/payroll-snapshot.module';
       { name: PayrollInputSnapshot.name, schema: PayrollInputSnapshotSchema },
       { name: TimesheetPeriod.name, schema: TimesheetPeriodSchema },
       { name: EmployeeProfile.name, schema: EmployeeProfileSchema },
+      { name: 'TimesheetSummary', schema: TimesheetSummarySchema },
       { name: Department.name, schema: DepartmentSchema },
       { name: Position.name, schema: PositionSchema },
       { name: TaxPolicy.name, schema: TaxPolicySchema },

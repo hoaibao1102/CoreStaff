@@ -48,7 +48,9 @@ Everything else is High/Medium hardening and test-gate work. Items marked "sourc
 | `AUD-H02` | **FIXED (scoped rule)** | The profile-department fallback now applies only to managers with **no assignment history at all** (legacy seeded managers). Once any assignment row exists, only effective assignments grant authority, so deactivating or ending the last one revokes access. The user's `DEPARTMENT_MANAGER` role is still not downgraded | `manager-scope.service.spec.ts` (+4 tests) |
 | `AUD-H07` | **PARTIAL** | Sockets join `sess:`/`user:`/`org:` rooms; logout disconnects that session, admin reset and password reset disconnect the user, tenant suspend disconnects the organization; connection errors now disconnect (fail closed). Not covered: password *change* (other sessions revoked, sockets not selected), HR disabling a single user, and re-authentication of long-lived sockets | `events.gateway.spec.ts`, `auth.service.spec.ts` |
 | `AUD-H08` | **FIXED** | `AuthGuard` and the socket gateway reject any non-`ACTIVE` user | `auth.guard.spec.ts`, `events.gateway.spec.ts` |
-| `AUD-C04`, `C06`, `H03`–`H05`, `H09`–`H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
+| `AUD-H03` | **FIXED** | `pickEffectiveAssignment` resolves by work date (future/expired ignored, latest start wins, same-start overlap → 409 `ASSIGNMENT_OVERLAP`) | `assignment-effective.spec.ts` |
+| `AUD-H05` | **FIXED** | `create()` reconciles snapshot employee set against the period's timesheet summaries (incomplete/duplicate/foreign rejected before claim) | `payroll-snapshot-population.spec.ts` |
+| `AUD-C04`, `C06`, `H04`, `H09`–`H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
 
 Behavior-change notes: payroll lifecycle method signatures changed (`organizationId` first); seed/demo scripts were updated to match. `AUD-C04` is deliberately untouched pending a product decision.
 

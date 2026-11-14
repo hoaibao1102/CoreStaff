@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, Optional, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { earningsKpiBonus } from './payroll-earnings-contract';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -31,7 +31,35 @@ export class PayrollRunService {
     private readonly insuranceService: InsuranceService,
     private readonly pitService: PitService,
     private readonly payslipService: PayslipService,
+    @Optional() @InjectModel('TimesheetSummary') private readonly summaryModel?: Model<any>,
   ) {}
+
+  /**
+   * AUD-H05: the bound snapshot set must be exactly the period's timesheet
+   * population. A snapshot set that omits an employee (e.g. only one department
+   * was generated), repeats one, or carries a foreign one is rejected before
+   * the period is claimed.
+   */
+  private async assertSnapshotsCoverPopulation(
+    organizationId: string,
+    timesheetPeriodId: string,
+    snapshots: any[],
+  ): Promise<void> {
+    if (!this.summaryModel) return;
+    const summaries: any[] = await this.summaryModel.find({
+      organizationId: new Types.ObjectId(organizationId),
+      periodId: new Types.ObjectId(timesheetPeriodId),
+    }).select({ employeeProfileId: 1 }).lean();
+    const expected = new Set(summaries.map((row) => String(row.employeeProfileId)));
+    const seen = new Set<string>();
+    for (const row of snapshots) {
+      const id = String(row.employeeProfileId);
+      if (seen.has(id)) throw new BadRequestException('PAYROLL_SNAPSHOT_DUPLICATE_EMPLOYEE');
+      seen.add(id);
+      if (!expected.has(id)) throw new BadRequestException('PAYROLL_SNAPSHOT_FOREIGN_EMPLOYEE');
+    }
+    if (seen.size !== expected.size) throw new BadRequestException('PAYROLL_SNAPSHOT_INCOMPLETE_POPULATION');
+  }
 
   /**
    * Create a new payroll run DRAFT for a closed timesheet period.
@@ -67,6 +95,8 @@ export class PayrollRunService {
     if (!snapshots.length || snapshots.some((row) => !row.canonicalPayloadHash)) {
       throw new BadRequestException('NO_PAYROLL_SNAPSHOTS_FOR_PERIOD');
     }
+
+    await this.assertSnapshotsCoverPopulation(organizationId, timesheetPeriodId, snapshots);
 
     // Check if payroll run already exists for this period
     const existing = await this.payrollRunModel.findOne({

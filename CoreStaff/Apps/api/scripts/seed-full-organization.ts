@@ -873,6 +873,7 @@ async function main() {
       insuranceService,
       pitService,
       payslipService,
+      TimesheetSummary as any,
     );
 
     const run = await payrollRunService.create({
