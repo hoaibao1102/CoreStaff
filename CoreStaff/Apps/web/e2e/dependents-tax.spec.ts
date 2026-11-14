@@ -37,7 +37,7 @@ async function openDependents(page: Page, profileId = 'p1') {
     const path = url.pathname;
 
     if (path.endsWith('/healthz')) {
-      return route.fulfill({ json: { status: 'ok' } });
+      return route.fulfill({ json: { status: 'ok', service: 'corestaff-api', mongo: 'configured', timezone: 'Asia/Ho_Chi_Minh' } });
     }
 
     if (path.endsWith('/auth/me')) {
@@ -262,7 +262,7 @@ async function openTaxPolicy(page: Page) {
     }
 
     if (path.endsWith('/healthz')) {
-      return route.fulfill({ json: { status: 'ok' } });
+      return route.fulfill({ json: { status: 'ok', service: 'corestaff-api', mongo: 'configured', timezone: 'Asia/Ho_Chi_Minh' } });
     }
 
     state.requests.push({ method, path: path + url.search, body: request.postData() });
@@ -368,7 +368,7 @@ test('Creating overlapping effective date is rejected', async ({ page }) => {
   await page.getByRole('button', { name: /Tạo chính sách/i }).click();
 
   // Should show conflict error
-  await expect(page.getByText(/trùng/lấp chồng|đã tồn tại/i)).toBeVisible();
+  await expect(page.getByText(/trùng|chồng lấp|lấp chồng|đã tồn tại/i)).toBeVisible();
 });
 
 /* ───────── PIT CALCULATION PREVIEW ───────── */

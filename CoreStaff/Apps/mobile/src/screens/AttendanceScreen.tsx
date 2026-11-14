@@ -1,3 +1,4 @@
+import { planAttendanceEvidence } from '../attendance-plan';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
@@ -86,17 +87,26 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
         if (!selfieUri) return;
         await punch({ selfieUri });
       } else {
-        const wifiFirst = today.assignment.hasWifiNetworks !== false;
-        const wifi = wifiFirst ? await currentWifi() : {};
-        if (!(wifiFirst && await accepted({ wifi }))) {
-          setPunchNotice('Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…');
-          const location = await currentLocation();
-          if (!(await accepted({ location, wifi }))) {
-            setPunchNotice('Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.');
-            const selfieUri = await takeSelfie();
-            if (!selfieUri) return;
-            await punch({ location, selfieUri, wifi });
+        // Only attempt the steps the workplace policy allows (AUD-H17).
+        const plan = planAttendanceEvidence(today.assignment);
+        if (!plan.wifi && !plan.gps && !plan.selfie) {
+          throw new PunchError('Nơi làm việc này không cho phép phương thức chấm công nào. Hãy liên hệ HR.');
+        }
+        const wifi = plan.wifi ? await currentWifi() : {};
+        if (!(plan.wifi && await accepted({ wifi }))) {
+          let location: PunchLocation | undefined;
+          if (plan.gps) {
+            setPunchNotice(plan.wifi ? 'Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…' : 'Đang kiểm tra vị trí GPS…');
+            location = await currentLocation();
+            if (await accepted({ location, wifi })) { setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.'); await load(true); return; }
           }
+          if (!plan.selfie) {
+            throw new PunchError('Chưa xác thực được vị trí chấm công và nơi làm việc không cho phép chụp selfie thay thế.');
+          }
+          setPunchNotice(plan.gps ? 'Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.' : 'Chụp ảnh selfie để gửi quản lý duyệt.');
+          const selfieUri = await takeSelfie();
+          if (!selfieUri) return;
+          await punch({ location, selfieUri, wifi });
         }
       }
       setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.');
