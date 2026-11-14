@@ -84,6 +84,14 @@ export class PayrollRun {
   @Prop({ required: true, min: 0, default: 0 })
   totalEmployeeCount: number;
 
+  // ── Preparer identity (AUD-H04 separation of duties) ───────────────────
+
+  @Prop({ type: 'ObjectId', ref: 'User' })
+  createdBy?: string;
+
+  @Prop({ type: 'ObjectId', ref: 'User' })
+  calculatedBy?: string;
+
   // ── Lock info ─────────────────────────────────────────────────────────
 
   @Prop({ type: 'ObjectId', ref: 'User' })

@@ -52,7 +52,8 @@ Everything else is High/Medium hardening and test-gate work. Items marked "sourc
 | `AUD-H05` | **FIXED** | `create()` reconciles snapshot employee set against the period's timesheet summaries (incomplete/duplicate/foreign rejected before claim) | `payroll-snapshot-population.spec.ts` |
 | `AUD-H10`, `H11`, `H12` | **FIXED** | Check+insert(+action/role projection) run in one transaction serialized by a per-scope lock document (`common/serialization-lock.ts`); loser retries and sees the winner | `test/concurrency-invariants.integration.spec.ts` (3 cases, all fail on pre-fix code) |
 | `AUD-H14` | **FIXED** | `StorageService.isConfigured()` accepts bucket + client so the AWS provider chain (IAM role) works; only a half-specified key pair is rejected | `storage.service.spec.ts` |
-| `AUD-C04`, `C06`, `H04`, `H09`, `H13`, `H15`, `H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
+| `AUD-H04` | **FIXED (policy-gated)** | Run records `createdBy`/`calculatedBy`; with `Organization.payrollSeparationOfDuties=true` the preparer gets 403 `PAYROLL_SEPARATION_OF_DUTIES` on lock/release. Default stays off (single-HR tenants); enabling is a tenant decision | `payroll-lifecycle-atomicity.spec.ts` (4 cases) |
+| `AUD-C04`, `C06`, `H09`, `H13`, `H15`, `H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
 
 Behavior-change notes: payroll lifecycle method signatures changed (`organizationId` first); seed/demo scripts were updated to match. `AUD-C04` is deliberately untouched pending a product decision.
 

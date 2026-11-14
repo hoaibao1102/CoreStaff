@@ -41,7 +41,7 @@ function modelWithRun(status: PayrollRunStatus, opts: { casResult?: unknown; per
   };
   const periodFindOneAndUpdate = jest.fn().mockResolvedValue('periodResult' in opts ? opts.periodResult : { _id: PERIOD });
   const model: any = {
-    db: { startSession: jest.fn().mockResolvedValue(sess), model: jest.fn(() => ({ findOneAndUpdate: periodFindOneAndUpdate })) },
+    db: { startSession: jest.fn().mockResolvedValue(sess), model: jest.fn(() => ({ findOneAndUpdate: periodFindOneAndUpdate, findById: () => ({ select: () => ({ lean: async () => ({ payrollSeparationOfDuties: (opts as any).sod === true }) }) }) })) },
     findOne: jest.fn(() => chain(doc)),
     findOneAndUpdate: jest.fn().mockResolvedValue('casResult' in opts ? opts.casResult : { ...doc, status: 'NEXT', toObject() { return this; } }),
   };
@@ -120,5 +120,40 @@ describe('payslip release is one transactional orchestration (AUD-C08)', () => {
     await service.release(String(ORG), String(RUN), USER);
     expect(payslipService.releaseForPayrollRun).toHaveBeenCalledWith(String(ORG), String(RUN), USER);
     expect(m.model.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('payroll separation of duties (AUD-H04)', () => {
+  const PREPARER = String(new Types.ObjectId());
+  const APPROVER = String(new Types.ObjectId());
+  function build(sod: boolean, status: PayrollRunStatus) {
+    const m: any = modelWithRun(status, { sod } as any);
+    m.doc.createdBy = new Types.ObjectId(PREPARER);
+    m.doc.calculatedBy = new Types.ObjectId(PREPARER);
+    const periodModel: any = { findOneAndUpdate: jest.fn().mockResolvedValue({ _id: PERIOD }) };
+    const payslipService: any = { releaseForPayrollRun: jest.fn().mockResolvedValue(undefined) };
+    const service = new PayrollRunService(m.model, {} as any, periodModel, {} as any, {} as any, {} as any, payslipService);
+    return { service, m, payslipService };
+  }
+
+  it('forbids the preparer from locking when the tenant enables the policy', async () => {
+    const { service, m } = build(true, PayrollRunStatus.CALCULATED);
+    await expect(service.lock(String(ORG), String(RUN), PREPARER)).rejects.toThrow('PAYROLL_SEPARATION_OF_DUTIES');
+    expect(m.model.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('forbids the preparer from releasing when the tenant enables the policy', async () => {
+    const { service, payslipService } = build(true, PayrollRunStatus.LOCKED);
+    await expect(service.release(String(ORG), String(RUN), PREPARER)).rejects.toThrow('PAYROLL_SEPARATION_OF_DUTIES');
+    expect(payslipService.releaseForPayrollRun).not.toHaveBeenCalled();
+  });
+
+  it('lets a different actor lock and release', async () => {
+    await expect(build(true, PayrollRunStatus.CALCULATED).service.lock(String(ORG), String(RUN), APPROVER)).resolves.toBeDefined();
+    await expect(build(true, PayrollRunStatus.LOCKED).service.release(String(ORG), String(RUN), APPROVER)).resolves.toBeDefined();
+  });
+
+  it('does not restrict the preparer when the policy is off (default)', async () => {
+    await expect(build(false, PayrollRunStatus.CALCULATED).service.lock(String(ORG), String(RUN), PREPARER)).resolves.toBeDefined();
   });
 });
