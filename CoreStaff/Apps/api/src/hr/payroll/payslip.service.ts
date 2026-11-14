@@ -429,7 +429,8 @@ export class PayslipService {
 
   /**
    * Get employee's own payslips (self-service).
-   * FIX: Allow both GENERATED and RELEASED status so employees can see their payslips immediately.
+   * AUD-C04: only published payslips (RELEASED, then VIEWED) are visible. A
+   * GENERATED payslip is a calculation draft that HR may still recalculate.
    */
   async getMyPayslips(employeeProfileId: string, organizationId: string, filters?: {
     periodLabel?: string;
@@ -440,13 +441,11 @@ export class PayslipService {
       organizationId: new Types.ObjectId(organizationId),
     };
 
-    // Only filter by specific status if provided in filters
-    if (filters?.status) {
-      filter.status = filters.status;
-    } else {
-      // Default: show both GENERATED and RELEASED payslips
-      filter.status = { $in: [PayslipStatus.GENERATED, PayslipStatus.RELEASED, PayslipStatus.VIEWED] };
-    }
+    // An explicit status narrows the list but can never widen it to drafts.
+    const published: string[] = [PayslipStatus.RELEASED, PayslipStatus.VIEWED];
+    filter.status = filters?.status
+      ? { $in: published.filter((status) => status === filters.status) }
+      : { $in: published };
 
     if (filters?.periodLabel) {
       filter.periodLabel = filters.periodLabel;
@@ -459,14 +458,13 @@ export class PayslipService {
   }
 
   /**
-   * Get employee's own single payslip detail (self-service).
-   * FIX: Allow both GENERATED and RELEASED status.
+   * Get employee's own single payslip detail (self-service). Published only (AUD-C04).
    */
   async getMyPayslip(payslipId: string, employeeProfileId: string): Promise<any> {
     const doc = await this.payslipModel.findOne({
       _id: new Types.ObjectId(payslipId),
       employeeProfileId: new Types.ObjectId(employeeProfileId),
-      status: { $in: [PayslipStatus.GENERATED, PayslipStatus.RELEASED, PayslipStatus.VIEWED] },
+      status: { $in: [PayslipStatus.RELEASED, PayslipStatus.VIEWED] },
     }).lean();
 
     if (!doc) {
@@ -484,7 +482,8 @@ export class PayslipService {
     const payslip = await this.payslipModel.findOne({
       _id: new Types.ObjectId(payslipId),
       employeeProfileId: new Types.ObjectId(employeeProfileId),
-      status: { $in: [PayslipStatus.GENERATED, PayslipStatus.RELEASED] },
+      // A draft must never become VIEWED: that state blocks recalculation (AUD-C04).
+      status: PayslipStatus.RELEASED,
     });
 
     // If already viewed or not found, just return silently (204 behavior)
