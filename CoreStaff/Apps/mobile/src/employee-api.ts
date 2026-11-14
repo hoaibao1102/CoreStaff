@@ -78,7 +78,7 @@ export interface AttendanceDay {
   checkOut: AttendanceEvent | null;
   resolution?: { type?: string; reason?: string } | null;
   attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[]; leaveTypes?: string[] } | null;
-  overtime?: { otMinutes?: number; status?: string; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
+  overtime?: { otMinutes?: number; status?: string; overtimeType?: string | null; actualMinutes?: number; classificationStatus?: string | null; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
 }
 
 export interface AttendanceHistory {

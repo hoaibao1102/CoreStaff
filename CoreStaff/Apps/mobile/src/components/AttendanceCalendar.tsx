@@ -22,7 +22,8 @@ const LOOKS: Record<HistoryStatus, Look> = {
   DAY_OFF: { bg: colors.infoSoft, fg: colors.info, border: colors.infoBorder, label: 'Nghỉ' },
   NONE: { bg: colors.surface, fg: colors.muted, border: colors.border, label: '' },
 };
-const LEGEND: HistoryStatus[] = ['ATTENDED', 'LATE', 'EARLY_LEAVE', 'FORGOTTEN', 'DAY_OFF'];
+const LEGEND: HistoryStatus[] = ['ATTENDED', 'LATE', 'EARLY_LEAVE', 'FORGOTTEN', 'FORFEITED', 'DAY_OFF'];
+const OT_COLOR = '#4f46e5';
 
 /** Ngày nghỉ tuần mà vẫn có chấm công thì tính là ngày làm (server cũng tính vào ngày công). */
 function statusOf(d: AttendanceDay): HistoryStatus {
@@ -74,16 +75,25 @@ export function AttendanceCalendar({ month, items, leaveMarks, onSelect }: { mon
         const status = cell.record ? statusOf(cell.record) : 'NONE';
         const look = LOOKS[status];
         const isToday = cell.key === today;
-        const tappable = !!cell.record && status !== 'NONE';
+        const hasOt = !!cell.record?.overtime;
+        const tappable = !!cell.record && (status !== 'NONE' || hasOt);
         const mark = leaveMarks?.get(cell.key);
         const appliedTag = !mark ? appliedLeaveTag(cell.record) : null;
+        // Về sớm hiện thêm một chấm riêng ngay cả khi ô đang là "Đi muộn" (giống web).
+        const earlyExtra = (cell.record?.earlyMinutes ?? 0) > 0 && status !== 'EARLY_LEAVE';
+        const hasMarks = status !== 'NONE' || earlyExtra || !!appliedTag || !!mark || hasOt;
         const body = <View style={[styles.box, { backgroundColor: look.bg, borderColor: isToday ? colors.primary : look.border }, isToday && styles.today]}>
           <Text style={[styles.dayNum, { color: status === 'NONE' ? (c === 6 ? colors.danger : colors.inkSoft) : look.fg }]}>{cell.day}</Text>
-          {appliedTag ? <View style={styles.markRow}><Text style={[styles.markTag, styles.markApplied]}>{appliedTag}</Text></View> : mark ? <View style={styles.markRow}><Text style={[styles.markTag, mark.stage === 'PENDING' ? styles.markPending : styles.markApproved]}>{mark.tag}</Text></View> : status !== 'NONE' ? <View style={[styles.dot, { backgroundColor: look.fg }]} /> : <View style={styles.dotSpace} />}
+          {hasMarks ? <View style={styles.markRow}>
+            {status !== 'NONE' ? <View style={[styles.dot, { backgroundColor: look.fg }]} /> : null}
+            {earlyExtra ? <View style={[styles.dot, { backgroundColor: colors.dangerText }]} /> : null}
+            {appliedTag ? <Text style={[styles.markTag, styles.markApplied]}>{appliedTag}</Text> : mark ? <Text style={[styles.markTag, mark.stage === 'PENDING' ? styles.markPending : styles.markApproved]}>{mark.tag}</Text> : null}
+            {hasOt ? <Text style={[styles.markTag, styles.markOt]}>OT</Text> : null}
+          </View> : <View style={styles.dotSpace} />}
         </View>;
         return <View key={c} style={styles.cell}>
           {tappable
-            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${look.label}${mark ? `, đơn nghỉ ${mark.tag} ${mark.stage === 'PENDING' ? 'chờ quản lý duyệt' : 'chờ HR áp dụng'}` : ''}`} onPress={() => onSelect(cell.record!)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
+            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${look.label}${hasOt ? ', có tăng ca' : ''}${mark ? `, đơn nghỉ ${mark.tag} ${mark.stage === 'PENDING' ? 'chờ quản lý duyệt' : 'chờ HR áp dụng'}` : ''}`} onPress={() => onSelect(cell.record!)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
             : body}
         </View>;
       })}
@@ -91,6 +101,7 @@ export function AttendanceCalendar({ month, items, leaveMarks, onSelect }: { mon
     <View style={styles.legend}>
       {leaveMarks?.size || items.some(isPartialLeaveDay) ? <><View style={styles.legendItem}><Text style={[styles.markTag, styles.markApplied]}>½S</Text><Text style={styles.legendText}>Nghỉ một phần ngày (HR đã áp dụng)</Text></View></> : null}
       {leaveMarks?.size ? <><View style={styles.legendItem}><Text style={[styles.markTag, styles.markPending]}>½S</Text><Text style={styles.legendText}>Đơn nghỉ chờ duyệt</Text></View><View style={styles.legendItem}><Text style={[styles.markTag, styles.markApproved]}>½S</Text><Text style={styles.legendText}>Đã duyệt, chờ HR áp dụng</Text></View></> : null}
+      {items.some(d => d.overtime) ? <View style={styles.legendItem}><Text style={[styles.markTag, styles.markOt]}>OT</Text><Text style={styles.legendText}>Có OT được duyệt</Text></View> : null}
       {LEGEND.map(s => <View key={s} style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: LOOKS[s].bg, borderColor: LOOKS[s].border }]} /><Text style={styles.legendText}>{LOOKS[s].label}</Text></View>)}
     </View>
   </View>;
@@ -111,7 +122,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendSwatch: { width: 12, height: 12, borderRadius: 4, borderWidth: 1 },
   legendText: { color: colors.muted, fontSize: 11, fontWeight: '600' },
-  markRow: { flexDirection: 'row' }, markTag: { fontSize: 9, fontWeight: '900', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', lineHeight: 13, color: '#fff' }, markPending: { backgroundColor: '#f59e0b' }, markApproved: { backgroundColor: '#2563eb' }, markApplied: { backgroundColor: '#0d9488' },
+  markRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 2 }, markTag: { fontSize: 9, fontWeight: '900', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', lineHeight: 13, color: '#fff' }, markPending: { backgroundColor: '#f59e0b' }, markApproved: { backgroundColor: '#2563eb' }, markApplied: { backgroundColor: '#0d9488' }, markOt: { backgroundColor: '#4f46e5' },
   fill: { flex: 1 },
   pressed: { opacity: 0.7 },
 });
