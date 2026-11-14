@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { friendlyEmployeeError } from '../employee-api';
 import { applyHrLeave, getHrEmployees, getHrLeaves, leaveDurationLabel, leaveStatusLabel, type HrEmployee, type HrLeave } from '../hr-api';
 import { AppButton, Card, EmptyState, ErrorBanner, LoadingBlock, ScreenHeader, SuccessBanner, formatDate, formatMinutes } from '../components/ui';
 import { Avatar, FilterChips, hrStyles, ToneBadge, type Tone } from '../components/HrParts';
 import { colors } from '../theme';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 
 type Filter = 'APPROVED' | 'HR_APPLIED' | 'ALL';
 
@@ -12,6 +13,7 @@ const statusTone = (s: string): Tone => s === 'APPROVED' || s === 'HR_APPLIED' ?
 
 /** Đơn nghỉ phép HR cần xử lý: quản lý đã duyệt, HR áp dụng vào bảng công. */
 export function HrLeavesScreen({ apiBase, realtimeRevision = 0 }: { apiBase: string; realtimeRevision?: number }) {
+  const { confirm, dialog } = useConfirmDialog();
   const [leaves, setLeaves] = useState<HrLeave[]>([]);
   // Đơn nghỉ lưu userId của nhân viên nên ghép tên qua danh bạ.
   const [byUserId, setByUserId] = useState<Record<string, HrEmployee>>({});
@@ -52,13 +54,17 @@ export function HrLeavesScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
   };
   const apply = (leave: HrLeave) => {
     const name = byUserId[leave.employeeId]?.fullName || 'nhân viên';
-    Alert.alert('Áp dụng đơn nghỉ', `Áp dụng đơn nghỉ ${formatDate(leave.startDate)} - ${formatDate(leave.endDate)} của ${name} vào bảng công? Thao tác này không hoàn tác được.`, [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Áp dụng', onPress: () => void run(leave, name) },
-    ]);
+    confirm({
+      title: 'Áp dụng đơn nghỉ',
+      message: `Áp dụng đơn nghỉ ${formatDate(leave.startDate)} - ${formatDate(leave.endDate)} của ${name} vào bảng công? Thao tác này không hoàn tác được.`,
+      confirmLabel: 'Áp dụng',
+      tone: 'warning',
+      icon: 'checkmark-done-outline',
+      onConfirm: () => { void run(leave, name); },
+    });
   };
 
-  return <ScrollView style={hrStyles.screen} contentContainerStyle={hrStyles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
+  return <><ScrollView style={hrStyles.screen} contentContainerStyle={hrStyles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
     <ScreenHeader eyebrow="NGHỈ PHÉP" title="Đơn nghỉ phép" description="Áp dụng đơn đã được quản lý duyệt vào bảng công." />
     {error ? <ErrorBanner message={error} /> : null}
     {success ? <SuccessBanner message={success} /> : null}
@@ -83,7 +89,7 @@ export function HrLeavesScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
         {l.status === 'APPROVED' ? <View style={styles.action}><AppButton label="Áp dụng vào bảng công" loading={applyingId === l._id} disabled={applyingId !== null} onPress={() => apply(l)} /></View> : null}
       </Card>;
     })}
-  </ScrollView>;
+  </ScrollView>{dialog}</>;
 }
 
 const styles = StyleSheet.create({

@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { AttendanceDay } from '../employee-api';
-import { dayHistoryStatus, type HistoryStatus } from '../day-credit';
+import { dayHistoryStatus, isPartialLeaveDay, type HistoryStatus } from '../day-credit';
 import { colors, radius, spacing } from '../theme';
 import { todayKey } from './ui';
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+/** Đơn nghỉ đã gửi/đã duyệt nhưng HR chưa áp dụng vào bảng công. */
+export interface LeaveMark { tag: string; stage: 'PENDING' | 'APPROVED' }
 
 interface Look { bg: string; fg: string; border: string; label: string }
 
@@ -24,6 +27,8 @@ const LEGEND: HistoryStatus[] = ['ATTENDED', 'LATE', 'EARLY_LEAVE', 'FORGOTTEN',
 /** Ngày nghỉ tuần mà vẫn có chấm công thì tính là ngày làm (server cũng tính vào ngày công). */
 function statusOf(d: AttendanceDay): HistoryStatus {
   const s = dayHistoryStatus(d);
+  // Nghỉ nửa buổi/theo giờ HR đã áp dụng cho ngày chưa có chấm công: vẫn phải thấy ngày đó là có nghỉ.
+  if (s === 'NONE' && isPartialLeaveDay(d)) return 'DAY_OFF';
   if (s !== 'NONE' || d.workdayType !== 'WEEKLY_OFF' || !(d.checkIn || d.checkOut)) return s;
   const worked = dayHistoryStatus({ ...d, workdayType: undefined });
   return worked === 'NONE' ? 'ATTENDED' : worked;
@@ -31,8 +36,18 @@ function statusOf(d: AttendanceDay): HistoryStatus {
 
 const two = (n: number) => String(n).padStart(2, '0');
 
+/** Nhãn nghỉ một phần ngày đã được HR áp dụng (½S, ½C, 2h) lấy từ chính bản ghi ngày công. */
+function appliedLeaveTag(d?: AttendanceDay): string | null {
+  if (!d || !isPartialLeaveDay(d)) return null;
+  const types = d.attendanceRequirements?.durationTypes ?? [];
+  if (types.includes('MORNING_HALF')) return '½S';
+  if (types.includes('AFTERNOON_HALF')) return '½C';
+  const hours = (d.attendanceRequirements?.approvedLeaveMinutes ?? 0) / 60;
+  return hours > 0 ? `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h` : 'Nghỉ';
+}
+
 /** Lịch tháng (tuần bắt đầu Thứ 2). `month` dạng "YYYY-MM". */
-export function AttendanceCalendar({ month, items, onSelect }: { month: string; items: AttendanceDay[]; onSelect: (day: AttendanceDay) => void }) {
+export function AttendanceCalendar({ month, items, leaveMarks, onSelect }: { month: string; items: AttendanceDay[]; leaveMarks?: Map<string, LeaveMark>; onSelect: (day: AttendanceDay) => void }) {
   const today = todayKey();
   const cells = useMemo(() => {
     const [year, mon] = month.split('-').map(Number);
@@ -60,18 +75,22 @@ export function AttendanceCalendar({ month, items, onSelect }: { month: string; 
         const look = LOOKS[status];
         const isToday = cell.key === today;
         const tappable = !!cell.record && status !== 'NONE';
+        const mark = leaveMarks?.get(cell.key);
+        const appliedTag = !mark ? appliedLeaveTag(cell.record) : null;
         const body = <View style={[styles.box, { backgroundColor: look.bg, borderColor: isToday ? colors.primary : look.border }, isToday && styles.today]}>
           <Text style={[styles.dayNum, { color: status === 'NONE' ? (c === 6 ? colors.danger : colors.inkSoft) : look.fg }]}>{cell.day}</Text>
-          {status !== 'NONE' ? <View style={[styles.dot, { backgroundColor: look.fg }]} /> : <View style={styles.dotSpace} />}
+          {appliedTag ? <View style={styles.markRow}><Text style={[styles.markTag, styles.markApplied]}>{appliedTag}</Text></View> : mark ? <View style={styles.markRow}><Text style={[styles.markTag, mark.stage === 'PENDING' ? styles.markPending : styles.markApproved]}>{mark.tag}</Text></View> : status !== 'NONE' ? <View style={[styles.dot, { backgroundColor: look.fg }]} /> : <View style={styles.dotSpace} />}
         </View>;
         return <View key={c} style={styles.cell}>
           {tappable
-            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${look.label}`} onPress={() => onSelect(cell.record!)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
+            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${look.label}${mark ? `, đơn nghỉ ${mark.tag} ${mark.stage === 'PENDING' ? 'chờ quản lý duyệt' : 'chờ HR áp dụng'}` : ''}`} onPress={() => onSelect(cell.record!)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
             : body}
         </View>;
       })}
     </View>)}
     <View style={styles.legend}>
+      {leaveMarks?.size || items.some(isPartialLeaveDay) ? <><View style={styles.legendItem}><Text style={[styles.markTag, styles.markApplied]}>½S</Text><Text style={styles.legendText}>Nghỉ một phần ngày (HR đã áp dụng)</Text></View></> : null}
+      {leaveMarks?.size ? <><View style={styles.legendItem}><Text style={[styles.markTag, styles.markPending]}>½S</Text><Text style={styles.legendText}>Đơn nghỉ chờ duyệt</Text></View><View style={styles.legendItem}><Text style={[styles.markTag, styles.markApproved]}>½S</Text><Text style={styles.legendText}>Đã duyệt, chờ HR áp dụng</Text></View></> : null}
       {LEGEND.map(s => <View key={s} style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: LOOKS[s].bg, borderColor: LOOKS[s].border }]} /><Text style={styles.legendText}>{LOOKS[s].label}</Text></View>)}
     </View>
   </View>;
@@ -92,6 +111,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendSwatch: { width: 12, height: 12, borderRadius: 4, borderWidth: 1 },
   legendText: { color: colors.muted, fontSize: 11, fontWeight: '600' },
+  markRow: { flexDirection: 'row' }, markTag: { fontSize: 9, fontWeight: '900', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', lineHeight: 13, color: '#fff' }, markPending: { backgroundColor: '#f59e0b' }, markApproved: { backgroundColor: '#2563eb' }, markApplied: { backgroundColor: '#0d9488' },
   fill: { flex: 1 },
   pressed: { opacity: 0.7 },
 });

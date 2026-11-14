@@ -77,7 +77,7 @@ export interface AttendanceDay {
   checkIn: AttendanceEvent | null;
   checkOut: AttendanceEvent | null;
   resolution?: { type?: string; reason?: string } | null;
-  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[] } | null;
+  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[]; leaveTypes?: string[] } | null;
   overtime?: { otMinutes?: number; status?: string; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
 }
 
@@ -281,6 +281,58 @@ export const getMyPayslips = (base: string) =>
 export const markPayslipViewed = (base: string, id: string) =>
   apiRequest<void>(base, `/api/payslips/me/${encodeURIComponent(id)}/viewed`, { method: 'POST' });
 
+/* ───────── Bảng công kỳ (cùng API với web: /api/hr/timesheet-periods/:id/my-review) ───────── */
+
+export type TimesheetReviewState = 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED';
+
+export interface TimesheetReviewCard {
+  periodId: string;
+  periodKey: string; // "YYYY-MM"
+  periodVersion: number;
+  periodStatus?: string; // CLOSED = HR đã chốt, chỉ xem
+  state: TimesheetReviewState;
+}
+
+export interface TimesheetReviewDay {
+  workDate: string;
+  scheduledObligationMinutes: number;
+  workedScheduledMinutes: number;
+  payableLeaveMinutes: number;
+  unpaidLeaveMinutes: number;
+  lateMinutes?: number;
+  earlyMinutes?: number;
+  overtimeMinutes: number;
+  workCredit: number;
+  reasonCode?: string;
+}
+
+export interface TimesheetReview extends TimesheetReviewCard {
+  projectionHash: string;
+  standardWorkUnits: number;
+  payableWorkUnits: number;
+  hasUnresolvedDays: boolean;
+  canAcknowledge: boolean;
+  days: TimesheetReviewDay[];
+}
+
+export const listMyTimesheetReviews = (base: string) =>
+  apiRequest<TimesheetReviewCard[]>(base, '/api/hr/timesheet-reviews/my');
+
+export const getMyTimesheetReview = (base: string, periodId: string) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(periodId)}/my-review`);
+
+export const acknowledgeMyTimesheetReview = (base: string, review: TimesheetReview) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(review.periodId)}/my-review/acknowledge`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash }),
+  });
+
+export const disputeMyTimesheetReview = (base: string, review: TimesheetReview, reason: string) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(review.periodId)}/my-review/dispute`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash, reason }),
+  });
+
 function newIdempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -317,6 +369,10 @@ export function friendlyEmployeeError(error: unknown): string {
     LEAVE_SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt đơn của chính mình.',
     DEPARTMENT_SCOPE_VIOLATION: 'Đơn này không thuộc phòng ban bạn phụ trách.',
     PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công đã khóa hoặc đã chốt lương, không thể thay đổi.',
+    PERIOD_CLOSED: 'HR đã chốt kỳ công này, chỉ còn để xem.',
+    PERIOD_VERSION_CONFLICT: 'Bảng công vừa thay đổi. Hãy tải lại rồi kiểm tra lại.',
+    TIMESHEET_REVIEW_CHANGED: 'Bảng công vừa thay đổi. Hãy tải lại rồi kiểm tra lại.',
+    TIMESHEET_HAS_UNRESOLVED_DAYS: 'Còn ngày chấm công chưa hoàn tất, chưa thể xác nhận.',
     REQUEST_NOT_FOUND: 'Không tìm thấy đơn này.',
     DEPARTMENT_MANAGER_NOT_FOUND: 'Bạn chưa được gán phụ trách phòng ban nào. Vui lòng liên hệ HR.',
     OVERTIME_ANNUAL_LIMIT_EXCEEDED: 'Bạn đã vượt giới hạn tăng ca trong năm.',

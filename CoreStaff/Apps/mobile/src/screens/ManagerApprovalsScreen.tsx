@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { friendlyEmployeeError } from '../employee-api';
 import {
@@ -10,6 +10,7 @@ import { AppButton, Card, EmptyState, ErrorBanner, ErrorState, LoadingBlock, Not
 import { AppIcon } from '../components/AppIcon';
 import { RequestsScreen } from './RequestsScreen';
 import { colors, radius, spacing } from '../theme';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 
 type Tab = 'review' | 'mine';
 
@@ -26,6 +27,7 @@ interface Row {
 const DURATION: Record<string, string> = { FULL_DAY: 'Cả ngày', MORNING_HALF: 'Buổi sáng', AFTERNOON_HALF: 'Buổi chiều', CUSTOM_HOURS: 'Theo giờ' };
 
 export function ManagerApprovalsScreen({ apiBase, realtimeRevision = 0, onCountChange }: { apiBase: string; realtimeRevision?: number; onCountChange?: (count: number) => void }) {
+  const { confirm, dialog } = useConfirmDialog();
   const [tab, setTab] = useState<Tab>('review');
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [leaves, setLeaves] = useState<ManagerLeaveRequest[]>([]);
@@ -63,7 +65,7 @@ export function ManagerApprovalsScreen({ apiBase, realtimeRevision = 0, onCountC
   const done = async (message: string, warnings: string[]) => {
     setSelected(null); setSuccess(message);
     await load(true);
-    if (warnings.length) Alert.alert('Cảnh báo giới hạn lao động', warnings.join('\n'), [{ text: 'Đã hiểu' }]);
+    if (warnings.length) confirm({ title: 'Cảnh báo giới hạn lao động', message: warnings.join('\n'), confirmLabel: 'Đã hiểu', cancelLabel: null, tone: 'warning' });
   };
 
   return <View style={styles.screen}>
@@ -80,6 +82,7 @@ export function ManagerApprovalsScreen({ apiBase, realtimeRevision = 0, onCountC
           : rows.map(row => <RequestCard key={row.key} row={row} onPress={() => { setSuccess(null); setSelected(row); }} />)}
       </ScrollView>}
     <DecisionModal row={selected} apiBase={apiBase} onClose={() => setSelected(null)} onDone={done} />
+  {dialog}
   </View>;
 }
 

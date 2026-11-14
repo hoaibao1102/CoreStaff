@@ -1,14 +1,17 @@
 import { planAttendanceEvidence } from '../attendance-plan';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import { getAttendanceHistory, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type PunchLocation, type TodayAttendance } from '../employee-api';
+import { getAttendanceHistory, getMyLeaveRequests, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type LeaveRequest, type PunchLocation, type TodayAttendance } from '../employee-api';
 import { DayDetailSheet } from '../components/DayDetailSheet';
-import { AttendanceCalendar } from '../components/AttendanceCalendar';
+import { AttendanceCalendar, type LeaveMark } from '../components/AttendanceCalendar';
+import { TimesheetReviewSection } from '../components/TimesheetReviewSection';
+import { leaveShortTag } from '../components/RequestsCalendar';
 import { currentWifi } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, NoticeBanner, ScreenHeader, SectionTitle, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime, shiftTitle, todayKey } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 
 const monthKey = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7);
 
@@ -37,8 +40,10 @@ async function takeSelfie(): Promise<string | undefined> {
 }
 
 export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: string; realtimeRevision?: number }) {
+  const { confirm, dialog } = useConfirmDialog();
   const [today, setToday] = useState<TodayAttendance | null>(null);
   const [history, setHistory] = useState<AttendanceHistory | null>(null);
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [month, setMonth] = useState(monthKey());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,14 +59,35 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
 
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true); setError(null);
-    const [todayResult, historyResult] = await Promise.allSettled([getTodayAttendance(apiBase), getAttendanceHistory(apiBase, month)]);
+    const [todayResult, historyResult, leaveResult] = await Promise.allSettled([getTodayAttendance(apiBase), getAttendanceHistory(apiBase, month), getMyLeaveRequests(apiBase)]);
     if (todayResult.status === 'fulfilled') setToday(todayResult.value);
+    // Danh sách đơn chỉ để đánh dấu lịch: lỗi tải không được làm hỏng màn chấm công.
+    if (leaveResult.status === 'fulfilled') setLeaves(leaveResult.value || []);
     if (historyResult.status === 'fulfilled') setHistory(historyResult.value);
     const failure = todayResult.status === 'rejected' ? todayResult.reason : historyResult.status === 'rejected' ? historyResult.reason : null;
     if (failure) setError(friendlyEmployeeError(failure));
     setLoading(false); setRefreshing(false);
   }, [apiBase, month, realtimeRevision]);
   useEffect(() => { void load(); }, [load]);
+
+  // Lịch chấm công chỉ có ngày HR đã áp dụng nghỉ. Đơn đang chờ duyệt hoặc đã duyệt mà HR chưa áp dụng
+  // vẫn phải thấy được trên lịch, kẻo nhân viên tưởng đơn "biến mất" sau khi quản lý duyệt.
+  const leaveMarks = useMemo(() => {
+    const marks = new Map<string, LeaveMark>();
+    for (const leave of leaves) {
+      const stage = leave.status === 'PENDING_MANAGER' ? 'PENDING' : leave.status === 'APPROVED' ? 'APPROVED' : null;
+      if (!stage) continue;
+      const first = leave.startDate.slice(0, 10), last = (leave.endDate || leave.startDate).slice(0, 10);
+      for (let t = Date.UTC(+first.slice(0, 4), +first.slice(5, 7) - 1, +first.slice(8, 10)), n = 0; n < 62; t += 86400000, n++) {
+        const d = new Date(t).toISOString().slice(0, 10);
+        if (d > last) break;
+        if (d.slice(0, 7) !== month) continue;
+        const existing = marks.get(d);
+        if (!existing || stage === 'PENDING') marks.set(d, { tag: leaveShortTag(leave), stage });
+      }
+    }
+    return marks;
+  }, [leaves, month]);
 
   const actionLabel = today?.availableAction === 'CHECK_IN' ? 'Xác nhận vào ca' : today?.availableAction === 'CHECK_OUT' ? 'Xác nhận ra ca' : 'Ca làm đã hoàn tất';
 
@@ -122,13 +148,16 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
     if (!today || today.availableAction === 'NONE') return;
     const checkingIn = today.availableAction === 'CHECK_IN';
     const outOffice = today.assignment.workplaceType === 'OUT_OFFICE';
-    Alert.alert(checkingIn ? 'Xác nhận vào ca' : 'Xác nhận ra ca', checkingIn ? `Ghi nhận vào ca tại ${today.assignment.workplaceName}?` : 'Ghi nhận kết thúc ca làm việc hôm nay?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: outOffice ? 'Chụp selfie' : checkingIn ? 'Vào ca' : 'Ra ca', onPress: () => void submit() },
-    ]);
+    confirm({
+      title: checkingIn ? 'Xác nhận vào ca' : 'Xác nhận ra ca',
+      message: checkingIn ? `Ghi nhận vào ca tại ${today.assignment.workplaceName}?` : 'Ghi nhận kết thúc ca làm việc hôm nay?',
+      confirmLabel: outOffice ? 'Chụp selfie' : checkingIn ? 'Vào ca' : 'Ra ca',
+      icon: outOffice ? 'camera-outline' : 'time-outline',
+      onConfirm: () => { void submit(); },
+    });
   };
 
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
+  return <><ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
     <ScreenHeader eyebrow="CHẤM CÔNG" title="Chấm công" description="Ghi nhận thời gian và theo dõi công của bạn." />
     {punchNotice ? <NoticeBanner message={punchNotice} /> : null}{punchError ? <ErrorBanner message={punchError} /> : null}{error && (loading || today || history) ? <ErrorBanner message={error} /> : null}{success ? <SuccessBanner message={success} /> : null}
     {loading ? <LoadingBlock /> : error && !today && !history ? <ErrorState message={error} onRetry={() => void load()} /> : <>
@@ -143,11 +172,12 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
       <View style={styles.metricGrid}><Metric label="Giờ làm" value={formatMinutes(today?.workingMinutes)} /><Metric label="Đi muộn" value={formatMinutes(today?.lateMinutes)} /><Metric label="Về sớm" value={formatMinutes(today?.earlyMinutes)} /></View>
       <View style={styles.monthHeader}><SectionTitle>Lịch sử tháng</SectionTitle><View style={styles.monthControl}><MonthButton label="Tháng trước" symbol="‹" onPress={() => changeMonth(-1)} /><Text style={styles.monthText}>{monthLabel}</Text><MonthButton label="Tháng sau" symbol="›" disabled={!canMoveNext} onPress={() => changeMonth(1)} /></View></View>
       {history ? <View style={styles.summaryRow}><Summary label="Ngày công" value={history.summary.workingDays} /><Summary label="Ngày đi muộn" value={history.summary.lateDays} /><Summary label="Tăng ca" value={formatMinutes(history.summary.otMinutes)} /></View> : null}
-      <AttendanceCalendar month={month} items={history?.items ?? []} onSelect={setSelectedDay} />
+      <AttendanceCalendar month={month} items={history?.items ?? []} leaveMarks={leaveMarks} onSelect={setSelectedDay} />
       {!history?.items.length ? <Text style={styles.emptyText}>Chưa có dữ liệu chấm công trong tháng này.</Text> : null}
+      <TimesheetReviewSection apiBase={apiBase} month={month} refreshKey={realtimeRevision} />
     </>}
     <DayDetailSheet day={selectedDay} policy={history?.workCreditPolicy} apiBase={apiBase} onClose={() => setSelectedDay(null)} />
-  </ScrollView>;
+  </ScrollView>{dialog}</>;
 }
 
 function attendanceLabel(status?: string) { return ({ NOT_CHECKED_IN: 'Chưa vào ca', CHECKED_IN: 'Đang trong ca', COMPLETED: 'Hoàn thành', DAY_OFF: 'Ngày nghỉ', LOCKED: 'Đã khóa' } as Record<string, string>)[status || ''] || 'Chưa có dữ liệu'; }
