@@ -65,6 +65,10 @@ export function HrAuditLogScreen({ apiBase }: { apiBase: string }) {
         return <Badge className="bg-blue-600 text-white">Chốt kỳ công</Badge>;
       case 'REOPEN_PERIOD':
         return <Badge className="bg-purple-600 text-white">Mở lại kỳ công</Badge>;
+      case 'PAYROLL_CREATE':
+        return <Badge className="bg-teal-600 text-white">Tạo bảng lương</Badge>;
+      case 'PAYROLL_LOCK':
+        return <Badge className="bg-amber-600 text-white">Khóa bảng lương</Badge>;
       case 'PAYROLL_CALCULATE':
         return <Badge className="bg-emerald-600 text-white">Tính bảng lương</Badge>;
       case 'PAYROLL_RELEASE':
@@ -121,7 +125,9 @@ export function HrAuditLogScreen({ apiBase }: { apiBase: string }) {
             <option value="SELF_APPROVED">Quản lý tự duyệt (Self-approved)</option>
             <option value="CLOSE_PERIOD">Chốt kỳ công</option>
             <option value="REOPEN_PERIOD">Mở lại kỳ công</option>
+            <option value="PAYROLL_CREATE">Tạo bảng lương</option>
             <option value="PAYROLL_CALCULATE">Tính bảng lương</option>
+            <option value="PAYROLL_LOCK">Khóa bảng lương</option>
             <option value="PAYROLL_RELEASE">Phát hành phiếu lương</option>
             <option value="REQUEST_EXPLANATION">Yêu cầu giải trình</option>
             <option value="ATTENDANCE_RESOLUTION">Xử lý vắng không phép</option>

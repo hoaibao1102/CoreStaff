@@ -37,6 +37,7 @@ import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
 import { PayslipDetailPage } from '../screens/hr/PayslipPreviewDialog';
 import { MyCompensationScreen } from '../screens/Employee/MyCompensationScreen';
 import { LandingScreen } from '../screens/Landing/LandingScreen';
+import { RouteNotFound } from '../components/RouteNotFound';
 
 interface WorkspaceRoutesProps {
   path: string;
@@ -56,15 +57,20 @@ interface StaffOverviewProps {
 
 /** Default route: session summary cards plus the workspace modules. */
 function StaffOverview({ user, apiBase, apiSource, health }: StaffOverviewProps) {
+  const showInfra = user.role === 'SYSTEM_ADMIN';
   const cards: { label: string; value: string; hint?: string | null }[] = [
     { label: 'Vai trò', value: roleLabel(user.role) },
     { label: 'Mã nhân viên', value: user.employeeCode || 'Không áp dụng' },
-    { label: 'API', value: statusPill(apiSource), hint: apiBase ?? undefined },
-    {
-      label: 'MongoDB',
-      value: health?.mongo === 'configured' ? 'Đã cấu hình' : 'Chưa rõ',
-      hint: health?.timezone,
-    },
+    ...(showInfra
+      ? [
+          { label: 'API', value: statusPill(apiSource), hint: apiBase ?? undefined },
+          {
+            label: 'MongoDB',
+            value: health?.mongo === 'configured' ? 'Đã cấu hình' : 'Chưa rõ',
+            hint: health?.timezone,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -81,9 +87,11 @@ function StaffOverview({ user, apiBase, apiSource, health }: StaffOverviewProps)
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               {roleLabel(user.role)}
             </span>
-            <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
-              {statusPill(apiSource)}
-            </span>
+            {showInfra && (
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+                {statusPill(apiSource)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -283,7 +291,7 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
               <PayslipDetailPage apiBase={apiBase} payslipId={route.split('/')[4] || ''} mode="hr" />
             </>
           ) : (
-            <HrOverviewScreen user={user} apiBase={apiBase} />
+            <RouteNotFound homePath="/overview" />
           )}
         </section>
       </WorkspaceShell>
@@ -378,10 +386,11 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     );
   }
 
-  // ── Fallback: show dashboard ─────────────────────────────────────────
+  // ── Fallback: unknown or not permitted for this role ─────────────────
+  const homePath = user.role === 'EMPLOYEE' ? '/app/attendance' : user.role === 'SYSTEM_ADMIN' ? '/platform/organizations' : '/overview';
   return (
     <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
-      <StaffOverview user={user} apiBase={apiBase} apiSource={apiSource} health={health} />
+      <RouteNotFound homePath={homePath} />
     </WorkspaceShell>
   );
 }

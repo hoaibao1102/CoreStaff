@@ -227,7 +227,12 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleLock = async (runId: string) => {
+  const handleLock = async (run: PayrollRun) => {
+    const confirmed = window.confirm(
+      `Khóa bảng lương kỳ ${run.periodLabel}? Sau khi khóa sẽ không thể tính lại hay chỉnh sửa số liệu.`,
+    );
+    if (!confirmed) return;
+    const runId = run._id;
     setLoading(true);
     try {
       await payrollPut(apiBase, `/api/payroll-runs/${runId}/lock`);
@@ -246,7 +251,12 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleRelease = async (runId: string) => {
+  const handleRelease = async (run: PayrollRun) => {
+    const confirmed = window.confirm(
+      `Phát hành phiếu lương kỳ ${run.periodLabel} cho ${run.processedEmployeeCount} nhân viên? Nhân viên sẽ nhận thông báo và xem được phiếu lương; thao tác này không thể hoàn tác.`,
+    );
+    if (!confirmed) return;
+    const runId = run._id;
     setLoading(true);
     try {
       await payrollPost(apiBase, `/api/payslips/release/${runId}`);
@@ -419,13 +429,13 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                             <Button size="sm" variant="outline" onClick={() => handleRecalculate(run)} disabled={loading}>
                               {loading ? 'Đang xử lý...' : 'Tính lại'}
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleLock(run._id)} disabled={loading}>
+                            <Button size="sm" variant="outline" onClick={() => handleLock(run)} disabled={loading}>
                               <LockKeyhole aria-hidden="true" />Khóa
                             </Button>
                           </>
                         )}
                         {run.status === 'LOCKED' && (
-                          <Button size="sm" variant="default" onClick={() => handleRelease(run._id)} disabled={loading}>
+                          <Button size="sm" variant="default" onClick={() => handleRelease(run)} disabled={loading}>
                             <Send aria-hidden="true" />Phát hành
                           </Button>
                         )}
