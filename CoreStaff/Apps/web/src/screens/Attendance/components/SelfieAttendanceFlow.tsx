@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Camera, Info, MapPin, RefreshCw, Smile, Clock, CheckCircle2, LogOut } from 'lucide-react';
 import type { DayAttendance } from '../types';
 import { StickyActionBar } from './StickyActionBar';
+import { AuthedImage } from '../../../components/AuthedImage';
 
 export interface SelfieAttendanceFlowProps {
   today: DayAttendance;
@@ -278,7 +279,7 @@ export function SelfieAttendanceFlow({
         <div className="md:col-span-7 flex flex-col items-center justify-center">
           {!isCompleted ? (
             <div className="w-full aspect-[3/4] max-w-[340px] md:max-w-[380px] relative bg-muted rounded-2xl border border-border overflow-hidden shadow-md">
-              <img
+              <AuthedImage
                 src={
                   previewPhotoUrl ||
                   (isCheckOut && today.checkIn && 'evidence' in today.checkIn && today.checkIn.evidence?.previewUrl

@@ -50,6 +50,7 @@ import { fetchAddressFromCoords } from '../Attendance/verification/useLocation';
 import { formatMinutes } from '../Policies/policies.ui';
 import { getSocket } from '@/services/socket';
 import { formatVN } from '@/lib/datetime';
+import { AuthedImage } from '@/components/AuthedImage';
 
 function formatDate(v?: string | Date) {
   return formatVN(v);
@@ -736,10 +737,11 @@ function DecisionDialog({
                       className="group relative cursor-pointer overflow-hidden rounded-lg border bg-black/5 aspect-4/3 flex items-center justify-center"
                       onClick={() => setPreviewImage(selfieSrc)}
                     >
-                      <img
+                      <AuthedImage
                         src={selfieSrc}
                         alt="Ảnh selfie chấm công"
                         className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        fallback={<span className="text-xs text-muted-foreground">Không tải được ảnh selfie</span>}
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-medium gap-1">
                         <Eye className="size-4" /> Bấm để xem rõ nét
@@ -908,7 +910,7 @@ function DecisionDialog({
         <Dialog open onOpenChange={() => setPreviewImage(null)}>
           <DialogContent className="max-w-3xl p-2 bg-black border-none flex flex-col items-center justify-center">
             <div className="relative w-full max-h-[85vh] flex items-center justify-center">
-              <img
+              <AuthedImage
                 src={previewImage}
                 alt="Ảnh phóng to"
                 className="max-h-[80vh] max-w-full rounded-md object-contain"

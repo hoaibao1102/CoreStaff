@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { friendlyEmployeeError } from '../employee-api';
 import {
@@ -11,6 +11,7 @@ import { AppIcon } from '../components/AppIcon';
 import { RequestsScreen } from './RequestsScreen';
 import { colors, radius, spacing } from '../theme';
 import { useConfirmDialog } from '../components/ConfirmDialog';
+import { AuthedImage } from '../authed-image';
 
 type Tab = 'review' | 'mine';
 
@@ -186,7 +187,7 @@ function SelfieCard({ uri }: { uri: string }) {
     {failed
       ? <View style={styles.selfieError}><Text style={styles.selfieErrorText}>Không tải được ảnh bằng chứng.</Text></View>
       : <View style={styles.selfieFrame}>
-        <Image source={{ uri }} resizeMode="cover" accessibilityLabel="Ảnh selfie bằng chứng" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} style={styles.selfieImage} />
+        <AuthedImage url={uri} resizeMode="cover" accessibilityLabel="Ảnh selfie bằng chứng" onReady={() => setLoaded(true)} onFail={() => setFailed(true)} style={styles.selfieImage} />
         {!loaded ? <View style={styles.selfieLoading}><ActivityIndicator color={colors.primary} /></View> : null}
       </View>}
   </Card>;

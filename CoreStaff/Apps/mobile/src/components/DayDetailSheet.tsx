@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AttendanceDay, AttendanceEvent, WorkCreditPolicy } from '../employee-api';
 import { calculateDayCredit, dayHistoryStatus, type HistoryStatus } from '../day-credit';
 import { AppIcon, type AppIconName } from './AppIcon';
 import { StatusBadge, formatDate, formatMinutes, formatTime, shiftTitle } from './ui';
 import { colors, radius, spacing } from '../theme';
+import { AuthedImage } from '../authed-image';
 
 type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
@@ -99,7 +100,7 @@ export function DayDetailSheet({ day, policy, apiBase, onClose }: { day: Attenda
       </ScrollView>
     </View>
     {photo ? <Modal visible transparent animationType="fade" onRequestClose={() => setPhoto(null)}>
-      <Pressable accessibilityLabel="Đóng ảnh" style={styles.lightbox} onPress={() => setPhoto(null)}><Image source={{ uri: photo }} resizeMode="contain" style={styles.lightboxImg} /></Pressable>
+      <Pressable accessibilityLabel="Đóng ảnh" style={styles.lightbox} onPress={() => setPhoto(null)}><AuthedImage url={photo} resizeMode="contain" style={styles.lightboxImg} /></Pressable>
     </Modal> : null}
   </Modal>;
 }
@@ -124,7 +125,7 @@ function Evidence({ event, apiBase, onPhoto }: { event: AttendanceEvent; apiBase
   const [icon, text]: [AppIconName, string] = event.method === 'SELFIE' ? ['camera-outline', 'Ảnh selfie'] : event.method === 'GPS' ? ['locate-outline', 'Xác thực vị trí GPS'] : event.method === 'NETWORK' ? ['wifi', 'Xác thực Wi-Fi công ty'] : ['shield-checkmark-outline', 'Đã ghi nhận'];
   const url = event.method === 'SELFIE' && event.evidenceUrl ? (event.evidenceUrl.startsWith('http') ? event.evidenceUrl : `${apiBase.replace(/\/$/, '')}${event.evidenceUrl}`) : null;
   return <View style={styles.evidence}>
-    {url ? <Pressable accessibilityRole="imagebutton" accessibilityLabel="Xem ảnh selfie" onPress={() => !failed && onPhoto(url)} style={styles.thumb}>{failed ? <AppIcon name="image-outline" size={22} color={colors.muted} /> : <Image source={{ uri: url }} onError={() => setFailed(true)} style={styles.thumbImg} />}</Pressable> : null}
+    {url ? <Pressable accessibilityRole="imagebutton" accessibilityLabel="Xem ảnh selfie" onPress={() => !failed && onPhoto(url)} style={styles.thumb}>{failed ? <AppIcon name="image-outline" size={22} color={colors.muted} /> : <AuthedImage url={url} onFail={() => setFailed(true)} style={styles.thumbImg} />}</Pressable> : null}
     <View style={styles.flex}>
       <View style={styles.evRow}><AppIcon name={icon} size={15} color={colors.primary} /><Text style={styles.evTitle}>{text}</Text></View>
       {address ? <Line icon="location-outline" text={address} /> : null}

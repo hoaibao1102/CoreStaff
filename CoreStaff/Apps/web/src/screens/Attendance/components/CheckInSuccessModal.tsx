@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { X, Clock, MapPin, Crosshair, Check, MoreHorizontal, CheckCircle2, Camera, Calendar, Info } from 'lucide-react';
 import type { AttendanceEvent, AttendanceMethod } from '../types';
+import { AuthedImage } from '../../../components/AuthedImage';
 
 export interface CheckInSuccessModalProps {
   isOpen: boolean;
@@ -215,7 +216,7 @@ export function CheckInSuccessModal({
           {photoUrl ? (
             <div className="space-y-2">
               <div className="relative aspect-[3/4] max-w-[360px] mx-auto w-full overflow-hidden rounded-2xl border border-border bg-muted shadow-md">
-                <img
+                <AuthedImage
                   src={photoUrl}
                   alt="Selfie bằng chứng"
                   className="absolute inset-0 size-full object-cover"
