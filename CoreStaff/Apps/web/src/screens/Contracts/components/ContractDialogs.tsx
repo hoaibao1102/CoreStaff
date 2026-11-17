@@ -19,6 +19,7 @@ import {
   type ContractType,
   type ContractStatus,
 } from '../../../lib/types';
+import { formatVN } from '@/lib/datetime';
 
 /** Employee option — { _id: profileId, fullName, employeeCode } shape is what
  * ContractsScreen passes in (EmployeeDirectory enriches codes the same way). */
@@ -576,9 +577,9 @@ export function ContractDetailDialog(props: {
 
               <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <FieldRow label="Loại hợp đồng" value={(CONTRACT_TYPE_LABELS as Record<string, string>)[contract.contractType]} />
-                <FieldRow label="Ngày hiệu lực" value={new Date(contract.effectiveDate).toLocaleDateString('vi-VN')} />
-                <FieldRow label="Ngày hết hạn" value={contract.expiryDate ? new Date(contract.expiryDate).toLocaleDateString('vi-VN') : 'Không thời hạn'} />
-                <FieldRow label="Ngày chấm dứt" value={contract.endDate ? new Date(contract.endDate).toLocaleDateString('vi-VN') : null} />
+                <FieldRow label="Ngày hiệu lực" value={formatVN(contract.effectiveDate)} />
+                <FieldRow label="Ngày hết hạn" value={contract.expiryDate ? formatVN(contract.expiryDate) : 'Không thời hạn'} />
+                <FieldRow label="Ngày chấm dứt" value={contract.endDate ? formatVN(contract.endDate) : null} />
                 <FieldRow label="Lý do đổi trạng thái" value={contract.statusReason} />
                 <FieldRow label="Ghi chú" value={contract.note} />
               </dl>

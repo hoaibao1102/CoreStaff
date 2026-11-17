@@ -73,6 +73,7 @@ import {
     validateEditJoinDate,
     validateStatusEffectiveDate,
 } from './validation';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Helpers ───────── */
 function formatVnd(val?: number | null): string {
@@ -882,8 +883,8 @@ function EmployeeDetailContent({
                                 >
                                     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         <FieldRow label="Mã nhân viên" value={employee.employeeCode} />
-                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
-                                        <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('vi-VN') : undefined} />
+                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? formatVN(employee.joinDate) : undefined} />
+                                        <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? formatVN(employee.dateOfBirth) : undefined} />
                                         <FieldRow label="Giới tính" value={employee.gender ? (GENDER_LABELS as Record<string, string>)[employee.gender] : undefined} />
                                         <FieldRow label="Số điện thoại" value={employee.phone} />
                                         <FieldRow label="Email" value={employee.email} />
@@ -1026,8 +1027,8 @@ function EmployeeDetailContent({
                                     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         <FieldRow label="Loại lao động" value={(EMPLOYMENT_TYPE_LABELS as Record<string, string>)[employee.employmentType]} />
                                         <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]} />
-                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
-                                        <FieldRow label="Ngày kết thúc" value={employee.endDate ? new Date(employee.endDate).toLocaleDateString('vi-VN') : undefined} />
+                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? formatVN(employee.joinDate) : undefined} />
+                                        <FieldRow label="Ngày kết thúc" value={employee.endDate ? formatVN(employee.endDate) : undefined} />
                                         <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
                                         <FieldRow label="Chức danh" value={employee.positionName || undefined} />
                                         <FieldRow label="Nơi làm việc" value={employee.workplaceName || undefined} />
@@ -1071,8 +1072,8 @@ function EmployeeDetailContent({
                                                     <div>
                                                         <CardTitle className="text-base">Mức lương & Đóng bảo hiểm</CardTitle>
                                                         <p className="text-sm text-muted-foreground">
-                                                            Hiệu lực từ: {new Date(salaryProfile.effectiveFrom).toLocaleDateString('vi-VN')}
-                                                            {salaryProfile.effectiveTo ? ` đến ${new Date(salaryProfile.effectiveTo).toLocaleDateString('vi-VN')}` : ' (Hiện tại)'}
+                                                            Hiệu lực từ: {formatVN(salaryProfile.effectiveFrom)}
+                                                            {salaryProfile.effectiveTo ? ` đến ${formatVN(salaryProfile.effectiveTo)}` : ' (Hiện tại)'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1274,7 +1275,7 @@ function EmployeeDetailContent({
                                                         </div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                             {dep.dateOfBirth && (
-                                                                <p>Ngày sinh: {new Date(dep.dateOfBirth).toLocaleDateString('vi-VN')}</p>
+                                                                <p>Ngày sinh: {formatVN(dep.dateOfBirth)}</p>
                                                             )}
                                                             {dep.idCardNumber && (
                                                                 <p>CCCD: {dep.idCardNumber}</p>
@@ -1351,7 +1352,7 @@ function EmployeeDetailContent({
                                             <div>
                                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ngày kết thúc</p>
                                                 <p className="text-sm font-medium text-foreground mt-1">
-                                                    {new Date(employee.endDate).toLocaleDateString('vi-VN')}
+                                                    {formatVN(employee.endDate)}
                                                 </p>
                                             </div>
                                         )}
@@ -1403,7 +1404,7 @@ function EmployeeDetailContent({
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground mt-1">
-                                                            Hiệu lực: {new Date(record.effectiveDate).toLocaleDateString('vi-VN')}
+                                                            Hiệu lực: {formatVN(record.effectiveDate)}
                                                             {record.reason && ` · Lý do: ${record.reason}`}
                                                         </p>
                                                     </div>
@@ -1412,7 +1413,7 @@ function EmployeeDetailContent({
                                                             Bởi {record.changedByName || record.changedBy}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground/80 mt-0.5">
-                                                            {new Date(record.createdAt).toLocaleDateString('vi-VN')}
+                                                            {formatVN(record.createdAt)}
                                                         </p>
                                                     </div>
                                                 </div>

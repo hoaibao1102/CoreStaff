@@ -26,6 +26,7 @@ const attendanceRows = [
 import { AttendanceHistoryView } from '../Attendance/components/AttendanceHistoryView';
 import { toast } from '../../components/toast';
 import { getSocket } from '../../services/socket';
+import { formatVN } from '@/lib/datetime';
 
 export function AttendanceHistoryScreen({ apiBase }: { apiBase?: string | null }) {
   return <AttendanceHistoryView apiBase={apiBase} />;
@@ -598,7 +599,7 @@ export function LeaveOvertimeScreen() {
                     </div>
 
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Ngày {new Date(row.workDate).toLocaleDateString('vi-VN')} · {row.reason}
+                      Ngày {formatVN(row.workDate)} · {row.reason}
                     </p>
 
                     {(row.reviewComment || (isClarification && row.reason)) && (

@@ -124,3 +124,143 @@ describe('calendar projection invalidation', () => {
     expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org', [dto.date], ctx.session);
   });
 });
+
+function setupRange(seed: Row[] = []) {
+  const rows: Row[] = seed.map((row, index) => ({ _id: `seed${index}`, organizationId: 'org', ...row }));
+  const session = {
+    withTransaction: jest.fn(async (work: () => Promise<void>) => work()),
+    endSession: jest.fn(async () => undefined),
+  };
+  const matchDate = (row: Row, cond: any) => {
+    if (cond === undefined) return true;
+    if (cond.$in) return cond.$in.includes(row.date);
+    return (cond.$gte === undefined || row.date >= cond.$gte) && (cond.$lte === undefined || row.date <= cond.$lte);
+  };
+  const calendar = {
+    db: { startSession: jest.fn(async () => session) },
+    find: jest.fn((filter: Row) => ({
+      session: jest.fn(() => ({ lean: jest.fn(async () => rows.filter(row => matchDate(row, filter.date)).map(row => ({ ...row }))) })),
+    })),
+    create: jest.fn(async (docs: Row[]) => docs.map((doc, index) => {
+      const row = { _id: `new${rows.length + index}`, ...doc };
+      rows.push(row);
+      return { ...row, toObject: () => ({ ...row }) };
+    })),
+    deleteMany: jest.fn(async (filter: Row) => {
+      const ids: unknown[] = filter._id.$in;
+      for (let i = rows.length - 1; i >= 0; i -= 1) if (ids.includes(rows[i]._id)) rows.splice(i, 1);
+      return { deletedCount: ids.length };
+    }),
+    updateOne: jest.fn(async (filter: Row, update: Row) => {
+      const row = rows.find(item => item._id === filter._id);
+      if (row) Object.assign(row, update.$set);
+      return { modifiedCount: row ? 1 : 0 };
+    }),
+  };
+  const policies = { overtimeAt: jest.fn(async (_org: string, _at: Date, _session?: unknown) => ({ publicHolidayRate: 3 })) };
+  const overtime = { invalidate: jest.fn(async () => ({ scanned: 0, changed: 0 })) };
+  const periodVersion = { bumpForWorkDates: jest.fn(async () => 1) };
+  const service = new CalendarService(calendar as never, policies as never, overtime as never, periodVersion as never);
+  return { service, calendar, policies, overtime, periodVersion, session, rows };
+}
+
+const tet = { startDate: '2027-02-05', endDate: '2027-02-09', type: CalendarExceptionType.PUBLIC_HOLIDAY, name: 'Tết Nguyên đán' };
+const tetRows = ['2027-02-05', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09'].map(date => ({ date, type: 'PUBLIC_HOLIDAY', name: 'Tết Nguyên đán' }));
+
+describe('multi-day holidays (range)', () => {
+  it('creates every adjacent day in one transaction and invalidates them together', async () => {
+    const ctx = setupRange();
+    const created = await ctx.service.createRange('org', 'hr', tet);
+    expect(created.map(row => row.date)).toEqual(['2027-02-05', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09']);
+    expect(ctx.policies.overtimeAt).toHaveBeenCalledTimes(5);
+    expect(ctx.overtime.invalidate).toHaveBeenCalledTimes(1);
+    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org', created.map(row => row.date), ctx.session);
+  });
+
+  it('a one-day range behaves like a single day', async () => {
+    const ctx = setupRange();
+    const created = await ctx.service.createRange('org', 'hr', { ...tet, endDate: tet.startDate });
+    expect(created).toHaveLength(1);
+  });
+
+  it('rejects an end date before the start date with both dates in the message', async () => {
+    const ctx = setupRange();
+    await expect(ctx.service.createRange('org', 'hr', { ...tet, endDate: '2027-02-01' })).rejects.toThrow(/CALENDAR_RANGE_INVALID.*01\/02\/2027.*05\/02\/2027/);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a range longer than the limit and says how many days were chosen', async () => {
+    const ctx = setupRange();
+    await expect(ctx.service.createRange('org', 'hr', { ...tet, endDate: '2027-04-30' })).rejects.toThrow(/CALENDAR_RANGE_TOO_LONG.*31/);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+  });
+
+  it('creates nothing and lists the days that are already configured', async () => {
+    const ctx = setupRange([{ date: '2027-02-07', type: 'SPECIAL_WORKING_DAY', name: 'Làm bù' }]);
+    await expect(ctx.service.createRange('org', 'hr', tet)).rejects.toThrow(/CALENDAR_DATE_ALREADY_CONFIGURED.*07\/02\/2027 \(Làm bù\)/);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+    expect(ctx.overtime.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('creates nothing and lists every day without an overtime policy', async () => {
+    const ctx = setupRange();
+    ctx.policies.overtimeAt.mockImplementation(async (_org: string, at: Date) => {
+      if (at.toISOString().slice(0, 10) >= '2027-02-08') throw new NotFoundException('OVERTIME_POLICY_NOT_FOUND');
+      return { publicHolidayRate: 3 };
+    });
+    await expect(ctx.service.createRange('org', 'hr', tet)).rejects.toThrow(/OVERTIME_POLICY_NOT_FOUND.*2 ngày: 08\/02\/2027, 09\/02\/2027/);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+  });
+
+  it('extends a run: keeps existing days and adds the new ones', async () => {
+    const ctx = setupRange(tetRows);
+    const result = await ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09', endDate: '2027-02-11' });
+    expect(result.map(row => row.date)).toEqual(['2027-02-05', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09', '2027-02-10', '2027-02-11']);
+    expect(ctx.calendar.create).toHaveBeenCalledWith([expect.objectContaining({ date: '2027-02-10' }), expect.objectContaining({ date: '2027-02-11' })], expect.anything());
+    expect(ctx.calendar.deleteMany).not.toHaveBeenCalled();
+    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org', ['2027-02-10', '2027-02-11'], ctx.session);
+  });
+
+  it('shortens a run: deletes the dropped days', async () => {
+    const ctx = setupRange(tetRows);
+    const result = await ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09', startDate: '2027-02-06', endDate: '2027-02-08' });
+    expect(result.map(row => row.date)).toEqual(['2027-02-06', '2027-02-07', '2027-02-08']);
+    expect(ctx.rows.map(row => row.date)).toEqual(['2027-02-06', '2027-02-07', '2027-02-08']);
+    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org', ['2027-02-05', '2027-02-09'], ctx.session);
+  });
+
+  it('renames the whole run in one step', async () => {
+    const ctx = setupRange(tetRows);
+    const result = await ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09', name: 'Nghỉ Tết' });
+    expect(result.every(row => row.name === 'Nghỉ Tết')).toBe(true);
+    expect(ctx.calendar.updateOne).toHaveBeenCalledTimes(5);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+  });
+
+  it('does not touch anything when nothing changed', async () => {
+    const ctx = setupRange(tetRows);
+    await ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09' });
+    expect(ctx.calendar.updateOne).not.toHaveBeenCalled();
+    expect(ctx.overtime.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('refuses to extend into a day that belongs to another configuration', async () => {
+    const ctx = setupRange([...tetRows, { date: '2027-02-10', type: 'SPECIAL_WORKING_DAY', name: 'Làm bù' }]);
+    await expect(ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09', endDate: '2027-02-10' })).rejects.toThrow(/10\/02\/2027 \(Làm bù\)/);
+    expect(ctx.calendar.create).not.toHaveBeenCalled();
+    expect(ctx.calendar.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing original range as not found', async () => {
+    const ctx = setupRange();
+    await expect(ctx.service.updateRange('org', 'hr', { ...tet, originalFrom: '2027-02-05', originalTo: '2027-02-09' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('removes a whole run and invalidates its days', async () => {
+    const ctx = setupRange(tetRows);
+    const result = await ctx.service.removeRange('org', '2027-02-05', '2027-02-09');
+    expect(result).toMatchObject({ deleted: 5, from: '2027-02-05', to: '2027-02-09' });
+    expect(ctx.rows).toHaveLength(0);
+    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org', result.dates, ctx.session);
+  });
+});

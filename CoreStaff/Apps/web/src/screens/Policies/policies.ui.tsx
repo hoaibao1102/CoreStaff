@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { Skeleton } from "@/components/skeleton";
+import { formatVN } from '@/lib/datetime';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Shared presentational helpers for the two policy screens
@@ -12,9 +13,7 @@ import { Skeleton } from "@/components/skeleton";
 /** Format an ISO/date string as dd/mm/yyyy; tolerant of missing/invalid input. */
 export function formatPolicyDate(value?: string | null): string {
   if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("vi-VN");
+  return formatVN(value);
 }
 
 /** "01/01/2026 – Hiện tại" or "01/01/2026 – 30/06/2026". */

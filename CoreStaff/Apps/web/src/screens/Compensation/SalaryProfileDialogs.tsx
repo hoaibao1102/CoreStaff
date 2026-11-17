@@ -16,6 +16,7 @@ import {
   type UpdateSalaryProfilePayload,
 } from '@/services/compensation.service';
 import { getEmployees, hrErrorMessage, type EmployeeProfile } from '@/services/hrService';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -670,9 +671,9 @@ export function SalaryProfileDetailDialog({
           <div className="flex justify-between border-b pb-2">
             <span className="text-muted-foreground">Khoảng hiệu lực:</span>
             <span className="font-medium">
-              {profile.effectiveFrom ? new Date(profile.effectiveFrom).toLocaleDateString('vi-VN') : '—'}
+              {profile.effectiveFrom ? formatVN(profile.effectiveFrom) : '—'}
               {' → '}
-              {profile.effectiveTo ? new Date(profile.effectiveTo).toLocaleDateString('vi-VN') : 'Vô hạn'}
+              {profile.effectiveTo ? formatVN(profile.effectiveTo) : 'Vô hạn'}
             </span>
           </div>
           <div className="flex justify-between border-b pb-2">

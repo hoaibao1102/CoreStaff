@@ -408,6 +408,16 @@ async function main() {
 
   // ── Employee assignments ─────────────────────────────────────────────────
   for (const emp of employees) {
+    // HR can only assign — and later edit — employees who are currently working
+    // (PROBATION / ACTIVE / ON_LEAVE). A user without such a profile would leave an
+    // assignment nobody can open in the UI, so skip it and say why.
+    if (APPLY) {
+      const profile: any = await EmployeeProfile.findOne({ organizationId, userId: userIds.get(emp.employeeCode) }).lean();
+      if (!profile || !['PROBATION', 'ACTIVE', 'ON_LEAVE'].includes(profile.employmentStatus)) {
+        console.log(`  ! SKIP EmployeeAssignment ${emp.employeeCode}: ${profile ? `trạng thái ${profile.employmentStatus} không còn làm việc` : 'chưa có hồ sơ nhân viên'}`);
+        continue;
+      }
+    }
     await insertIfMissing(
       Assignment,
       { organizationId, userId: userIds.get(emp.employeeCode) },

@@ -13,6 +13,7 @@ import { CreatePeriodDialog } from './CreatePeriodDialog';
 import { ReopenPeriodDialog } from './ReopenPeriodDialog';
 import { toast } from '@/components/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/dialog';
+import { formatVN } from '@/lib/datetime';
 
 const STATUS_FILTERS: { value: TimesheetPeriodStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Tất cả trạng thái' },
@@ -171,8 +172,8 @@ function TimesheetPeriodList({ apiBase, organizationId, canManage, user }: { api
                   </span>
                 </TableCell>
                 <TableCell>v{row.version}</TableCell>
-                <TableCell>{new Date(row.startDate).toLocaleDateString('vi-VN')}</TableCell>
-                <TableCell>{new Date(row.endDate).toLocaleDateString('vi-VN')}</TableCell>
+                <TableCell>{formatVN(row.startDate)}</TableCell>
+                <TableCell>{formatVN(row.endDate)}</TableCell>
                 {canManage && (
                   <TableCell>
                     {(row.status === 'OPEN' || row.status === 'REVIEWING') && (user.role === 'HR' || user.role === 'DEPARTMENT_MANAGER') && (

@@ -10,6 +10,7 @@ import { useHrResource } from '../../lib/useHrResource';
 import { hrErrorMessage, listEmployees, listInsuranceProfiles, listInsurancePolicies, type InsuranceProfile, type InsurancePolicy } from '../../services/hrService';
 import { deriveInsuranceSalary, listSalaryProfiles, type SalaryProfile } from '../../services/compensation.service';
 import { InsuranceProfileCreateDialog, InsuranceProfileDetailDialog, type InsuranceEmployeeOption } from './components/InsuranceProfileDialogs';
+import { formatVN } from '@/lib/datetime';
 
 const PAGE_SIZE = 10;
 
@@ -42,8 +43,7 @@ function formatPercent(rate: number): string {
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 function isEffective(row: { effectiveFrom: string; effectiveTo?: string | null }, now: Date): boolean {

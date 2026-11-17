@@ -7,6 +7,7 @@ import { toast } from '../../../components/toast';
 import { hrErrorMessage } from '../../../services/hrService';
 import { respondRequestClarification, type ManagerRequest } from '../../../services/manager.service';
 import { AlertCircle, Clock, Info } from 'lucide-react';
+import { formatVN } from '@/lib/datetime';
 
 interface Props {
   apiBase: string;
@@ -24,7 +25,7 @@ export function ClarificationResponseModal({ apiBase, request, open, onClose, on
   const [error, setError] = useState('');
 
   const workDateFormatted = request.workDate
-    ? new Date(request.workDate).toLocaleDateString('vi-VN')
+    ? formatVN(request.workDate)
     : '';
 
   const hrMessage = request.reviewComment || request.reason || 'HR yêu cầu nhân viên giải trình mốc chấm công còn thiếu.';

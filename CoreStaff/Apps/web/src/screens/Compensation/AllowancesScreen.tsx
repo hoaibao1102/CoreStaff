@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getOrganizationAllowances, type OrganizationAllowance } from '@/services/compensation.service';
 import { hrErrorMessage } from '@/services/hrService';
 import { AllowanceCreateDialog, AllowanceEditDialog } from './AllowanceDialogs';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -18,9 +19,7 @@ function formatVnd(val?: number): string {
 
 function formatDate(iso?: string | null): string {
   if (!iso) return 'Vô hạn';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('vi-VN');
+  return formatVN(iso);
 }
 
 export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: string | null; canManage?: boolean }) {

@@ -42,6 +42,7 @@ import {
   type EmployeeDocument,
 } from '../../services/hrService';
 import { SelfProvisionDialog } from '../EmployeeDirectory/components/SelfProvisionDialog';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Helpers ───────── */
 
@@ -52,8 +53,7 @@ function display(value: string | null | undefined): string {
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
-  const time = new Date(value);
-  return Number.isNaN(time.getTime()) ? '—' : time.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 function initials(name: string): string {

@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { FormInputField } from '@/components/form/FormInputField';
 import { FormSelectField } from '@/components/form/FormSelectField';
 import { toast } from '@/components/toast';
-import { assignmentErrorMessage, createAssignment, type CreateAssignmentPayload } from '@/services/assignment.service';
+import { assignmentErrorMessage, createAssignment, isWorkingEmployee, todayIso, type CreateAssignmentPayload } from '@/services/assignment.service';
 import type { Department, EmployeeProfile, Workplace } from '@/services/hrService';
+import { formatDateOnlyVN } from '@/lib/datetime';
 
 interface AssignmentCreateDialogProps {
   apiBase: string;
@@ -37,7 +38,7 @@ const EMPTY_FORM: AssignmentForm = {
   effectiveTo: '',
 };
 
-/** Lọc nhân viên: thuộc phòng ban đã chọn VÀ chưa có phân công nơi làm việc */
+/** Lọc nhân viên: đang làm việc, thuộc phòng ban đã chọn VÀ chưa có phân công nơi làm việc */
 function filterEligibleEmployees(
   employees: EmployeeProfile[],
   departmentId: string,
@@ -45,7 +46,7 @@ function filterEligibleEmployees(
 ): EmployeeProfile[] {
   if (!departmentId) return [];
   return employees.filter(emp =>
-    emp.departmentId === departmentId && !assignedUserIds.has(emp.userId)
+    isWorkingEmployee(emp.employmentStatus) && emp.departmentId === departmentId && !assignedUserIds.has(emp.userId)
   );
 }
 
@@ -55,6 +56,7 @@ function validate(form: AssignmentForm): AssignmentFormErrors {
   if (!form.userId) errors.userId = 'Vui lòng chọn nhân viên.';
   if (!form.workplaceId) errors.workplaceId = 'Vui lòng chọn nơi làm việc.';
   if (!form.effectiveFrom) errors.effectiveFrom = 'Vui lòng chọn ngày bắt đầu.';
+  else if (form.effectiveFrom < todayIso()) errors.effectiveFrom = `Ngày bắt đầu (${formatDateOnlyVN(form.effectiveFrom)}) đã qua. Vui lòng chọn từ hôm nay (${formatDateOnlyVN(todayIso())}) trở đi.`;
   if (!form.effectiveTo) errors.effectiveTo = 'Vui lòng chọn ngày kết thúc.';
   if (form.effectiveFrom && form.effectiveTo && form.effectiveFrom > form.effectiveTo) {
     errors.effectiveTo = 'Ngày bắt đầu không được sau ngày kết thúc.';
@@ -244,7 +246,7 @@ export function AssignmentCreateDialog({
               </label>
               <div className="flex flex-col items-center justify-center gap-2 min-h-11 w-full rounded-lg border border-input bg-muted px-3 py-4 text-center">
                 <Users className="size-5 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm text-muted-foreground">Không còn nhân viên chưa được phân công trong phòng ban này.</p>
+                <p className="text-sm text-muted-foreground">Phòng ban này không còn nhân viên đang làm việc nào chưa được phân công.</p>
               </div>
             </div>
           ) : (
@@ -276,8 +278,8 @@ export function AssignmentCreateDialog({
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormInputField id="assignment-effectiveFrom" label="Ngày bắt đầu" type="date" required value={form.effectiveFrom} onChange={event => updateField('effectiveFrom', event.target.value)} disabled={submitting} error={errors.effectiveFrom} />
-          <FormInputField id="assignment-effectiveTo" label="Ngày kết thúc" type="date" required value={form.effectiveTo} onChange={event => updateField('effectiveTo', event.target.value)} disabled={submitting} error={errors.effectiveTo} min={form.effectiveFrom || undefined} />
+          <FormInputField id="assignment-effectiveFrom" label="Ngày bắt đầu" type="date" required value={form.effectiveFrom} onChange={event => updateField('effectiveFrom', event.target.value)} disabled={submitting} error={errors.effectiveFrom} min={todayIso()} />
+          <FormInputField id="assignment-effectiveTo" label="Ngày kết thúc" type="date" required value={form.effectiveTo} onChange={event => updateField('effectiveTo', event.target.value)} disabled={submitting} error={errors.effectiveTo} min={form.effectiveFrom || todayIso()} />
         </div>
         <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" className="min-h-11" disabled={submitting} onClick={close}>Hủy</Button>

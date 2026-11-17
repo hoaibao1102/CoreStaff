@@ -15,6 +15,7 @@ import { toast } from '@/components/toast';
 import { AppLink } from '@/components/AppLink';
 import { hrErrorMessage, hrRequest } from '@/services/hrService';
 import { Calculator, Download, Eye, LockKeyhole, Plus, Send } from 'lucide-react';
+import { formatVN } from '@/lib/datetime';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -354,7 +355,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                 <option value="">Chọn kỳ công</option>
                 {availablePeriods.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.period} ({new Date(p.startDate).toLocaleDateString('vi-VN')} → {new Date(p.endDate).toLocaleDateString('vi-VN')}) - Đã chốt
+                    {p.period} ({formatVN(p.startDate)} → {formatVN(p.endDate)}) - Đã chốt
                   </option>
                 ))}
               </select>
@@ -413,7 +414,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                     <TableCell className="text-right font-mono">{formatCurrency(run.totalGross || 0)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(run.totalNet || 0)}</TableCell>
                     <TableCell className="text-center">{run.processedEmployeeCount}/{run.totalEmployeeCount}</TableCell>
-                    <TableCell>{new Date(run.runDate).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>{formatVN(run.runDate)}</TableCell>
                     <TableCell className="sticky right-0 z-10 bg-card pr-6 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>

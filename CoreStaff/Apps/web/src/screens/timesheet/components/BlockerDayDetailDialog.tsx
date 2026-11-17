@@ -180,7 +180,7 @@ export function BlockerDayDetailDialog({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-muted-foreground">Ngày công</div>
-                  <div className="font-medium">{day.workDate}</div>
+                  <div className="font-medium">{formatVN(day.workDate)}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Kết quả</div>

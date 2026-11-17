@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Skeleton } from '@/components/skeleton';
 import { getAssignmentById, type Assignment } from '@/services/assignment.service';
 import type { Department, EmployeeProfile, Workplace } from '@/services/hrService';
+import { formatDateOnlyVN, formatInstantDateTimeVN } from '@/lib/datetime';
 
 interface AssignmentDetailDialogProps {
   apiBase: string;
@@ -19,11 +20,8 @@ interface AssignmentDetailDialogProps {
 
 function formatDate(value?: string, includeTime = false): string {
   if (!value) return 'Chưa cập nhật';
-  const date = includeTime ? new Date(value) : new Date(`${value.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return 'Chưa cập nhật';
-  return new Intl.DateTimeFormat('vi-VN', includeTime
-    ? { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }
-    : { dateStyle: 'medium' }).format(date);
+  const text = includeTime ? formatInstantDateTimeVN(value) : formatDateOnlyVN(value);
+  return text === '—' ? 'Chưa cập nhật' : text;
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -86,7 +84,7 @@ export function AssignmentDetailDialog({
               <DetailRow label="Phòng ban">{departmentNames.get(assignment.departmentId) || 'Chưa có thông tin'}</DetailRow>
               <DetailRow label="Nơi làm việc">{assignment.workplaceId ? workplaceNames.get(assignment.workplaceId) || 'Chưa có thông tin' : 'Chưa chỉ định'}</DetailRow>
               <DetailRow label="Ngày bắt đầu">{formatDate(assignment.effectiveFrom)}</DetailRow>
-              <DetailRow label="Ngày kết thúc">{formatDate(assignment.effectiveTo)}</DetailRow>
+              <DetailRow label="Ngày kết thúc">{assignment.effectiveTo ? formatDate(assignment.effectiveTo) : 'Không thời hạn'}</DetailRow>
               <DetailRow label="Trạng thái"><Badge variant="secondary" className={assignment.active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>{assignment.active ? 'Đang hoạt động' : 'Ngưng hoạt động'}</Badge></DetailRow>
               <DetailRow label="Ngày tạo">{formatDate(assignment.createdAt, true)}</DetailRow>
               <DetailRow label="Ngày cập nhật">{formatDate(assignment.updatedAt, true)}</DetailRow>

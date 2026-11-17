@@ -35,6 +35,8 @@ interface DepartmentRow extends BaseRow {
 interface ProfileRow extends BaseRow {
 	userId: string;
 	employeeCode: string;
+	fullName?: string;
+	employmentStatus?: string;
 }
 
 interface WorkplaceRow extends BaseRow {
@@ -207,8 +209,8 @@ function seedDept(org: string, id: string): DepartmentRow {
 	return { _id: id, organizationId: org, code: `D${id}`, name: `Department ${id}`, active: true };
 }
 
-function seedProfile(org: string, id: string): ProfileRow {
-	return { _id: id, organizationId: org, userId: `user-${id}`, employeeCode: `EMP-${id}` };
+function seedProfile(org: string, id: string, employmentStatus = 'ACTIVE'): ProfileRow {
+	return { _id: id, organizationId: org, userId: `user-${id}`, employeeCode: `EMP-${id}`, fullName: `Nhân viên ${id}`, employmentStatus };
 }
 
 function seedWorkplace(org: string, id: string): WorkplaceRow {
@@ -413,5 +415,83 @@ describe('PATCH /hr/assignments/:id/deactivate — AssignmentService.setActive',
 		const svc = buildService(assignments, [], [], []);
 
 		await expect(svc.setActive('org1', 'nonexistent', false)).rejects.toBeInstanceOf(NotFoundException);
+	});
+});
+
+describe('Assignment rules — working employees only, specific errors', () => {
+	const future = '2999-01-01';
+	const depts = () => [seedDept('org1', 'dept1')];
+
+	it('C1: rejects a resigned employee and names them with their status', async () => {
+		const svc = buildService([], depts(), [seedProfile('org1', 'p1', 'RESIGNED')], []);
+		const err = await svc.create('org1', null, { userIds: ['user-p1'], departmentId: 'dept1', effectiveFrom: future }).catch((e) => e);
+		expect(err).toBeInstanceOf(BadRequestException);
+		const message = JSON.stringify(err.getResponse());
+		expect(message).toContain('EMPLOYEE_NOT_WORKING');
+		expect(message).toContain('Nhân viên p1 (EMP-p1)');
+		expect(message).toContain('Đã nghỉ việc');
+	});
+
+	it('C2: rejects a user without an employee profile with a specific message', async () => {
+		const svc = buildService([], depts(), [], []);
+		await expect(
+			svc.create('org1', null, { userIds: ['user-ghost'], departmentId: 'dept1', effectiveFrom: future }),
+		).rejects.toThrow('EMPLOYEE_PROFILE_NOT_FOUND');
+	});
+
+	it('C3: rejects a start date in the past and says which date and what is allowed', async () => {
+		const svc = buildService([], depts(), [seedProfile('org1', 'p1')], []);
+		const err = await svc.create('org1', null, { userIds: ['user-p1'], departmentId: 'dept1', effectiveFrom: '2020-01-01' }).catch((e) => e);
+		expect(err).toBeInstanceOf(BadRequestException);
+		const message = JSON.stringify(err.getResponse());
+		expect(message).toContain('EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+		expect(message).toContain('01/01/2020');
+	});
+
+	it('C4: reports every problem at once (past date + resigned employee)', async () => {
+		const svc = buildService([], depts(), [seedProfile('org1', 'p1', 'TERMINATED')], []);
+		const err = await svc.create('org1', null, { userIds: ['user-p1'], departmentId: 'dept1', effectiveFrom: '2020-01-01' }).catch((e) => e);
+		const message = JSON.stringify(err.getResponse());
+		expect(message).toContain('EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+		expect(message).toContain('EMPLOYEE_NOT_WORKING');
+	});
+
+	it('U13: re-assigning to a resigned employee is rejected', async () => {
+		const assignments = [seedAssignment('org1', 'user-p1', 'dept1', { id: 'asgn1' })];
+		const svc = buildService(assignments, depts(), [seedProfile('org1', 'p1'), seedProfile('org1', 'p2', 'RESIGNED')], []);
+		await expect(svc.update('org1', 'asgn1', { userId: 'user-p2' })).rejects.toThrow('EMPLOYEE_NOT_WORKING');
+	});
+
+	it('U14: seeded row (past start, no end date, owner has no profile) can still change its workplace', async () => {
+		const assignments = [seedAssignment('org1', 'user-orphan', 'dept1', { id: 'asgn1', effectiveFrom: '2026-01-01' })];
+		const svc = buildService(assignments, depts(), [], [seedWorkplace('org1', 'wp2')]);
+		const result = await svc.update('org1', 'asgn1', { workplaceId: 'wp2', effectiveFrom: '2026-01-01' });
+		expect(result.workplaceId).toBe('wp2');
+	});
+
+	it('U15: changing the start date of a seeded row to another past date is rejected', async () => {
+		const assignments = [seedAssignment('org1', 'user-p1', 'dept1', { id: 'asgn1', effectiveFrom: '2026-01-01' })];
+		const svc = buildService(assignments, depts(), [seedProfile('org1', 'p1')], []);
+		await expect(svc.update('org1', 'asgn1', { effectiveFrom: '2026-02-01' })).rejects.toThrow('EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+	});
+
+	it('U16: stored ISO timestamp for the same day is not treated as a changed past date', async () => {
+		const assignments = [seedAssignment('org1', 'user-p1', 'dept1', { id: 'asgn1', effectiveFrom: '2026-01-01' })];
+		const svc = buildService(assignments, depts(), [seedProfile('org1', 'p1')], [seedWorkplace('org1', 'wp2')]);
+		const result = await svc.update('org1', 'asgn1', { workplaceId: 'wp2', effectiveFrom: '2026-01-01T00:00:00.000Z' });
+		expect(result.workplaceId).toBe('wp2');
+	});
+
+	it('U17: overlap error names the employee, department and both date ranges', async () => {
+		const assignments = [
+			seedAssignment('org1', 'user-p1', 'dept1', { id: 'asgn1', effectiveFrom: '2999-01-01', effectiveTo: '2999-01-31' }),
+			seedAssignment('org1', 'user-p1', 'dept1', { id: 'asgn2', effectiveFrom: '2999-03-01', effectiveTo: '2999-03-31' }),
+		];
+		const svc = buildService(assignments, depts(), [seedProfile('org1', 'p1')], []);
+		const err = await svc.update('org1', 'asgn2', { effectiveFrom: '2999-01-15', effectiveTo: '2999-03-31' }).catch((e) => e);
+		const message = JSON.stringify(err.getResponse());
+		expect(message).toContain('OVERLAPPING_ASSIGNMENT_EXISTS');
+		expect(message).toContain('Nhân viên p1 (EMP-p1)');
+		expect(message).toContain('01/01/2999');
 	});
 });

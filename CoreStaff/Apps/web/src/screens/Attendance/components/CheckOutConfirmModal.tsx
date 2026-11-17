@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { X, Clock, AlertTriangle, CheckCircle2, LogOut, Building2, Calendar, MapPin } from 'lucide-react';
 import type { DayAttendance } from '../types';
+import { formatWeekdayDateVN } from '@/lib/datetime';
 
 export interface CheckOutConfirmModalProps {
   isOpen: boolean;
@@ -85,12 +86,7 @@ export function CheckOutConfirmModal({
     return formatMinutesToHours(totalMins);
   }, [checkInRecordedAt, now]);
 
-  const todayDateFormatted = now.toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  const todayDateFormatted = formatWeekdayDateVN(now);
 
   return (
     <div

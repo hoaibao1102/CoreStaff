@@ -39,9 +39,12 @@ export class BatchValidator {
             const sanitized = details.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
             throw new BadRequestException({
                 success: false,
+                // Top-level message keeps HttpException#message meaningful (logs, tests).
+                message: sanitized,
                 error: {
                     code: 'VALIDATION_ERROR',
                     message: sanitized,
+                    details: this.errors,
                 },
             });
         }

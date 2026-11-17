@@ -49,7 +49,7 @@ import { hrErrorMessage } from '@/services/hrService';
 import { fetchAddressFromCoords } from '../Attendance/verification/useLocation';
 import { formatMinutes } from '../Policies/policies.ui';
 import { getSocket } from '@/services/socket';
-import { formatVN } from '@/lib/datetime';
+import { formatInstantDateTimeVN, formatVN } from '@/lib/datetime';
 import { AuthedImage } from '@/components/AuthedImage';
 
 function formatDate(v?: string | Date) {
@@ -818,9 +818,9 @@ function DecisionDialog({
                 </span>
                 <p className="text-sm font-medium text-indigo-950 flex items-center gap-2">
                   <Clock3 className="size-4 text-indigo-600" />
-                  {request.requestedStart ? new Date(request.requestedStart).toLocaleString('vi-VN') : '—'}
+                  {request.requestedStart ? formatInstantDateTimeVN(request.requestedStart) : '—'}
                   {' → '}
-                  {request.requestedEnd ? new Date(request.requestedEnd).toLocaleString('vi-VN') : '—'}
+                  {request.requestedEnd ? formatInstantDateTimeVN(request.requestedEnd) : '—'}
                 </p>
                 {request.workDescription && (
                   <p className="text-xs text-indigo-900/80">Mô tả công việc: {request.workDescription}</p>

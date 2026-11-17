@@ -45,16 +45,16 @@ export class CreateTimesheetPeriodDto {
   }
 
   /**
-   * Validate that the period does not start in the past.
-   * startDate must be >= today (allow creating periods starting from today).
+   * Validate that the period has not already fully ended.
+   * endDate must be >= today (the current month may be created mid-month).
    */
   validateNotInPast(): void {
-    const start = new Date(this.startDate);
+    const end = new Date(this.endDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Normalize to start of day
     
-    if (start < today) {
-      throw new Error(`PERIOD_IN_PAST: Period start date (${this.startDate}) cannot be in the past.`);
+    if (end < today) {
+      throw new Error(`PERIOD_IN_PAST: Period end date (${this.endDate}) is already in the past.`);
     }
   }
 

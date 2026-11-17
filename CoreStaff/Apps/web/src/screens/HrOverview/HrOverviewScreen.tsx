@@ -43,6 +43,7 @@ import {
   type EmploymentStatus,
 } from '../../lib/types';
 import { roleLabel } from '../../lib/labels';
+import { formatVN, formatWeekdayDateVN } from '@/lib/datetime';
 
 /* ───────── Top Stat Metric Card ───────── */
 
@@ -130,12 +131,7 @@ export function HrOverviewScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
   const [timesheetPeriods, setTimesheetPeriods] = useState<TimesheetPeriod[]>([]);
 
   const dateStr = useMemo(() => {
-    return new Intl.DateTimeFormat('vi-VN', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date());
+    return formatWeekdayDateVN(new Date());
   }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {
@@ -383,7 +379,7 @@ export function HrOverviewScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
           <MetricCard
             title="Kỳ công hiện tại"
             value={activePeriod ? activePeriod.period : 'Chưa tạo'}
-            subtitle={activePeriod ? `${activePeriod.startDate} → ${activePeriod.endDate}` : 'Xem danh sách các kỳ công'}
+            subtitle={activePeriod ? `${formatVN(activePeriod.startDate)} → ${formatVN(activePeriod.endDate)}` : 'Xem danh sách các kỳ công'}
             icon={CalendarDays}
             iconBg="bg-emerald-500/10 dark:bg-emerald-500/20"
             iconColor="text-emerald-600 dark:text-emerald-400"

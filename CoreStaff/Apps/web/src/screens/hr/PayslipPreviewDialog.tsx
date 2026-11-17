@@ -19,6 +19,7 @@ import { Tooltip } from '@/components/tooltip';
 import { ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import { hrRequest } from '@/services/hrService';
 import { employeeRequest } from '@/services/employeeService';
+import { formatInstantDateTimeVN } from '@/lib/datetime';
 
 export type PayslipRow = {
   _id: string;
@@ -89,11 +90,8 @@ const formatHours = (value: number) =>
 
 export const formatDate = (dateStr?: string) => {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+  return formatInstantDateTimeVN(dateStr);
+};;;
 
 export const STATUS_LABELS: Record<string, string> = {
   GENERATED: 'Đã Tạo',

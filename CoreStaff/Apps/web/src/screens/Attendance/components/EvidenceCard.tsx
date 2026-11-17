@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { AttendanceEvent } from '../types';
 import { useAuthedImage } from '../../../components/AuthedImage';
+import { formatInstantDateTimeVN } from '@/lib/datetime';
 
 export interface EvidenceCardProps {
   event: AttendanceEvent;
@@ -156,7 +157,7 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
                 {event.recordedAt && (
                   <div className="text-[11px] text-muted-foreground pt-0.5">
                     Thời điểm ghi nhận:{' '}
-                    {new Date(event.recordedAt).toLocaleString('vi-VN')}
+                    {formatInstantDateTimeVN(event.recordedAt)}
                   </div>
                 )}
               </div>

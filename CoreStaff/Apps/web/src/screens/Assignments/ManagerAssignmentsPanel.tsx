@@ -14,6 +14,7 @@ import {
   setManagerAssignmentActive,
   type ManagerAssignment,
 } from '@/services/manager.service';
+import { formatVN } from '@/lib/datetime';
 
 export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
   const [rows, setRows] = useState<ManagerAssignment[]>([]);
@@ -99,8 +100,8 @@ export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
                   <strong>Phòng ban:</strong> {dn.get(r.departmentId) ?? r.departmentId}
                 </p>
                 <p className="text-muted-foreground">
-                  {new Date(r.effectiveFrom).toLocaleDateString('vi-VN')} →{' '}
-                  {r.effectiveTo ? new Date(r.effectiveTo).toLocaleDateString('vi-VN') : 'Không thời hạn'}
+                  {formatVN(r.effectiveFrom)} →{' '}
+                  {r.effectiveTo ? formatVN(r.effectiveTo) : 'Không thời hạn'}
                 </p>
                 <Button className="w-full" variant="outline" onClick={() => toggle(r)}>
                   {r.active ? (

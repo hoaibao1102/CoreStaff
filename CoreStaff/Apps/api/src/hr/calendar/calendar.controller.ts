@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
 import { Tenant, requireOrganizationId } from '../../common/tenant-context';
 import { CalendarService } from './calendar.service';
-import { CreateCalendarExceptionDto, UpdateCalendarExceptionDto } from './dto/calendar.dto';
+import { CreateCalendarExceptionDto, CreateCalendarRangeDto, UpdateCalendarExceptionDto, UpdateCalendarRangeDto } from './dto/calendar.dto';
 
 @UseGuards(AuthGuard, RolesGuard)
 @Controller('hr/calendar-exceptions')
@@ -11,6 +11,13 @@ export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
   @Roles('HR') @Post()
   async create(@Tenant() org: string | null, @Req() req: any, @Body() dto: CreateCalendarExceptionDto) { return { success: true, data: await this.calendar.create(requireOrganizationId(org), String(req.user._id), dto) }; }
+  // Range routes are declared before the ':id' routes so 'range' is never read as an id.
+  @Roles('HR') @Post('range')
+  async createRange(@Tenant() org: string | null, @Req() req: any, @Body() dto: CreateCalendarRangeDto) { const data = await this.calendar.createRange(requireOrganizationId(org), String(req.user._id), dto); return { success: true, data, count: data.length }; }
+  @Roles('HR') @Put('range')
+  async updateRange(@Tenant() org: string | null, @Req() req: any, @Body() dto: UpdateCalendarRangeDto) { const data = await this.calendar.updateRange(requireOrganizationId(org), String(req.user._id), dto); return { success: true, data, count: data.length }; }
+  @Roles('HR') @Delete('range')
+  async removeRange(@Tenant() org: string | null, @Query('from') from: string, @Query('to') to: string) { return { success: true, data: await this.calendar.removeRange(requireOrganizationId(org), from, to) }; }
   @Roles('HR') @Get()
   async list(@Tenant() org: string | null, @Query('from') from?: string, @Query('to') to?: string) { return { success: true, data: await this.calendar.list(requireOrganizationId(org), from, to) }; }
   @Roles('HR') @Get(':id')

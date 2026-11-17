@@ -104,8 +104,9 @@ export class TimesheetPeriodService {
 			throw new BadRequestException(`INVALID_DAY_RANGE: Period must have between ${MIN_PERIOD_DAYS} and ${MAX_PERIOD_DAYS} days (actual: ${diffDays} days)`);
 		}
 
-		// Validate not in past
-		this.validateNotInPast(dto.startDate);
+		// Reject only a period that has already fully ended; the current month
+		// is allowed so HR can create it mid-month.
+		this.validateNotInPast(dto.endDate);
 
 		const newStartDate = new Date(dto.startDate);
 		const newEndDate = new Date(dto.endDate);
@@ -162,6 +163,21 @@ export class TimesheetPeriodService {
 					startDate: newStartDate,
 					endDate: newEndDate,
 				}], { session });
+
+				// Punches made before HR created this period were stored without a
+				// periodId; link them so period views and payroll include them.
+				await this.attendanceDayModel.updateMany(
+					{
+						organizationId,
+						workDate: {
+							$gte: newStartDate.toISOString().slice(0, 10),
+							$lte: newEndDate.toISOString().slice(0, 10),
+						},
+						$or: [{ periodId: { $exists: false } }, { periodId: null }],
+					},
+					{ $set: { periodId: created._id } },
+					{ session },
+				);
 			});
 			return this.toResponse(created.toObject());
 		} catch (err: any) {
@@ -1331,12 +1347,12 @@ export class TimesheetPeriodService {
 		return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 	}
 
-	private validateNotInPast(startDate: string): void {
-		const start = new Date(startDate);
+	private validateNotInPast(endDate: string): void {
+		const end = new Date(endDate);
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-		if (start < today) {
-			throw new BadRequestException('PERIOD_IN_PAST: Period start date cannot be in the past');
+		if (end < today) {
+			throw new BadRequestException('PERIOD_IN_PAST: Period has already ended and cannot be created');
 		}
 	}
 }

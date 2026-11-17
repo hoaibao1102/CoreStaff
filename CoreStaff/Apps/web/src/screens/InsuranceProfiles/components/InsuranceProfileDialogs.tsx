@@ -9,6 +9,7 @@ import { FormLabel } from '../../../components/form/FormLabel';
 import { FormError } from '../../../components/form/FormError';
 import { toast } from '../../../components/toast';
 import { createInsuranceProfile, hrErrorMessage, type InsuranceProfile, type InsuranceProfileCreateDto } from '../../../services/hrService';
+import { formatVN } from '@/lib/datetime';
 
 export interface InsuranceEmployeeOption {
   _id: string;
@@ -18,8 +19,7 @@ export interface InsuranceEmployeeOption {
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 /* ───────── Create Dialog ───────── */

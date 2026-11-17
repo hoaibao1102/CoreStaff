@@ -26,6 +26,7 @@ import { Separator } from '../../components/separator';
 import { Skeleton } from '../../components/skeleton';
 import { hrRequest, listEmployees, type Department, type EmployeeProfile } from '../../services/hrService';
 import { deriveInsuranceSalary, type EmployeeAssignedAllowance } from '../../services/compensation.service';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Types ───────── */
 
@@ -68,13 +69,8 @@ function formatCurrency(value: number): string {
 }
 
 function formatDate(value: string | null | undefined): string {
-    if (!value) return '—';
-    try {
-        const d = new Date(value);
-        return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
-    } catch {
-        return '—';
-    }
+  if (!value) return '—';
+  return formatVN(value);
 }
 
 function initials(name: string): string {

@@ -49,11 +49,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
 			if (typeof body === 'string') {
 				envelope = { success: false, error: { code: codeFromBody(body, status), message: body, details: null } };
 			} else {
-				const obj = body as { code?: string; message?: string | string[]; error?: string; details?: unknown };
-				if (Array.isArray(obj.message)) {
-					envelope = { success: false, error: { code: STATUS_DEFAULT_CODE[status] ?? 'VALIDATION_FAILED', message: obj.error ?? 'Invalid request.', details: obj.message } };
+				const obj = body as { code?: string; message?: string | string[]; error?: string | { code?: string; message?: string; details?: unknown }; details?: unknown };
+				const nested = obj.error && typeof obj.error === 'object' ? obj.error : undefined;
+				if (nested && typeof nested.message === 'string') {
+					// Services that already built an envelope-shaped body (BatchValidator):
+					// keep their specific code/message instead of a generic fallback.
+					envelope = { success: false, error: { code: typeof nested.code === 'string' && looksLikeCode(nested.code) ? nested.code : codeFromBody(nested.message, status), message: nested.message, details: nested.details ?? null } };
+				} else if (Array.isArray(obj.message)) {
+					envelope = { success: false, error: { code: STATUS_DEFAULT_CODE[status] ?? 'VALIDATION_FAILED', message: typeof obj.error === 'string' ? obj.error : 'Invalid request.', details: obj.message } };
 				} else {
-					const msg = typeof obj.message === 'string' ? obj.message : (obj.error ?? 'Request failed.');
+					const msg = typeof obj.message === 'string' ? obj.message : (typeof obj.error === 'string' ? obj.error : 'Request failed.');
 					envelope = { success: false, error: { code: typeof obj.code === 'string' && looksLikeCode(obj.code) ? obj.code : codeFromBody(msg, status), message: msg, details: obj.details ?? null } };
 				}
 			}

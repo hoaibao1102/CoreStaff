@@ -15,6 +15,7 @@ import {
   type EnterpriseInsurancePolicy,
   type EnterpriseInsurancePolicyCreateDto,
 } from '../../../services/hrService';
+import { formatVN } from '@/lib/datetime';
 
 const VND = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
@@ -26,8 +27,7 @@ const COST_BEARER_OPTIONS: Array<{ value: EnterpriseInsuranceCostBearer; label: 
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 /* ───────── Create Dialog ───────── */
