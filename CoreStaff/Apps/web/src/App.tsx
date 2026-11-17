@@ -93,6 +93,10 @@ export default function App() {
       forgetSession();
       setUser(null);
       setMustChangePassword(false);
+      if (window.location.pathname !== '/login') {
+        window.history.pushState(null, '', '/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     };
     window.addEventListener(signedOutEvent, onSignedOut);
     // AUD-M08: a sign-out in another tab must clear this tab's data at once, and

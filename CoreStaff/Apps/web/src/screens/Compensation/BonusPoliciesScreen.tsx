@@ -72,7 +72,7 @@ export function BonusPoliciesScreen({ apiBase, canManage = true }: { apiBase: st
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Chính sách thưởng chuyên cần</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Cấu hình quy tắc đánh giá chuyên cần có phiên bản (TASK-034).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Cấu hình quy tắc đánh giá chuyên cần có phiên bản.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>

@@ -493,9 +493,13 @@ function EmployeeDetailContent({
         const joinDateError = validateEditJoinDate(employmentForm.joinDate);
         if (joinDateError) errors.joinDate = joinDateError;
 
+        if (employmentForm.departmentId && !employmentForm.positionId) {
+            errors.positionId = 'Vui lòng chọn chức danh cho phòng ban đã chọn.';
+        }
+
         if (Object.keys(errors).length > 0) {
             setEmploymentErrors(errors);
-            toast.warning('Vui lòng kiểm tra thông tin', 'Ngày vào làm chưa hợp lệ.');
+            toast.warning('Vui lòng kiểm tra thông tin', errors.positionId || 'Ngày vào làm chưa hợp lệ.');
             return;
         }
 
@@ -905,11 +909,11 @@ function EmployeeDetailContent({
                                                 </div>
                                                 <div>
                                                     <CardTitle className="text-base">Chỉnh sửa thông tin công việc</CardTitle>
-                                                    <p className="text-sm text-muted-foreground">Cập nhật phòng ban, chức danh, quản lý và nơi làm việc.</p>
+                                                    <p className="text-sm text-muted-foreground">Cập nhật phòng ban, chức danh và nơi làm việc.</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button size="sm" onClick={handleSaveEmployment} disabled={savingEmployment}>
+                                                <Button size="sm" onClick={handleSaveEmployment} disabled={savingEmployment || (!!employmentForm.departmentId && !employmentForm.positionId)}>
                                                     <Save className="mr-1.5 h-4 w-4" />
                                                     {savingEmployment ? 'Đang lưu…' : 'Lưu thông tin công việc'}
                                                 </Button>
@@ -954,7 +958,10 @@ function EmployeeDetailContent({
                                                     id="edit-departmentId"
                                                     className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                     value={employmentForm.departmentId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value, positionId: '' }))}
+                                                    onChange={(e) => {
+                                                        setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value, positionId: '' }));
+                                                        if (employmentErrors.positionId) setEmploymentErrors(prev => ({ ...prev, positionId: null }));
+                                                    }}
                                                 >
                                                     <option value="">Chưa chọn phòng ban</option>
                                                     {departments.map((d) => (
@@ -965,37 +972,25 @@ function EmployeeDetailContent({
 
                                             {/* Chức danh — chỉ hiện chức danh thuộc phòng ban đã chọn */}
                                             <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-positionId">Chức danh</FormLabel>
+                                                <FormLabel htmlFor="edit-positionId" required={!!employmentForm.departmentId}>Chức danh</FormLabel>
                                                 <select
                                                     id="edit-positionId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                                                    className={`block h-10 w-full rounded-lg border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${employmentErrors.positionId ? 'border-destructive ring-1 ring-destructive' : 'border-input'}`}
                                                     value={employmentForm.positionId}
                                                     disabled={!employmentForm.departmentId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, positionId: e.target.value }))}
+                                                    onChange={(e) => {
+                                                        setEmploymentForm(prev => ({ ...prev, positionId: e.target.value }));
+                                                        if (employmentErrors.positionId) setEmploymentErrors(prev => ({ ...prev, positionId: null }));
+                                                    }}
                                                 >
-                                                    <option value="">Chưa chọn chức danh</option>
+                                                    <option value="">{employmentForm.departmentId ? 'Chọn chức danh' : 'Chưa chọn phòng ban'}</option>
                                                     {positions.filter((p) => p.departmentId === employmentForm.departmentId).map((p) => (
                                                         <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
                                                     ))}
                                                 </select>
-                                            </div>
-
-                                            {/* Quản lý trực tiếp */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-directManagerId">Quản lý trực tiếp</FormLabel>
-                                                <select
-                                                    id="edit-directManagerId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.directManagerId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, directManagerId: e.target.value }))}
-                                                >
-                                                    <option value="">Chưa chọn quản lý</option>
-                                                    {managers.map((m) => (
-                                                        <option key={m.userId} value={m.userId}>
-                                                            {m.fullName || m.employeeCode} ({m.employeeCode})
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                {employmentErrors.positionId && (
+                                                    <p className="text-xs text-destructive">{employmentErrors.positionId}</p>
+                                                )}
                                             </div>
 
                                             {/* Nơi làm việc */}
@@ -1035,7 +1030,6 @@ function EmployeeDetailContent({
                                         <FieldRow label="Ngày kết thúc" value={employee.endDate ? new Date(employee.endDate).toLocaleDateString('vi-VN') : undefined} />
                                         <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
                                         <FieldRow label="Chức danh" value={employee.positionName || undefined} />
-                                        <FieldRow label="Quản lý trực tiếp" value={employee.managerName || undefined} />
                                         <FieldRow label="Nơi làm việc" value={employee.workplaceName || undefined} />
                                     </dl>
                                 </ProfileSection>

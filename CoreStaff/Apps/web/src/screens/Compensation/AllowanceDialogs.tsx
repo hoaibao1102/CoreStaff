@@ -102,7 +102,7 @@ export function AllowanceCreateDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <DialogTitle>Tạo phụ cấp tổ chức mới</DialogTitle>
-          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào danh mục chính sách của tổ chức (TASK-033).</DialogDescription>
+          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào danh mục chính sách của tổ chức.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">

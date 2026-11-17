@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, Eye, EyeOff, LoaderCircle, RefreshCw, TriangleAlert, UserRoundPlus, Copy, Check, Mail } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, LoaderCircle, UserRoundPlus, Copy, Check, Mail } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/alert';
@@ -91,14 +91,6 @@ function positionOptions(positions: EmployeeCreateDialogProps['positions'], depa
         }));
 }
 
-function accountOptions(accounts: EmployeeCreateDialogProps['accounts']) {
-    return accounts.map(account => ({ value: account._id, label: `${account.fullName} — ${account.email}` }));
-}
-
-function managerOptions(managers: EmployeeCreateDialogProps['managers']) {
-    return managers.map(manager => ({ value: manager.userId, label: `${manager.fullName || manager.employeeCode} — ${manager.employeeCode}` }));
-}
-
 /* ───────── Main Dialog Component ───────── */
 
 export function EmployeeCreateDialog({
@@ -128,10 +120,7 @@ export function EmployeeCreateDialog({
     const [copiedAll, setCopiedAll] = useState(false);
     const [copiedEmail, setCopiedEmail] = useState(false);
     const [copiedPw, setCopiedPw] = useState(false);
-    // 'link' is the default so the existing eligible-accounts flow (and its
-    // tests/e2e) is untouched; 'new' provisions an EMPLOYEE account (TASK-120).
-    const [mode, setMode] = useState<CreateAccountMode>(meMode ? 'new' : 'link');
-    const modeRef = useRef(mode); // the submit callback reads the value it was built with
+    const mode: CreateAccountMode = 'new';
     const {
         form,
         errors,
@@ -147,17 +136,8 @@ export function EmployeeCreateDialog({
         // from the session so the 'new' validation (which omits userId from the
         // payload — the server takes it from the session) passes untouched.
         meMode ? { fullName: user?.fullName ?? '', email: user?.email ?? '' } : undefined,
-        meMode ? 'new' : mode,
+        'new',
     );
-
-    const fillFromAccount = useCallback((userId: string, current: typeof form) => {
-        const account = accounts.find(item => item._id === userId);
-        // Only fill contact fields the user hasn't changed.
-        const next: Partial<typeof form> = { userId };
-        if (!current.email || current.email === accounts.find(item => item._id === current.userId)?.email) next.email = account?.email ?? '';
-        if (!current.phone || current.phone === accounts.find(item => item._id === current.userId)?.phone) next.phone = account?.phone ?? '';
-        return { ...current, ...next };
-    }, [accounts]);
 
     const handleCreated = useCallback(async () => {
         // meMode wraps the whole form; it never swaps the mode toggle under the
@@ -301,7 +281,7 @@ export function EmployeeCreateDialog({
                     <DialogDescription className="mt-1.5 max-w-xl">
                         {meMode
                             ? 'Nhập các thông tin nghiệp vụ của chính bạn. Hồ sơ sẽ bắt đầu ở trạng thái Thử việc và không tạo tài khoản mới.'
-                            : 'Chọn tạo tài khoản mới hoặc liên kết tài khoản đã có. Hồ sơ mới sẽ bắt đầu ở trạng thái Thử việc.'}
+                            : 'Nhập thông tin nhân sự để khởi tạo hồ sơ và tài khoản đăng nhập mới. Hồ sơ mới sẽ bắt đầu ở trạng thái Thử việc.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -431,79 +411,21 @@ export function EmployeeCreateDialog({
                             <div>
                                 <h3 className="font-semibold text-foreground">Tài khoản và mã nhân viên</h3>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    {meMode ? 'Mã của bạn, gắn với tài khoản đã đăng nhập.' : 'Chọn tạo mới hoặc liên kết tài khoản đã tồn tại, rồi nhập mã nhân viên duy nhất.'}
+                                    {meMode ? 'Mã của bạn, gắn với tài khoản đã đăng nhập.' : 'Nhập họ và tên cùng mã nhân viên duy nhất để khởi tạo tài khoản và hồ sơ.'}
                                 </p>
                             </div>
-                            {/* Mode toggle — link is the default; provisioning needs a name + email */}
-                            {!meMode && (
-                                <div role="tablist" aria-label="Cách tạo hồ sơ" className="inline-flex rounded-lg border border-border bg-muted p-1">
-                                    {(['link', 'new'] as const).map(modeKey => (
-                                        <button
-                                            key={modeKey}
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={mode === modeKey}
-                                            className={`min-h-9 rounded-md px-3 text-sm font-medium ${mode === modeKey ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                            onClick={() => { setMode(modeKey); setErrors({ general: null }); }}
-                                        >
-                                            {modeKey === 'link' ? 'Liên kết tài khoản' : 'Tạo tài khoản mới'}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {accountsFailed && (
-                                <Alert className="border-amber-300 bg-amber-50/70 px-3 py-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-                                    <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 text-amber-600 dark:text-amber-400" />
-                                    <div className="min-w-0">
-                                        <AlertTitle>Chưa tải được tài khoản nhân viên</AlertTitle>
-                                        <AlertDescription className="mt-0.5 text-amber-800 dark:text-amber-200">
-                                            Kiểm tra kết nối với máy chủ rồi thử lại.
-                                        </AlertDescription>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            className="mt-3 min-h-9 border-amber-300 bg-background px-3 text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950"
-                                            onClick={onRetryAccounts}
-                                        >
-                                            <RefreshCw aria-hidden="true" className="size-4" />
-                                            Thử tải lại
-                                        </Button>
-                                    </div>
-                                </Alert>
-                            )}
                             <div className="grid gap-4 sm:grid-cols-2">
-                                {meMode || mode === 'new' ? (
-                                    <FormInputField
-                                        id="create-fullName"
-                                        label="Họ và tên"
-                                        required={mode === 'new'}
-                                        value={meMode ? user?.fullName ?? '' : form.fullName}
-                                        onChange={(e) => updateField('fullName', e.target.value)}
-                                        onBlur={() => blurField('fullName')}
-                                        placeholder="Ví dụ: Nguyễn Văn An"
-                                        disabled={meMode || isSubmitting}
-                                        error={meMode ? null : errors.fullName}
-                                    />
-                                ) : (
-                                    <FormSelectField
-                                        id="create-userId"
-                                        label="Tài khoản nhân viên"
-                                        required
-                                        value={form.userId}
-                                        onChange={(e) => {
-                                            const userId = e.target.value;
-                                            updateField('userId', userId);
-                                            const next = fillFromAccount(userId, { ...form, userId });
-                                            if (next.email !== form.email) updateField('email', next.email);
-                                            if (next.phone !== form.phone) updateField('phone', next.phone);
-                                        }}
-                                        onBlur={() => blurField('userId')}
-                                        options={accountOptions(accounts)}
-                                        placeholder={accountsFailed ? 'Không thể tải danh sách tài khoản' : accounts.length ? 'Chọn tài khoản nhân viên' : 'Không có tài khoản phù hợp'}
-                                        disabled={isSubmitting || accountsFailed}
-                                        error={errors.userId}
-                                    />
-                                )}
+                                <FormInputField
+                                    id="create-fullName"
+                                    label="Họ và tên"
+                                    required={!meMode}
+                                    value={meMode ? user?.fullName ?? '' : form.fullName}
+                                    onChange={(e) => updateField('fullName', e.target.value)}
+                                    onBlur={() => blurField('fullName')}
+                                    placeholder="Ví dụ: Nguyễn Văn An"
+                                    disabled={meMode || isSubmitting}
+                                    error={meMode ? null : errors.fullName}
+                                />
                                 <FormInputField
                                     id="create-employeeCode"
                                     label="Mã nhân viên"
@@ -599,10 +521,10 @@ export function EmployeeCreateDialog({
 
                         {/* Contact Section */}
                         <section className="space-y-4 border-t border-border pt-6">
-                            <div><h3 className="font-semibold text-foreground">Thông tin liên hệ</h3><p className="mt-1 text-sm text-muted-foreground">{meMode ? 'Email và số điện thoại được lấy từ tài khoản đăng nhập của bạn.' : 'Thông tin liên hệ nghiệp vụ; email và số điện thoại được gợi ý từ tài khoản đã chọn.'}</p></div>
+                            <div><h3 className="font-semibold text-foreground">Thông tin liên hệ</h3><p className="mt-1 text-sm text-muted-foreground">{meMode ? 'Email và số điện thoại được lấy từ tài khoản đăng nhập của bạn.' : 'Email sẽ được sử dụng làm tài khoản đăng nhập hệ thống của nhân viên.'}</p></div>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <FormInputField id="create-phone" label="Số điện thoại" inputMode="numeric" maxLength={10} value={form.phone} onChange={(e) => updateField('phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} onBlur={() => blurField('phone')} placeholder="Ví dụ: 0912345678" disabled={meMode || submitting.current} error={meMode ? null : errors.phone} helperText={meMode ? 'Sẽ hiển thị từ tài khoản của bạn.' : 'Chỉ nhập số, đủ 10 chữ số.'} />
-                                <FormInputField id="create-email" label="Email nhân sự" type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} onBlur={() => blurField('email')} placeholder="nhanvien@company.com" disabled={meMode || submitting.current} error={meMode ? null : errors.email} />
+                                <FormInputField id="create-email" label="Email nhân sự" type="email" required={!meMode} value={form.email} onChange={(e) => updateField('email', e.target.value)} onBlur={() => blurField('email')} placeholder="nhanvien@company.com" disabled={meMode || submitting.current} error={meMode ? null : errors.email} helperText={meMode ? undefined : 'Dùng làm tên đăng nhập hệ thống.'} />
                                 <div className="sm:col-span-2"><FormInputField id="create-address" label="Địa chỉ" value={form.address} onChange={(e) => updateField('address', e.target.value)} onBlur={() => blurField('address')} maxLength={256} disabled={submitting.current} error={errors.address} /></div>
                             </div>
                         </section>
@@ -651,27 +573,6 @@ export function EmployeeCreateDialog({
                         <section className="space-y-4 border-t border-border pt-6">
                             <div><h3 className="font-semibold text-foreground">Thông tin ngân hàng</h3><p className="mt-1 text-sm text-muted-foreground">Thông tin phục vụ thanh toán lương, có thể bổ sung sau.</p></div>
                             <div className="grid gap-4 sm:grid-cols-2"><FormInputField id="create-bankAccount" label="Tài khoản ngân hàng" value={form.bankAccount} onChange={(e) => updateField('bankAccount', e.target.value.replace(/[^\d]/g, '').slice(0, 17))} onBlur={() => blurField('bankAccount')} placeholder="6 đến 17 chữ số" disabled={submitting.current} error={errors.bankAccount} /></div>
-                        </section>
-
-                        {/* Management Section */}
-                        <section className="space-y-4 border-t border-border pt-6">
-                            <div>
-                                <h3 className="font-semibold text-foreground">Quản lý và nơi làm việc</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">Có thể chọn quản lý trực tiếp ngay bây giờ; nơi làm việc sẽ được bổ sung khi danh mục sẵn sàng.</p>
-                            </div>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <FormSelectField
-                                    id="create-directManagerId"
-                                    label="Quản lý trực tiếp"
-                                    value={form.directManagerId}
-                                    onChange={(e) => updateField('directManagerId', e.target.value)}
-                                    onBlur={() => blurField('directManagerId')}
-                                    options={managerOptions(managers).filter(option => option.value !== form.userId)}
-                                    placeholder="Chọn quản lý trực tiếp"
-                                    disabled={submitting.current}
-                                    error={errors.directManagerId}
-                                />
-                            </div>
                         </section>
                     </div>
 

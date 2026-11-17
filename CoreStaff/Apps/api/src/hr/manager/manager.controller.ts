@@ -82,7 +82,7 @@ export class ManagerController {
   async list(@Tenant() org: string | null) { return { success: true, data: await this.assignments.list(this.org(org)) }; }
 
   @Roles('HR') @Get('hr/manager-assignment-candidates')
-  async candidates(@Tenant() org: string | null) { return { success: true, data: await this.assignments.listCandidates(this.org(org)) }; }
+  async candidates(@Tenant() org: string | null, @Query('departmentId') departmentId?: string) { return { success: true, data: await this.assignments.listCandidates(this.org(org), departmentId) }; }
 
   @Roles('HR') @Post('hr/manager-assignments')
   async create(@Tenant() org: string | null, @CurrentUser() user: SessionUser, @Body() dto: CreateManagerAssignmentDto) {

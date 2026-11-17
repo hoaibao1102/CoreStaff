@@ -91,7 +91,7 @@ describe('DayDetailModal & Work Credit Calculation', () => {
     };
 
     await act(async () => {
-      root.render(<DayDetailModal isOpen={true} onClose={() => {}} day={day} />);
+      root.render(<DayDetailModal isOpen={true} onClose={() => { }} day={day} />);
     });
 
     // Verify 3 cards
@@ -136,7 +136,7 @@ describe('DayDetailModal & Work Credit Calculation', () => {
     };
 
     await act(async () => {
-      root.render(<DayDetailModal isOpen={true} onClose={() => {}} day={day} />);
+      root.render(<DayDetailModal isOpen={true} onClose={() => { }} day={day} />);
     });
 
     expect(container.textContent).toContain('Quên chấm công');
@@ -168,7 +168,7 @@ describe('DayDetailModal & Work Credit Calculation', () => {
     expect(credit.halfMinMinutes).toBe(240);
 
     await act(async () => {
-      root.render(<DayDetailModal isOpen={true} onClose={() => {}} day={day} workCreditPolicy={policy} />);
+      root.render(<DayDetailModal isOpen={true} onClose={() => { }} day={day} workCreditPolicy={policy} />);
     });
 
     const accordionBtn = container.querySelector<HTMLButtonElement>('button:has(svg.lucide-calculator)')

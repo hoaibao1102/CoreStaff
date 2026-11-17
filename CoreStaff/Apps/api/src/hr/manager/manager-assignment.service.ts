@@ -21,11 +21,15 @@ export class ManagerAssignmentService {
     return this.assignments.find({ organizationId }).sort({ createdAt: -1 }).lean();
   }
 
-  async listCandidates(organizationId: string) {
-    const profiles = await this.employeeProfiles.find({
+  async listCandidates(organizationId: string, departmentId?: string) {
+    const query: Record<string, unknown> = {
       organizationId,
       employmentStatus: { $in: ['PROBATION', 'ACTIVE', 'ON_LEAVE'] },
-    }).select('userId').lean();
+    };
+    if (departmentId) {
+      query.departmentId = departmentId;
+    }
+    const profiles = await this.employeeProfiles.find(query).select('userId').lean();
     const userIds = profiles.map(row => row.userId);
     const rows = await this.users.find({
       organizationId,

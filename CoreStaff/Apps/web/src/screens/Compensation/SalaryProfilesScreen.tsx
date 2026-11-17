@@ -61,7 +61,7 @@ export function SalaryProfilesScreen({ apiBase, canManage = true }: { apiBase: s
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Hồ sơ lương nhân viên</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Quản lý mức lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian (TASK-031/032).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Quản lý mức lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>

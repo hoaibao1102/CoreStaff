@@ -60,7 +60,7 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Danh mục phụ cấp tổ chức</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Quản lý các khoản phụ cấp độc lập hoặc từ danh mục chuẩn (TASK-033).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Quản lý các khoản phụ cấp độc lập hoặc từ danh mục chuẩn.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>

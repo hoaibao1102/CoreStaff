@@ -387,13 +387,12 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
                 <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold whitespace-nowrap">Tạm tính</span>
               )}
             </div>
-            <span className={`text-sm font-bold font-mono mt-1 block ${
-              creditDetail.credit === 1
+            <span className={`text-sm font-bold font-mono mt-1 block ${creditDetail.credit === 1
                 ? 'text-emerald-600'
                 : creditDetail.credit === 0.5
-                ? 'text-blue-600'
-                : 'text-amber-600'
-            }`}>
+                  ? 'text-blue-600'
+                  : 'text-amber-600'
+              }`}>
               {creditDetail.label}
             </span>
           </div>
@@ -409,13 +408,12 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
             <div className="flex items-center gap-2">
               <Calculator className="size-4 text-primary" />
               <span>Chi tiết quy đổi công:</span>
-              <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                creditDetail.credit === 1
+              <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${creditDetail.credit === 1
                   ? 'bg-emerald-100 text-emerald-800'
                   : creditDetail.credit === 0.5
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-amber-100 text-amber-800'
-              }`}>
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
                 {creditDetail.label}
               </span>
             </div>
@@ -435,13 +433,12 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
                 </div>
                 <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                   <div
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      creditDetail.credit === 1
+                    className={`h-2 rounded-full transition-all duration-300 ${creditDetail.credit === 1
                         ? 'bg-emerald-500'
                         : creditDetail.credit === 0.5
-                        ? 'bg-blue-500'
-                        : 'bg-amber-500'
-                    }`}
+                          ? 'bg-blue-500'
+                          : 'bg-amber-500'
+                      }`}
                     style={{ width: `${Math.min(100, Math.max(creditDetail.ratioPercent, creditDetail.credit > 0 ? 10 : 0))}%` }}
                   />
                 </div>
@@ -451,8 +448,8 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
               <div className="rounded-lg bg-background p-2.5 border border-border/80 text-[11px] space-y-1.5">
                 <p className="font-medium text-foreground">{creditDetail.ruleExplanation}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1 border-t border-border/60">
-                  <div>• Tiêu chuẩn 1.0 công: ≥ {creditDetail.fullPercentStr} ca ({creditDetail.fullMinMinutes} phút)</div>
-                  <div>• Tiêu chuẩn 0.5 công: ≥ {creditDetail.halfPercentStr} ca ({creditDetail.halfMinMinutes} phút)</div>
+                  <div>• Tiêu chuẩn 1.0 công: ≥ {creditDetail.fullPercentStr} ca ({creditDetail.fullMinMinutes} phút) - ({creditDetail.fullMinMinutes / 60} tiếng)</div>
+                  <div>• Tiêu chuẩn 0.5 công: ≥ {creditDetail.halfPercentStr} ca ({creditDetail.halfMinMinutes} phút) - ({creditDetail.halfMinMinutes / 60} tiếng)</div>
                 </div>
               </div>
 
@@ -549,14 +546,14 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
                 {day.overtime.approvedStart
                   ? new Date(day.overtime.approvedStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                   : day.overtime.requestedStart
-                  ? new Date(day.overtime.requestedStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                  : '—'}
+                    ? new Date(day.overtime.requestedStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                    : '—'}
                 {' → '}
                 {day.overtime.approvedEnd
                   ? new Date(day.overtime.approvedEnd).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                   : day.overtime.requestedEnd
-                  ? new Date(day.overtime.requestedEnd).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                  : '—'}
+                    ? new Date(day.overtime.requestedEnd).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                    : '—'}
                 {day.overtime.otMinutes ? ` (${Math.floor(day.overtime.otMinutes / 60)}h${day.overtime.otMinutes % 60 > 0 ? ` ${day.overtime.otMinutes % 60}p` : ''})` : ''}
               </p>
               {day.overtime.reason && (
@@ -586,11 +583,10 @@ export function DayDetailModal({ isOpen, onClose, day, workCreditPolicy }: DayDe
         <button
           type="button"
           onClick={onClose}
-          className={`w-full rounded-xl py-3 text-xs font-bold transition-colors ${
-            historyStatus === 'FORGOTTEN'
+          className={`w-full rounded-xl py-3 text-xs font-bold transition-colors ${historyStatus === 'FORGOTTEN'
               ? 'border border-border text-foreground hover:bg-muted'
               : 'bg-primary text-primary-foreground shadow hover:bg-primary/90'
-          }`}
+            }`}
         >
           Đóng chi tiết
         </button>
