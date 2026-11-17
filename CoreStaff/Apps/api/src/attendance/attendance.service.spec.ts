@@ -211,6 +211,19 @@ describe('V2 period guard', () => {
     await expect(action(ownerId, organizationId, verifiedPunch, undefined, undefined, undefined, 'v2')).rejects.toThrow('ACTIVE_TIMESHEET_PERIOD_REQUIRED');
     expect(day.save).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])('still punches when HR has not created the period yet checkout=%s', async checkout => {
+    const { service } = punchFixture(checkout);
+    const session = { inTransaction: () => true, withTransaction: async (fn: any) => fn(), endSession: jest.fn() };
+    (service as any).attendanceDayModel.db = { model: () => ({ findById: () => ({ lean: async () => ({ attendanceOvertimeV2Enabled: true }) }) }), startSession: async () => session };
+    (service as any).periodVersion.claimForWorkDate = jest.fn(async () => { throw new Error('PERIOD_REQUIRED'); });
+    const action = checkout ? service.checkOut.bind(service) : service.checkIn.bind(service);
+    // The thin fixture cannot finish a whole punch; what matters is that a
+    // missing period no longer aborts it.
+    const outcome = await action(ownerId, organizationId, verifiedPunch, undefined, undefined, undefined, 'v2').then(() => null, (e: any) => e);
+    expect(outcome?.message).not.toBe('PERIOD_REQUIRED');
+    expect((service as any).periodVersion.claimForWorkDate).toHaveBeenCalled();
+  });
 });
 
 const verifiedPunch = { workMode: WorkMode.IN_OFFICE, latitude: 10, longitude: 106, address: 'Office' } as any;

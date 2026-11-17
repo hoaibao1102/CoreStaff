@@ -178,6 +178,21 @@ export class AttendanceService {
    * TASK-073 — Resolve active timesheet period for a workDate.
    * Returns periodId so attendance_days can reference which period it belongs to.
    */
+  /**
+   * Punches must not depend on HR having created the period yet (periods are
+   * created manually). A missing period is tolerated: the day is stored without
+   * a periodId and linked when the period is created. A covering period that is
+   * closed / payroll-claimed (or any other failure) still blocks the punch.
+   */
+  private async claimPeriodIfAny(organizationId: string, workDate: string, session: ClientSession) {
+    try {
+      return await this.periodVersion.claimForWorkDate(organizationId, workDate, session);
+    } catch (error: any) {
+      if (error?.message === 'PERIOD_REQUIRED') return null;
+      throw error;
+    }
+  }
+
   private async resolvePeriodId(organizationId: Types.ObjectId, workDate: string): Promise<string | null> {
     const period = await this.periodModel.findOne({
       organizationId,
@@ -434,7 +449,7 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
-    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+    const claim = session ? await this.claimPeriodIfAny(organizationId, workDate, session) : null;
 
     // 1. Kiểm tra đã check-in chưa
     const existingDayQuery = this.attendanceDayModel.findOne({
@@ -715,7 +730,7 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
-    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+    const claim = session ? await this.claimPeriodIfAny(organizationId, workDate, session) : null;
 
     // 1. Tìm ngày công hiện tại
     const dayQuery = this.attendanceDayModel.findOne({

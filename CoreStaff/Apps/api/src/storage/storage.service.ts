@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -126,9 +126,19 @@ export class StorageService {
       try { await stat(target); } catch { throw new BadRequestException('STORAGE_OBJECT_MISSING'); }
       return createReadStream(target);
     }
-    const out: GetObjectCommandOutput = await this.requireClient().send(
-      new GetObjectCommand({ Bucket: process.env.S3_BUCKET!.trim(), Key: key }),
-    );
+    let out: GetObjectCommandOutput;
+    try {
+      out = await this.requireClient().send(
+        new GetObjectCommand({ Bucket: process.env.S3_BUCKET!.trim(), Key: key }),
+      );
+    } catch (err: any) {
+      // A row whose bytes were never uploaded (e.g. seeded data) is a missing
+      // resource, not a server fault.
+      if (err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404) {
+        throw new NotFoundException('STORAGE_OBJECT_MISSING');
+      }
+      throw err;
+    }
     if (!out.Body) throw new BadRequestException('STORAGE_OBJECT_MISSING');
     return Readable.from(out.Body as Readable);
   }
