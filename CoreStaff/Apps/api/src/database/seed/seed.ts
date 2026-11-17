@@ -19,10 +19,11 @@ import {
   OvertimePayPolicySchema,
 } from '../schemas/compensation.schema';
 import { WorkCreditPolicySchema } from '../schemas/work-credit-policy.schema';
-import { TimesheetPeriodSchema } from '../schemas/timesheet-period.schema';
 import { EmploymentStatus, Role, OrganizationStatus, ShiftScope, normalizeEmail } from '../schemas/enums';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { userFields, profileFields, type AccountInput } from './provision';
+import { PlatformAuditLogSchema } from '../schemas/platform-audit-log.schema';
+import { seedPlatformAuditDemo } from './platform-audit-demo';
 import { ORGS, HRS, DEPARTMENTS, POSITIONS, WORKPLACES, SHIFTS, EMPLOYEES, CONTRACTS, DOCUMENTS, DEV_SEED_PASSWORD, type ContractSeed, type DocumentSeed } from './seed-data';
 
 /**
@@ -119,7 +120,6 @@ async function main(): Promise<void> {
     const AllowanceCatalog = connection.model('AllowanceCatalog', AllowanceCatalogSchema);
     const BonusTemplate = connection.model('AttendanceBonusTemplate', AttendanceBonusTemplateSchema);
     const WorkCreditPolicy = connection.model('WorkCreditPolicy', WorkCreditPolicySchema);
-    const TimesheetPeriod = connection.model('TimesheetPeriod', TimesheetPeriodSchema);
 
     const orgIds = new Map<string, mongoose.Types.ObjectId>();
     for (const { code, name } of ORGS) {
@@ -192,42 +192,6 @@ async function main(): Promise<void> {
             businessReference: 'Chính sách quy đổi ngày công mặc định',
             version: 1,
             active: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        },
-        { upsert: true },
-      );
-      await TimesheetPeriod.updateOne(
-        { organizationId, period: '2026-10' },
-        {
-          $setOnInsert: {
-            organizationId,
-            period: '2026-10',
-            name: 'Kỳ công tháng 10/2026',
-            startDate: new Date('2026-10-01T00:00:00.000Z'),
-            endDate: new Date('2026-10-31T23:59:59.999Z'),
-            status: 'REVIEWING',
-            active: true,
-            version: 1,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        },
-        { upsert: true },
-      );
-      await TimesheetPeriod.updateOne(
-        { organizationId, period: '2026-11' },
-        {
-          $setOnInsert: {
-            organizationId,
-            period: '2026-11',
-            name: 'Kỳ công tháng 11/2026',
-            startDate: new Date('2026-11-01T00:00:00.000Z'),
-            endDate: new Date('2026-11-30T23:59:59.999Z'),
-            status: 'REVIEWING',
-            active: true,
-            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -436,6 +400,7 @@ async function main(): Promise<void> {
     }
 
     await seedSystemAdmin(User);
+    await seedPlatformAudit(connection, User, Org, orgIds);
     console.log('[seed] done');
   } catch (err) {
     console.error('[seed] failed:', err instanceof Error ? err.message : err);
@@ -593,6 +558,38 @@ function toContractRow(
     endDate: row.endDate ? new Date(row.endDate) : undefined,
     note: row.note,
   };
+}
+
+/**
+ * Demo rows for the platform audit screen (tenant lifecycle + admin sign-ins).
+ * Idempotent: every row has a fixed eventId. Skipped when no system admin exists.
+ */
+async function seedPlatformAudit(
+  connection: mongoose.Connection,
+  User: UserModel,
+  Org: OrgModel,
+  orgIds: Map<string, mongoose.Types.ObjectId>,
+): Promise<void> {
+  const admin: any = await User.findOne({ role: Role.SYSTEM_ADMIN }).lean();
+  if (!admin) {
+    console.log('[seed] SKIPPED platform audit demo (no system admin account)');
+    return;
+  }
+  const orgs = [];
+  for (const { code, name } of ORGS) {
+    const id = orgIds.get(code);
+    if (!id) continue;
+    const hr: any = await User.findOne({ organizationId: id, role: Role.HR }).lean();
+    const org: any = await Org.findById(id).lean();
+    orgs.push({ id: String(id), code, name, hrEmail: hr?.email, createdAt: org?.createdAt });
+  }
+  const model = connection.model('PlatformAuditLog', PlatformAuditLogSchema);
+  const { created, skipped } = await seedPlatformAuditDemo(model as never, {
+    orgs,
+    admin: { id: String(admin._id), fullName: admin.fullName, email: admin.email },
+    includeAdminActivity: true,
+  });
+  console.log(`[seed] platform audit demo: ${created} created, ${skipped} already present`);
 }
 
 /** Platform-local SYSTEM_ADMIN from env (PLATFORM_ADMIN_EMAIL / _PASSWORD); orgId null. */

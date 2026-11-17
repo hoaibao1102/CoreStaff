@@ -93,8 +93,8 @@ export class PlatformController {
 	@ApiResponse({ status: 404, description: 'ORGANIZATION_NOT_FOUND' })
 	@ApiResponse({ status: 409, description: 'EMAIL_TAKEN' })
 	@ApiErrorExamples()
-	async createInitialHr(@Param('id') id: string, @Body() dto: CreateInitialHrDto) {
-		const data = await this.platform.createInitialHr(id, dto);
+	async createInitialHr(@CurrentUser() user: SessionUser, @Param('id') id: string, @Body() dto: CreateInitialHrDto) {
+		const data = await this.platform.createInitialHr(id, dto, String(user._id ?? user.id));
 		return { success: true, data };
 	}
 
@@ -105,8 +105,8 @@ export class PlatformController {
 	@ApiCreatedSuccess('Tenant suspended.', { ...organizationExample, status: 'SUSPENDED' })
 	@ApiResponse({ status: 404, description: 'ORGANIZATION_NOT_FOUND' })
 	@ApiErrorExamples()
-	async suspend(@Param('id') id: string) {
-		const data = await this.platform.setOrganizationStatus(id, OrganizationStatus.SUSPENDED);
+	async suspend(@CurrentUser() user: SessionUser, @Param('id') id: string) {
+		const data = await this.platform.setOrganizationStatus(id, OrganizationStatus.SUSPENDED, String(user._id ?? user.id));
 		return { success: true, data };
 	}
 
@@ -115,8 +115,8 @@ export class PlatformController {
 	@ApiCreatedSuccess('Tenant active.', organizationExample)
 	@ApiResponse({ status: 404, description: 'ORGANIZATION_NOT_FOUND' })
 	@ApiErrorExamples()
-	async activate(@Param('id') id: string) {
-		const data = await this.platform.setOrganizationStatus(id, OrganizationStatus.ACTIVE);
+	async activate(@CurrentUser() user: SessionUser, @Param('id') id: string) {
+		const data = await this.platform.setOrganizationStatus(id, OrganizationStatus.ACTIVE, String(user._id ?? user.id));
 		return { success: true, data };
 	}
 }

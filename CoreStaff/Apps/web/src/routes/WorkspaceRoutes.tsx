@@ -31,6 +31,7 @@ import { HrLeaveScreen } from '../screens/Leave/HrLeaveScreen';
 import { EmployeeLeaveScreen } from '../screens/Leave/EmployeeLeaveScreen';
 import { ManagerLeaveScreen } from '../screens/Leave/ManagerLeaveScreen';
 import { HrAuditLogScreen } from '../screens/HrAudit/HrAuditLogScreen';
+import { PlatformAuditScreen } from '../screens/PlatformAudit/PlatformAuditScreen';
 import { TaxPolicyList } from '../screens/Compensation/TaxPolicyList';
 import { PayrollRunScreen } from '../screens/hr/PayrollRunScreen';
 import { PayslipDetailScreen } from '../screens/Employee/PayslipDetailScreen';
@@ -312,7 +313,9 @@ export function WorkspaceRoutes({ path, user, apiBase, apiSource, health, onLogo
     return (
       <WorkspaceShell user={user} currentPath={route} onLogout={onLogout} apiBase={apiBase}>
         <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <EmployeeDataState status="unavailable" description="Platform Audit: Tính năng nhật ký kiểm toán nền tảng đang được phát triển." />
+          {apiBase
+            ? <PlatformAuditScreen apiBase={apiBase} />
+            : <EmployeeDataState status="unavailable" description="Chưa kết nối được API. Vui lòng tải lại trang." />}
         </section>
       </WorkspaceShell>
     );

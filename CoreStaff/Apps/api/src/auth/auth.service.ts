@@ -24,6 +24,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { PasswordResetTokenDocument } from '../database/schemas/password-reset-token.schema';
 import { ResetMailer, RESET_MAILER } from './strategies/reset-mailer';
 import { EventsGateway } from '../events/events.gateway';
+import { PlatformAuditService } from '../platform/platform-audit.service';
+import { PlatformAuditAction, PlatformAuditTarget } from '../platform/platform-audit.constants';
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -51,9 +53,29 @@ export class AuthService {
 		@InjectModel('Organization') private readonly orgModel: Model<OrganizationDocument>,
 		@Inject(RESET_MAILER) private readonly resetMailer: ResetMailer,
 		@Optional() private readonly eventsGateway?: EventsGateway,
+		@Optional() private readonly platformAudit?: PlatformAuditService,
 	) {}
 
-	async login(dto: LoginDto): Promise<{
+	/** Platform admin accounts only: their sign-in and password events go to the platform audit. */
+	private async auditAdmin(user: any, action: string, context: { ip?: string; userAgent?: string } = {}, outcome: 'SUCCEEDED' | 'FAILED' = 'SUCCEEDED', details?: Record<string, unknown>): Promise<void> {
+		if (!this.platformAudit || user?.role !== 'SYSTEM_ADMIN') return;
+		await this.platformAudit.record({
+			actorId: String(user._id),
+			actorNameSnapshot: user.fullName,
+			actorEmailSnapshot: user.email,
+			actorRoleSnapshot: user.role,
+			action,
+			targetType: PlatformAuditTarget.ADMIN_ACCOUNT,
+			targetId: String(user._id),
+			targetSummary: user.email,
+			outcome,
+			ip: context.ip,
+			userAgent: context.userAgent?.slice(0, 200),
+			details,
+		});
+	}
+
+	async login(dto: LoginDto, context: { ip?: string; userAgent?: string } = {}): Promise<{
 		user: Record<string, unknown>;
 		mustChangePassword: boolean;
 		sessionId: string;
@@ -84,7 +106,15 @@ export class AuthService {
 		const valid = await comparePassword(dto.password, candidate.passwordHash);
 
 		if (!valid) {
+			const wasLocked = Boolean(candidate.lockedUntil && candidate.lockedUntil > new Date());
 			await this._handleLoginFailure(candidate);
+			if (candidate.role === 'SYSTEM_ADMIN' && this.platformAudit) {
+				const fresh: any = await this.userModel.findById(candidate._id).select({ failedLoginCount: 1, lockedUntil: 1 }).lean();
+				await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_LOGIN_FAILED, context, 'FAILED', { failedLoginCount: fresh?.failedLoginCount, reason: 'WRONG_PASSWORD' });
+				if (!wasLocked && fresh?.lockedUntil && fresh.lockedUntil > new Date()) {
+					await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_ACCOUNT_LOCKED, context, 'SUCCEEDED', { lockedUntil: fresh.lockedUntil, failedLoginCount: fresh.failedLoginCount });
+				}
+			}
 			throw new UnauthorizedException('AUTH_INVALID_CREDENTIALS');
 		}
 
@@ -105,6 +135,8 @@ export class AuthService {
 			expiresAt: new Date(Date.now() + SESSION_TTL_MS),
 			refreshExpiresAt: new Date(Date.now() + REFRESH_TTL_MS),
 		});
+
+		await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_LOGIN_SUCCEEDED, context, 'SUCCEEDED', { firstLoginSetup: Boolean(candidate.mustChangePassword) });
 
 		return {
 			user: toSafeUser(candidate, resolved.employeeCode),
@@ -258,6 +290,8 @@ export class AuthService {
 		if (keepToken) filter.tokenHash = { $ne: hashToken(keepToken) };
 		await this.sessionModel.updateMany(filter, { revokedAt: new Date() }).exec();
 
+		await this.auditAdmin(user, PlatformAuditAction.ADMIN_PASSWORD_CHANGED, {}, 'SUCCEEDED', { otherSessionsRevoked: true });
+
 		return { success: true };
 	}
 
@@ -331,6 +365,8 @@ export class AuthService {
 		await this.sessionModel.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: now }).exec();
 		await this.resetTokenModel.updateMany({ userId: user._id, usedAt: null }, { usedAt: now }).exec();
 		this.eventsGateway?.disconnectUser(String(user._id));
+
+		await this.auditAdmin(user, PlatformAuditAction.ADMIN_PASSWORD_RESET, {}, 'SUCCEEDED', { allSessionsRevoked: true });
 
 		return { success: true };
 	}

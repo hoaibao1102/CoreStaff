@@ -17,6 +17,7 @@
  * mốc thời gian giống hệt hệ thống vận hành thật. Không có con số nào được
  * ghi tay vào summary/snapshot/payslip.
  */
+import { seedPlatformAuditDemo } from '../src/database/seed/platform-audit-demo';
 import { installVirtualClock, resetVirtualClock, setVirtualNow, vnInstant } from './lib/virtual-clock';
 
 import * as fs from 'node:fs';
@@ -189,6 +190,7 @@ async function resetOrg(demo: DemoApp, orgId: Types.ObjectId) {
     if (name === 'Organization' || !model.schema.path('organizationId')) continue;
     removed += (await model.deleteMany({ organizationId: { $in: ids } })).deletedCount ?? 0;
   }
+  removed += (await demo.model('PlatformAuditLog').deleteMany({ targetOrganizationId: { $in: ids } })).deletedCount ?? 0;
   await demo.model('Organization').deleteOne({ _id: orgId });
   console.log(`[seed:demo] Đã xóa ${removed} bản ghi của tenant ${ORG_CODE}.`);
 }
@@ -682,6 +684,28 @@ async function finalizeStatuses(ctx: Ctx) {
   await periods.updateOne({ _id: ctx.periods.get(CURRENT_PERIOD), status: { $in: ['OPEN', 'REVIEWING'] } }, { $set: { status: TimesheetPeriodStatus.OPEN } });
 }
 
+/**
+ * Platform side of the demo tenant: the admin created the organization and its
+ * first HR, so the platform audit shows those two events. The other platform
+ * activity (sign-ins, lockout, suspend) is seeded by `npm run seed`.
+ */
+async function seedPlatformAuditForDemoOrg(ctx: Ctx) {
+  const m = ctx.demo.model;
+  const admin: any = await m('User').findOne({ role: 'SYSTEM_ADMIN' }).lean();
+  if (!admin) {
+    console.log('[seed:demo] Bỏ qua platform audit (chưa có tài khoản System Admin — chạy "npm run seed" trước).');
+    return;
+  }
+  const hr: any = await m('User').findOne({ organizationId: ctx.orgId, role: 'HR' }).lean();
+  const org: any = await m('Organization').findById(ctx.orgId).lean();
+  const { created } = await seedPlatformAuditDemo(m('PlatformAuditLog') as never, {
+    orgs: [{ id: String(ctx.orgId), code: ORG_CODE, name: ORG_NAME, hrEmail: hr?.email, createdAt: org?.createdAt }],
+    admin: { id: String(admin._id), fullName: admin.fullName, email: admin.email },
+    includeAdminActivity: false,
+  });
+  console.log(`[seed:demo] Platform audit: ${created} sự kiện cho ${ORG_CODE}.`);
+}
+
 async function seed() {
   const demo = await createDemoApp();
   try {
@@ -718,6 +742,7 @@ async function seed() {
       await connection.db?.admin().ping().catch(() => undefined);
     }
     await finalizeStatuses(ctx);
+    await seedPlatformAuditForDemoOrg(ctx);
 
     const importDir = path.resolve(__dirname, '..', 'demo-import');
     await generateDemoImportFiles(importDir);
