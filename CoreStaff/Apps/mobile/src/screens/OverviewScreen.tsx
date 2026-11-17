@@ -15,7 +15,7 @@ function greeting() {
 function todayLabel() {
   const days = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
   const d = new Date(Date.now() + 7 * 3600 * 1000);
-  return `${days[d.getUTCDay()]}, ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  return `${days[d.getUTCDay()]}, ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 export function OverviewScreen({ user, apiBase, onNavigate, realtimeRevision = 0, pendingApprovals }: { user: AuthUser; apiBase: string; onNavigate: (tab: BottomTabKey) => void; realtimeRevision?: number; pendingApprovals?: number }) {

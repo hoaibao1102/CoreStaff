@@ -1,4 +1,5 @@
 import { apiRequest } from './auth';
+import { isoDatesToVN } from './date';
 
 export type AttendanceStatus = 'NOT_CHECKED_IN' | 'CHECKED_IN' | 'COMPLETED' | 'DAY_OFF' | 'LOCKED';
 
@@ -391,5 +392,5 @@ export function friendlyEmployeeError(error: unknown): string {
     EMPLOYEE_PROFILE_NOT_FOUND: 'Chưa tìm thấy hồ sơ nhân viên. Vui lòng liên hệ HR.',
     PAYSLIP_NOT_FOUND_OR_NOT_ACCESSIBLE: 'Phiếu lương không tồn tại hoặc bạn không có quyền xem.',
   };
-  return messages[code] || messages[raw] || raw;
+  return messages[code] || messages[raw] || isoDatesToVN(raw);
 }

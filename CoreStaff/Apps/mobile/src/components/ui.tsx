@@ -3,6 +3,7 @@ import type { DateTimePickerEvent } from '@react-native-community/datetimepicker
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, spacing } from '../theme';
 import { AppIcon, type AppIconName } from './AppIcon';
+import { formatDate, isoDatesToVN, maskDateInput, parseDateVN } from '../date';
 
 let cachedDateTimePicker: any = undefined;
 function getNativeDatePicker(): any {
@@ -43,6 +44,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function DateTimeField({ label, mode, value, onChange, required, disabled, error }: { label: string; mode: 'date' | 'time'; value: string; onChange: (value: string) => void; required?: boolean; disabled?: boolean; error?: string }) {
   const NativePicker = getNativeDatePicker();
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState<string | null>(null);
   const current = (() => {
     const base = new Date();
     if (mode === 'date') { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value); if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])); }
@@ -56,7 +58,18 @@ export function DateTimeField({ label, mode, value, onChange, required, disabled
   };
 
   if (!NativePicker) {
-    return <Field label={label} value={value} onChangeText={onChange} placeholder={mode === 'date' ? 'YYYY-MM-DD' : 'HH:mm'} required={required} editable={!disabled} error={error} />;
+    if (mode === 'date') {
+      // No native picker (e.g. Expo web): type dd/mm/yyyy, the value stays YYYY-MM-DD.
+      const onType = (text: string) => {
+        const masked = maskDateInput(text);
+        const iso = masked.length === 10 ? parseDateVN(masked) : null;
+        if (iso) { setTyped(null); onChange(iso); return; }
+        setTyped(masked);
+        if (!masked) onChange('');
+      };
+      return <Field label={label} value={typed ?? (value ? formatDate(value) : '')} onChangeText={onType} placeholder="dd/mm/yyyy" keyboardType="number-pad" maxLength={10} required={required} editable={!disabled} error={error} />;
+    }
+    return <Field label={label} value={value} onChangeText={onChange} placeholder="HH:mm" required={required} editable={!disabled} error={error} />;
   }
 
   const display = mode === 'date' ? formatDate(value) : value || '--:--';
@@ -89,14 +102,14 @@ export function LoadingBlock({ label = 'Đang tải dữ liệu…' }: { label?:
 export function EmptyState({ icon, title, description }: { icon: AppIconName; title: string; description: string }) { return <Card style={styles.empty}><View style={styles.emptySymbol}><AppIcon name={icon} size={26} color={colors.primaryDark} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyDescription}>{description}</Text></Card>; }
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <Card style={styles.empty}><View style={[styles.emptySymbol, styles.errorSymbol]}><Text style={styles.errorSymbolText}>!</Text></View><Text style={styles.emptyTitle}>Chưa tải được dữ liệu</Text><Text style={styles.emptyDescription}>{message}</Text><AppButton label="Thử lại" variant="secondary" onPress={onRetry} /></Card>; }
 export function formatTime(value?: string | null) { if (!value) return '--:--'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '--:--' : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }); }
-export function formatDate(value?: string | null) { if (!value) return '-'; const raw = value.slice(0, 10); const parts = raw.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : value; }
+export { formatDate, isoDatesToVN, maskDateInput, parseDateVN };
 /** 125 -> "2 giờ 5 phút", 40 -> "40 phút", 120 -> "2 giờ", null -> "-". */
 export function formatMinutes(value?: number | null) { if (value == null) return '-'; const total = Math.max(0, Math.round(value)); const hours = Math.floor(total / 60); const minutes = total % 60; if (!hours) return `${minutes} phút`; return minutes ? `${hours} giờ ${minutes} phút` : `${hours} giờ`; }
 /** "2026-09" -> "09/2026"; giá trị khác định dạng giữ nguyên. */
 export function formatPeriod(value?: string | null) { const m = /^(\d{4})-(\d{2})$/.exec(value || ''); return m ? `${m[2]}/${m[1]}` : value || '-'; }
 /** "Ca hành chính (08:00 - 17:00)" -> "Ca hành chính" (giờ đã có dòng riêng). */
 export function shiftTitle(name?: string | null, fallback = '') { const t = (name || '').replace(/\s*\(.*\)\s*$/, '').trim(); return t || fallback; }
-export function formatDateTime(value?: string | null) { return value ? `${formatTime(value)} ${formatDate(new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }))}` : '-'; }
+export function formatDateTime(value?: string | null) { return value ? `${formatTime(value)} ${formatDate(value)}` : '-'; }
 export function todayKey() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }); }
 export function initialsOf(fullName?: string | null) { const parts = (fullName || '').trim().split(/\s+/).filter(p => /^\p{L}/u.test(p)); if (!parts.length) return 'NV'; if (parts.length === 1) return parts[0][0].toUpperCase(); return parts.slice(-2).map(p => p[0].toUpperCase()).join(''); }
 export function formatMoney(value?: number | null) { const v = Math.round(value || 0); return `${v < 0 ? '-' : ''}${String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`; }
