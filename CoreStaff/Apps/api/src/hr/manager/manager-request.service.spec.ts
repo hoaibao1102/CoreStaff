@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, UnprocessableEntityException } f
 import { ManagerRequestService } from './manager-request.service';
 
 type Row=Record<string,any>;
-function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, periodVersion:any={bumpForWorkDates:jest.fn().mockResolvedValue(1)}){
+function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, periodVersion:any={bumpForWorkDates:jest.fn().mockResolvedValue(1)}, covered:string[]=managed){
  const model={
   create:jest.fn(async(d:Row)=>({toObject:()=>({_id:'new',version:1,status:'PENDING',...d})})),
   find:jest.fn((f:Row)=>{
@@ -12,7 +12,8 @@ function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, pe
       : f.status?.$ne
         ? r.status!==f.status.$ne
         : r.status===f.status;
-    const filtered = rows.filter(r=>r.organizationId===f.organizationId&&statusOk(r)&&(!f.departmentId?.$in||f.departmentId.$in.includes(r.departmentId))&&(!f.$or||f.$or.some((x:Row)=>(x.departmentId?.$in??[]).includes(r.departmentId)||(x.employeeUserId?.$in??[]).includes(r.employeeUserId)))&&(!f.type||r.type===f.type));
+    const ninOk=(x:Row,row:Row)=>!x.departmentId?.$nin||!x.departmentId.$nin.includes(row.departmentId);
+    const filtered = rows.filter(r=>r.organizationId===f.organizationId&&statusOk(r)&&(!f.departmentId?.$in||f.departmentId.$in.includes(r.departmentId))&&(!f.$or||f.$or.some((x:Row)=>((x.departmentId?.$in??[]).includes(r.departmentId)||(x.employeeUserId?.$in??[]).includes(r.employeeUserId))&&ninOk(x,r)))&&(!f.type||r.type===f.type));
     const c: any = {};
     c.populate = () => c;
     c.sort = () => c;
@@ -28,7 +29,7 @@ function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, pe
   }),
   findOneAndUpdate:jest.fn((f:Row,u:Row)=>({lean:async()=>{const r=rows.find(x=>String(x._id)===String(f._id)&&x.organizationId===f.organizationId&&x.version===f.version&&x.status===f.status);if(!r)return null;Object.assign(r,u.$set);r.version++;return r;}})),
  };
- const scope={getAuthorizedReviewDepartmentIds:jest.fn(async()=>managed),requireReviewDepartment:jest.fn(async()=>{}),getManagedDepartmentIds:jest.fn(async()=>managed),resolveEmployeeIdsForDepartments:jest.fn(async()=>['u1']),isEmployeeInManagedScope:jest.fn(async(_o:string,_m:string,u:string)=>u==='u1'),requireDepartment:jest.fn(async(_o:string,_m:string,d:string)=>{if(!managed.includes(d))throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');})};
+ const scope={getAuthorizedReviewDepartmentIds:jest.fn(async()=>managed),requireReviewDepartment:jest.fn(async()=>{}),getManagedDepartmentIds:jest.fn(async()=>managed),getDepartmentIdsWithActiveManagers:jest.fn(async()=>covered),resolveEmployeeIdsForDepartments:jest.fn(async()=>['u1']),isEmployeeInManagedScope:jest.fn(async(_o:string,_m:string,u:string)=>u==='u1'),requireDepartment:jest.fn(async(_o:string,_m:string,d:string)=>{if(!managed.includes(d))throw new ForbiddenException('DEPARTMENT_SCOPE_VIOLATION');})};
  const employees={findOne:jest.fn((f:Row)=>({lean:async()=>f.userId==='manager'?{_id:'pm',userId:'manager',departmentId:'d1'}:{_id:'p1',userId:f.userId,departmentId:'d1'}}))};
  const attendanceDays={
   findOne:jest.fn(()=>({lean:async()=>null})),
@@ -226,6 +227,17 @@ describe('ManagerRequestService',()=>{
   const s=build([{_id:'legacy',organizationId:'o1',employeeUserId:'u1',departmentId:'old-dept',type:'ATTENDANCE',status:'PENDING'}]);
   await expect(s.listForManager('o1','manager',{status:'PENDING'})).resolves.toMatchObject([{_id:'legacy'}]);
   await expect(s.detail('o1','manager','legacy')).resolves.toMatchObject({_id:'legacy'});
+ });
+ it('keeps a transferred employee\'s old request in the old department only',async()=>{
+  // u1 moved d1 -> d2. The row was stamped d1 and `decide()` authorizes against
+  // d1, so the new manager (d2) must not also see it — that is what made one
+  // employee show up in both managers' queues. `covered` is tenant-wide: both
+  // departments have a manager, so the legacy employee branch applies to neither.
+  const row={_id:'old',organizationId:'o1',employeeUserId:'u1',departmentId:'d1',type:'ATTENDANCE',status:'PENDING'};
+  const oldManager=build([{...row}],['d1'],undefined,undefined,undefined,['d1','d2']);
+  const newManager=build([{...row}],['d2'],undefined,undefined,undefined,['d1','d2']);
+  await expect(oldManager.listForManager('o1','old-manager',{status:'PENDING'})).resolves.toMatchObject([{_id:'old'}]);
+  await expect(newManager.listForManager('o1','new-manager',{status:'PENDING'})).resolves.toEqual([]);
  });
  it('writes an approved missing check-in into the attendance day and event',async()=>{
   const row={_id:'adj1',organizationId:'o1',employeeUserId:'u1',employeeId:'p1',departmentId:'d1',type:'ATTENDANCE',status:'PENDING',version:1,workDate:new Date('2026-09-14T00:00:00Z'),requestedStart:new Date('2026-09-14T01:00:00Z'),reason:'Forgot the start-of-shift check-in',metadata:{actionType:'CHECK_IN',adjustmentSource:'MANUAL_ADJUSTMENT'}};

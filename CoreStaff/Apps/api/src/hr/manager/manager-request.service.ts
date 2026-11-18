@@ -297,14 +297,22 @@ export class ManagerRequestService {
     const departments = filter.departmentId ? [filter.departmentId] : ids;
     if (!departments.length) return [];
     const employeeUserIds = await this.scope.resolveEmployeeIdsForDepartments(org, departments);
-    // The employee scope branch recovers pending legacy requests that were
-    // stamped with a stale profile department before assignment-aware routing.
+    // A request belongs to the department stamped on it — that is also the one
+    // `decide()` authorizes against. The employee branch exists only to recover
+    // legacy rows stamped with a stale profile department before routing became
+    // assignment-aware, so it must skip departments that already have a manager:
+    // otherwise an employee who transfers shows up in BOTH queues, the old
+    // manager holding the row by department and the new one by employee.
+    const covered = await this.scope.getDepartmentIdsWithActiveManagers(org);
     const query: any = {
       organizationId: org,
       status: { $ne: 'CANCELLED' },
       $or: [
         { departmentId: { $in: departments } },
-        { employeeUserId: { $in: employeeUserIds } },
+        {
+          employeeUserId: { $in: employeeUserIds },
+          ...(covered.length ? { departmentId: { $nin: covered } } : {}),
+        },
       ],
     };
     if (filter.type && filter.type !== 'ALL') query.type = filter.type;
