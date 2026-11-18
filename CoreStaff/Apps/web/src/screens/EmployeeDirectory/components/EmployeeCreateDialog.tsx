@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { CheckCircle2, Eye, EyeOff, LoaderCircle, UserRoundPlus, Copy, Check, Mail } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/dialog';
 import { Button } from '../../../components/button';
@@ -7,7 +7,7 @@ import { FormInputField } from '../../../components/form/FormInputField';
 import { FormSelectField } from '../../../components/form/FormSelectField';
 import { FormLabel } from '../../../components/form/FormLabel';
 import { useFormEmployee, type CreateAccountMode } from '../hooks/useEmployeeForm';
-import type { EmployeeCreateDialogProps, SelfProvisionDialogProps } from '../types';
+import type { EmployeeCreateDialogProps, SelfProvisionDialogProps, EmployeeFormState } from '../types';
 import { GENDER_LABELS, type Gender } from '../../../lib/types';
 import { createEmployee, createMyEmployeeProfile } from '../../../services/hrService';
 import { mapEmployeeValidationErrors } from '../apiErrors';
@@ -39,6 +39,11 @@ function mapApiError(error: unknown): ApiErrorInfo {
             title: 'Mã nhân viên đã được sử dụng',
             message: 'Mã nhân viên này đã có người khác. Vui lòng nhập mã mới.',
             field: 'employeeCode',
+        },
+        EMAIL_TAKEN: {
+            title: 'Email đã được sử dụng',
+            message: 'Email này đã thuộc một hồ sơ khác (kể cả nhân viên đã nghỉ). Vui lòng dùng email mới.',
+            field: 'email',
         },
         DEPARTMENT_NOT_FOUND: {
             title: 'Phòng ban không còn tồn tại',
@@ -109,6 +114,7 @@ export function EmployeeCreateDialog({
     onRetryAccounts,
     onOpenChange,
     onCreated,
+    rehireFrom,
 }: EmployeeCreateDialogProps) {
     const formRef = useRef<HTMLFormElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +130,34 @@ export function EmployeeCreateDialog({
     const [copiedEmail, setCopiedEmail] = useState(false);
     const [copiedPw, setCopiedPw] = useState(false);
     const mode: CreateAccountMode = 'new';
+    // Cùng một object cho cả mount và reset (useEmployeeForm memo hoá resetForm
+    // theo `initialValues`, nên object mới mỗi render sẽ làm callback đổi liên tục).
+    const initialValues = useMemo(
+        () =>
+            // In meMode the caller cannot change identity: prefill fullName/email
+            // from the session so the 'new' validation (which omits userId from the
+            // payload — the server takes it from the session) passes untouched.
+            meMode
+                ? { fullName: user?.fullName ?? '', email: user?.email ?? '' }
+                : // Tuyển lại: chỉ prefill dữ liệu cá nhân không unique. Email và mã
+                  // nhân viên thuộc hồ sơ cũ (unique index vẫn giữ chỗ), nên phải nhập mới.
+                  rehireFrom
+                  ? {
+                        fullName: rehireFrom.fullName ?? '',
+                        joinDate: new Date().toISOString().slice(0, 10),
+                        dateOfBirth: rehireFrom.dateOfBirth ?? '',
+                        gender: (rehireFrom.gender ?? '') as EmployeeFormState['gender'],
+                        phone: rehireFrom.phone ?? '',
+                        address: rehireFrom.address ?? '',
+                        citizenId: rehireFrom.citizenId ?? '',
+                        taxCode: rehireFrom.taxCode ?? '',
+                        socialInsuranceCode: rehireFrom.socialInsuranceCode ?? '',
+                        departmentId: rehireFrom.departmentId ?? '',
+                        positionId: rehireFrom.positionId ?? '',
+                    }
+                  : undefined,
+        [meMode, user?.fullName, user?.email, rehireFrom],
+    );
     const {
         form,
         errors,
@@ -134,13 +168,7 @@ export function EmployeeCreateDialog({
         buildPayload,
         resetForm,
         setErrors,
-    } = useFormEmployee(
-        // In meMode the caller cannot change identity: prefill fullName/email
-        // from the session so the 'new' validation (which omits userId from the
-        // payload — the server takes it from the session) passes untouched.
-        meMode ? { fullName: user?.fullName ?? '', email: user?.email ?? '' } : undefined,
-        'new',
-    );
+    } = useFormEmployee(initialValues, 'new');
 
     const handleCreated = useCallback(async () => {
         // meMode wraps the whole form; it never swaps the mode toggle under the
@@ -280,10 +308,12 @@ export function EmployeeCreateDialog({
         >
             <DialogContent className="max-w-3xl gap-0">
                 <DialogHeader className="border-b border-border px-5 py-5 pr-16 sm:px-6">
-                    <DialogTitle className="text-xl font-semibold">{meMode ? 'Tạo hồ sơ của tôi' : 'Tạo hồ sơ nhân sự'}</DialogTitle>
+                    <DialogTitle className="text-xl font-semibold">{meMode ? 'Tạo hồ sơ của tôi' : rehireFrom ? 'Tuyển lại nhân sự' : 'Tạo hồ sơ nhân sự'}</DialogTitle>
                     <DialogDescription className="mt-1.5 max-w-xl">
                         {meMode
                             ? 'Nhập các thông tin nghiệp vụ của chính bạn. Hồ sơ sẽ bắt đầu ở trạng thái Thử việc và không tạo tài khoản mới.'
+                            : rehireFrom
+                            ? `Tạo hồ sơ mới cho ${rehireFrom.fullName || 'nhân sự'} khi quay lại làm việc. Hồ sơ cũ vẫn được giữ nguyên làm lịch sử, nên email và mã nhân viên phải mới.`
                             : 'Nhập thông tin nhân sự để khởi tạo hồ sơ và tài khoản đăng nhập mới. Hồ sơ mới sẽ bắt đầu ở trạng thái Thử việc.'}
                     </DialogDescription>
                 </DialogHeader>

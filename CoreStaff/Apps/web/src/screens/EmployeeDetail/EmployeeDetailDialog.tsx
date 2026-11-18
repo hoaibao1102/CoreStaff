@@ -11,6 +11,7 @@ import {
     Coins,
     Plus,
     UsersRound,
+    UserPlus,
 } from 'lucide-react';
 import { Badge } from '@/components/badge';
 import type { AuthUser } from '../../services/auth';
@@ -196,6 +197,8 @@ export function EmployeeDetailDialog(props: {
     employeeId: string;
     onClose: () => void;
     onChanged?: () => void;
+    /** Nghỉ việc rồi quay lại: mở form tạo hồ sơ mới với thông tin đã prefill. */
+    onRehire?: (employee: EmployeeProfile) => void;
 }) {
     return (
         <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }}>
@@ -222,11 +225,13 @@ function EmployeeDetailContent({
     apiBase,
     employeeId,
     onChanged,
+    onRehire,
 }: {
     user: AuthUser;
     apiBase: string;
     employeeId: string;
     onChanged?: () => void;
+    onRehire?: (employee: EmployeeProfile) => void;
 }) {
     const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
     const [history, setHistory] = useState<EmploymentHistoryRecord[]>([]);
@@ -607,6 +612,7 @@ function EmployeeDetailContent({
     const validTransitions = employee
         ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[employee.employmentStatus] || []
         : [];
+    const isTerminal = employee?.employmentStatus === 'RESIGNED' || employee?.employmentStatus === 'TERMINATED';
 
     return (
         <>
@@ -1266,6 +1272,19 @@ function EmployeeDetailContent({
                                                 <p className="text-sm text-muted-foreground">Trạng thái nhân sự và quyền chuyển tiếp.</p>
                                             </div>
                                         </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                        {isTerminal && onRehire && (
+                                            <Button
+                                                id="employee-rehire-trigger"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => onRehire(employee)}
+                                                title="Tạo hồ sơ mới cho người quay lại làm việc. Hồ sơ cũ vẫn được giữ làm lịch sử."
+                                            >
+                                                <UserPlus className="mr-1.5 h-4 w-4" />
+                                                Tuyển lại nhân sự
+                                            </Button>
+                                        )}
                                         <Button
                                             id="employee-status-trigger"
                                             size="sm"
@@ -1276,6 +1295,7 @@ function EmployeeDetailContent({
                                             <Shield className="mr-1.5 h-4 w-4" />
                                             Thay đổi trạng thái
                                         </Button>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>

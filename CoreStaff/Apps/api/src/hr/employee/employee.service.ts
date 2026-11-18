@@ -6,7 +6,7 @@ import { PositionDocument } from '../../database/schemas/position.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { DependentItem, EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { EmploymentHistoryDocument } from '../../database/schemas/employment-history.schema';
-import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
+import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, UserStatus, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
@@ -271,6 +271,15 @@ export class EmployeeService {
 				profile.employmentStatus = dto.newStatus;
 				if (dto.newStatus === EmploymentStatus.RESIGNED || dto.newStatus === EmploymentStatus.TERMINATED) {
 					profile.endDate = new Date(dto.effectiveDate);
+					// Người đã nghỉ không còn đường vào hệ thống. auth guard đã chặn mọi
+					// status khác ACTIVE (auth/guards/auth.guard.ts), nên không cần thu hồi
+					// session riêng — email của tài khoản này vẫn bị chiếm bởi unique index,
+					// đúng ý: hồ sơ tuyển lại phải dùng email mới (tạo hồ sơ mới, id mới).
+					await this.userModel.updateOne(
+						{ _id: profile.userId, organizationId },
+						{ $set: { status: UserStatus.DISABLED } },
+						{ session },
+					);
 				}
 				await profile.save({ session });
 

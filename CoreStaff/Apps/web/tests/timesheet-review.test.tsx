@@ -3,8 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { EmployeeTimesheetReviewScreen } from '../src/screens/Employee/EmployeeTimesheetReviewScreen';
 import * as hr from '../src/services/hrService';
+import * as manager from '../src/services/manager.service';
 
 jest.mock('../src/services/hrService');
+jest.mock('../src/services/manager.service');
 const review = { periodId: 'p1', periodKey: '2026-10', periodVersion: 2, projectionHash: 'a'.repeat(64), state: 'PENDING' as const, standardWorkUnits: 1, standardWorkMinutes: 480, payableWorkUnits: 1, hasUnresolvedDays: false, canAcknowledge: true, days: [{ workDate: '2026-10-01', scheduledObligationMinutes: 480, workedScheduledMinutes: 480, payableLeaveMinutes: 0, unpaidLeaveMinutes: 0, overtimeMinutes: 0, workCredit: 1, reasonCode: 'FULL_CREDIT' }], history: [] };
 let root: Root; let container: HTMLDivElement;
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); (hr.listMyTimesheetReviews as jest.Mock).mockResolvedValue([{ periodId: 'p1', periodKey: '2026-10', periodVersion: 2, state: 'PENDING' }]); (hr.getMyTimesheetReview as jest.Mock).mockResolvedValue(review); });
@@ -21,7 +23,46 @@ it('submits the reviewed version when the employee confirms', async () => {
   expect(hr.acknowledgeMyTimesheetReview).toHaveBeenCalledWith('api', 'p1', 2, 'a'.repeat(64));
   expect(container.textContent).toContain('Bạn đã xác nhận thông tin bảng công chính xác.');
 });
-it('requires a meaningful dispute reason', async () => { await act(async () => root.render(<EmployeeTimesheetReviewScreen apiBase="api" />)); await act(async () => { await Promise.resolve(); await Promise.resolve(); }); const button = [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Báo sai lệch'))!; await act(async () => button.click()); expect(container.textContent).toContain('Lý do sai lệch'); });
+it('opens the three-column dispute panel with a reason field per draft', async () => { await act(async () => root.render(<EmployeeTimesheetReviewScreen apiBase="api" />)); await act(async () => { await Promise.resolve(); await Promise.resolve(); }); const button = [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Báo sai lệch'))!; await act(async () => button.click()); expect(container.textContent).toContain('Báo sai lệch bảng công'); expect(container.textContent).toContain('Lý do đơn này'); expect([...container.querySelectorAll('button')].some(x => x.textContent?.includes('Thêm đơn thiếu công'))).toBe(true); });
+it('sends one request per draft and marks the period with the corrected dates', async () => {
+  (manager.createMyRequest as jest.Mock).mockResolvedValue({});
+  (hr.disputeMyTimesheetReview as jest.Mock).mockResolvedValue({ ...review, state: 'DISPUTED' });
+  await act(async () => root.render(<EmployeeTimesheetReviewScreen apiBase="api" />));
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  await act(async () => [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Báo sai lệch'))!.click());
+  // The single reviewed day has no punches, so one draft is seeded for it.
+  const reason = [...container.querySelectorAll('textarea')][0] as HTMLTextAreaElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(reason, 'Tôi quên chấm công buổi sáng');
+    reason.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const submit = [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Gửi 1 yêu cầu'))!;
+  await act(async () => { submit.click(); await Promise.resolve(); await Promise.resolve(); });
+  expect(manager.createMyRequest).toHaveBeenCalledWith('api', expect.objectContaining({
+    type: 'ATTENDANCE', workDate: '2026-10-01', adjustmentType: 'CHECK_IN', reason: 'Tôi quên chấm công buổi sáng',
+  }));
+  expect(hr.disputeMyTimesheetReview).toHaveBeenCalledWith('api', 'p1', 2, 'a'.repeat(64), expect.stringContaining('01/10/2026'), ['2026-10-01']);
+});
+it('adds a draft to the batch and sends each with its own reason', async () => {
+  (manager.createMyRequest as jest.Mock).mockResolvedValue({});
+  (hr.disputeMyTimesheetReview as jest.Mock).mockResolvedValue({ ...review, state: 'DISPUTED' });
+  await act(async () => root.render(<EmployeeTimesheetReviewScreen apiBase="api" />));
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  await act(async () => [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Báo sai lệch'))!.click());
+  await act(async () => [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Thêm đơn thiếu công'))!.click());
+  const setText = async (field: HTMLTextAreaElement, value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const reasons = [...container.querySelectorAll('textarea')] as HTMLTextAreaElement[];
+  expect(reasons).toHaveLength(2);
+  await setText(reasons[0], 'Quên chấm công buổi sáng');
+  await setText(reasons[1], 'Máy chấm công lỗi buổi chiều');
+  await act(async () => [...container.querySelectorAll('button')].find(x => x.textContent?.includes('Gửi 2 yêu cầu'))!.click());
+  expect(manager.createMyRequest).toHaveBeenCalledTimes(2);
+  expect(manager.createMyRequest).toHaveBeenNthCalledWith(1, 'api', expect.objectContaining({ reason: 'Quên chấm công buổi sáng' }));
+  expect(manager.createMyRequest).toHaveBeenNthCalledWith(2, 'api', expect.objectContaining({ reason: 'Máy chấm công lỗi buổi chiều' }));
+});
 it('shows an incomplete timesheet for review but blocks acknowledgement', async () => {
   (hr.getMyTimesheetReview as jest.Mock).mockResolvedValue({
     ...review,

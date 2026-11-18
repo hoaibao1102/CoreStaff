@@ -64,6 +64,9 @@ export interface EmployeeCreateDialogProps {
     onOpenChange: (open: boolean) => void;
     /** Result: link mode → the profile; provisioning mode → profile + tempPassword (once). */
     onCreated: (employee: EmployeeProfile & { tempPassword?: string }) => void;
+    /** Nghỉ việc rồi quay lại: prefill thông tin cá nhân từ hồ sơ cũ.
+     * Email + mã nhân viên cố ý để trống — hồ sơ mới cần định danh mới. */
+    rehireFrom?: EmployeeProfile;
 }
 
 /** Props của dialog tự tạo hồ sơ (Phase C) — dùng chung form, chặn mode tài

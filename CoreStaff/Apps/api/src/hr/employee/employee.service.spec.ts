@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
-import { EmploymentStatus } from '../../database/schemas/enums';
+import { EmploymentStatus, UserStatus } from '../../database/schemas/enums';
 
 interface ProfileRow {
 	_id: string;
@@ -138,6 +138,8 @@ function buildRefModel(ids: Record<string, string[]>, docs: Array<Record<string,
 				) ?? null;
 			return { lean: () => ({ exec: run }), select: () => ({ lean: run }), exec: run };
 		},
+		/** changeStatus disables the account on resign/terminate — recorded, not asserted here. */
+		updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
 	};
 }
 
@@ -518,6 +520,50 @@ describe('EmployeeService.changeStatus (TASK-023)', () => {
 
 		expect(updated.employmentStatus).toBe(EmploymentStatus.RESIGNED);
 		expect(new Date(updated.endDate as Date).toISOString().slice(0, 10)).toBe('2026-11-01');
+	});
+
+	it('disables the login account when transitioning to RESIGNED or TERMINATED', async () => {
+		const users = buildRefModel({ org1: ['user1'] });
+		const profiles = [seedProfile(EmploymentStatus.ACTIVE)];
+		const svc = new EmployeeService(
+			buildProfileModel(profiles) as never,
+			buildHistoryModel([]) as never,
+			buildRefModel({}) as never,
+			buildRefModel({}) as never,
+			users as never,
+			fakeConnection() as never,
+		);
+
+		await svc.changeStatus('org1', '1', 'hr-user', {
+			newStatus: EmploymentStatus.RESIGNED,
+			effectiveDate: '2026-11-01',
+		} as never);
+
+		expect(users.updateOne).toHaveBeenCalledWith(
+			{ _id: 'user1', organizationId: 'org1' },
+			{ $set: { status: UserStatus.DISABLED } },
+			expect.anything(),
+		);
+	});
+
+	it('does not touch the login account on a non-terminal transition', async () => {
+		const users = buildRefModel({ org1: ['user1'] });
+		const profiles = [seedProfile(EmploymentStatus.ACTIVE)];
+		const svc = new EmployeeService(
+			buildProfileModel(profiles) as never,
+			buildHistoryModel([]) as never,
+			buildRefModel({}) as never,
+			buildRefModel({}) as never,
+			users as never,
+			fakeConnection() as never,
+		);
+
+		await svc.changeStatus('org1', '1', 'hr-user', {
+			newStatus: EmploymentStatus.ON_LEAVE,
+			effectiveDate: '2026-11-01',
+		} as never);
+
+		expect(users.updateOne).not.toHaveBeenCalled();
 	});
 
 	it('never transitions out of the terminal RESIGNED state (SRS §176)', async () => {

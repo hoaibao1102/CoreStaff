@@ -10,6 +10,7 @@ function review(state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED', history: any[] =
     periodId: 'period-1', periodKey: '2026-09', periodVersion: 3,
     state, projectionHash: 'a'.repeat(64), standardWorkUnits: 22,
     standardWorkMinutes: 10_560, payableWorkUnits: 21.5,
+    hasUnresolvedDays: false, canAcknowledge: true,
     days: [{
       workDate: '2026-09-15', checkInAt: '2026-09-15T01:00:00.000Z',
       checkOutAt: '2026-09-15T05:00:00.000Z', scheduledObligationMinutes: 480,
@@ -51,33 +52,35 @@ async function openReview(page: Page) {
     return route.fulfill({ json: { success: true, data: [] } });
   });
   await page.goto('/app/timesheet-review');
-  await expect(page.getByRole('heading', { name: 'Rà soát bảng công' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Công & Lương của tôi' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Báo sai lệch' })).toBeVisible();
   return actions;
 }
 
 test('employee acknowledges the exact visible projection and can later dispute it', async ({ page }) => {
   const actions = await openReview(page);
-  await expect(page.getByText('Kỳ 2026-09 · phiên bản 3')).toBeVisible();
+  await expect(page.getByText('Tháng 9/2026')).toBeVisible();
   await expect(page.getByText('21.5')).toBeVisible();
-  await expect(page.getByText('2026-09-15')).toBeVisible();
+  await expect(page.getByText('15/09/2026')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Báo sai lệch' }).click();
+  const panel = page.getByRole('form', { name: 'Báo sai lệch bảng công' });
+  await panel.getByLabel('Ngày').first().fill('2026-09-15');
+  await panel.getByLabel('Lý do đơn thiếu công').fill('Thiếu thời gian làm việc buổi chiều');
+  await panel.getByRole('button', { name: /Gửi \d+ yêu cầu/ }).click();
+  await expect(page.getByText('Đã báo sai lệch', { exact: true })).toBeVisible();
+  expect(actions[0].path).toBe('/api/hr/timesheet-periods/period-1/my-review/dispute');
+  expect(actions[0].body).toMatchObject({ expectedPeriodVersion: 3, projectionHash: 'a'.repeat(64) });
+  expect(actions[0].body.disputedWorkDates).toHaveLength(1);
+  expect(actions[0].body.disputeReason ?? actions[0].body.reason).toContain('15/09/2026');
 
   await page.getByRole('button', { name: 'Đã kiểm tra — thông tin chính xác' }).click();
   await expect(page.getByRole('dialog', { name: 'Xác nhận thông tin chính xác' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Xác nhận' }).click();
-  await expect(page.getByText('Trạng thái: Đã xác nhận')).toBeVisible();
-  expect(actions[0]).toEqual({
+  await expect(page.getByText('Đã xác nhận', { exact: true })).toBeVisible();
+  expect(actions[1]).toEqual({
     path: '/api/hr/timesheet-periods/period-1/my-review/acknowledge',
     body: { expectedPeriodVersion: 3, projectionHash: 'a'.repeat(64) },
-  });
-
-  await page.getByRole('button', { name: 'Báo sai lệch' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Lý do sai lệch').fill('Thiếu thời gian làm việc buổi chiều');
-  await dialog.getByRole('button', { name: 'Gửi báo sai lệch' }).click();
-  await expect(page.getByText('Trạng thái: Đã báo sai lệch')).toBeVisible();
-  expect(actions[1]).toEqual({
-    path: '/api/hr/timesheet-periods/period-1/my-review/dispute',
-    body: { expectedPeriodVersion: 3, projectionHash: 'a'.repeat(64), reason: 'Thiếu thời gian làm việc buổi chiều' },
   });
 
   const body = await page.locator('body').innerText();
@@ -87,8 +90,9 @@ test('employee acknowledges the exact visible projection and can later dispute i
 test('employee dispute requires a meaningful reason', async ({ page }) => {
   await openReview(page);
   await page.getByRole('button', { name: 'Báo sai lệch' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Lý do sai lệch').fill('Sai');
-  await expect(dialog.getByRole('alert')).toHaveText('Lý do cần ít nhất 10 ký tự.');
-  await expect(dialog.getByRole('button', { name: 'Gửi báo sai lệch' })).toBeDisabled();
+  const panel = page.getByRole('form', { name: 'Báo sai lệch bảng công' });
+  await panel.getByLabel('Ngày').first().fill('2026-09-15');
+  await panel.getByLabel('Lý do đơn thiếu công').fill('Sai');
+  await expect(panel.getByRole('button', { name: /Gửi \d+ yêu cầu/ })).toBeDisabled();
+  await expect(panel.getByText('Mỗi đơn cần ngày hợp lệ')).toBeVisible();
 });
