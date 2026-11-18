@@ -7,7 +7,7 @@ import { getAttendanceHistory, getMyLeaveRequests, getTodayAttendance, punchAtte
 import { DayDetailSheet } from '../components/DayDetailSheet';
 import { AttendanceCalendar, type LeaveMark } from '../components/AttendanceCalendar';
 import { leaveShortTag } from '../components/RequestsCalendar';
-import { currentWifi } from '../wifi';
+import { currentWifi, wifiDiagnostics, type WifiDiagnostics } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, NoticeBanner, ScreenHeader, SectionTitle, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime, shiftTitle, todayKey } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
 import { useConfirmDialog } from '../components/ConfirmDialog';
@@ -167,6 +167,7 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
         <AppButton variant="accent" label={actionLabel} loading={submitting} disabled={!today || today.availableAction === 'NONE'} onPress={confirmSubmit} />
         {today?.assignment.workplaceType === 'OUT_OFFICE' ? <Text style={styles.heroNote}>Ca ngoài văn phòng có thể yêu cầu vị trí hoặc selfie theo chính sách công ty.</Text> : null}
       </Card>
+      {process.env.EXPO_PUBLIC_WIFI_DEBUG === '1' ? <WifiDebugCard /> : null}
       {today?.attendanceRequirements ? <Card style={styles.leaveCard}><Text style={styles.leaveTitle}>Nghỉ phép đã được HR áp dụng</Text><Text style={styles.leaveText}>Thời gian nghỉ: {intervalText(today.attendanceRequirements.approvedLeaveIntervals)} ({formatMinutes(today.attendanceRequirements.approvedLeaveMinutes)})</Text><Text style={styles.leaveText}>Thời gian còn phải làm: {intervalText(today.attendanceRequirements.requiredWorkingIntervals)} ({formatMinutes(today.attendanceRequirements.requiredWorkingMinutes)})</Text><Text style={styles.leaveText}>Khung chấm công hiệu lực: {today.attendanceRequirements.effectiveCheckInTime || '—'} – {today.attendanceRequirements.effectiveCheckOutTime || '—'}</Text></Card> : today?.pendingLeave ? <Card style={styles.pendingCard}><Text style={styles.pendingTitle}>Đơn nghỉ đang chờ xử lý</Text><Text style={styles.pendingText}>{pendingLeaveText(today.pendingLeave.durationType, today.pendingLeave.requestedStart, today.pendingLeave.requestedEnd)}. Ca làm gốc vẫn được áp dụng cho tới khi quản lý duyệt và HR áp dụng.</Text></Card> : null}
       <View style={styles.metricGrid}><Metric label="Giờ làm" value={formatMinutes(today?.workingMinutes)} /><Metric label="Đi muộn" value={formatMinutes(today?.lateMinutes)} /><Metric label="Về sớm" value={formatMinutes(today?.earlyMinutes)} /></View>
       <View style={styles.monthHeader}><SectionTitle>Lịch sử tháng</SectionTitle><View style={styles.monthControl}><MonthButton label="Tháng trước" symbol="‹" onPress={() => changeMonth(-1)} /><Text style={styles.monthText}>{monthLabel}</Text><MonthButton label="Tháng sau" symbol="›" disabled={!canMoveNext} onPress={() => changeMonth(1)} /></View></View>
@@ -178,6 +179,26 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
   </ScrollView>{dialog}</>;
 }
 
+/** Dev only: shows what the phone reads so HR can paste the BSSID into the workplace's Wi-Fi list. */
+function WifiDebugCard() {
+  const [info, setInfo] = useState<WifiDiagnostics | null>(null);
+  const [busy, setBusy] = useState(false);
+  const scan = useCallback(async () => { setBusy(true); try { setInfo(await wifiDiagnostics()); } finally { setBusy(false); } }, []);
+  useEffect(() => { void scan(); }, [scan]);
+  const hint = !info ? null
+    : !info.moduleLoaded ? 'Thiếu module native (đang chạy Expo Go?). Cần dev build.'
+    : !info.permission ? 'Chưa cấp quyền Vị trí cho app.'
+    : !info.servicesEnabled ? 'Dịch vụ Vị trí của máy đang tắt.'
+    : !info.bssid ? 'Không đọc được BSSID: chưa kết nối WiFi hoặc OS che dữ liệu.'
+    : null;
+  return <Card style={styles.debugCard}>
+    <Text style={styles.debugTitle}>DEBUG · WiFi đọc được</Text>
+    <Text selectable style={styles.debugLine}>SSID: {info?.ssid ?? '—'}</Text>
+    <Text selectable style={styles.debugLine}>BSSID: {info?.bssid ?? '—'}</Text>
+    {hint ? <Text style={styles.debugHint}>{hint}</Text> : null}
+    <Pressable accessibilityRole="button" onPress={() => void scan()} disabled={busy} style={({ pressed }) => [styles.debugButton, pressed && styles.pressed]}><Text style={styles.debugButtonText}>{busy ? 'Đang đọc…' : 'Đọc lại'}</Text></Pressable>
+  </Card>;
+}
 function attendanceLabel(status?: string) { return ({ NOT_CHECKED_IN: 'Chưa vào ca', CHECKED_IN: 'Đang trong ca', COMPLETED: 'Hoàn thành', DAY_OFF: 'Ngày nghỉ', LOCKED: 'Đã khóa' } as Record<string, string>)[status || ''] || 'Chưa có dữ liệu'; }
 function intervalText(items: Array<{ from: string; to: string }>) { return items.length ? items.map(item => `${item.from}–${item.to}`).join(', ') : 'Không có'; }
 function pendingLeaveText(duration: string, start?: string, end?: string) { if (duration === 'MORNING_HALF') return 'Nghỉ buổi sáng'; if (duration === 'AFTERNOON_HALF') return 'Nghỉ buổi chiều'; if (duration === 'CUSTOM_HOURS') return `Nghỉ theo giờ${start && end ? ` (${start}–${end})` : ''}`; return 'Nghỉ cả ngày'; }
@@ -193,5 +214,6 @@ const styles = StyleSheet.create({
   metricGrid: { flexDirection: 'row', gap: spacing.xs }, metric: { flex: 1, minHeight: 76, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', padding: spacing.xs }, metricValue: { color: colors.ink, fontSize: 14, fontWeight: '800', textAlign: 'center' }, metricLabel: { color: colors.muted, fontSize: 11, marginTop: 4 },
   leaveCard: { backgroundColor: colors.successSoft, borderColor: colors.success }, leaveTitle: { color: colors.successText, fontSize: 13, fontWeight: '800' }, leaveText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 }, pendingCard: { backgroundColor: colors.warningSoft }, pendingTitle: { color: colors.warningText, fontSize: 13, fontWeight: '800' }, pendingText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs }, sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' }, monthControl: { flexDirection: 'row', alignItems: 'center', gap: 2 }, monthButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md }, monthButtonDisabled: { opacity: 0.35 }, monthArrow: { color: colors.primary, fontSize: 24, lineHeight: 27, fontWeight: '700' }, monthText: { minWidth: 82, color: colors.inkSoft, fontSize: 12, fontWeight: '800', textAlign: 'center' }, summaryRow: { flexDirection: 'row', backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.sm }, summary: { flex: 1, alignItems: 'center' }, summaryValue: { color: colors.primaryDark, fontSize: 17, fontWeight: '800' }, summaryLabel: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  debugCard: { backgroundColor: colors.warningSoft, gap: 4 }, debugTitle: { color: colors.warningText, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }, debugLine: { color: colors.ink, fontSize: 13, fontWeight: '700' }, debugHint: { color: colors.warningText, fontSize: 12, lineHeight: 17 }, debugButton: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.warningText, marginTop: 4 }, debugButtonText: { color: colors.warningText, fontSize: 12, fontWeight: '800' },
   dayCard: { gap: spacing.sm }, dayTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }, dayDate: { color: colors.ink, fontSize: 14, fontWeight: '800' }, dayTimes: { color: colors.muted, fontSize: 12, marginTop: 5 }, dayMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider }, dayMetaText: { color: colors.inkSoft, fontSize: 11, fontWeight: '700' }, warningText: { color: colors.warningText, fontSize: 11, fontWeight: '700' }, earlyText: { color: colors.dangerText, fontSize: 11, fontWeight: '700' }, blueText: { color: colors.primaryDark, fontSize: 11, fontWeight: '700' }, emptyText: { color: colors.muted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.lg }, pressed: { opacity: 0.7 },
 });
