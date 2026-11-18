@@ -6,7 +6,13 @@ function build(rows:Row[], managed=['d1'], ot?:any, employeeAssignments?:any, pe
  const model={
   create:jest.fn(async(d:Row)=>({toObject:()=>({_id:'new',version:1,status:'PENDING',...d})})),
   find:jest.fn((f:Row)=>{
-    const filtered = rows.filter(r=>r.organizationId===f.organizationId&&(!f.departmentId?.$in||f.departmentId.$in.includes(r.departmentId))&&(!f.$or||f.$or.some((x:Row)=>(x.departmentId?.$in??[]).includes(r.departmentId)||(x.employeeUserId?.$in??[]).includes(r.employeeUserId)))&&(!f.type||r.type===f.type)&&(!f.status||r.status===f.status));
+    // QC 2.4 — readers filter out CANCELLED rows; mirror that in the fake.
+    const statusOk=(r:Row)=>f.status===undefined
+      ? true
+      : f.status?.$ne
+        ? r.status!==f.status.$ne
+        : r.status===f.status;
+    const filtered = rows.filter(r=>r.organizationId===f.organizationId&&statusOk(r)&&(!f.departmentId?.$in||f.departmentId.$in.includes(r.departmentId))&&(!f.$or||f.$or.some((x:Row)=>(x.departmentId?.$in??[]).includes(r.departmentId)||(x.employeeUserId?.$in??[]).includes(r.employeeUserId)))&&(!f.type||r.type===f.type));
     const c: any = {};
     c.populate = () => c;
     c.sort = () => c;

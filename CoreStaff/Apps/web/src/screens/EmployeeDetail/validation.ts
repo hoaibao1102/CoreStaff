@@ -2,6 +2,8 @@
  * Validation rules cho form chỉnh sửa nhân viên (Employee Detail).
  */
 
+import { validateMinimumWorkingAge } from '../EmployeeDirectory/validation';
+
 export function validateEditPhone(value: string): string | null {
     const trimmed = value.trim();
     if (!trimmed) return null; // Không bắt buộc trong edit mode
@@ -44,7 +46,7 @@ export function validateEditDateOfBirth(value: string): string | null {
         return 'Ngày sinh không thể lớn hơn ngày hiện tại.';
     }
 
-    return null;
+    return validateMinimumWorkingAge(value);
 }
 
 export function validateEditJoinDate(value: string): string | null {

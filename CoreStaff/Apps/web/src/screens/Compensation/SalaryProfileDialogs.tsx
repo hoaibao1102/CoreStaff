@@ -47,7 +47,6 @@ export function SalaryProfileCreateDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
   const [effectiveTo, setEffectiveTo] = useState('');
   const [baseSalary, setBaseSalary] = useState('');
-  const [isProbation, setIsProbation] = useState(false);
   const [probationJobSalary, setProbationJobSalary] = useState('');
   const [probationAgreedSalary, setProbationAgreedSalary] = useState('');
   const [assignedAllowances, setAssignedAllowances] = useState<Record<string, { enabled: boolean; amount: string }>>({});
@@ -113,7 +112,9 @@ export function SalaryProfileCreateDialog({
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
-    if (isProbation) {
+    // QC 4.12 — no checkbox: leaving both blank means "no probation wage".
+    // Filling only one is an error, since the server requires both together.
+    if (probationJobSalary.trim() || probationAgreedSalary.trim()) {
       jobSal = Number(probationJobSalary);
       agreedSal = Number(probationAgreedSalary);
       if (Number.isNaN(jobSal) || jobSal <= 0) return setError('Lương công việc thử việc không hợp lệ.');
@@ -152,12 +153,16 @@ export function SalaryProfileCreateDialog({
     }
   };
 
-  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  // Lương đóng BH là số dẫn xuất (chỉ trừ phụ cấp có tích BH) — hiện trước để HR thấy ngay.
   const derivedInsuranceSalary = deriveInsuranceSalary(
     Number(baseSalary) || 0,
     Object.entries(assignedAllowances)
       .filter(([_, v]) => v.enabled)
-      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+      .map(([allowanceId, v]) => ({
+        allowanceId,
+        amount: Number(v.amount) || 0,
+        insuranceBased: allowances.find(a => a._id === allowanceId)?.insuranceBased === true,
+      })),
   );
 
   return (
@@ -209,36 +214,33 @@ export function SalaryProfileCreateDialog({
                 <Input type="number" min="0" step="500000" placeholder="15000000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
+                <label className="text-sm font-medium">Lương đóng BH (VND)</label>
                 <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
                   {formatVnd(derivedInsuranceSalary)}
                 </div>
-                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
+                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp có tích tính BH.</p>
               </div>
             </div>
 
+            {/* QC 4.12 — loại hợp đồng đã có trạng thái Thử việc/Chính thức nên
+                không cần checkbox; để trống cả hai ô = không cấu hình thử việc. */}
             <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="isProbation" checked={isProbation} onChange={e => setIsProbation(e.target.checked)} className="h-4 w-4 rounded border-input cursor-pointer" disabled={submitting} />
-                <label htmlFor="isProbation" className="text-sm font-medium cursor-pointer">Cấu hình lương thử việc</label>
-              </div>
-              {isProbation && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Lương công việc (VND)</label>
-                    <Input type="number" placeholder="15000000" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Lương thỏa thuận (VND)</label>
-                    <Input type="number" placeholder="12750000" value={probationAgreedSalary} onChange={e => setProbationAgreedSalary(e.target.value)} disabled={submitting} />
-                  </div>
-                  {Number(probationJobSalary) > 0 && Number(probationAgreedSalary) > 0 && (
-                    <p className="col-span-full text-xs text-muted-foreground">
-                      Tỷ lệ thử việc: <strong className="text-foreground">{((Number(probationAgreedSalary) / Number(probationJobSalary)) * 100).toFixed(1)}%</strong> (Yêu cầu tối thiểu theo chính sách: ≥ 85%)
-                    </p>
-                  )}
+              <div className="text-sm font-medium text-foreground">Lương thử việc (tuỳ chọn)</div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Lương công việc (VND)</label>
+                  <Input type="number" placeholder="15000000" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Lương thỏa thuận (VND)</label>
+                  <Input type="number" placeholder="12750000" value={probationAgreedSalary} onChange={e => setProbationAgreedSalary(e.target.value)} disabled={submitting} />
+                </div>
+                {Number(probationJobSalary) > 0 && Number(probationAgreedSalary) > 0 && (
+                  <p className="col-span-full text-xs text-muted-foreground">
+                    Tỷ lệ thử việc: <strong className="text-foreground">{((Number(probationAgreedSalary) / Number(probationJobSalary)) * 100).toFixed(1)}%</strong> (Yêu cầu tối thiểu theo chính sách: ≥ 85%)
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -272,7 +274,7 @@ export function SalaryProfileCreateDialog({
                               Mã: <code className="font-mono">{item.code}</code>
                               {item.description ? ` • ${item.description}` : ''}
                               {item.taxable ? ' • Thuế PIT' : ''}
-                              {item.insuranceBased ? ' • Đóng BHXH' : ''}
+                              {item.insuranceBased ? ' • Đóng BH' : ''}
                               {item.prorated ? ' • Tính theo ngày công' : ''}
                             </div>
                           </div>
@@ -349,7 +351,6 @@ export function SalaryProfileEditDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(profile.effectiveFrom ? profile.effectiveFrom.split('T')[0] : '');
   const [effectiveTo, setEffectiveTo] = useState(profile.effectiveTo ? profile.effectiveTo.split('T')[0] : '');
   const [baseSalary, setBaseSalary] = useState(String(profile.baseSalary ?? ''));
-  const [isProbation, setIsProbation] = useState(!!profile.probationJobSalary);
   const [probationJobSalary, setProbationJobSalary] = useState(String(profile.probationJobSalary ?? ''));
   const [probationAgreedSalary, setProbationAgreedSalary] = useState(String(profile.probationAgreedSalary ?? ''));
   const [assignedAllowances, setAssignedAllowances] = useState<Record<string, { enabled: boolean; amount: string }>>({});
@@ -414,7 +415,9 @@ export function SalaryProfileEditDialog({
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
-    if (isProbation) {
+    // QC 4.12 — no checkbox any more: keep whatever probation amounts were
+    // already saved so the update does not silently drop them.
+    if (probationJobSalary && probationAgreedSalary) {
       jobSal = Number(probationJobSalary);
       agreedSal = Number(probationAgreedSalary);
       if (Number.isNaN(jobSal) || jobSal <= 0) return setError('Lương công việc thử việc không hợp lệ.');
@@ -436,8 +439,8 @@ export function SalaryProfileEditDialog({
         effectiveFrom: effectiveFrom || undefined,
         effectiveTo: effectiveTo || null,
         baseSalary: base,
-        probationJobSalary: isProbation ? jobSal : undefined,
-        probationAgreedSalary: isProbation ? agreedSal : undefined,
+        probationJobSalary: jobSal,
+        probationAgreedSalary: agreedSal,
         organizationAllowanceIds: enabledList.map(x => x.allowanceId),
         allowances: enabledList,
         attendanceBonusPolicyId: bonusPolicyId || null,
@@ -452,12 +455,16 @@ export function SalaryProfileEditDialog({
     }
   };
 
-  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  // Lương đóng BH là số dẫn xuất (chỉ trừ phụ cấp có tích BH) — hiện trước để HR thấy ngay.
   const editDerivedInsuranceSalary = deriveInsuranceSalary(
     Number(baseSalary) || 0,
     Object.entries(assignedAllowances)
       .filter(([_, v]) => v.enabled)
-      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+      .map(([allowanceId, v]) => ({
+        allowanceId,
+        amount: Number(v.amount) || 0,
+        insuranceBased: allowances.find(a => a._id === allowanceId)?.insuranceBased === true,
+      })),
   );
 
   return (
@@ -492,21 +499,20 @@ export function SalaryProfileEditDialog({
                 <Input type="number" min="0" step="500000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
+                <label className="text-sm font-medium">Lương đóng BH (VND)</label>
                 <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
                   {formatVnd(editDerivedInsuranceSalary)}
                 </div>
-                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
+                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp có tích tính BH.</p>
               </div>
             </div>
 
-            <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="editIsProbation" checked={isProbation} onChange={e => setIsProbation(e.target.checked)} className="h-4 w-4 rounded border-input cursor-pointer" disabled={submitting} />
-                <label htmlFor="editIsProbation" className="text-sm font-medium cursor-pointer">Cấu hình lương thử việc</label>
-              </div>
-              {isProbation && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
+            {/* QC 4.12 — checklist đã có trạng thái Thử việc/Chính thức, nên form
+                sửa chỉ hiển thị lại mức lương thử việc đã lưu (không tick được). */}
+            {(probationJobSalary || probationAgreedSalary) && (
+              <div className="rounded-lg border border-border p-4 space-y-2 bg-muted/20">
+                <div className="text-sm font-medium text-foreground">Lương thử việc đã cấu hình</div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-1">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium">Lương công việc (VND)</label>
                     <Input type="number" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
@@ -516,8 +522,8 @@ export function SalaryProfileEditDialog({
                     <Input type="number" value={probationAgreedSalary} onChange={e => setProbationAgreedSalary(e.target.value)} disabled={submitting} />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -550,7 +556,7 @@ export function SalaryProfileEditDialog({
                               Mã: <code className="font-mono">{item.code}</code>
                               {item.description ? ` • ${item.description}` : ''}
                               {item.taxable ? ' • Thuế PIT' : ''}
-                              {item.insuranceBased ? ' • Đóng BHXH' : ''}
+                              {item.insuranceBased ? ' • Đóng BH' : ''}
                               {item.prorated ? ' • Tính theo ngày công' : ''}
                             </div>
                           </div>
@@ -634,7 +640,7 @@ export function SalaryProfileDetailDialog({
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatVnd(profile.baseSalary)}</span>
           </div>
           <div className="flex justify-between border-b pb-2">
-            <span className="text-muted-foreground">Lương đóng BHXH (tự tính):</span>
+            <span className="text-muted-foreground">Lương đóng BH (tự tính):</span>
             <span className="font-medium">{formatVnd(deriveInsuranceSalary(profile.baseSalary, profile.allowances))}</span>
           </div>
           {profile.probationJobSalary ? (

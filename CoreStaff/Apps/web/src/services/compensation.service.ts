@@ -60,15 +60,18 @@ export interface UpdateSalaryProfilePayload {
 }
 
 /**
- * Lương đóng bảo hiểm = lương cơ bản − tổng phụ cấp (không âm).
+ * Lương đóng BH = lương cơ bản − tổng phụ cấp **có tích BH** (không âm).
+ * QC 4.11 — chỉ phụ cấp `insuranceBased = true` mới trừ khỏi căn cứ.
  * Cùng công thức backend dùng khi ghi hồ sơ — dùng để hiển thị khớp payroll.
  */
 export function deriveInsuranceSalary(
   baseSalary: number,
-  allowances?: EmployeeAssignedAllowance[],
+  allowances?: Array<EmployeeAssignedAllowance & { insuranceBased?: boolean }>,
 ): number {
-  const totalAllowances = (allowances ?? []).reduce((sum, item) => sum + (item?.amount ?? 0), 0);
-  return Math.max(0, baseSalary - totalAllowances);
+  const bearingAllowances = (allowances ?? [])
+    .filter((item) => item?.insuranceBased === true)
+    .reduce((sum, item) => sum + (item?.amount ?? 0), 0);
+  return Math.max(0, baseSalary - bearingAllowances);
 }
 
 export async function listSalaryProfiles(base: string, employeeId?: string): Promise<SalaryProfile[]> {

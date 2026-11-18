@@ -356,7 +356,6 @@ export function EmployeeDirectoryScreen({
             departments={departments}
             positions={positions}
             accounts={accounts}
-            managers={resource.data?.managers ?? []}
             accountsFailed={resource.data?.accountsFailed}
             onRetryAccounts={loadEmployees}
             onOpenChange={setCreateOpen}

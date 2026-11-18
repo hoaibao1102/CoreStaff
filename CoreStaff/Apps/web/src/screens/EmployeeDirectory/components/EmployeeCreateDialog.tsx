@@ -8,7 +8,7 @@ import { FormSelectField } from '../../../components/form/FormSelectField';
 import { FormLabel } from '../../../components/form/FormLabel';
 import { useFormEmployee, type CreateAccountMode } from '../hooks/useEmployeeForm';
 import type { EmployeeCreateDialogProps, SelfProvisionDialogProps } from '../types';
-import { EMPLOYMENT_TYPE_LABELS, GENDER_LABELS, type EmploymentType, type Gender } from '../../../lib/types';
+import { GENDER_LABELS, type Gender } from '../../../lib/types';
 import { createEmployee, createMyEmployeeProfile } from '../../../services/hrService';
 import { mapEmployeeValidationErrors } from '../apiErrors';
 import { toast } from '../../../components/toast';
@@ -53,7 +53,12 @@ function mapApiError(error: unknown): ApiErrorInfo {
         MANAGER_NOT_FOUND: {
             title: 'Không tìm thấy quản lý trực tiếp',
             message: 'Quản lý trực tiếp đã chọn không còn khả dụng. Vui lòng chọn lại.',
-            field: 'directManagerId',
+            field: 'departmentId',
+        },
+        DOB_MINIMUM_AGE: {
+            title: 'Chưa đủ tuổi lao động',
+            message: 'Nhân viên phải đủ 15 tuổi theo Luật Lao động 2019 (Điều 143).',
+            field: 'dateOfBirth',
         },
         VALIDATION_FAILED: {
             title: 'Vui lòng kiểm tra thông tin',
@@ -71,7 +76,6 @@ function mapApiError(error: unknown): ApiErrorInfo {
 
 /* ───────── Select Options ───────── */
 
-const employmentTypeOptions = Object.entries(EMPLOYMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 const genderOptions = Object.entries(GENDER_LABELS).map(([value, label]) => ({ value, label }));
 
 function departmentOptions(departments: EmployeeCreateDialogProps['departments']) {
@@ -101,7 +105,6 @@ export function EmployeeCreateDialog({
     departments,
     positions,
     accounts,
-    managers,
     accountsFailed,
     onRetryAccounts,
     onOpenChange,
@@ -459,15 +462,6 @@ export function EmployeeCreateDialog({
                                     error={errors.joinDate}
                                 />
                                 <FormSelectField
-                                    id="create-employmentType"
-                                    label="Loại lao động"
-                                    value={form.employmentType}
-                                    onChange={(e) => updateField('employmentType', e.target.value as EmploymentType)}
-                                    options={employmentTypeOptions}
-                                    disabled={submitting.current}
-                                    error={errors.employmentType}
-                                />
-                                <FormSelectField
                                     id="create-departmentId"
                                     label="Phòng ban"
                                     value={form.departmentId}
@@ -568,11 +562,6 @@ export function EmployeeCreateDialog({
                                     error={errors.socialInsuranceCode}
                                 />
                             </div>
-                        </section>
-
-                        <section className="space-y-4 border-t border-border pt-6">
-                            <div><h3 className="font-semibold text-foreground">Thông tin ngân hàng</h3><p className="mt-1 text-sm text-muted-foreground">Thông tin phục vụ thanh toán lương, có thể bổ sung sau.</p></div>
-                            <div className="grid gap-4 sm:grid-cols-2"><FormInputField id="create-bankAccount" label="Tài khoản ngân hàng" value={form.bankAccount} onChange={(e) => updateField('bankAccount', e.target.value.replace(/[^\d]/g, '').slice(0, 17))} onBlur={() => blurField('bankAccount')} placeholder="6 đến 17 chữ số" disabled={submitting.current} error={errors.bankAccount} /></div>
                         </section>
                     </div>
 

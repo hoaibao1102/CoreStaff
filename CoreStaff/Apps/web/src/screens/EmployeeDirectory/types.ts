@@ -3,7 +3,7 @@ import type { EmployeeProfile, Department, Position, EmployeeCreateDto, Eligible
 
 export type { EmployeeProfile, Department, Position };
 
-export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERNSHIP';
+export type EmploymentType = 'FULL_TIME';
 
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
@@ -12,7 +12,6 @@ export interface EmployeeFormState {
     userId: string;
     fullName: string;
     employeeCode: string;
-    employmentType: EmploymentType | '';
     joinDate: string;
     dateOfBirth: string;
     gender: Gender | '';
@@ -22,11 +21,8 @@ export interface EmployeeFormState {
     citizenId: string;
     taxCode: string;
     socialInsuranceCode: string;
-    bankAccount: string;
     departmentId: string;
     positionId: string;
-    directManagerId: string;
-    workplaceId: string;
 }
 
 /** Validation errors của từng field trong form */
@@ -34,7 +30,6 @@ export interface EmployeeFormErrors {
     userId?: string | null;
     fullName?: string | null;
     employeeCode?: string | null;
-    employmentType?: string | null;
     joinDate?: string | null;
     dateOfBirth?: string | null;
     gender?: string | null;
@@ -44,11 +39,8 @@ export interface EmployeeFormErrors {
     citizenId?: string | null;
     taxCode?: string | null;
     socialInsuranceCode?: string | null;
-    bankAccount?: string | null;
     departmentId?: string | null;
     positionId?: string | null;
-    directManagerId?: string | null;
-    workplaceId?: string | null;
     general?: string | null;
 }
 
@@ -67,7 +59,6 @@ export interface EmployeeCreateDialogProps {
     departments: Department[];
     positions: Position[];
     accounts: EligibleEmployeeAccount[];
-    managers: EmployeeProfile[];
     accountsFailed?: boolean;
     onRetryAccounts?: () => void;
     onOpenChange: (open: boolean) => void;
@@ -92,7 +83,6 @@ export interface EmployeeEditDialogProps {
     employee: EmployeeProfile;
     departments: Department[];
     positions: Position[];
-    managers: EmployeeProfile[];
     onOpenChange: (open: boolean) => void;
     onSave: (employee: EmployeeProfile) => void;
 }

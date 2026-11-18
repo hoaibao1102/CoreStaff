@@ -125,7 +125,7 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
                   <TableCell>
                     <div className="flex flex-wrap gap-1 text-[11px]">
                       <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">Chịu thuế TNCN</Badge>
-                      {row.insuranceBased && <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Tính BHXH</Badge>}
+                      {row.insuranceBased && <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Tính BH</Badge>}
                       {row.prorated ? (
                         <Badge variant="secondary" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">Theo ngày công</Badge>
                       ) : (

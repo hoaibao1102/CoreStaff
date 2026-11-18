@@ -13,6 +13,7 @@ export class CreateManagerRequestDto{
  @IsOptional() @IsIn(['ATTENDANCE_CONFIRMATION']) requestKind?:'ATTENDANCE_CONFIRMATION';
  @IsOptional() @IsString() @Length(64,64) previewHash?:string;
  @IsOptional() @IsDateString() customCheckOutTime?:string;
+ @IsOptional() @IsDateString() customCheckInTime?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedStart?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedEnd?:string;
  @ApiProperty({required:false,enum:['CHECK_IN','CHECK_OUT']}) @IsOptional() @IsIn(['CHECK_IN','CHECK_OUT']) adjustmentType?:'CHECK_IN'|'CHECK_OUT';

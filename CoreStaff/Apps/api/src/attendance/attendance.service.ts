@@ -275,11 +275,13 @@ export class AttendanceService {
     }
 
     // Tìm yêu cầu phê duyệt gần nhất trong ngày (nếu có)
+    // QC 2.4 — a cancelled request must never become the day's banner status.
     const latestRequest: any = await this.managerRequestModel
       .findOne({
         organizationId: orgObjectId,
         employeeUserId: empObjectId,
         workDate,
+        status: { $ne: 'CANCELLED' },
       })
       .sort({ createdAt: -1 })
       .lean();

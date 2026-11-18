@@ -56,7 +56,6 @@ import {
     DEPENDENT_RELATIONSHIP_LABELS,
 } from '../../services/hrService';
 import {
-    deriveInsuranceSalary,
     listSalaryProfiles,
     getOrganizationAllowances,
     type SalaryProfile,
@@ -286,18 +285,14 @@ function EmployeeDetailContent({
         citizenId: '',
         taxCode: '',
         socialInsuranceCode: '',
-        bankAccount: '',
     });
     const [personalErrors, setPersonalErrors] = useState<Record<string, string | null>>({});
 
-    /* Tab 2: Employment info form state */
+    /* Tab 2: Employment info form state — QC 3.2/4.4/4.8: no manager, workplace or employment type. */
     const [employmentForm, setEmploymentForm] = useState({
-        employmentType: '' as EmploymentType | '',
         joinDate: '',
         departmentId: '',
         positionId: '',
-        directManagerId: '',
-        workplaceId: '',
     });
     const [employmentErrors, setEmploymentErrors] = useState<Record<string, string | null>>({});
 
@@ -314,32 +309,23 @@ function EmployeeDetailContent({
         setLoading(true);
         setError(null);
         try {
-            const [data, deptList, posList, workplaceList, empList] = await Promise.all([
+            const [data, deptList, posList] = await Promise.all([
                 getEmployeeById(apiBase, employeeId),
                 getDepartments(apiBase, true).catch(() => []),
                 getPositions(apiBase, { activeOnly: true }).catch(() => []),
-                getWorkplaces(apiBase).catch(() => []),
-                getEmployees(apiBase).catch(() => ({ employees: [] })),
             ]);
 
             setDepartments(Array.isArray(deptList) ? deptList : []);
             setPositions(Array.isArray(posList) ? posList : []);
-            setWorkplaces(Array.isArray(workplaceList) ? workplaceList : []);
-            const allEmps: EmployeeProfile[] = Array.isArray(empList) ? empList : (empList?.employees ?? []);
-            setManagers(allEmps.filter(e => e.userId !== data.userId));
 
             // Build lookup maps for client-side name resolution
             const deptMap = new Map((Array.isArray(deptList) ? deptList : []).map(d => [d._id, d.name]));
             const posMap = new Map((Array.isArray(posList) ? posList : []).map(p => [p._id, p.name]));
-            const wpMap = new Map((Array.isArray(workplaceList) ? workplaceList : []).map(w => [w._id, w.name]));
-            const mgrMap = new Map(allEmps.map(e => [e.userId, e.fullName || e.employeeCode]));
 
             const enriched: EmployeeProfile = {
                 ...data,
                 departmentName: data.departmentId ? (deptMap.get(data.departmentId) ?? data.departmentName) : undefined,
                 positionName: data.positionId ? (posMap.get(data.positionId) ?? data.positionName) : undefined,
-                workplaceName: data.workplaceId ? (wpMap.get(data.workplaceId) ?? data.workplaceName) : undefined,
-                managerName: data.directManagerId ? (mgrMap.get(data.directManagerId) ?? data.managerName) : undefined,
             };
 
             setEmployee(enriched);
@@ -358,16 +344,12 @@ function EmployeeDetailContent({
                 citizenId: data.citizenId || '',
                 taxCode: data.taxCode || '',
                 socialInsuranceCode: data.socialInsuranceCode || '',
-                bankAccount: data.bankAccount || '',
             });
 
             setEmploymentForm({
-                employmentType: data.employmentType || '',
                 joinDate: formattedJoinDate,
                 departmentId: data.departmentId || '',
                 positionId: data.positionId || '',
-                directManagerId: data.directManagerId || '',
-                workplaceId: data.workplaceId || '',
             });
         } catch (err: unknown) {
             const status = (err as any)?.status;
@@ -519,15 +501,11 @@ function EmployeeDetailContent({
             // Re-resolve names
             const deptMap = new Map(departments.map(d => [d._id, d.name]));
             const posMap = new Map(positions.map(p => [p._id, p.name]));
-            const wpMap = new Map(workplaces.map(w => [w._id, w.name]));
-            const mgrMap = new Map(managers.map(m => [m.userId, m.fullName || m.employeeCode]));
 
             const enriched: EmployeeProfile = {
                 ...updated,
                 departmentName: updated.departmentId ? (deptMap.get(updated.departmentId) ?? updated.departmentName) : undefined,
                 positionName: updated.positionId ? (posMap.get(updated.positionId) ?? updated.positionName) : undefined,
-                workplaceName: updated.workplaceId ? (wpMap.get(updated.workplaceId) ?? updated.workplaceName) : undefined,
-                managerName: updated.directManagerId ? (mgrMap.get(updated.directManagerId) ?? updated.managerName) : undefined,
             };
 
             setEmployee(prev => prev ? { ...prev, ...enriched } : enriched);
@@ -674,11 +652,11 @@ function EmployeeDetailContent({
                         </Card>
 
                         {/* 3 Sub-Tabs Navigation */}
-                        <div className="flex border-b border-border/80 gap-1 sm:gap-2">
+                        <div className="flex flex-wrap justify-start border-b border-border/80 gap-1 sm:gap-2">
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'personal'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -691,7 +669,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'employment'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -704,7 +682,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'compensation'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -722,7 +700,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'tax'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -740,7 +718,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'status'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -861,11 +839,6 @@ function EmployeeDetailContent({
                                                 value={personalForm.socialInsuranceCode}
                                                 onChange={(v) => setPersonalForm(prev => ({ ...prev, socialInsuranceCode: v.replace(/[^\d]/g, '').slice(0, 12) }))}
                                             />
-                                            <EditField
-                                                label="Tài khoản ngân hàng"
-                                                value={personalForm.bankAccount}
-                                                onChange={(v) => setPersonalForm(prev => ({ ...prev, bankAccount: v.replace(/[^\d]/g, '').slice(0, 17) }))}
-                                            />
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -892,7 +865,6 @@ function EmployeeDetailContent({
                                         <FieldRow label="CCCD/CMND" value={employee.citizenId} />
                                         <FieldRow label="Mã số thuế" value={employee.taxCode} />
                                         <FieldRow label="Số BHXH" value={employee.socialInsuranceCode} />
-                                        <FieldRow label="Tài khoản ngân hàng" value={employee.bankAccount} />
                                     </dl>
                                 </ProfileSection>
                             )}
@@ -927,21 +899,6 @@ function EmployeeDetailContent({
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                            {/* Loại lao động */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-employmentType" required>Loại lao động</FormLabel>
-                                                <select
-                                                    id="edit-employmentType"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.employmentType}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, employmentType: e.target.value as EmploymentType }))}
-                                                >
-                                                    {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([key, label]) => (
-                                                        <option key={key} value={key}>{label}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
                                             {/* Ngày vào làm */}
                                             <EditField
                                                 label="Ngày vào làm"
@@ -993,22 +950,6 @@ function EmployeeDetailContent({
                                                     <p className="text-xs text-destructive">{employmentErrors.positionId}</p>
                                                 )}
                                             </div>
-
-                                            {/* Nơi làm việc */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-workplaceId">Nơi làm việc</FormLabel>
-                                                <select
-                                                    id="edit-workplaceId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.workplaceId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, workplaceId: e.target.value }))}
-                                                >
-                                                    <option value="">Chưa chọn nơi làm việc</option>
-                                                    {workplaces.map((w) => (
-                                                        <option key={w._id} value={w._id}>{w.name} ({w.code})</option>
-                                                    ))}
-                                                </select>
-                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -1031,7 +972,6 @@ function EmployeeDetailContent({
                                         <FieldRow label="Ngày kết thúc" value={employee.endDate ? formatVN(employee.endDate) : undefined} />
                                         <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
                                         <FieldRow label="Chức danh" value={employee.positionName || undefined} />
-                                        <FieldRow label="Nơi làm việc" value={employee.workplaceName || undefined} />
                                     </dl>
                                 </ProfileSection>
                             )}
@@ -1092,7 +1032,7 @@ function EmployeeDetailContent({
                                         <CardContent>
                                             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                                 <FieldRow label="Lương cơ bản" value={formatVnd(salaryProfile.baseSalary)} />
-                                                <FieldRow label="Lương đóng BHXH (tự tính)" value={formatVnd(deriveInsuranceSalary(salaryProfile.baseSalary, salaryProfile.allowances))} />
+                                                <FieldRow label="Lương đóng BH" value={formatVnd(salaryProfile.insuranceSalary ?? 0)} />
                                                 {salaryProfile.probationJobSalary ? (
                                                     <FieldRow label="Lương theo công việc thử việc" value={formatVnd(salaryProfile.probationJobSalary)} />
                                                 ) : null}
@@ -1167,7 +1107,7 @@ function EmployeeDetailContent({
                                                                             "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
                                                                             orgAllowance?.insuranceBased ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                                                                         )}>
-                                                                            {orgAllowance?.insuranceBased ? 'Tính đóng BHXH' : 'Không đóng BHXH'}
+                                                                            {orgAllowance?.insuranceBased ? 'Tính đóng BH' : 'Không đóng BH'}
                                                                         </span>
                                                                         {orgAllowance?.prorated && (
                                                                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">

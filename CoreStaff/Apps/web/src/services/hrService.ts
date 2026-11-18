@@ -1062,6 +1062,10 @@ export interface PeriodBlockerRow {
     overallApprovalStatus?: string;
     checkInAt?: string | null;
     checkOutAt?: string | null;
+    /** QC 2.1 — an HR explanation request is already open for this day. */
+    hasOpenExplanation?: boolean;
+    openRequestStatus?: string;
+    requestId?: string;
 }
 
 export interface PeriodBlockerPage {

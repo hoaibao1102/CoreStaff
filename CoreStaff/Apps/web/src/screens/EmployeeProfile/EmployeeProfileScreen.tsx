@@ -464,10 +464,8 @@ export function EmployeeProfileScreen({
     { label: 'Mã nhân viên', value: display(profile?.employeeCode ?? user.employeeCode), icon: Hash },
     { label: 'Phòng ban', value: display(profile?.departmentName), icon: UsersRound },
     { label: 'Chức danh', value: display(profile?.positionName), icon: BriefcaseBusiness },
-    { label: 'Quản lý trực tiếp', value: display(profile?.managerName), icon: UserRound },
     { label: 'Loại lao động', value: profile ? EMPLOYMENT_TYPE_LABELS[profile.employmentType] : '—', icon: BriefcaseBusiness },
     { label: 'Ngày vào làm', value: formatDate(profile?.joinDate), icon: CalendarDays },
-    { label: 'Nơi làm việc', value: display(profile?.workplaceName), icon: MapPin },
     { label: 'Ca làm việc', value: '—', icon: CalendarDays },
   ];
 
@@ -482,7 +480,6 @@ export function EmployeeProfileScreen({
   const legalFields: ProfileField[] = [
     { label: 'Mã số thuế', value: display(profile?.taxCode), icon: CreditCard },
     { label: 'Số BHXH', value: display(profile?.socialInsuranceCode), icon: CreditCard },
-    { label: 'Tài khoản ngân hàng', value: display(profile?.bankAccount), icon: CreditCard, wide: true },
   ];
 
   /* ── Render ── */

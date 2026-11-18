@@ -40,7 +40,16 @@ export function confirmationError(error: unknown): string {
   return 'Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.';
 }
 
-export function ConfirmationSummary({ preview: p, customCheckOutTime }: { preview: AttendanceConfirmationPreview; customCheckOutTime?: string }) {
+/** `HH:mm` in Vietnam time for an ISO instant, or '' when absent. */
+const vnClock = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
+};
+
+export function ConfirmationSummary({ preview: p, customCheckInTime, customCheckOutTime }: { preview: AttendanceConfirmationPreview; customCheckInTime?: string; customCheckOutTime?: string }) {
   const inSource = confirmationSource(p.existingPunches?.checkInProvenance);
   const outSource = confirmationSource(p.existingPunches?.checkOutProvenance);
   const hasIn = Boolean(p.existingPunches?.checkInAt || (inSource && inSource !== 'LEGACY_UNKNOWN'));
@@ -84,12 +93,14 @@ export function ConfirmationSummary({ preview: p, customCheckOutTime }: { previe
             <span className="text-lg font-bold text-foreground">
               {p.existingPunches?.checkInAt
                 ? confirmationTime(p.existingPunches.checkInAt)
+                : customCheckInTime
+                ? customCheckInTime
                 : hasIn
                 ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Đã chấm')
                 : confirmationTime(p.proposedChanges?.checkInAt)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {hasIn ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Giờ thực tế') : 'Đề xuất theo ca'}
+              {hasIn ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Giờ thực tế') : customCheckInTime ? 'Tự khai báo thực tế' : 'Đề xuất theo ca'}
             </span>
           </div>
         </div>
@@ -166,8 +177,10 @@ export function AttendanceConfirmationForm({
   onCancel?: () => void;
 }) {
   const [reason, setReason] = useState('');
+  // QC 1.2 — both endpoints are editable and default to the shift proposal,
+  // never to a hard-coded 17:00.
+  const [customCheckInTime, setCustomCheckInTime] = useState('');
   const [customCheckOutTime, setCustomCheckOutTime] = useState('');
-  const [showCustomCheckOut, setShowCustomCheckOut] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
@@ -188,11 +201,21 @@ export function AttendanceConfirmationForm({
     return () => { live = false; };
   }, [apiBase, workDate, revision, bypass]);
 
+  // Seed the editable times once per preview: only for punches that are still
+  // missing, and always from the proposal (the shift, leave-adjusted).
+  useEffect(() => {
+    const p = result?.date === workDate ? result.preview : undefined;
+    if (!p) return;
+    if (!p.existingPunches?.checkInAt) setCustomCheckInTime(vnClock(p.proposedChanges?.checkInAt));
+    if (!p.existingPunches?.checkOutAt) setCustomCheckOutTime(vnClock(p.proposedChanges?.checkOutAt));
+  }, [result, workDate]);
+
   if (bypass) return <>{legacy}</>;
   const currentResult = result?.date === workDate ? result : null;
   if (currentResult?.legacy) return <>{legacy}</>;
 
   const preview = currentResult?.preview;
+
   const canSubmit = Boolean(preview) && !busy && !stale && preview!.canSubmit && Boolean(preview!.actionType) && Boolean(preview!.previewHash)
     && !preview!.blockedReasons?.length && preview!.period?.canMutate !== false
     && (preview!.quota?.remaining ?? 1) > 0 && reason.trim().length >= 10 && reason.trim().length <= 1000;
@@ -208,7 +231,8 @@ export function AttendanceConfirmationForm({
           workDate,
           reason: reason.trim(),
           previewHash: preview.previewHash!,
-          ...(customCheckOutTime ? { customCheckOutTime: `${workDate}T${customCheckOutTime}:00+07:00` } : {}),
+          ...(customCheckInTime && !preview.existingPunches?.checkInAt ? { customCheckInTime: `${workDate}T${customCheckInTime}:00+07:00` } : {}),
+          ...(customCheckOutTime && !preview.existingPunches?.checkOutAt ? { customCheckOutTime: `${workDate}T${customCheckOutTime}:00+07:00` } : {}),
         };
         const serialized = JSON.stringify(payload);
         if (attempt.current?.payload !== serialized) attempt.current = { payload: serialized, key: crypto.randomUUID() };
@@ -239,51 +263,48 @@ export function AttendanceConfirmationForm({
           Đang tải xem trước…
         </div>
       ) : preview ? (
-        <ConfirmationSummary preview={preview} customCheckOutTime={customCheckOutTime} />
+        <ConfirmationSummary preview={preview} customCheckInTime={customCheckInTime} customCheckOutTime={customCheckOutTime} />
       ) : (
         <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
           {currentResult.error}
         </p>
       )}
 
-      {preview && !preview.existingPunches?.checkOutAt && (
-        <div className="pt-1">
-          {!showCustomCheckOut ? (
-            <button
-              type="button"
-              onClick={() => setShowCustomCheckOut(true)}
-              className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium"
-            >
-              🕒 Hôm nay bạn có làm thêm giờ (OT)? Bấm vào đây để tự nhập giờ ra thực tế
-            </button>
-          ) : (
-            <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  🕒 Giờ ra thực tế (làm căn cứ tính OT)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCustomCheckOut(false);
-                    setCustomCheckOutTime('');
-                  }}
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  Hủy, dùng giờ theo ca
-                </button>
-              </div>
+      {/* QC 1.2 — the employee may correct either punch; each defaults to the shift. */}
+      {preview && (!preview.existingPunches?.checkInAt || !preview.existingPunches?.checkOutAt) && (
+        <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3.5 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Giờ vào / ra thực tế</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Mặc định theo ca. Nếu hôm nay bạn vào muộn, về muộn hoặc làm thêm giờ (OT), hãy sửa lại giờ thực tế để Quản lý duyệt đúng công.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-xs font-medium text-foreground">
+              Giờ vào thực tế
               <input
                 type="time"
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Giờ vào thực tế"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                value={customCheckInTime}
+                disabled={busy || Boolean(preview.existingPunches?.checkInAt)}
+                onChange={e => setCustomCheckInTime(e.target.value)}
+              />
+              {preview.existingPunches?.checkInAt && <span className="text-muted-foreground font-normal">Đã có mốc vào — không sửa được ở đây.</span>}
+            </label>
+            <label className="grid gap-1.5 text-xs font-medium text-foreground">
+              Giờ ra thực tế
+              <input
+                type="time"
+                aria-label="Giờ ra thực tế"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                 value={customCheckOutTime}
+                disabled={busy || Boolean(preview.existingPunches?.checkOutAt)}
                 onChange={e => setCustomCheckOutTime(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Nếu hôm nay bạn có làm việc ngoài giờ (OT), vui lòng nhập giờ ra thực tế (ví dụ: 19:30). Mốc này sẽ làm căn cứ để Quản lý duyệt và hệ thống tính đủ giờ OT cho bạn.
-              </p>
-            </div>
-          )}
+              {preview.existingPunches?.checkOutAt && <span className="text-muted-foreground font-normal">Đã có mốc ra — không sửa được ở đây.</span>}
+            </label>
+          </div>
         </div>
       )}
 

@@ -100,6 +100,8 @@ export function BlockerDayDetailDialog({
 
   const day = detail?.day;
   const canResolveAsAbsent = blocker?.type === 'MISSING_CHECK_IN' || blocker?.type === 'MISSING_CHECK_OUT';
+  // QC 2.1 — never offer a second explanation request for the same day.
+  const hasOpenExplanation = blocker?.hasOpenExplanation === true;
 
   async function handleRequestExplanation() {
     if (!blocker) return;
@@ -261,13 +263,19 @@ export function BlockerDayDetailDialog({
 
                   {!showAbsenceResolution && !showExplanationForm && (
                     <div className="flex flex-wrap gap-2 pt-1">
-                      <Button
-                        type="button"
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => { setShowExplanationForm(true); setShowAbsenceResolution(false); }}
-                      >
-                        Yêu cầu NV giải trình
-                      </Button>
+                      {hasOpenExplanation ? (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border border-blue-300">
+                          Đã yêu cầu giải trình · {APPROVAL_LABEL[blocker?.openRequestStatus ?? ''] ?? blocker?.openRequestStatus ?? 'Chờ phản hồi'}
+                        </Badge>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => { setShowExplanationForm(true); setShowAbsenceResolution(false); }}
+                        >
+                          Yêu cầu NV giải trình
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="destructive"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CalendarDays, CheckCircle2, ClipboardCheck, Clock3, RefreshCw, TriangleAlert } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/alert';
 import { Badge } from '@/components/badge';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { Textarea } from '@/components/textarea';
+import { AdjustmentRequestForm, type AdjustmentRow } from './components/AdjustmentRequestForm';
 import {
   acknowledgeMyTimesheetReview,
   disputeMyTimesheetReview,
@@ -70,8 +71,37 @@ export function EmployeeTimesheetReviewScreen({ apiBase, embedded = false }: { a
   const [confirming, setConfirming] = useState(false);
   const [disputing, setDisputing] = useState(false);
   const [reason, setReason] = useState('');
+  const [adjustRows, setAdjustRows] = useState<AdjustmentRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+
+  /**
+   * QC 2.2 — "Báo sai lệch" opens the same adjustment form the OT tab uses,
+   * pre-filled with one row per day of this period. The employee ticks the
+   * days that are wrong; each tick becomes one adjustment request.
+   */
+  const openDispute = (review: EmployeeTimesheetReview) => {
+    setActionError('');
+    setAdjustRows(review.days.map((day) => {
+      const missingIn = !day.checkInAt && day.scheduledObligationMinutes > 0;
+      const missingOut = !day.checkInAt && !day.checkOutAt ? false : !day.checkOutAt && day.scheduledObligationMinutes > 0;
+      const adjustmentType = missingIn ? 'CHECK_IN' : 'CHECK_OUT';
+      const vnTime = (value?: string | null) => value
+        ? new Date(value).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false })
+        : '';
+      return {
+        workDate: day.workDate.slice(0, 10),
+        adjustmentType,
+        time: missingIn ? (vnTime(day.checkInAt) || '08:00') : (vnTime(day.checkOutAt) || '17:00'),
+        enabled: Boolean(day.checkInAt || day.checkOutAt) ? false : true,
+        warning: day.checkInAt && day.checkOutAt
+          ? 'Ngày đã đủ hai mốc — điều chỉnh giờ sẽ bị từ chối.'
+          : undefined,
+      } as AdjustmentRow;
+    }));
+    setReason('');
+    setDisputing(true);
+  };
 
   const load = useCallback(async (preferredPeriodId?: string) => {
     setLoading(true);
@@ -126,17 +156,20 @@ export function EmployeeTimesheetReviewScreen({ apiBase, embedded = false }: { a
     } finally { setBusy(false); }
   };
 
-  const dispute = async () => {
-    if (!review || reason.trim().length < 10) return;
-    setBusy(true);
-    setActionError('');
+  /**
+   * After the batch adjustment requests are filed, also record the period-level
+   * dispute mark so the department-confirm gate knows the timesheet was queried.
+   */
+  const finishBatch = async () => {
+    if (!review || reason.trim().length < 10) { setDisputing(false); return; }
     try {
       setReview(await disputeMyTimesheetReview(apiBase, review.periodId, review.periodVersion, review.projectionHash, reason.trim()));
       setDisputing(false);
-      setReason('');
     } catch (caught) {
+      // The adjustment requests already reached the manager; this mark is
+      // informational, so keep the dialog open only to surface the reason.
       setActionError(errorMessage(caught));
-    } finally { setBusy(false); }
+    }
   };
 
   return <section className={`w-full space-y-6 ${embedded ? '' : 'mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8'}`}>
@@ -175,12 +208,12 @@ export function EmployeeTimesheetReviewScreen({ apiBase, embedded = false }: { a
         <Card><CardHeader className="border-b"><CardTitle>Chi tiết ngày công</CardTitle><p className="text-sm text-muted-foreground">Phiên bản {review.periodVersion} · {review.days.length} ngày có dữ liệu</p></CardHeader><CardContent className="px-0"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="pl-4">Ngày</TableHead><TableHead>Nghĩa vụ</TableHead><TableHead>Đã làm</TableHead><TableHead>Nghỉ có lương</TableHead><TableHead>Tăng ca</TableHead><TableHead className="pr-4 text-right">Công dự kiến</TableHead></TableRow></TableHeader><TableBody>{review.days.map((day) => <TableRow key={day.workDate}><TableCell className="pl-4 font-medium">{formatDate(day.workDate)}</TableCell><TableCell>{formatMinutes(day.scheduledObligationMinutes)}</TableCell><TableCell>{formatMinutes(day.workedScheduledMinutes)}</TableCell><TableCell>{formatMinutes(day.payableLeaveMinutes)}</TableCell><TableCell>{formatMinutes(day.overtimeMinutes)}</TableCell><TableCell className="pr-4 text-right font-semibold">{day.workCredit}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
 
         {review.periodStatus === 'CLOSED' && <Alert><CheckCircle2 /><AlertDescription>HR đã chốt kỳ công này. Bảng công chỉ còn để xem.</AlertDescription></Alert>}
-        {review.state !== 'ACKNOWLEDGED' && review.periodStatus !== 'CLOSED' && <div className="flex flex-col-reverse gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{review.hasUnresolvedDays ? 'Cần xử lý các ngày chấm công chưa hoàn tất trước khi xác nhận.' : 'Hãy báo sai lệch nếu số liệu chưa đúng trước khi xác nhận.'}</p><div className="flex flex-col gap-3 sm:flex-row"><Button type="button" variant="outline" disabled={busy} onClick={() => { setActionError(''); setDisputing(true); }}><TriangleAlert data-icon="inline-start" />Báo sai lệch</Button><Button type="button" disabled={busy || !review.canAcknowledge} onClick={() => { setActionError(''); setConfirming(true); }}><CheckCircle2 data-icon="inline-start" />Đã kiểm tra — thông tin chính xác</Button></div></div>}
+        {review.state !== 'ACKNOWLEDGED' && review.periodStatus !== 'CLOSED' && <div className="flex flex-col-reverse gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{review.hasUnresolvedDays ? 'Cần xử lý các ngày chấm công chưa hoàn tất trước khi xác nhận.' : 'Hãy báo sai lệch nếu số liệu chưa đúng trước khi xác nhận.'}</p><div className="flex flex-col gap-3 sm:flex-row"><Button type="button" variant="outline" disabled={busy} onClick={() => openDispute(review)}><TriangleAlert data-icon="inline-start" />Báo sai lệch</Button><Button type="button" disabled={busy || !review.canAcknowledge} onClick={() => { setActionError(''); setConfirming(true); }}><CheckCircle2 data-icon="inline-start" />Đã kiểm tra — thông tin chính xác</Button></div></div>}
       </>}
 
     <Dialog open={confirming} onOpenChange={(open) => !busy && setConfirming(open)}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Xác nhận thông tin chính xác</DialogTitle><DialogDescription>Xác nhận được gắn với đúng phiên bản bảng công bạn vừa xem. Hãy chắc chắn bạn đã kiểm tra đầy đủ.</DialogDescription></DialogHeader>{actionError && <Alert className="mx-6 mb-4 border-destructive/30 bg-destructive/5 text-destructive" role="alert"><AlertCircle /><AlertDescription>{actionError}</AlertDescription></Alert>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setConfirming(false)}>Hủy</Button><Button type="button" disabled={busy} onClick={acknowledge}>{busy ? 'Đang xác nhận...' : 'Xác nhận'}</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={disputing} onOpenChange={(open) => !busy && setDisputing(open)}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader className="border-b p-6 pr-14">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
@@ -188,42 +221,22 @@ export function EmployeeTimesheetReviewScreen({ apiBase, embedded = false }: { a
             </span>
             <div className="space-y-1">
               <DialogTitle>Báo sai lệch bảng công</DialogTitle>
-              <DialogDescription>Mô tả ngày và nội dung chưa chính xác để bộ phận phụ trách kiểm tra nhanh hơn.</DialogDescription>
+              <DialogDescription>
+                Tích những ngày chưa chính xác, chọn mốc công và giờ thực tế. Mỗi ngày đã chọn tạo một yêu cầu điều chỉnh công gửi tới Quản lý phòng ban.
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
-        <div className="space-y-3 px-6 py-5">
-          <div className="flex items-center justify-between gap-4">
-            <label className="text-sm font-semibold" htmlFor="timesheet-dispute-reason">Lý do sai lệch</label>
-            <span className="text-xs tabular-nums text-muted-foreground">{reason.length}/2000</span>
-          </div>
-          <Textarea
-            id="timesheet-dispute-reason"
-            className="min-h-32 resize-y px-3 py-2.5 leading-6"
-            rows={5}
-            maxLength={2000}
-            autoFocus
-            aria-invalid={reason.length > 0 && reason.trim().length < 10}
-            aria-describedby="timesheet-dispute-help"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="Ví dụ: Ngày 15/10 tôi đã chấm công lúc 08:02 nhưng hệ thống chưa ghi nhận check-in."
-          />
-          <div id="timesheet-dispute-help" className="flex min-h-5 items-start justify-between gap-4 text-xs">
-            <p className={reason.length > 0 && reason.trim().length < 10 ? 'text-destructive' : 'text-muted-foreground'}>
-              {reason.length > 0 && reason.trim().length < 10 ? `Cần thêm ${10 - reason.trim().length} ký tự để gửi.` : 'Nêu rõ ngày, giờ và dữ liệu cần điều chỉnh (tối thiểu 10 ký tự).'}
-            </p>
-          </div>
-          {actionError && <Alert className="border-destructive/30 bg-destructive/5 text-destructive" role="alert"><AlertCircle /><AlertDescription>{actionError}</AlertDescription></Alert>}
-        </div>
-        <DialogFooter className="border-t bg-muted/20 p-4 sm:px-6">
-          <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" className="sm:min-w-24" variant="outline" disabled={busy} onClick={() => setDisputing(false)}>Hủy</Button>
-            <Button type="button" className="sm:min-w-36" variant="destructive" disabled={busy || reason.trim().length < 10} onClick={dispute}>
-              <TriangleAlert data-icon="inline-start" />{busy ? 'Đang gửi...' : 'Gửi báo sai lệch'}
-            </Button>
-          </div>
-        </DialogFooter>
+        <AdjustmentRequestForm
+          apiBase={apiBase}
+          rows={adjustRows}
+          onRowsChange={setAdjustRows}
+          reason={reason}
+          onReasonChange={setReason}
+          selectable
+          onDone={() => { void finishBatch(); }}
+          onCancel={() => setDisputing(false)}
+        />
       </DialogContent>
     </Dialog>
   </section>;

@@ -11,6 +11,7 @@ import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
 import { CreateDependentDto } from './dto/create-dependent.dto';
+import { assertWorkingAge } from './minimum-age';
 import { UpdateDependentDto } from './dto/update-dependent.dto';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../../auth/strategies/password-policy';
@@ -48,6 +49,7 @@ export class EmployeeService {
 	 */
 	async create(organizationId: string, dto: CreateEmployeeProfileDto): Promise<Record<string, unknown>> {
 		await this.assertRefsInTenant(organizationId, dto);
+		assertWorkingAge(dto.dateOfBirth);
 		if (dto.userId) return this.linkProfile(organizationId, dto);
 		return this.provisionProfile(organizationId, dto);
 	}
@@ -156,6 +158,7 @@ export class EmployeeService {
 			throw new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
 		}
 		await this.assertRefsInTenant(organizationId, dto);
+		assertWorkingAge(dto.dateOfBirth);
 		if (await this.profileModel.exists({ organizationId, employeeCode: normalizeEmployeeCode(dto.employeeCode) })) {
 			throw new ConflictException('EMPLOYEE_CODE_TAKEN');
 		}

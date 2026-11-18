@@ -21,6 +21,7 @@ import {
 	normalizeEmployeeCode,
 } from '../../../database/schemas/enums';
 import { provisionAccount, type AccountInput } from '../../../database/seed/provision';
+import { isWorkingAge, MINIMUM_WORKING_AGE } from '../minimum-age';
 import { hashPassword } from '../../../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../../../auth/strategies/password-policy';
 
@@ -603,6 +604,9 @@ export class EmployeeImportService {
 
 			parsed.dateOfBirth = readIso(row, 'dateOfBirth');
 			if (parsed.dateOfBirth && parsed.dateOfBirth > today) fail('DOB_FUTURE_DATE', 'Ngày sinh không được ở tương lai.');
+			else if (parsed.dateOfBirth && !isWorkingAge(parsed.dateOfBirth, new Date(`${today}T00:00:00Z`))) {
+				fail('DOB_MINIMUM_AGE', `Nhân viên phải đủ ${MINIMUM_WORKING_AGE} tuổi theo Luật Lao động 2019 (Điều 143).`);
+			}
 
 			const genderCell = readText(row, 'gender');
 			const gender = resolveAlias(genderCell, GENDER_ALIASES, Object.values(Gender))

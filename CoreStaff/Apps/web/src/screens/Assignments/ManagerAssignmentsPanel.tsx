@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Power, PowerOff, Users } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/alert';
 import { Badge } from '@/components/badge';
@@ -19,7 +19,6 @@ import { formatVN } from '@/lib/datetime';
 export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
   const [rows, setRows] = useState<ManagerAssignment[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -27,22 +26,18 @@ export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
 
   useEffect(() => {
     setLoading(true);
+    // QC 5.1 — the list now carries manager/department names from the server.
     Promise.all([
       getManagerAssignments(apiBase),
-      getManagerAssignmentCandidates(apiBase),
       getDepartments(apiBase),
     ])
-      .then(([a, m, d]) => {
+      .then(([a, d]) => {
         setRows(a);
-        setManagers(m);
         setDepartments(d);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Không thể tải phân công quản lý.'))
       .finally(() => setLoading(false));
   }, [apiBase, rev]);
-
-  const mn = useMemo(() => new Map(managers.map((x) => [x.id, x.fullName])), [managers]);
-  const dn = useMemo(() => new Map(departments.map((x) => [x._id, x.name])), [departments]);
 
   const toggle = async (r: ManagerAssignment) => {
     try {
@@ -89,7 +84,7 @@ export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
             <Card key={r._id}>
               <CardHeader>
                 <div className="flex justify-between gap-2">
-                  <CardTitle className="text-base">{mn.get(r.managerUserId) ?? 'Quản lý'}</CardTitle>
+                  <CardTitle className="text-base">{r.managerName ?? 'Quản lý'}</CardTitle>
                   <Badge variant={r.active ? 'default' : 'secondary'}>
                     {r.active ? 'Hiệu lực' : 'Ngưng'}
                   </Badge>
@@ -97,7 +92,7 @@ export function ManagerAssignmentsPanel({ apiBase }: { apiBase: string }) {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <p>
-                  <strong>Phòng ban:</strong> {dn.get(r.departmentId) ?? r.departmentId}
+                  <strong>Phòng ban:</strong> {r.departmentName ?? r.departmentId}
                 </p>
                 <p className="text-muted-foreground">
                   {formatVN(r.effectiveFrom)} →{' '}

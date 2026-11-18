@@ -11,6 +11,7 @@ import {OvertimeService} from '../overtime/overtime.service';
 import {PeriodVersionService} from '../timesheet/period-version.service';
 import {EmployeeAssignmentDocument} from '../../database/schemas/assignment.schema';
 import {AttendanceApprovalStatus,AttendanceEventType,AttendanceMethod,AttendanceStatus,DayResult} from '../../database/schemas/enums';
+import {closeSiblingRequests} from './close-sibling-requests';
 @Injectable()
 export class ManagerRequestService {
   constructor(
@@ -159,7 +160,7 @@ export class ManagerRequestService {
   }
 
   async listMine(org: string, userId: string) {
-    return this.requests.find({ organizationId: org, employeeUserId: userId }).sort({ createdAt: -1 }).lean();
+    return this.requests.find({ organizationId: org, employeeUserId: userId, status: { $ne: 'CANCELLED' } }).sort({ createdAt: -1 }).lean();
   }
 
   async respondClarification(org: string, userId: string, requestId: string, dto: RespondClarificationDto) {
@@ -177,6 +178,15 @@ export class ManagerRequestService {
     }
     if (dto.expectedVersion && req.version !== dto.expectedVersion) {
       throw new ConflictException('REQUEST_STATE_CHANGED');
+    }
+
+    // QC 2.4 — a forfeited day is settled; replying to a stale explanation
+    // must not resurrect it.
+    const linkedDay: any = req.attendanceDayId
+      ? await this.attendanceDays.findOne({ _id: req.attendanceDayId, organizationId: org }).lean()
+      : null;
+    if (linkedDay?.resolution?.type === 'FORFEITED_MISSING_PUNCH') {
+      throw new ConflictException('DAY_ALREADY_FORFEITED');
     }
 
     const workDateStr = req.workDate ? new Date(req.workDate).toISOString().slice(0, 10) : '';
@@ -291,6 +301,7 @@ export class ManagerRequestService {
     // stamped with a stale profile department before assignment-aware routing.
     const query: any = {
       organizationId: org,
+      status: { $ne: 'CANCELLED' },
       $or: [
         { departmentId: { $in: departments } },
         { employeeUserId: { $in: employeeUserIds } },
@@ -879,6 +890,15 @@ export class ManagerRequestService {
     }
     day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
     await day.save({ session });
+    // QC 2.4 — the day is settled; cancel every other open request on it,
+    // including the explanation row that produced this approval.
+    await closeSiblingRequests(this.requests, {
+      organizationId: org,
+      attendanceDayId: day._id,
+      exceptId: request._id,
+      reason: 'EXPLANATION_APPROVED',
+      session,
+    });
   }
 
 }

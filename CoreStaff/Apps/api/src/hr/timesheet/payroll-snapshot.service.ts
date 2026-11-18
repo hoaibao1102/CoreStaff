@@ -44,12 +44,16 @@ export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingD
 }
 
 /**
- * Lương đóng bảo hiểm = lương cơ bản hợp đồng − tổng phụ cấp gán cho nhân viên
+ * Lương đóng bảo hiểm = lương cơ bản hợp đồng − tổng phụ cấp **có tích tính BH**
  * (không âm). Một chỗ khai duy nhất — hồ sơ lương, snapshot và FE đều dùng cùng
  * công thức để số hiện trên màn khớp số chốt kỳ.
+ *
+ * QC 4.11: chỉ phụ cấp `insuranceBased = true` mới trừ khỏi căn cứ đóng BH;
+ * phụ cấp không tích không được trừ. Đây là chủ ý theo QC — luật VN thông
+ * thường cộng phụ cấp vào căn cứ, không trừ; đổi hướng nếu nghiệp vụ chốt khác.
  */
-export function deriveInsuranceSalary(monthlyBaseSalary: number, totalAllowances: number): number {
-  return Math.max(0, monthlyBaseSalary - totalAllowances);
+export function deriveInsuranceSalary(monthlyBaseSalary: number, insuranceBearingAllowances: number): number {
+  return Math.max(0, monthlyBaseSalary - insuranceBearingAllowances);
 }
 
 /**
@@ -327,11 +331,16 @@ export class PayrollSnapshotService {
       type: allowance.code ?? String(allowance._id),
       label: allowance.name ?? allowance.code ?? 'Phụ cấp',
       amount: assignedAmounts.get(String(allowance._id)) ?? allowance.amount ?? 0,
+      // QC 4.11 — only ticked allowances reduce the insurance base.
+      insuranceBased: allowance.insuranceBased === true,
       // R1: mọi phụ cấp đều chịu thuế TNCN. Cờ `OrganizationAllowance.taxable`
       // vẫn còn trong schema (deprecated) nhưng không còn được đọc ở đây.
       taxable: true,
     }));
     const totalAllowances = allowanceBreakdown.reduce((sum: number, item: any) => sum + item.amount, 0);
+    const insuranceAllowances = allowanceBreakdown
+      .filter((item: any) => item.insuranceBased)
+      .reduce((sum: number, item: any) => sum + item.amount, 0);
     const nonTaxableAllowances = 0;
 
     const attendanceBonusPolicy: any = salaryProfile?.attendanceBonusPolicyId
@@ -368,7 +377,7 @@ export class PayrollSnapshotService {
     // Calculate insurance contributions (TASK-090/091/092)
     // Lương đóng bảo hiểm suy ra: lương cơ bản hợp đồng − tổng phụ cấp (không âm).
     // KHÔNG nhập tay nữa — xem Docs/DOCS_DECISION_LOG.md.
-    const insuranceSalary = deriveInsuranceSalary(monthlyBaseSalary, totalAllowances);
+    const insuranceSalary = deriveInsuranceSalary(monthlyBaseSalary, insuranceAllowances);
     const insuranceProfile = await this.resolveInsuranceProfile(
       organizationId,
       summary.employeeProfileId,

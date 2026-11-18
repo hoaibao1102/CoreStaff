@@ -6,6 +6,7 @@ import { calculateLeaveDay } from '../leave/leave.service';
 import { LeaveDurationType } from '../../database/schemas/enums';
 import { vnTimeToUtc } from '../../common/vietnam-time';
 import { proposeAttendanceConfirmation } from './attendance-confirmation-domain';
+import { closeSiblingRequests } from './close-sibling-requests';
 export const CONFIRMATION_MODELS = 'CONFIRMATION_MODELS';
 function stable(value:any):any {if(value instanceof Date)return value.toISOString();if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,stable(value[k])]));return value;}
 const read = (query: any, session?: ClientSession): Promise<any> => query.session(session ?? null).lean();
@@ -84,7 +85,11 @@ export class AttendanceConfirmationService {
           for(const [field,eventType] of [['checkInAt','CHECK_IN'],['checkOutAt','CHECK_OUT']]){
             if(preview.existingPunches[field])continue;
             const eventId=new Types.ObjectId();
-            const customTime = field === 'checkOutAt' && (current.requestedEnd || current.metadata?.customCheckOutTime) ? new Date(current.requestedEnd || current.metadata.customCheckOutTime) : null;
+            // QC 1.2 — both endpoints carry an employee-declared actual time.
+            const customValue = field === 'checkInAt'
+              ? (current.requestedStart || current.metadata?.customCheckInTime)
+              : (current.requestedEnd || current.metadata?.customCheckOutTime);
+            const customTime = customValue ? new Date(customValue) : null;
             const isActual = Boolean(customTime);
             set[field]=customTime || new Date(preview.proposedChanges[field]);
             const source = isActual ? 'CONFIRMED_ACTUAL' : 'CONFIRMED_SCHEDULE';
@@ -109,12 +114,15 @@ export class AttendanceConfirmationService {
             });
           }
           if (set.checkInAt && set.checkOutAt) {
+            if (new Date(set.checkInAt) >= new Date(set.checkOutAt)) throw new ConflictException('TIME_WINDOW_INVALID');
             const breakMinutes = Number(preview.snapshot?.shift?.breakMinutes ?? 60);
             set.workingMinutes = Math.max(0, Math.floor((new Date(set.checkOutAt).getTime() - new Date(set.checkInAt).getTime()) / 60000) - breakMinutes);
           }
           const day=await m.days.findOneAndUpdate(filter,{$set:set,$setOnInsert:{organizationId:org,employeeId:current.employeeUserId,workDate}},{new:true,upsert:!before,session}).session(session).lean();
           if(!day)throw new ConflictException('ATTENDANCE_CONFIRMATION_STALE');
           await m.events.create(events.map(event=>({...event,attendanceDayId:day._id})),{session,ordered:true});
+          // QC 2.4 — the day is complete; nothing else may stay actionable on it.
+          await closeSiblingRequests(m.requests,{organizationId:org,attendanceDayId:day._id,reason:'ATTENDANCE_CONFIRMED',session});
         }else{
           const released=await m.quotas.updateOne({organizationId:org,employeeUserId:current.employeeUserId,monthKey:current.confirmationMonthKey,usedSlots:{$gt:0}},{$inc:{usedSlots:-1}},{session});
           if(released.modifiedCount!==1)throw new ConflictException('CONFIRMATION_QUOTA_INCONSISTENT');
@@ -139,7 +147,7 @@ export class AttendanceConfirmationService {
 
   async create(org:string,userId:string,dto:any,key?:string) {
     if (!key || key.length>128 || !/^[\x21-\x7e]+$/.test(key)) throw new ConflictException('IDEMPOTENCY_KEY_REQUIRED');
-    const allowed=['requestKind','type','workDate','reason','previewHash','customCheckOutTime'];
+    const allowed=['requestKind','type','workDate','reason','previewHash','customCheckOutTime','customCheckInTime'];
     if(Object.keys(dto).some(k=>!allowed.includes(k)) || dto.type!=='ATTENDANCE' || dto.requestKind!=='ATTENDANCE_CONFIRMATION' || typeof dto.reason!=='string' || dto.reason.trim().length<10 || dto.reason.trim().length>1000 || typeof dto.previewHash!=='string') throw new ConflictException('ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID');
     const payload={requestKind:dto.requestKind,type:dto.type,workDate:dto.workDate,reason:dto.reason.trim(),previewHash:dto.previewHash};
     const payloadHash=createHash('sha256').update(JSON.stringify(payload)).digest('hex'), m=this.models;
@@ -154,12 +162,18 @@ export class AttendanceConfirmationService {
           const preview=await this.preview(org,userId,dto.workDate,session);
           if(preview.contextHash!==dto.previewHash)throw new ConflictException('ATTENDANCE_CONFIRMATION_STALE');
           if(!preview.canSubmit)throw new ConflictException(preview.blockedReasons[0]);
+          // QC 1.2 — the employee may correct either endpoint, not just check-out.
+          const customCheckIn=dto.customCheckInTime?new Date(dto.customCheckInTime):null;
+          const customCheckOut=dto.customCheckOutTime?new Date(dto.customCheckOutTime):null;
+          const effectiveIn=customCheckIn??(preview.existingPunches?.checkInAt?new Date(preview.existingPunches.checkInAt):preview.proposedChanges?.checkInAt?new Date(preview.proposedChanges.checkInAt):null);
+          const effectiveOut=customCheckOut??(preview.existingPunches?.checkOutAt?new Date(preview.existingPunches.checkOutAt):preview.proposedChanges?.checkOutAt?new Date(preview.proposedChanges.checkOutAt):null);
+          if(effectiveIn&&effectiveOut&&effectiveIn>=effectiveOut)throw new ConflictException('TIME_WINDOW_INVALID');
           await m.periodVersion.claimForWorkDate(org,dto.workDate,session);
           const quotaIdentity={organizationId:org,employeeUserId:userId,monthKey:preview.quota.monthKey};
           await m.quotas.updateOne(quotaIdentity,{$setOnInsert:{...quotaIdentity,usedSlots:0}},{upsert:true,session});
           const slot=await m.quotas.findOneAndUpdate({...quotaIdentity,usedSlots:{$lt:preview.quota.limit}},{$inc:{usedSlots:1}},{new:true,session}).session(session).lean();
           if(!slot)throw new ConflictException('MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
-          const [row]=await m.requests.create([{...identity,employeeId:preview.snapshot.employeeProfileId,departmentId:preview.snapshot.departmentId,type:'ATTENDANCE',workDate:new Date(`${dto.workDate}T00:00:00Z`),reason:payload.reason,status:'PENDING',version:1,confirmationSlotActive:true,confirmationMonthKey:preview.quota.monthKey,confirmationPayloadHash:payloadHash,confirmationContextHash:preview.contextHash,confirmationSnapshot:preview.snapshot,requestedEnd:dto.customCheckOutTime?new Date(dto.customCheckOutTime):undefined,metadata:{adjustmentSource:'ATTENDANCE_CONFIRMATION',actionType:preview.actionType,customCheckOutTime:dto.customCheckOutTime}}],{session});
+          const [row]=await m.requests.create([{...identity,employeeId:preview.snapshot.employeeProfileId,departmentId:preview.snapshot.departmentId,type:'ATTENDANCE',workDate:new Date(`${dto.workDate}T00:00:00Z`),reason:payload.reason,status:'PENDING',version:1,confirmationSlotActive:true,confirmationMonthKey:preview.quota.monthKey,confirmationPayloadHash:payloadHash,confirmationContextHash:preview.contextHash,confirmationSnapshot:preview.snapshot,requestedStart:dto.customCheckInTime?new Date(dto.customCheckInTime):undefined,requestedEnd:dto.customCheckOutTime?new Date(dto.customCheckOutTime):undefined,metadata:{adjustmentSource:'ATTENDANCE_CONFIRMATION',actionType:preview.actionType,customCheckInTime:dto.customCheckInTime,customCheckOutTime:dto.customCheckOutTime}}],{session});
           result=row.toObject(); created=true;
         });
         if(created){try{m.notify?.notifyNewRequest(String(result.departmentId),{requestId:String(result._id),type:'ATTENDANCE',departmentId:String(result.departmentId),employeeUserId:userId,reason:result.reason,status:'PENDING',createdAt:result.createdAt??new Date()});}catch{/* REST remains source of truth after commit. */}}

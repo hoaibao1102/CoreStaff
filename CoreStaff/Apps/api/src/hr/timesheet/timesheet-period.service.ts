@@ -23,6 +23,7 @@ import { UserDocument } from '../../database/schemas/user.schema';
 import { PoliciesService } from '../policies/policies.service';
 import { PeriodObligationService } from './period-obligation.service';
 import { acquireSerializationLock } from '../../common/serialization-lock';
+import { closeSiblingRequests } from '../manager/close-sibling-requests';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -536,7 +537,7 @@ export class TimesheetPeriodService {
 				.sort({ recordedAt: 1 })
 				.lean(),
 			this.managerRequestModel
-				.findOne({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId) })
+				.findOne({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId), status: { $ne: 'CANCELLED' } })
 				.sort({ createdAt: -1 })
 				.lean(),
 		]);
@@ -604,6 +605,14 @@ export class TimesheetPeriodService {
 					{ new: true, session },
 				).lean();
 				await this.periodVersionService.bump(organizationId, id, session);
+				// QC 2.4 — the day is now a forfeited absence; any pending
+				// adjustment/explanation for it can never apply.
+				await closeSiblingRequests(this.managerRequestModel, {
+					organizationId,
+					attendanceDayId: day._id,
+					reason: 'FORFEITED_MISSING_PUNCH',
+					session,
+				});
 				await this.audit?.recordForActor(actor.userId, {
 					organizationId,
 					action: 'ATTENDANCE_RESOLUTION',
@@ -647,6 +656,16 @@ export class TimesheetPeriodService {
 		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') throw new ConflictException('DAY_ALREADY_FORFEITED');
 		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
 
+		// QC 2.1 — one open explanation per day. Without this guard the same
+		// blocker could spawn identical requests on every click.
+		const openExplanation = await this.managerRequestModel.findOne({
+			organizationId: new Types.ObjectId(organizationId),
+			attendanceDayId: day._id,
+			source: 'HR_MISSING_PUNCH_EXPLANATION',
+			status: { $in: ['CLARIFICATION_REQUESTED', 'PENDING'] },
+		}).select('_id').lean();
+		if (openExplanation) throw new ConflictException('EXPLANATION_ALREADY_REQUESTED');
+
 		const rawNote = note?.trim();
 		const cleanNote = rawNote && rawNote.length >= 10
 			? rawNote
@@ -688,34 +707,24 @@ export class TimesheetPeriodService {
 					{ new: true, session },
 				).lean();
 
-				const existingRequest = await this.managerRequestModel.findOne({
+				// QC 2.1 — append-only: a day has at most one open HR explanation
+				// (guarded above), and this must never rewrite another kind of
+				// request that happens to share the same attendanceDayId.
+				await this.managerRequestModel.create([{
 					organizationId: new Types.ObjectId(organizationId),
+					employeeId: employeeProfileId,
+					employeeUserId: employeeUserId,
+					departmentId: departmentId,
+					workDate: new Date(`${day.workDate}T00:00:00.000Z`),
+					type: 'ATTENDANCE',
+					source: 'HR_MISSING_PUNCH_EXPLANATION',
+					status: 'CLARIFICATION_REQUESTED',
 					attendanceDayId: day._id,
-				}).session(session);
-
-				if (existingRequest) {
-					existingRequest.status = 'CLARIFICATION_REQUESTED';
-					existingRequest.reviewComment = cleanNote;
-					existingRequest.reviewedBy = actor.userId;
-					existingRequest.reviewedAt = new Date();
-					await existingRequest.save({ session });
-				} else {
-					await this.managerRequestModel.create([{
-						organizationId: new Types.ObjectId(organizationId),
-						employeeId: employeeProfileId,
-						employeeUserId: employeeUserId,
-						departmentId: departmentId,
-						workDate: new Date(`${day.workDate}T00:00:00.000Z`),
-						type: 'ATTENDANCE',
-						source: 'HR_MISSING_PUNCH_EXPLANATION',
-						status: 'CLARIFICATION_REQUESTED',
-						attendanceDayId: day._id,
-						reason: cleanNote,
-						reviewedBy: actor.userId,
-						reviewedAt: new Date(),
-						version: 1,
-					}], { session });
-				}
+					reason: cleanNote,
+					reviewedBy: actor.userId,
+					reviewedAt: new Date(),
+					version: 1,
+				}], { session });
 
 				await this.periodVersionService.bump(organizationId, id, session);
 				await this.audit?.recordForActor(actor.userId, {
@@ -757,7 +766,35 @@ export class TimesheetPeriodService {
 		}
 
 		await this.fillMissingIdentity(organizationId, days, rows);
+		await this.fillOpenExplanations(organizationId, rows);
 		return rows;
+	}
+
+	/**
+	 * QC 2.1 — tell the review UI which blocked days already have an open HR
+	 * explanation, so the "request explanation" button is not offered twice.
+	 */
+	private async fillOpenExplanations(organizationId: string, rows: PeriodBlockerRow[]): Promise<void> {
+		if (!rows.length) return;
+		const dayIds = [...new Set(rows.map((row) => row.attendanceDayId))]
+			.filter((id) => Types.ObjectId.isValid(id))
+			.map((id) => new Types.ObjectId(id));
+		if (!dayIds.length) return;
+		const open = await this.managerRequestModel.find({
+			organizationId: new Types.ObjectId(organizationId),
+			attendanceDayId: { $in: dayIds },
+			source: 'HR_MISSING_PUNCH_EXPLANATION',
+			status: { $in: ['CLARIFICATION_REQUESTED', 'PENDING'] },
+		}).select('_id attendanceDayId status').lean();
+		if (!open.length) return;
+		const byDay = new Map(open.map((row: any) => [String(row.attendanceDayId), row]));
+		for (const row of rows) {
+			const request = byDay.get(row.attendanceDayId);
+			if (!request) continue;
+			row.hasOpenExplanation = true;
+			row.openRequestStatus = String(request.status);
+			row.requestId = String(request._id);
+		}
 	}
 
 	/**

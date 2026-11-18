@@ -54,21 +54,15 @@ export const GENDER_LABELS: Record<Gender, string> = {
     OTHER: 'Khác',
 };
 
-/** Employment type enum from backend. */
+/** Employment type enum from backend (FULL_TIME is the only value the schema accepts). */
 export const EMPLOYMENT_TYPE = {
     FULL_TIME: 'FULL_TIME',
-    PART_TIME: 'PART_TIME',
-    CONTRACT: 'CONTRACT',
-    INTERNSHIP: 'INTERNSHIP',
 } as const;
 
 export type EmploymentType = (typeof EMPLOYMENT_TYPE)[keyof typeof EMPLOYMENT_TYPE];
 
 export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
     FULL_TIME: 'Toàn thời gian',
-    PART_TIME: 'Bán thời gian',
-    CONTRACT: 'Hợp đồng',
-    INTERNSHIP: 'Thực tập',
 };
 
 /** Contract type enum from backend (employment-contract.schema.ts, TASK-028). */

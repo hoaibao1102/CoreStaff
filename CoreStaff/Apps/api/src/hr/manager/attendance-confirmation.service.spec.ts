@@ -38,7 +38,7 @@ describe('attendance confirmation cutover', () => {
     const query=(v:any)=>({session:()=>({lean:async()=>v})});
     const session:any={withTransaction:async(fn:any)=>fn(),endSession:jest.fn()};
     const request={_id:'req',source:'ATTENDANCE_CONFIRMATION',employeeUserId:'user',departmentId:'dept',status:'PENDING',version:1,workDate:new Date('2026-09-14'),confirmationContextHash:'hash',confirmationMonthKey:'2026-09',confirmationSlotActive:true};
-    const requests={db:{startSession:async()=>session},findOne:()=>query(request),findOneAndUpdate:jest.fn(()=>query({...request,status:'APPROVED',version:2}))};
+    const requests={db:{startSession:async()=>session},findOne:()=>query(request),findOneAndUpdate:jest.fn(()=>query({...request,status:'APPROVED',version:2})),updateMany:jest.fn(async()=>({modifiedCount:0}))};
     const days={findOne:()=>query({_id:'day',checkInAt:new Date('2026-09-14T01:15:00Z')}),findOneAndUpdate:jest.fn(()=>query({_id:'day'}))};
     const notify={notifyApprovalDecision:jest.fn()};
     const events={create:jest.fn(async()=>[])},audit={create:jest.fn(async()=>[])},periodVersion={claimForWorkDate:jest.fn(async()=>({periodId:'period',version:2}))};

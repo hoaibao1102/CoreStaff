@@ -26,7 +26,7 @@ import type {
   DayAttendance,
   AttendanceEvent,
 } from './types';
-import { useLocation, fetchAddressFromCoords, formatCoords } from './verification/useLocation';
+import { useLocation, fetchAddressFromCoords, formatCoords, getFreshCoords } from './verification/useLocation';
 import { useGpsVerification } from './verification/useGpsVerification';
 import { CameraCapture, SelfiePreview } from './components/CameraComponents';
 import { GpsAttendanceFlow } from './components/GpsAttendanceFlow';import { SelfieAttendanceFlow } from './components/SelfieAttendanceFlow';
@@ -218,7 +218,12 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
   const [userWorkplace, setUserWorkplace] = useState<Workplace | null>(null);
   const [isLoadingWorkplace, setIsLoadingWorkplace] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<AttendanceMethod>('GPS');
+  // QC 1.1 — the server resolves Wi-Fi → GPS → selfie; the client no longer
+  // offers a method switch. These are the workplace policy flags the same
+  // resolver reads, so the UI can predict when a photo will be required.
+  const [allowGpsAttendance, setAllowGpsAttendance] = useState(true);
+  const [allowSelfieFallback, setAllowSelfieFallback] = useState(true);
+  const [locating, setLocating] = useState(false);
   const [attendanceRecord, setAttendanceRecord] = useState<DayAttendance>({
     id: 'att-today',
     workDate: new Date().toISOString().split('T')[0],
@@ -307,9 +312,8 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
         active: true,
       });
 
-      if (isOutOffice || todayData.workMode === 'OUT_OFFICE') {
-        setSelectedMethod('SELFIE');
-      }
+      setAllowGpsAttendance(todayData.assignment.allowGpsAttendance !== false);
+      setAllowSelfieFallback(todayData.assignment.allowSelfieFallback !== false);
 
       setAttendanceRecord((prev) => ({
         ...prev,
@@ -320,7 +324,8 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
         workplaceAddress: todayData.assignment.address || 'Văn phòng làm việc',
         status: todayData.attendanceStatus,
         availableAction: todayData.availableAction,
-        attendanceMethod: isOutOffice ? 'SELFIE' : prev.attendanceMethod,
+        // Show the method the server actually recorded, not the client's intent.
+        attendanceMethod: todayData.checkOut?.method ?? todayData.checkIn?.method ?? (isOutOffice ? 'SELFIE' : 'GPS'),
         overallApprovalStatus: todayData.overallApprovalStatus,
         approvalComment: todayData.approvalComment,
         approvalReviewedAt: todayData.approvalReviewedAt,
@@ -472,10 +477,46 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
     return () => window.clearTimeout(timer);
   }, [result]);
 
-  // Update verification context when switching methods
-  const handleSelectMethod = (m: AttendanceMethod) => {
-    setSelectedMethod(m);
-    setAttendanceRecord((prev) => ({ ...prev, attendanceMethod: m }));
+  /**
+   * QC 1.1 — one action, server-authoritative fallback. Try GPS (when the
+   * workplace allows it and the fix is accurate enough); the server answers
+   * `SELFIE_REQUIRED` / `LOW_LOCATION_ACCURACY` when GPS cannot prove presence,
+   * and we open the camera straight away instead of asking for a second click.
+   */
+  const resolveGpsThenSubmit = async (mode: 'CHECK_IN' | 'CHECK_OUT') => {
+    const isOutOffice = userWorkplace?.type === 'OUT_OFFICE';
+    if (isOutOffice) {
+      setCameraMode(mode);
+      setIsCameraOpen(true);
+      return;
+    }
+
+    const fresh = location.coords ?? await getFreshCoords(8_000);
+    const accuracyOk = !!fresh && fresh.accuracyMeters <= workplaceGps.maximumAccuracyMeters;
+    const gpsUsable = allowGpsAttendance && accuracyOk && gpsVerification.canAttend;
+
+    if (!gpsUsable) {
+      if (!allowSelfieFallback) {
+        setResult({
+          status: 'error',
+          message: allowGpsAttendance
+            ? 'Vị trí GPS chưa đạt độ chính xác hoặc nằm ngoài phạm vi văn phòng. Văn phòng này chỉ cho chấm công bằng GPS.'
+            : 'Văn phòng này chỉ cho chấm công bằng GPS trong phạm vi.',
+        });
+        return;
+      }
+      setResult({
+        status: 'error',
+        message: allowGpsAttendance
+          ? 'Chưa xác định được vị trí trong phạm vi văn phòng. Vui lòng chụp ảnh xác nhận để Quản lý duyệt.'
+          : 'Văn phòng này không dùng GPS — vui lòng chụp ảnh xác nhận.',
+      });
+      setCameraMode(mode);
+      setIsCameraOpen(true);
+      return;
+    }
+
+    await executeAttendanceSubmission(mode, undefined, fresh);
   };
 
   // Check-in / Check-out dispatch
@@ -491,120 +532,89 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
       return;
     }
 
-    // SELFIE: Open camera first
-    if (selectedMethod === 'SELFIE') {
-      setCameraMode(mode);
-      setIsCameraOpen(true);
-      return;
-    }
-
-    // NETWORK or GPS: Execute action directly
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    executeAttendanceSubmission(mode);
+    setLocating(true);
+    try {
+      await resolveGpsThenSubmit(mode);
+    } finally {
+      setLocating(false);
+      setIsSubmitting(false);
+    }
   };
 
   const handleConfirmCheckOut = async () => {
     setIsCheckOutConfirmOpen(false);
-
-    if (selectedMethod === 'SELFIE') {
-      setCameraMode('CHECK_OUT');
-      setIsCameraOpen(true);
-      return;
-    }
-
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await executeAttendanceSubmission('CHECK_OUT');
+    setLocating(true);
+    try {
+      await resolveGpsThenSubmit('CHECK_OUT');
+    } finally {
+      setLocating(false);
+      setIsSubmitting(false);
+    }
   };
 
-  const executeAttendanceSubmission = async (mode: 'CHECK_IN' | 'CHECK_OUT', photoUrl?: string) => {
+  const executeAttendanceSubmission = async (
+    mode: 'CHECK_IN' | 'CHECK_OUT',
+    photoUrl?: string,
+    coordsOverride?: { latitude: number; longitude: number; accuracyMeters: number } | null,
+  ) => {
     if (!apiBase) return;
     setIsSubmitting(true);
     const eventTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const coords = coordsOverride ?? location.coords;
 
     try {
-      if (mode === 'CHECK_IN') {
-        if (selectedMethod === 'SELFIE') {
-          if (!photoUrl) throw new Error('Vui lòng chụp ảnh selfie trước khi gửi.');
-          const formData = new FormData();
+      if (photoUrl) {
+        // Selfie path — a newly captured photo is the evidence the server approves.
+        const formData = new FormData();
+        if (mode === 'CHECK_IN') {
           const workMode = userWorkplace?.type === 'OUT_OFFICE' ? 'OUT_OFFICE' : 'IN_OFFICE';
           formData.append('workMode', workMode);
-          formData.append('selfie', dataUrlToFile(photoUrl, 'checkin-selfie.jpg'));
-          if (location.coords) {
-            formData.append('latitude', String(location.coords.latitude));
-            formData.append('longitude', String(location.coords.longitude));
-            formData.append('accuracyMeters', String(location.coords.accuracyMeters));
-          }
-          if (selfieAddress || currentAddress) {
-            formData.append('address', selfieAddress || currentAddress);
-          }
-          await apiCheckIn(apiBase, formData);
-        } else if (selectedMethod === 'GPS') {
-          if (!location.coords) throw new Error('Không thể lấy tọa độ GPS của thiết bị.');
-          await apiCheckIn(apiBase, {
-            workMode: 'IN_OFFICE',
-            location: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              accuracyMeters: location.coords.accuracyMeters,
-              address: currentAddress || attendanceRecord.workplaceAddress,
-            },
-          });
-        } else {
-          throw new Error('Phương thức chấm công không hợp lệ.');
         }
-
-        await fetchTodayData();
-        setResult({
-          status: 'success',
-          message: `Vào ca thành công lúc ${eventTime}. Chúc bạn một ngày làm việc hiệu quả!`,
-        });
-        setIsSuccessModalOpen(true);
+        formData.append('selfie', dataUrlToFile(photoUrl, mode === 'CHECK_IN' ? 'checkin-selfie.jpg' : 'checkout-selfie.jpg'));
+        if (coords) {
+          formData.append('latitude', String(coords.latitude));
+          formData.append('longitude', String(coords.longitude));
+          formData.append('accuracyMeters', String(coords.accuracyMeters));
+        }
+        if (selfieAddress || currentAddress) {
+          formData.append('address', selfieAddress || currentAddress);
+        }
+        await (mode === 'CHECK_IN' ? apiCheckIn(apiBase, formData) : apiCheckOut(apiBase, formData));
       } else {
-        // CHECK_OUT
-        if (selectedMethod === 'SELFIE') {
-          if (!photoUrl) throw new Error('Vui lòng chụp ảnh selfie trước khi gửi.');
-          const formData = new FormData();
-          formData.append('selfie', dataUrlToFile(photoUrl, 'checkout-selfie.jpg'));
-          if (location.coords) {
-            formData.append('latitude', String(location.coords.latitude));
-            formData.append('longitude', String(location.coords.longitude));
-            formData.append('accuracyMeters', String(location.coords.accuracyMeters));
-          }
-          if (selfieAddress || currentAddress) {
-            formData.append('address', selfieAddress || currentAddress);
-          }
-          await apiCheckOut(apiBase, formData);
-        } else if (selectedMethod === 'GPS') {
-          if (!location.coords) throw new Error('Không thể lấy tọa độ GPS của thiết bị.');
-          await apiCheckOut(apiBase, {
-            location: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              accuracyMeters: location.coords.accuracyMeters,
+        const locationPayload = coords
+          ? {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              accuracyMeters: coords.accuracyMeters,
               address: currentAddress || attendanceRecord.workplaceAddress,
-            },
-          });
+            }
+          : undefined;
+        if (mode === 'CHECK_IN') {
+          await apiCheckIn(apiBase, { workMode: 'IN_OFFICE', location: locationPayload });
         } else {
-          throw new Error('Phương thức chấm công không hợp lệ.');
+          await apiCheckOut(apiBase, { location: locationPayload });
         }
-
-        await fetchTodayData();
-        setResult({
-          status: 'success',
-          message: `Tan ca thành công lúc ${eventTime}. Đã ghi nhận ngày công!`,
-        });
-        setIsSuccessModalOpen(true);
       }
+
+      await fetchTodayData();
+      setResult({
+        status: 'success',
+        message: mode === 'CHECK_IN'
+          ? `Vào ca thành công lúc ${eventTime}. Chúc bạn một ngày làm việc hiệu quả!`
+          : `Tan ca thành công lúc ${eventTime}. Đã ghi nhận ngày công!`,
+      });
+      setIsSuccessModalOpen(true);
     } catch (err: any) {
-      if (err.code === 'SELFIE_REQUIRED') {
-        setSelectedMethod('SELFIE');
+      // The server could not prove presence with GPS — capture a photo instead.
+      if ((err.code === 'SELFIE_REQUIRED' || err.code === 'LOW_LOCATION_ACCURACY') && allowSelfieFallback) {
         setResult({
           status: 'error',
-          message: 'Vị trí GPS ngoài phạm vi văn phòng. Đã chuyển sang chế độ Selfie để bạn gửi Quản lý duyệt.',
+          message: 'Vị trí GPS ngoài phạm vi hoặc chưa đủ chính xác. Đã chuyển sang chụp ảnh xác nhận để Quản lý duyệt.',
         });
+        setCameraMode(mode);
+        setIsCameraOpen(true);
       } else {
         setResult({
           status: 'error',
@@ -662,39 +672,22 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             <span className="font-semibold text-foreground">Phương thức chấm công:</span>
           </div>
 
-          {/* 3 Check-in Method Switcher */}
+          {/* QC 1.1 — no method switch: the server resolves Wi-Fi → GPS → selfie. */}
           {userWorkplace?.type === 'OUT_OFFICE' ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800">
               <Camera className="size-3.5" />
               <span>Phương thức: Chụp ảnh Selfie thực địa</span>
             </div>
           ) : (
-            <div className="inline-flex rounded-xl bg-muted p-1 gap-1 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('GPS')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'GPS'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <MapPin className="size-3.5" />
-                <span>GPS</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectMethod('SELFIE')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  selectedMethod === 'SELFIE'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Camera className="size-3.5" />
-                <span>Selfie</span>
-              </button>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground font-semibold text-xs">
+              <MapPin className="size-3.5" />
+              <span>
+                {allowGpsAttendance
+                  ? allowSelfieFallback
+                    ? 'Tự động: Wi-Fi → GPS → ảnh xác nhận'
+                    : 'Chỉ GPS trong phạm vi'
+                  : 'Ảnh xác nhận (GPS đã tắt)'}
+              </span>
             </div>
           )}
         </div>
@@ -792,12 +785,12 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground self-start sm:self-center">
-                    <span>Phương thức ưu tiên: GPS</span>
+                    <span>{allowGpsAttendance ? 'Ưu tiên GPS trong phạm vi' : 'GPS đang tắt'}</span>
                   </div>
                 )}
               </div>
 
-              {/* Informational Callout / Fallback Alert */}
+              {/* QC 1.1 — informational only; there is no fallback button any more. */}
               {userWorkplace?.type === 'OUT_OFFICE' ? (
                 <div className="mt-3.5 flex items-start gap-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 p-3 text-xs text-purple-800 dark:text-purple-200 border border-purple-200/60 dark:border-purple-800/40">
                   <Compass className="size-4 shrink-0 text-purple-600 dark:text-purple-400 mt-0.5" />
@@ -805,38 +798,19 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
                     Bạn được phân công nơi làm việc lưu động. Vui lòng bấm vào <strong>Chụp ảnh chấm công</strong> bên dưới, ảnh chụp cùng tọa độ thực địa sẽ được ghi nhận trực tiếp.
                   </p>
                 </div>
-              ) : selectedMethod !== 'SELFIE' ? (
-                <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/30">
-                  <div className="flex items-start sm:items-center gap-2">
-                    <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <span>
-                      Vị trí GPS ngoài phạm vi văn phòng?
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectMethod('SELFIE')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline hover:text-primary/90 transition-colors whitespace-nowrap self-end sm:self-auto"
-                  >
-                    <Camera className="size-3.5" />
-                    Chấm công dự phòng bằng Selfie (Fallback) &rarr;
-                  </button>
+              ) : !allowSelfieFallback ? (
+                <div className="mt-3.5 flex items-start gap-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200 border border-amber-200/60 dark:border-amber-800/30">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <p>
+                    Văn phòng của bạn chỉ cho chấm công khi vị trí GPS nằm trong phạm vi và đủ độ chính xác. Hãy bật định vị rồi thử lại.
+                  </p>
                 </div>
               ) : (
-                <div className="mt-3.5 flex items-center justify-between gap-2.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs text-blue-800 dark:text-blue-200 border border-blue-200/60 dark:border-blue-800/30">
-                  <div className="flex items-center gap-2">
-                    <Camera className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                    <span>
-                      Đang ở chế độ chấm công dự phòng bằng Selfie (Fallback).
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectMethod('GPS')}
-                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline transition-colors whitespace-nowrap"
-                  >
-                    Quay lại GPS &rarr;
-                  </button>
+                <div className="mt-3.5 flex items-start gap-2.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs text-blue-800 dark:text-blue-200 border border-blue-200/60 dark:border-blue-800/30">
+                  <Camera className="size-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <p>
+                    Hệ thống tự chọn phương thức: Wi-Fi văn phòng → GPS trong phạm vi → chụp ảnh xác nhận (Quản lý duyệt). Nếu GPS không khả dụng, camera sẽ mở ngay.
+                  </p>
                 </div>
               )}
             </div>
@@ -851,24 +825,22 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             )}
 
             {/* Selected Method Flow */}
-            {selectedMethod === 'GPS' && (
+            {userWorkplace?.type === 'OUT_OFFICE' ? (
+              <SelfieAttendanceFlow
+                today={attendanceRecord}
+                submitting={isSubmitting || locating}
+                onStartCapture={handleAction}
+                previewPhotoUrl={previewPhotoUrl}
+                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
+              />
+            ) : (
               <GpsAttendanceFlow
                 today={attendanceRecord}
                 coords={location.coords}
                 gpsVerification={gpsVerification}
                 workplaceGps={workplaceGps}
-                submitting={isSubmitting}
+                submitting={isSubmitting || locating}
                 onSubmit={handleAction}
-                onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
-              />
-            )}
-
-            {selectedMethod === 'SELFIE' && (
-              <SelfieAttendanceFlow
-                today={attendanceRecord}
-                submitting={isSubmitting}
-                onStartCapture={handleAction}
-                previewPhotoUrl={previewPhotoUrl}
                 onOpenSuccessModal={() => setIsSuccessModalOpen(true)}
               />
             )}
@@ -877,7 +849,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
       </main>
 
       {/* Selfie Preview Screen (shown after capturing photo) */}
-      {previewPhotoUrl && selectedMethod === 'SELFIE' && (
+      {previewPhotoUrl && (
         <SelfiePreview
           mode={cameraMode}
           photoUrl={previewPhotoUrl}
