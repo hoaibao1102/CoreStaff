@@ -8,6 +8,16 @@ function stripSlash(url: string): string {
 function viteEnv(): Record<string, string> {
   const stub = (globalThis as { __VITE_ENV__?: Record<string, string> }).__VITE_ENV__;
   if (stub && typeof stub === 'object') return stub;
+  try {
+    const metaEnv = import.meta.env;
+    if (metaEnv && typeof metaEnv === 'object') {
+      return {
+        PROD: String(metaEnv.PROD),
+        VITE_API_URL: metaEnv.VITE_API_URL,
+        VITE_API_FALLBACK_URL: metaEnv.VITE_API_FALLBACK_URL,
+      };
+    }
+  } catch {}
   const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   const env: Record<string, string> = {};
   if (proc?.env) {

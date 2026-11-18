@@ -1,11 +1,23 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://18-141-68-40.sslip.io/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://18-141-68-40.sslip.io/socket.io/:path*"
+    },
+    {
       "source": "/hr/employees/:path*",
       "destination": "/index.html"
     },
     {
       "source": "/app/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
