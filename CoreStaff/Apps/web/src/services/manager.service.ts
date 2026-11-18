@@ -164,7 +164,7 @@ export function managerRequestKind(request: Pick<ManagerRequest, 'type' | 'reque
   return request.evidenceId || request.metadata?.actionType ? 'SELFIE' : 'MANUAL';
 }
 export function canApproveConfirmation(request: ManagerRequest) {
-  return request.canApprove === true && request.contextValidity?.valid === true && request.period?.canMutate === true;
+  return request.canApprove === true && request.contextValidity?.valid === true && request.period?.canMutate !== false;
 }
 export const managerRequestLabel = (request: ManagerRequest) => ({
   OVERTIME: 'Làm thêm giờ (OT)',

@@ -28,6 +28,7 @@ import { toast } from '../../components/toast';
 import {
   EMPLOYMENT_STATUS_BADGE,
   EMPLOYMENT_STATUS_LABELS,
+  getEffectiveStatus,
   EMPLOYMENT_TYPE_LABELS,
   GENDER_LABELS,
 } from '../../lib/types';
@@ -162,14 +163,15 @@ function ProfileHeader({ user, profile }: { user: AuthUser; profile?: EmployeePr
   const phone = display(profile?.phone);
   const employeeCode = display(profile?.employeeCode ?? user.employeeCode);
 
-  const statusLabel = profile
-    ? EMPLOYMENT_STATUS_LABELS[profile.employmentStatus]
+  const eff = profile ? getEffectiveStatus(profile.employmentStatus, profile.endDate) : null;
+  const statusLabel = eff
+    ? EMPLOYMENT_STATUS_LABELS[eff]
     : 'Chưa có hồ sơ nhân sự';
 
   /* Map employment status to a readable tone class. */
-  const statusTone = profile
+  const statusTone = eff
     ? (() => {
-      const s = profile.employmentStatus;
+      const s = eff;
       if (s === 'ACTIVE') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
       if (s === 'PROBATION') return 'border-amber-200 bg-amber-50 text-amber-700';
       if (s === 'ON_LEAVE') return 'border-blue-200 bg-blue-50 text-blue-700';

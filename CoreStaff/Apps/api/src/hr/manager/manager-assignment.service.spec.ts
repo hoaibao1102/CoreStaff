@@ -16,9 +16,20 @@ function build(rows: Row[], users: Row[], departments: Row[], profiles: Row[] = 
 }))) {
   const model = {
     // QC 5.1 — list() now populates names.
-    find: jest.fn(() => ({ populate: function(this: any) { return this; }, sort: () => ({ populate: function(this: any) { return this; }, session: () => ({ lean: async () => rows }), lean: async () => rows }), lean: async () => rows })),
+    find: jest.fn((filter: Row = {}) => {
+      const filtered = rows.filter(r => matches(r, filter));
+      return {
+        populate: function(this: any) { return this; },
+        sort: () => ({ populate: function(this: any) { return this; }, session: () => ({ lean: async () => filtered }), lean: async () => filtered }),
+        session: () => ({ lean: async () => filtered }),
+        lean: async () => filtered,
+      };
+    }),
     db: { startSession: async () => ({ withTransaction: async (fn: any) => fn(), endSession: async () => undefined }), collection: () => ({ updateOne: async () => undefined }) },
-    findOne: jest.fn((filter: Row) => q(rows.find(r => matches(r, filter)) ?? null)),
+    findOne: jest.fn((filter: Row) => {
+      const res = q(rows.find(r => matches(r, filter)) ?? null);
+      return { ...res, session: () => res };
+    }),
     // QC 5.1 — demotion asks whether another active assignment remains.
     exists: jest.fn(async (filter: Row) => {
       const row = rows.find(r => matches(r, filter) && r.active === true);
@@ -102,6 +113,28 @@ describe('ManagerAssignmentService', () => {
     await service.setActive('o1','a1',false);
     expect(users[0].role).toBe('DEPARTMENT_MANAGER');
   });
+  it('rejects assigning a new manager when the department already has an active manager', async () => {
+    const rows = [{ _id: 'a1', organizationId: 'o1', managerUserId: 'm1', departmentId: 'd1', active: true, effectiveFrom: new Date('2026-01-01') }];
+    const users = [
+      { _id: 'm1', organizationId: 'o1', role: 'DEPARTMENT_MANAGER', status: 'ACTIVE' },
+      { _id: 'm2', organizationId: 'o1', role: 'EMPLOYEE', status: 'ACTIVE' },
+    ];
+    const service = build(rows, users, [{ _id: 'd1', organizationId: 'o1' }]);
+    await expect(service.create('o1', 'hr1', { managerUserId: 'm2', departmentId: 'd1', effectiveFrom: '2026-06-01' }))
+      .rejects.toThrow('DEPARTMENT_ALREADY_HAS_MANAGER');
+  });
+
+  it('allows assigning a new manager once the previous manager is deactivated', async () => {
+    const rows = [{ _id: 'a1', organizationId: 'o1', managerUserId: 'm1', departmentId: 'd1', active: false, effectiveFrom: new Date('2026-01-01') }];
+    const users = [
+      { _id: 'm1', organizationId: 'o1', role: 'EMPLOYEE', status: 'ACTIVE' },
+      { _id: 'm2', organizationId: 'o1', role: 'EMPLOYEE', status: 'ACTIVE' },
+    ];
+    const service = build(rows, users, [{ _id: 'd1', organizationId: 'o1' }]);
+    await expect(service.create('o1', 'hr1', { managerUserId: 'm2', departmentId: 'd1', effectiveFrom: '2026-06-01' }))
+      .resolves.toMatchObject({ managerUserId: 'm2', departmentId: 'd1', active: true });
+  });
+
   it('clears an open-ended assignment with effectiveTo: null (QC 5.1)', async () => {
     const rows=[{_id:'a1',organizationId:'o1',managerUserId:'m1',departmentId:'d1',active:true,effectiveFrom:new Date('2026-01-01'),effectiveTo:new Date('2026-12-31')}];
     const users=[{_id:'m1',organizationId:'o1',role:'DEPARTMENT_MANAGER',status:'ACTIVE'}];

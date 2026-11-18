@@ -349,14 +349,19 @@ export class ManagerRequestService {
       if (!this.confirmation) return { ...row, isSelfRequest: isSelfApproval, isSelfApproval, canApprove: false, contextValidity: { valid: false } };
       try {
         const { snapshot, ...confirmation } = await this.confirmation.preview(org, employee, new Date(row.workDate).toISOString().slice(0, 10));
-        const valid = confirmation.contextHash === row.confirmationContextHash;
+        const valid = confirmation.contextHash === row.confirmationContextHash || Boolean(
+          (row as any).confirmationSnapshot &&
+          ((row as any).confirmationSnapshot.punches?.checkInAt ?? undefined) === (confirmation.existingPunches?.checkInAt ?? undefined) &&
+          ((row as any).confirmationSnapshot.punches?.checkOutAt ?? undefined) === (confirmation.existingPunches?.checkOutAt ?? undefined),
+        );
         const blockers = confirmation.blockedReasons.filter(code => code !== 'MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
         return {
           ...row,
           isSelfRequest: isSelfApproval,
           isSelfApproval,
+          period: confirmation.period ?? { status: 'OPEN', canMutate: true },
           confirmation: { ...confirmation, enabled: true },
-          canApprove: row.status === 'PENDING' && valid && blockers.length === 0 && confirmation.period?.canMutate === true,
+          canApprove: row.status === 'PENDING' && valid && blockers.length === 0 && confirmation.period?.canMutate !== false,
           contextValidity: { valid },
         };
       } catch (error: any) {

@@ -17,10 +17,16 @@ export const confirmationTime = (value?: string | null) => {
 const enablementError = 'Chưa xác định chế độ xác nhận công từ máy chủ. Vui lòng liên hệ HR hoặc tải lại; không chuyển sang nhập giờ thủ công.';
 
 export function confirmationError(error: unknown): string {
-  const code = typeof error === 'string' ? error : (error as { code?: string })?.code;
+  if (!error) return 'Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.';
+
+  const isCode = (str: string) => /^[A-Z][A-Z0-9_]{3,}$/.test(str.trim());
+
   const messages: Record<string, string> = {
     PERIOD_REQUIRED: 'Chưa có kỳ công phù hợp. Vui lòng liên hệ HR tạo hoặc mở kỳ.',
-    PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công đã khóa hoặc đã tính lương. Vui lòng liên hệ HR.',
+    PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Tháng này đã có bảng lương hoặc đã chốt kỳ công, không thể gửi đơn xác nhận công.',
+    TIMESHEET_ALREADY_ACKNOWLEDGED: 'Bảng công tháng này bạn đã xác nhận kiểm tra chính xác, không thể gửi thêm yêu cầu xác nhận công.',
+    ALREADY_FULL_WORK_CREDIT: 'Ngày này bạn đã chấm đủ 1 công theo ca làm việc, không thể gửi yêu cầu xác nhận công.',
+    ATTENDANCE_CONFIRMATION_FUTURE_DATE_FORBIDDEN: 'Không thể gửi xác nhận công cho ngày tương lai. Vui lòng chỉ chọn từ hôm nay trở về trước.',
     ATTENDANCE_CONFIRMATION_STALE: 'Dữ liệu đã thay đổi. Hãy tải lại xem trước; đơn cũ cần quản lý từ chối hoặc yêu cầu giải trình.',
     MONTHLY_CONFIRMATION_LIMIT_EXCEEDED: 'Đã hết lượt xác nhận công trong tháng ngày làm việc.',
     ATTENDANCE_CONFIRMATION_DUPLICATE: 'Ngày này đã có yêu cầu xác nhận công đang giữ lượt.',
@@ -33,10 +39,59 @@ export function confirmationError(error: unknown): string {
     NEEDS_MANUAL_REVIEW: 'Dữ liệu chấm công của ngày này cần HR kiểm tra trước khi tạo yêu cầu.',
     CONTEXT_REQUIRES_REVIEW: 'Ngày công này đã được HR xác nhận vắng không tính công (hoặc đang có xử lý rà soát). Vui lòng liên hệ HR nếu cần mở lại.',
     ATTENDANCE_CONFIRMATION_DISABLED: 'Tính năng xác nhận công hiện chưa được bật. Vui lòng liên hệ HR.',
-    ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: 'Thông tin xác nhận công chưa hợp lệ. Vui lòng kiểm tra lại.',
+    ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: 'Thông tin xác nhận công chưa hợp lệ (lý do phải từ 10 - 1000 ký tự và vui lòng bấm "Tải lại xem trước").',
     ATTENDANCE_CONFIRMATION_FLOW_REQUIRED: 'Vui lòng dùng xác nhận công theo lịch, không nhập giờ thủ công.',
+    TIME_WINDOW_INVALID: 'Giờ vào thực tế phải trước giờ ra thực tế.',
+    IDEMPOTENCY_KEY_REQUIRED: 'Thiếu khóa định danh yêu cầu.',
+    REASON_REQUIRED: 'Vui lòng nhập lý do xác nhận công.',
+    REASON_TOO_SHORT: 'Lý do xác nhận công quá ngắn (tối thiểu 10 ký tự).',
+    REASON_TOO_LONG: 'Lý do xác nhận công quá dài (tối đa 1000 ký tự).',
+    WORK_DATE_INVALID: 'Ngày làm việc không hợp lệ.',
+    PREVIEW_HASH_REQUIRED: 'Thiếu mã xác thực xem trước. Vui lòng bấm "Tải lại xem trước".',
+    PREVIEW_HASH_INVALID: 'Mã xác thực xem trước không hợp lệ. Vui lòng bấm "Tải lại xem trước".',
+    OPERATION_ID_REQUIRED: 'Thiếu mã định danh thao tác phê duyệt. Vui lòng thử lại.',
+    REQUEST_NOT_FOUND: 'Không tìm thấy đơn xác nhận công này.',
+    REQUEST_STATE_CHANGED: 'Trạng thái đơn đã thay đổi hoặc đã được xử lý trước đó. Vui lòng tải lại danh sách.',
+    REVIEW_REASON_REQUIRED: 'Vui lòng nhập ý kiến phản hồi / lý do từ chối (từ 10 đến 1000 ký tự).',
+    SELF_APPROVAL_FORBIDDEN: 'Quản lý không được phép tự phê duyệt đơn của chính mình.',
+    CONFIRMATION_QUOTA_INCONSISTENT: 'Dữ liệu lượt xác nhận công trong tháng không đồng nhất. Vui lòng liên hệ HR.',
   };
+
+  const errObj = error as { code?: string; message?: string; details?: any };
+  const rawMsg = typeof error === 'string' ? error : errObj?.message;
+  const code = typeof error === 'string' ? (error.includes(':') ? error.split(':')[0].trim() : error) : errObj?.code;
+  const details = errObj?.details;
+
+  // 1. If details array exists (e.g. from ValidationPipe / class-validator)
+  if (Array.isArray(details) && details.length > 0) {
+    const detailList = details.map((d: any) => {
+      const str = typeof d === 'string' ? d : JSON.stringify(d);
+      if (str.includes(':')) {
+        const text = str.split(':').slice(1).join(':').trim();
+        if (text && !isCode(text)) return text;
+      }
+      return !isCode(str) ? str : (messages[str] ?? null);
+    }).filter(Boolean);
+    if (detailList.length > 0) return detailList.join('; ');
+  }
+
+  // 2. If message contains specific detail after ":" (e.g. "ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: Lý do quá ngắn")
+  if (rawMsg && typeof rawMsg === 'string' && rawMsg.includes(':')) {
+    const [, ...rest] = rawMsg.split(':');
+    const detail = rest.join(':').trim();
+    if (detail && !detail.startsWith('http') && !detail.startsWith('HTTP') && !detail.startsWith('//') && !isCode(detail)) {
+      return detail;
+    }
+  }
+
+  // 3. Known error code mappings
   if (code && messages[code]) return messages[code];
+
+  // 4. Raw human-readable message if not an internal code
+  if (rawMsg && typeof rawMsg === 'string' && !rawMsg.startsWith('HTTP ') && rawMsg !== 'Request failed.' && !isCode(rawMsg)) {
+    return rawMsg;
+  }
+
   return 'Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.';
 }
 
@@ -91,16 +146,16 @@ export function ConfirmationSummary({ preview: p, customCheckInTime, customCheck
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-bold text-foreground">
-              {p.existingPunches?.checkInAt
-                ? confirmationTime(p.existingPunches.checkInAt)
-                : customCheckInTime
+              {customCheckInTime
                 ? customCheckInTime
+                : p.existingPunches?.checkInAt
+                ? confirmationTime(p.existingPunches.checkInAt)
                 : hasIn
                 ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Đã chấm')
                 : confirmationTime(p.proposedChanges?.checkInAt)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {hasIn ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Giờ thực tế') : customCheckInTime ? 'Tự khai báo thực tế' : 'Đề xuất theo ca'}
+              {customCheckInTime ? 'Tự khai báo thực tế' : hasIn ? (inSource && inSource !== 'LEGACY_UNKNOWN' ? inSource : 'Giờ thực tế') : 'Đề xuất theo ca'}
             </span>
           </div>
         </div>
@@ -117,16 +172,16 @@ export function ConfirmationSummary({ preview: p, customCheckInTime, customCheck
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-bold text-foreground">
-              {p.existingPunches?.checkOutAt
-                ? confirmationTime(p.existingPunches.checkOutAt)
-                : customCheckOutTime
+              {customCheckOutTime
                 ? customCheckOutTime
+                : p.existingPunches?.checkOutAt
+                ? confirmationTime(p.existingPunches.checkOutAt)
                 : hasOut
                 ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Đã chấm')
                 : confirmationTime(p.proposedChanges?.checkOutAt)}
             </span>
             <span className="text-xs text-muted-foreground">
-              {hasOut ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Giờ thực tế') : customCheckOutTime ? 'Tự khai báo thực tế' : 'Giờ tan ca'}
+              {customCheckOutTime ? 'Tự khai báo thực tế' : hasOut ? (outSource && outSource !== 'LEGACY_UNKNOWN' ? outSource : 'Giờ thực tế') : 'Giờ tan ca'}
             </span>
           </div>
         </div>
@@ -145,7 +200,12 @@ export function ConfirmationSummary({ preview: p, customCheckInTime, customCheck
       </div>
 
       {/* Lỗi / Chặn nếu có */}
-      {(p.blockedReasons ?? []).map((r, index) => (
+      {(p.blockedReasons ?? [])
+        .filter(r => {
+          const code = typeof r === 'string' ? r : r.code;
+          return !['ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED', 'NO_WORK_OBLIGATION', 'ALREADY_COMPLETE'].includes(code);
+        })
+        .map((r, index) => (
         <p role="alert" key={index} className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs font-medium text-destructive">
           {confirmationError(typeof r === 'string' ? r : r.code)}
         </p>
@@ -201,13 +261,14 @@ export function AttendanceConfirmationForm({
     return () => { live = false; };
   }, [apiBase, workDate, revision, bypass]);
 
-  // Seed the editable times once per preview: only for punches that are still
-  // missing, and always from the proposal (the shift, leave-adjusted).
+  // Seed the editable times once per preview: defaults to proposal, existing punch, or standard shift.
   useEffect(() => {
     const p = result?.date === workDate ? result.preview : undefined;
     if (!p) return;
-    if (!p.existingPunches?.checkInAt) setCustomCheckInTime(vnClock(p.proposedChanges?.checkInAt));
-    if (!p.existingPunches?.checkOutAt) setCustomCheckOutTime(vnClock(p.proposedChanges?.checkOutAt));
+    const defaultIn = vnClock(p.proposedChanges?.checkInAt) || vnClock(p.existingPunches?.checkInAt) || '08:00';
+    const defaultOut = vnClock(p.proposedChanges?.checkOutAt) || vnClock(p.existingPunches?.checkOutAt) || '17:00';
+    setCustomCheckInTime(defaultIn);
+    setCustomCheckOutTime(defaultOut);
   }, [result, workDate]);
 
   if (bypass) return <>{legacy}</>;
@@ -215,9 +276,13 @@ export function AttendanceConfirmationForm({
   if (currentResult?.legacy) return <>{legacy}</>;
 
   const preview = currentResult?.preview;
+  const todayVN = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const isFutureDate = Boolean(workDate && workDate > todayVN);
 
-  const canSubmit = Boolean(preview) && !busy && !stale && preview!.canSubmit && Boolean(preview!.actionType) && Boolean(preview!.previewHash)
-    && !preview!.blockedReasons?.length && preview!.period?.canMutate !== false
+  const isTimeOrderValid = !customCheckInTime || !customCheckOutTime || customCheckInTime < customCheckOutTime;
+  const canSubmit = Boolean(preview) && !busy && !stale && !isFutureDate && isTimeOrderValid
+    && preview!.canSubmit
+    && preview!.period?.canMutate !== false
     && (preview!.quota?.remaining ?? 1) > 0 && reason.trim().length >= 10 && reason.trim().length <= 1000;
 
   return (
@@ -227,12 +292,23 @@ export function AttendanceConfirmationForm({
         event.preventDefault();
         if (!canSubmit || !preview || submitting.current) return;
         submitting.current = true; setBusy(true); setError('');
+        const formatIsoTime = (time: string) => {
+          if (!time) return undefined;
+          const clean = time.trim();
+          if (!clean) return undefined;
+          const parts = clean.split(':');
+          const hh = (parts[0] || '00').padStart(2, '0');
+          const mm = (parts[1] || '00').padStart(2, '0');
+          const ss = (parts[2] || '00').padStart(2, '0');
+          return `${workDate}T${hh}:${mm}:${ss}+07:00`;
+        };
+        const effectivePreviewHash = preview.previewHash || (preview as any).contextHash;
         const payload: any = {
           workDate,
           reason: reason.trim(),
-          previewHash: preview.previewHash!,
-          ...(customCheckInTime && !preview.existingPunches?.checkInAt ? { customCheckInTime: `${workDate}T${customCheckInTime}:00+07:00` } : {}),
-          ...(customCheckOutTime && !preview.existingPunches?.checkOutAt ? { customCheckOutTime: `${workDate}T${customCheckOutTime}:00+07:00` } : {}),
+          previewHash: effectivePreviewHash,
+          ...(customCheckInTime ? { customCheckInTime: formatIsoTime(customCheckInTime) } : {}),
+          ...(customCheckOutTime ? { customCheckOutTime: formatIsoTime(customCheckOutTime) } : {}),
         };
         const serialized = JSON.stringify(payload);
         if (attempt.current?.payload !== serialized) attempt.current = { payload: serialized, key: crypto.randomUUID() };
@@ -251,12 +327,18 @@ export function AttendanceConfirmationForm({
         Ngày
         <input
           type="date"
+          max={todayVN}
           className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={workDate}
           disabled={busy}
           onChange={e => onDateChange(e.target.value)}
         />
       </label>
+      {isFutureDate && (
+        <p role="alert" className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs font-medium text-destructive">
+          Không thể gửi xác nhận công cho ngày tương lai. Vui lòng chỉ chọn từ hôm nay trở về trước.
+        </p>
+      )}
 
       {!currentResult ? (
         <div role="status" className="rounded-xl border border-blue-100 bg-blue-50/30 p-4 text-sm text-muted-foreground">
@@ -270,8 +352,8 @@ export function AttendanceConfirmationForm({
         </p>
       )}
 
-      {/* QC 1.2 — the employee may correct either punch; each defaults to the shift. */}
-      {preview && (!preview.existingPunches?.checkInAt || !preview.existingPunches?.checkOutAt) && (
+      {/* QC 1.2 — the employee may adjust both endpoints; each defaults to proposal, punch or shift. */}
+      {preview && (
         <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3.5 space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">Giờ vào / ra thực tế</p>
@@ -287,10 +369,9 @@ export function AttendanceConfirmationForm({
                 aria-label="Giờ vào thực tế"
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                 value={customCheckInTime}
-                disabled={busy || Boolean(preview.existingPunches?.checkInAt)}
+                disabled={busy || preview?.canSubmit === false}
                 onChange={e => setCustomCheckInTime(e.target.value)}
               />
-              {preview.existingPunches?.checkInAt && <span className="text-muted-foreground font-normal">Đã có mốc vào — không sửa được ở đây.</span>}
             </label>
             <label className="grid gap-1.5 text-xs font-medium text-foreground">
               Giờ ra thực tế
@@ -299,10 +380,9 @@ export function AttendanceConfirmationForm({
                 aria-label="Giờ ra thực tế"
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                 value={customCheckOutTime}
-                disabled={busy || Boolean(preview.existingPunches?.checkOutAt)}
+                disabled={busy || preview?.canSubmit === false}
                 onChange={e => setCustomCheckOutTime(e.target.value)}
               />
-              {preview.existingPunches?.checkOutAt && <span className="text-muted-foreground font-normal">Đã có mốc ra — không sửa được ở đây.</span>}
             </label>
           </div>
         </div>
@@ -314,7 +394,7 @@ export function AttendanceConfirmationForm({
           className="min-h-24 w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
           placeholder="Ví dụ: Tôi đã có mặt làm việc cả ngày nhưng lúc về vội nên quên bấm máy chấm công (ít nhất 10 ký tự)..."
           value={reason}
-          disabled={busy}
+          disabled={busy || preview?.canSubmit === false}
           maxLength={1000}
           required
           onChange={e => setReason(e.target.value)}

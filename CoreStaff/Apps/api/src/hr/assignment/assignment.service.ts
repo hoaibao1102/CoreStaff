@@ -29,7 +29,7 @@ const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
     ACTIVE: 'Đang làm việc',
     ON_LEAVE: 'Đang nghỉ phép dài hạn',
     RESIGNED: 'Đã nghỉ việc',
-    TERMINATED: 'Đã bị chấm dứt hợp đồng',
+    TERMINATED: 'Đã nghỉ việc',
 };
 
 function todayVietnam(): string {

@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/dropdown-menu';
 import type { AuthUser } from '@/services/auth';
-import { assignmentErrorMessage, getAssignments, type Assignment } from '@/services/assignment.service';
+import { assignmentErrorMessage, getAssignments, isWorkingEmployee, type Assignment } from '@/services/assignment.service';
 import { getDepartments, getWorkplaces, listEmployees, type Department, type EmployeeProfile, type Workplace } from '@/services/hrService';
 import { AssignmentCreateDialog } from './AssignmentCreateDialog';
 import { AssignmentDetailDialog } from './AssignmentDetailDialog';
@@ -25,7 +25,8 @@ function formatDate(value?: string | null): string {
   return text === '—' ? 'Chưa cập nhật' : text;
 }
 
-function AssignmentStatus({ active }: { active: boolean }) {
+function AssignmentStatus({ active, left }: { active: boolean; left?: boolean }) {
+  if (left) return <Badge variant="secondary" className="bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300">Đã nghỉ việc</Badge>;
   return <Badge variant="secondary" className={active
     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
     : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}>
@@ -40,7 +41,7 @@ export function AssignmentScreen({ user, apiBase }: { user: AuthUser; apiBase: s
 }
 
 function AssignmentList({ apiBase }: { apiBase: string }) {
-  const [rows, setRows] = useState<Assignment[]>([]);
+  const [rows, setRows] = useState<Array<Assignment & { employeeLeft?: boolean }>>([]);
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
@@ -62,13 +63,21 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
     setLoading(true);
     setError(null);
     void Promise.all([
-      getAssignments(apiBase, { active: status === 'active', ...(workplaceId ? { workplaceId } : {}) }),
+      Promise.all([
+        getAssignments(apiBase, { active: true, ...(workplaceId ? { workplaceId } : {}) }),
+        getAssignments(apiBase, { active: false, ...(workplaceId ? { workplaceId } : {}) }),
+      ]).then(([a, b]) => [...a, ...b]),
       listEmployees(apiBase, '', ''),
       getDepartments(apiBase),
       getWorkplaces(apiBase),
     ]).then(([assignmentRows, employeeRows, departmentRows, workplaceRows]) => {
       if (cancelled) return;
-      setRows(assignmentRows);
+      // Offboarded employees keep `active: true` rows (clipped to their last day)
+      // so the final timesheet still resolves, but HR sees them as ended.
+      const leftIds = new Set(employeeRows.filter(e => !isWorkingEmployee(e.employmentStatus)).map(e => e.userId));
+      setRows(assignmentRows
+        .map(row => ({ ...row, employeeLeft: leftIds.has(row.userId) }))
+        .filter(row => (status === 'active') === (row.active && !row.employeeLeft)));
       setEmployees(employeeRows);
       setDepartments(departmentRows);
       setWorkplaces(workplaceRows);
@@ -131,14 +140,14 @@ function AssignmentList({ apiBase }: { apiBase: string }) {
                 <TableCell>{departmentNames.get(row.departmentId) || 'Chưa có thông tin'}</TableCell>
                 <TableCell>{row.workplaceId ? workplaceNames.get(row.workplaceId) || 'Chưa có thông tin' : 'Không áp dụng'}</TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(row.effectiveFrom)}</TableCell><TableCell className="text-muted-foreground">{row.effectiveTo ? formatDate(row.effectiveTo) : 'Không thời hạn'}</TableCell>
-                <TableCell><AssignmentStatus active={row.active} /></TableCell>
+                <TableCell><AssignmentStatus active={row.active} left={row.employeeLeft} /></TableCell>
                 <TableCell className="w-20 pr-6 text-right"><DropdownMenu>
                   <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="min-h-11 min-w-11" />} aria-label={`Mở thao tác phân công của ${employeeNames.get(row.userId) || 'nhân viên'}`}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem className="min-h-10 px-3" onClick={() => setDetailId(row._id)}><Eye aria-hidden="true" />Xem chi tiết</DropdownMenuItem>
-                    <DropdownMenuItem className="min-h-10 px-3" onClick={() => setEditId(row._id)}><Pencil aria-hidden="true" />Chỉnh sửa</DropdownMenuItem>
-                    {!row.active && <DropdownMenuItem className="min-h-10 px-3 text-primary" onClick={() => setActivateId(row._id)}><Power aria-hidden="true" />Kích hoạt lại</DropdownMenuItem>}
-                    {row.active && <DropdownMenuItem variant="destructive" className="min-h-10 px-3" onClick={() => setDeactivateId(row._id)}><PowerOff aria-hidden="true" />Ngưng hoạt động</DropdownMenuItem>}
+                    {!row.employeeLeft && <DropdownMenuItem className="min-h-10 px-3" onClick={() => setEditId(row._id)}><Pencil aria-hidden="true" />Chỉnh sửa</DropdownMenuItem>}
+                    {!row.active && !row.employeeLeft && <DropdownMenuItem className="min-h-10 px-3 text-primary" onClick={() => setActivateId(row._id)}><Power aria-hidden="true" />Kích hoạt lại</DropdownMenuItem>}
+                    {row.active && !row.employeeLeft && <DropdownMenuItem variant="destructive" className="min-h-10 px-3" onClick={() => setDeactivateId(row._id)}><PowerOff aria-hidden="true" />Ngưng hoạt động</DropdownMenuItem>}
                   </DropdownMenuContent>
                 </DropdownMenu></TableCell>
               </TableRow>)}</TableBody></Table>

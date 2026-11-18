@@ -29,6 +29,8 @@ import {
     EMPLOYMENT_STATUS_LABELS,
     EMPLOYMENT_STATUS_BADGE,
     EMPLOYMENT_STATUS_TRANSITIONS,
+    CORE_EMPLOYMENT_STATUSES,
+    getEffectiveStatus,
     EMPLOYMENT_TYPE_LABELS,
     GENDER_LABELS,
     type EmploymentStatus,
@@ -525,12 +527,16 @@ function EmployeeDetailContent({
         }
     };
 
+    const effectiveStatus = employee ? getEffectiveStatus(employee.employmentStatus, employee.endDate) : 'ACTIVE';
+
     /* ── Tab 3: Status Change Validation & Save ── */
     const validateStatusChange = useCallback((): boolean => {
         const errors: Record<string, string | null> = {};
 
         if (!statusForm.newStatus) {
             errors.newStatus = 'Vui lòng chọn trạng thái mới.';
+        } else if (employee && statusForm.newStatus === getEffectiveStatus(employee.employmentStatus, employee.endDate)) {
+            errors.newStatus = 'Nhân viên hiện đã ở trạng thái này. Vui lòng chọn trạng thái mới.';
         }
 
         const effectiveDateError = validateStatusEffectiveDate(statusForm.effectiveDate);
@@ -538,7 +544,7 @@ function EmployeeDetailContent({
 
         setStatusErrors(errors);
         return Object.keys(errors).length === 0;
-    }, [statusForm]);
+    }, [statusForm, employee]);
 
     const handleStatusChange = async () => {
         if (!validateStatusChange()) {
@@ -564,7 +570,13 @@ function EmployeeDetailContent({
             setStatusForm({ newStatus: '', effectiveDate: '', reason: '' });
             onChanged?.();
             await loadHistory();
-            toast.success('Cập nhật trạng thái thành công', 'Trạng thái nhân sự và lịch sử thay đổi đã được cập nhật.');
+            const impact = (updated as any)?.offboarding;
+            toast.success(
+                'Cập nhật trạng thái thành công',
+                impact
+                    ? `Đã chấm dứt ${impact.contractsTerminated} hợp đồng, gỡ ${impact.assignmentsClipped + impact.assignmentsDeactivated} phân công, ${impact.managerAssignmentsClosed} phân công quản lý, huỷ ${impact.leaveRequestsCancelled} đơn nghỉ và khoá tài khoản.`
+                    : 'Trạng thái nhân sự và lịch sử thay đổi đã được cập nhật.',
+            );
         } catch (err: unknown) {
             const code = (err as any)?.code;
             const message = code === 'EMPLOYMENT_STATUS_TRANSITION_INVALID'
@@ -610,7 +622,7 @@ function EmployeeDetailContent({
     }
 
     const validTransitions = employee
-        ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[employee.employmentStatus] || []
+        ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[effectiveStatus] || []
         : [];
     const isTerminal = employee?.employmentStatus === 'RESIGNED' || employee?.employmentStatus === 'TERMINATED';
 
@@ -650,8 +662,8 @@ function EmployeeDetailContent({
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[employee.employmentStatus]}`}>
-                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}
+                                    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[effectiveStatus]}`}>
+                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]}
                                     </span>
                                 </div>
                             </CardContent>
@@ -973,7 +985,7 @@ function EmployeeDetailContent({
                                 >
                                     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         <FieldRow label="Loại lao động" value={(EMPLOYMENT_TYPE_LABELS as Record<string, string>)[employee.employmentType]} />
-                                        <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]} />
+                                        <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]} />
                                         <FieldRow label="Ngày vào làm" value={employee.joinDate ? formatVN(employee.joinDate) : undefined} />
                                         <FieldRow label="Ngày kết thúc" value={employee.endDate ? formatVN(employee.endDate) : undefined} />
                                         <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
@@ -1303,8 +1315,8 @@ function EmployeeDetailContent({
                                         <div>
                                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trạng thái</p>
                                             <div className="mt-1">
-                                                <span className={`inline-flex rounded-full px-3.5 py-1 text-sm font-semibold ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[employee.employmentStatus]}`}>
-                                                    {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}
+                                                <span className={`inline-flex rounded-full px-3.5 py-1 text-sm font-semibold ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[effectiveStatus]}`}>
+                                                    {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]}
                                                 </span>
                                             </div>
                                         </div>
@@ -1404,7 +1416,7 @@ function EmployeeDetailContent({
                             <div>
                                 <DialogTitle>Thay đổi trạng thái</DialogTitle>
                                 <DialogDescription className="mt-1.5">
-                                    Trạng thái hiện tại: {employee ? (EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus] : '—'}
+                                    Trạng thái hiện tại: {employee ? (EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus] : '—'}
                                 </DialogDescription>
                             </div>
                         </div>
@@ -1425,9 +1437,13 @@ function EmployeeDetailContent({
                                 aria-invalid={!!statusErrors.newStatus}
                             >
                                 <option value="">Chọn trạng thái mới</option>
-                                {validTransitions.map((status) => (
-                                    <option key={status} value={status}>
-                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[status]}
+                                {CORE_EMPLOYMENT_STATUSES.map(({ value, label }) => (
+                                    <option
+                                        key={value}
+                                        value={value}
+                                        disabled={value === effectiveStatus}
+                                    >
+                                        {label} {value === effectiveStatus ? '(Hiện tại)' : ''}
                                     </option>
                                 ))}
                             </select>
@@ -1465,6 +1481,20 @@ function EmployeeDetailContent({
                             />
                             <p className="text-right text-xs text-muted-foreground">{statusForm.reason.length}/500</p>
                         </div>
+
+                        {(statusForm.newStatus === 'RESIGNED' || statusForm.newStatus === 'TERMINATED') && (
+                            <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <p className="font-medium">Hệ thống sẽ tự động thực hiện:</p>
+                                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                                    <li>Chấm dứt hợp đồng lao động đang hiệu lực/nháp.</li>
+                                    <li>Kết thúc phân công phòng ban, ca làm tại ngày hiệu lực; huỷ phân công tương lai.</li>
+                                    <li>Thu hồi vai trò Trưởng phòng (nếu có).</li>
+                                    <li>Huỷ đơn nghỉ phép bắt đầu sau ngày hiệu lực.</li>
+                                    <li>Đăng xuất mọi thiết bị và khoá tài khoản đăng nhập.</li>
+                                </ul>
+                                <p className="mt-1 text-xs">Thao tác không thể hoàn tác.</p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">

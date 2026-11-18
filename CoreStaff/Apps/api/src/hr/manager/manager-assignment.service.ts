@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { ClientSession, Model } from 'mongoose';
+import { ClientSession, Model, isValidObjectId, Types } from 'mongoose';
 import { acquireSerializationLock } from '../../common/serialization-lock';
 import { ManagerAssignmentDocument } from '../../database/schemas/manager-assignment.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
@@ -24,6 +24,33 @@ export class ManagerAssignmentService {
       .populate('managerUserId', 'fullName')
       .populate('departmentId', 'name code')
       .lean();
+
+    const userIds = rows.map((r: any) => String((r.managerUserId as any)?._id ?? r.managerUserId));
+    const objectUserIds = userIds.filter(id => isValidObjectId(id)).map(id => new Types.ObjectId(id));
+    const orgFilter = isValidObjectId(organizationId)
+      ? { $in: [organizationId, new Types.ObjectId(organizationId)] }
+      : organizationId;
+
+    const profiles = await this.employeeProfiles.find({
+      organizationId: orgFilter as any,
+      userId: { $in: [...userIds, ...objectUserIds] } as any,
+      $or: [
+        { employmentStatus: { $in: ['RESIGNED', 'TERMINATED'] } },
+        { endDate: { $exists: true, $ne: null } },
+      ],
+    }).select('userId employmentStatus endDate').lean();
+
+    const resignedUserIds = new Set(profiles.map(p => String(p.userId)));
+
+    for (const row of rows as any[]) {
+      const uId = String((row.managerUserId as any)?._id ?? row.managerUserId);
+      if (resignedUserIds.has(uId) && row.active) {
+        row.active = false;
+        await this.assignments.updateOne({ _id: row._id }, { $set: { active: false } });
+        await this.demoteIfNoLongerManager(organizationId, uId, String(row._id));
+      }
+    }
+
     return rows.map((row: any) => ({
       ...row,
       managerName: row.managerUserId?.fullName ?? null,
@@ -66,6 +93,7 @@ export class ManagerAssignmentService {
       if (await this.overlaps(organizationId, dto.managerUserId, dto.departmentId, from, to, undefined, session)) {
         throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
       }
+      await this.assertDepartmentFree(organizationId, dto.departmentId, from, to, undefined, session);
       const [row] = await this.assignments.create(
         [{ ...dto, organizationId, createdBy, effectiveFrom: from, effectiveTo: to }],
         { session },
@@ -98,6 +126,7 @@ export class ManagerAssignmentService {
       if (dto.active !== false && await this.overlaps(organizationId, managerUserId, departmentId, from, to, id, session)) {
         throw new ConflictException('MANAGER_ASSIGNMENT_OVERLAP');
       }
+      if (dto.active !== false) await this.assertDepartmentFree(organizationId, departmentId, from, to, id, session);
       const update: Record<string, unknown> = { $set: patch };
       if (unset) update.$unset = unset;
       const row = await this.assignments.findOneAndUpdate({ _id: id, organizationId }, update, { new: true, runValidators: true, session }).lean();
@@ -149,6 +178,16 @@ export class ManagerAssignmentService {
     // QC 5.1 — deactivation must demote the user, so it joins the serialized
     // transaction instead of writing a bare update.
     return this.serialized(organizationId, async (session) => {
+      if (active) {
+        const findQ = this.assignments.findOne({ _id: id, organizationId });
+        const current = await (session && typeof (findQ as any).session === 'function' ? (findQ as any).session(session) : findQ).lean();
+        if (!current) throw new NotFoundException('MANAGER_ASSIGNMENT_NOT_FOUND');
+        await this.validateRefs(organizationId, String(current.managerUserId), String(current.departmentId));
+        await this.assertDepartmentFree(
+          organizationId, String(current.departmentId), new Date(current.effectiveFrom),
+          current.effectiveTo ? new Date(current.effectiveTo) : undefined, id, session,
+        );
+      }
       const row = await this.assignments.findOneAndUpdate({ _id: id, organizationId }, { $set: { active } }, { new: true, session }).lean();
       if (!row) throw new NotFoundException('MANAGER_ASSIGNMENT_NOT_FOUND');
       if (!active) await this.demoteIfNoLongerManager(organizationId, String(row.managerUserId), String(row._id), session);
@@ -167,7 +206,8 @@ export class ManagerAssignmentService {
       this.employeeProfiles.findOne({
         organizationId,
         userId: managerUserId,
-        employmentStatus: { $in: ['PROBATION', 'ACTIVE', 'ON_LEAVE'] },
+        // QC 5.2 — probation employees may not be department managers.
+        employmentStatus: 'ACTIVE',
       }).lean(),
       this.departments.findOne({ _id: departmentId, organizationId }).lean(),
     ]);
@@ -177,10 +217,54 @@ export class ManagerAssignmentService {
 
   private async overlaps(organizationId: string, managerUserId: string, departmentId: string, from: Date, to?: Date, excludeId?: string, session?: ClientSession) {
     const query = this.assignments.find({ organizationId, managerUserId, departmentId, active: true }).sort({ effectiveFrom: 1 });
-    const rows = await (session ? query.session(session) : query).lean();
+    const rows: any[] = await (session && typeof (query as any).session === 'function' ? (query as any).session(session) : query).lean();
     const start = from.getTime(), end = to?.getTime() ?? Number.POSITIVE_INFINITY;
-    return rows.some(row => String(row._id) !== String(excludeId ?? '')
+    return rows.some((row: any) => String(row._id) !== String(excludeId ?? '')
+      && String(row.managerUserId) === String(managerUserId)
+      && String(row.departmentId) === String(departmentId)
+      && row.active !== false
       && new Date(row.effectiveFrom).getTime() <= end
       && start <= (row.effectiveTo ? new Date(row.effectiveTo).getTime() : Number.POSITIVE_INFINITY));
+  }
+
+  /**
+   * One department, one manager at a time: a new manager can only be assigned
+   * once the previous manager's assignment has been stopped (or ends before).
+   */
+  private async assertDepartmentFree(organizationId: string, departmentId: string, from: Date, to?: Date, excludeId?: string, session?: ClientSession) {
+    const query = this.assignments.find({ organizationId, departmentId, active: true }).sort({ effectiveFrom: 1 });
+    const rows: any[] = await (session && typeof (query as any).session === 'function' ? (query as any).session(session) : query).lean();
+    const start = from.getTime(), end = to?.getTime() ?? Number.POSITIVE_INFINITY;
+
+    const userIds = rows.map((r: any) => String((r.managerUserId as any)?._id ?? r.managerUserId));
+    const objectUserIds = userIds.filter(id => isValidObjectId(id)).map(id => new Types.ObjectId(id));
+    const orgFilter = isValidObjectId(organizationId)
+      ? { $in: [organizationId, new Types.ObjectId(organizationId)] }
+      : organizationId;
+
+    const resignedProfiles = await this.employeeProfiles.find({
+      organizationId: orgFilter as any,
+      userId: { $in: [...userIds, ...objectUserIds] } as any,
+      $or: [
+        { employmentStatus: { $in: ['RESIGNED', 'TERMINATED'] } },
+        { endDate: { $exists: true, $ne: null } },
+      ],
+    }).select('userId').lean();
+    const resignedUserIds = new Set(resignedProfiles.map(p => String(p.userId)));
+
+    for (const row of rows) {
+      const uId = String((row.managerUserId as any)?._id ?? row.managerUserId);
+      if (resignedUserIds.has(uId) && row.active) {
+        row.active = false;
+        await this.assignments.updateOne({ _id: row._id }, { $set: { active: false } });
+      }
+    }
+
+    const clash = rows.some((row: any) => String(row._id) !== String(excludeId ?? '')
+      && String(row.departmentId) === String(departmentId)
+      && row.active !== false
+      && new Date(row.effectiveFrom).getTime() <= end
+      && start <= (row.effectiveTo ? new Date(row.effectiveTo).getTime() : Number.POSITIVE_INFINITY));
+    if (clash) throw new ConflictException('DEPARTMENT_ALREADY_HAS_MANAGER');
   }
 }

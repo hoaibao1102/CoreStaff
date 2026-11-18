@@ -41,7 +41,7 @@ export type EmploymentStatus = (typeof EmploymentStatus)[keyof typeof Employment
  */
 export const EMPLOYMENT_STATUS_TRANSITIONS: Record<EmploymentStatus, EmploymentStatus[]> = {
   PROBATION: [EmploymentStatus.ACTIVE, EmploymentStatus.RESIGNED, EmploymentStatus.TERMINATED],
-  ACTIVE: [EmploymentStatus.ON_LEAVE, EmploymentStatus.RESIGNED, EmploymentStatus.TERMINATED],
+  ACTIVE: [EmploymentStatus.PROBATION, EmploymentStatus.ON_LEAVE, EmploymentStatus.RESIGNED, EmploymentStatus.TERMINATED],
   ON_LEAVE: [EmploymentStatus.ACTIVE, EmploymentStatus.RESIGNED, EmploymentStatus.TERMINATED],
   RESIGNED: [],
   TERMINATED: [],

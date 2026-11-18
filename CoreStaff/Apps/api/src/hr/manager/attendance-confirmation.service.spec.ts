@@ -97,4 +97,241 @@ describe('attendance confirmation cutover', () => {
     const service = new AttendanceConfirmationService(organizations as any);
     await expect(service.preview('org', 'user', '2026-09-14')).rejects.toThrow('ATTENDANCE_CONFIRMATION_DISABLED');
   });
+  it('blocks preview and submit when timesheet period is closed or claimed for payroll', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = { organizationId: 'org', periodKey: '2026-09', startDate: '2026-09-14', endDate: '2026-09-14', employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }], assignments: [], shifts: [], calendarExceptions: [], leaveRequests: [], attendanceDays: [], overtimeResults: [] };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query(null) },
+      days: { findOne: () => query(null) }, overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 0 }) },
+      periods: { find: () => query([{ _id: 'period-closed', period: '2026-09', status: 'CLOSED', payrollRunId: 'payroll-123' }]) },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-09-14');
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockedReasons).toContain('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+  });
+  it('blocks preview when employee has already acknowledged timesheet for the month', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = { organizationId: 'org', periodKey: '2026-10', startDate: '2026-10-15', endDate: '2026-10-15', employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }], assignments: [], shifts: [], calendarExceptions: [], leaveRequests: [], attendanceDays: [], overtimeResults: [] };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query(null) },
+      days: { findOne: () => query(null) }, overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 0 }) },
+      periods: { find: () => query([{ _id: 'period-open', period: '2026-10', status: 'OPEN' }]) },
+      acknowledgements: {
+        findOne: () => ({
+          sort: () => query({ action: 'ACKNOWLEDGED', actedAt: new Date() }),
+        }),
+      },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-10-15');
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockedReasons).toContain('TIMESHEET_ALREADY_ACKNOWLEDGED');
+  });
+
+  it('blocks preview with ALREADY_FULL_WORK_CREDIT when the day already has full 1 work credit', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = {
+      organizationId: 'org', periodKey: '2026-09', startDate: '2026-09-14', endDate: '2026-09-14',
+      employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }],
+      assignments: [{ id: 'assignment', userId: 'user', departmentId: 'dept', active: true }],
+      shifts: [{ id: 'shift', scope: 'ORGANIZATION', active: true, weekdays: [1], effectiveFrom: '2026-01-01', startTime: '08:00', endTime: '17:00', breakMinutes: 60 }],
+      calendarExceptions: [], leaveRequests: [],
+      attendanceDays: [{ userId: 'user', workDate: '2026-09-14', checkInAt: '2026-09-14T01:00:00.000Z', checkOutAt: '2026-09-14T10:00:00.000Z', workingMinutes: 480 }],
+      overtimeResults: [],
+    };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query({ ...facts.shifts[0], gracePeriodMinutes: 5 }) },
+      days: { findOne: () => query({
+        checkInAt: new Date('2026-09-14T01:00:00.000Z'),
+        checkOutAt: new Date('2026-09-14T10:00:00.000Z'),
+        workingMinutes: 480,
+      }) },
+      overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 1 }) },
+      periods: { find: () => query([{ _id: 'period', status: 'OPEN' }]) },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-09-14');
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockedReasons).toContain('ALREADY_FULL_WORK_CREDIT');
+  });
+
+  it('allows preview when punches exist but do not meet full 1 work credit', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = {
+      organizationId: 'org', periodKey: '2026-09', startDate: '2026-09-14', endDate: '2026-09-14',
+      employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }],
+      assignments: [{ id: 'assignment', userId: 'user', departmentId: 'dept', active: true }],
+      shifts: [{ id: 'shift', scope: 'ORGANIZATION', active: true, weekdays: [1], effectiveFrom: '2026-01-01', startTime: '08:00', endTime: '17:00', breakMinutes: 60 }],
+      calendarExceptions: [], leaveRequests: [],
+      attendanceDays: [{ userId: 'user', workDate: '2026-09-14', checkInAt: '2026-09-14T01:00:00.000Z', checkOutAt: '2026-09-14T05:00:00.000Z', workingMinutes: 240 }],
+      overtimeResults: [],
+    };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query({ ...facts.shifts[0], gracePeriodMinutes: 5 }) },
+      days: { findOne: () => query({
+        checkInAt: new Date('2026-09-14T01:00:00.000Z'),
+        checkOutAt: new Date('2026-09-14T05:00:00.000Z'),
+        workingMinutes: 240,
+      }) },
+      overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 1 }) },
+      periods: { find: () => query([{ _id: 'period', status: 'OPEN' }]) },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-09-14');
+    expect(result.canSubmit).toBe(true);
+    expect(result.blockedReasons).not.toContain('ALREADY_FULL_WORK_CREDIT');
+  });
+
+  it('does not block preview or submit when timesheet period does not exist', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = {
+      organizationId: 'org', periodKey: '2026-09', startDate: '2026-09-14', endDate: '2026-09-14',
+      employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }],
+      assignments: [{ id: 'assignment', userId: 'user', departmentId: 'dept', active: true }],
+      shifts: [{ id: 'shift', scope: 'ORGANIZATION', active: true, weekdays: [1], effectiveFrom: '2026-01-01', startTime: '08:00', endTime: '17:00', breakMinutes: 60 }],
+      calendarExceptions: [], leaveRequests: [], attendanceDays: [], overtimeResults: [],
+    };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query(facts.shifts[0]) },
+      days: { findOne: () => query(null) }, overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 0 }) },
+      periods: { find: () => query([]) }, // No periods created!
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-09-14');
+    expect(result.canSubmit).toBe(true);
+    expect(result.blockedReasons).not.toContain('PERIOD_REQUIRED');
+  });
+
+  it('ignores undefined optional DTO properties produced by class-transformer', async () => {
+    const session: any = { withTransaction: async (fn: any) => fn(), endSession: jest.fn() };
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const requests = { db: { startSession: async () => session }, findOne: jest.fn(() => query(null)), create: jest.fn(async (rows: any) => [{ _id: 'request', ...rows[0], toObject() { return { ...rows[0], _id: 'request' }; } }]) };
+    const quotas = { updateOne: jest.fn(async () => ({ matchedCount: 1 })), findOneAndUpdate: jest.fn(() => query({ usedSlots: 1 })) };
+    const periodVersion = { claimForWorkDate: jest.fn(async () => ({ periodId: 'period', version: 2 })) };
+    const service = new AttendanceConfirmationService({} as any, { requests, quotas, periodVersion });
+    jest.spyOn(service, 'preview').mockResolvedValue({ canSubmit: true, contextHash: 'hash', blockedReasons: [], quota: { monthKey: '2026-09', limit: 3 }, snapshot: { employeeProfileId: 'profile', departmentId: 'dept' }, actionType: 'FULL_DAY' } as any);
+    await expect(service.create('org', 'user', {
+      requestKind: 'ATTENDANCE_CONFIRMATION',
+      type: 'ATTENDANCE',
+      workDate: '2026-09-14',
+      reason: 'I forgot to punch in',
+      previewHash: 'hash',
+      requestedStart: undefined,
+      requestedEnd: undefined,
+      adjustmentType: undefined,
+      workDescription: undefined,
+      retroactiveReason: undefined,
+    }, 'key')).resolves.toMatchObject({ _id: 'request', source: 'ATTENDANCE_CONFIRMATION', status: 'PENDING' });
+  });
+
+  it('blocks future dates with ATTENDANCE_CONFIRMATION_FUTURE_DATE_FORBIDDEN', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = {
+      organizationId: 'org', periodKey: '2099-12', startDate: '2099-12-31', endDate: '2099-12-31',
+      employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }],
+      assignments: [], shifts: [], calendarExceptions: [], leaveRequests: [], attendanceDays: [], overtimeResults: [],
+    };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query(null) },
+      days: { findOne: () => query(null) }, overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 0 }) },
+      periods: { find: () => query([]) },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2099-12-31');
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockedReasons).toContain('ATTENDANCE_CONFIRMATION_FUTURE_DATE_FORBIDDEN');
+  });
+
+  it('blocks preview when a PayrollRun already exists for the month', async () => {
+    const query = (value: any) => ({ session: () => ({ lean: async () => value }) });
+    const facts: any = {
+      organizationId: 'org', periodKey: '2026-09', startDate: '2026-09-14', endDate: '2026-09-14',
+      employees: [{ employeeProfileId: 'profile', userId: 'user', departmentIds: ['dept'] }],
+      assignments: [], shifts: [], calendarExceptions: [], leaveRequests: [], attendanceDays: [], overtimeResults: [],
+    };
+    const models: any = {
+      source: { load: jest.fn(async () => facts) },
+      shifts: { findOne: () => query(null) },
+      days: { findOne: () => query(null) }, overrides: { find: () => query([]) },
+      policyRules: { attendanceConfirmationRulesForWorkDate: jest.fn(async () => ({ _id: 'policy', version: 2, maxMonthlyAttendanceConfirmations: 3 })) },
+      quotas: { findOne: () => query({ usedSlots: 0 }) },
+      periods: { find: () => query([]) },
+      payrollRuns: { findOne: () => query({ _id: 'run-1', periodLabel: '09/2026', status: 'RELEASED' }) },
+    };
+    const service = new AttendanceConfirmationService({ findOne: () => query({ attendanceOvertimeV2Enabled: true }) } as any, models);
+    const result = await service.preview('org', 'user', '2026-09-14');
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockedReasons).toContain('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+  });
+
+  it('approves confirmation when both checkIn and checkOut already exist without duplicate event error', async () => {
+    const query = (v: any) => ({ session: () => ({ lean: async () => v }) });
+    const session: any = { withTransaction: async (fn: any) => fn(), endSession: jest.fn() };
+    const request = {
+      _id: 'req-both',
+      source: 'ATTENDANCE_CONFIRMATION',
+      employeeUserId: 'user',
+      departmentId: 'dept',
+      status: 'PENDING',
+      version: 1,
+      workDate: new Date('2026-10-23'),
+      confirmationContextHash: 'hash',
+      confirmationMonthKey: '2026-10',
+      confirmationSlotActive: true,
+    };
+    const requests = {
+      db: { startSession: async () => session },
+      findOne: () => query(request),
+      findOneAndUpdate: jest.fn(() => query({ ...request, status: 'APPROVED', version: 2 })),
+      updateMany: jest.fn(async () => ({ modifiedCount: 0 })),
+    };
+    const days = {
+      findOne: () => query({ _id: 'day', checkInAt: new Date('2026-10-23T06:40:00Z'), checkOutAt: new Date('2026-10-23T09:30:00Z') }),
+      findOneAndUpdate: jest.fn(() => query({ _id: 'day' })),
+    };
+    const events = { deleteMany: jest.fn(async () => ({ deletedCount: 2 })), create: jest.fn(async () => []) };
+    const audit = { create: jest.fn(async () => []) };
+    const periodVersion = { claimForWorkDate: jest.fn(async () => ({ periodId: 'period', version: 2 })) };
+    const scope = { requireReviewDepartment: jest.fn(async () => {}) };
+    const notify = { notifyApprovalDecision: jest.fn() };
+    const service = new AttendanceConfirmationService({} as any, { requests, days, events, audit, periodVersion, scope, notify });
+    jest.spyOn(service, 'preview').mockResolvedValue({
+      contextHash: 'hash',
+      blockedReasons: [],
+      snapshot: { shift: { startTime: '08:00', endTime: '17:00', breakMinutes: 60 } },
+      proposedChanges: {
+        actionType: 'FULL_DAY',
+        checkInAt: '2026-10-23T06:40:00.000Z',
+        checkOutAt: '2026-10-23T09:30:00.000Z',
+        calculation: { workingMinutes: 480 },
+      },
+      existingPunches: { checkInAt: '2026-10-23T06:40:00.000Z', checkOutAt: '2026-10-23T09:30:00.000Z' },
+      requiredWorkingIntervals: [{ from: '13:00', to: '17:00' }],
+    } as any);
+    await expect(service.decide('org', 'manager', 'req-both', 'APPROVED', 1, 'op-both')).resolves.toMatchObject({ status: 'APPROVED' });
+    expect(events.deleteMany).toHaveBeenCalledWith(
+      { organizationId: 'org', attendanceDayId: 'day', eventType: { $in: ['CHECK_IN', 'CHECK_OUT'] } },
+      { session },
+    );
+    expect(events.create).toHaveBeenCalledTimes(1);
+  });
 });

@@ -143,8 +143,17 @@ function buildRefModel(ids: Record<string, string[]>, docs: Array<Record<string,
 	};
 }
 
+const cascadeCalls: Array<{ model: string; op: string; filter: Record<string, unknown>; update: Record<string, unknown> }> = [];
+
 function fakeConnection() {
+	const write = (model: string, op: string) => async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+		cascadeCalls.push({ model, op, filter, update });
+		return { modifiedCount: 1 };
+	};
 	return {
+		model(name: string) {
+			return { updateMany: write(name, 'updateMany'), updateOne: write(name, 'updateOne') };
+		},
 		async startSession() {
 			return {
 				async withTransaction(fn: () => Promise<void>) {
@@ -522,48 +531,59 @@ describe('EmployeeService.changeStatus (TASK-023)', () => {
 		expect(new Date(updated.endDate as Date).toISOString().slice(0, 10)).toBe('2026-11-01');
 	});
 
-	it('disables the login account when transitioning to RESIGNED or TERMINATED', async () => {
-		const users = buildRefModel({ org1: ['user1'] });
+	it('offboarding cascade: terminates contract, clips/deactivates assignments, demotes, revokes sessions, cancels future leave', async () => {
+		cascadeCalls.length = 0;
 		const profiles = [seedProfile(EmploymentStatus.ACTIVE)];
-		const svc = new EmployeeService(
-			buildProfileModel(profiles) as never,
-			buildHistoryModel([]) as never,
-			buildRefModel({}) as never,
-			buildRefModel({}) as never,
-			users as never,
-			fakeConnection() as never,
-		);
-
-		await svc.changeStatus('org1', '1', 'hr-user', {
-			newStatus: EmploymentStatus.RESIGNED,
+		const svc = buildService(profiles, []);
+		const updated: any = await svc.changeStatus('org1', '1', 'hr-user', {
+			newStatus: EmploymentStatus.TERMINATED,
 			effectiveDate: '2026-11-01',
 		} as never);
 
-		expect(users.updateOne).toHaveBeenCalledWith(
-			{ _id: 'user1', organizationId: 'org1' },
-			{ $set: { status: UserStatus.DISABLED } },
-			expect.anything(),
-		);
+		const by = (model: string) => cascadeCalls.filter(c => c.model === model);
+		expect(by('EmploymentContract')[0].update).toMatchObject({ $set: { status: 'TERMINATED' } });
+		const [future, open] = by('Assignment');
+		expect(future.filter).toMatchObject({ effectiveFrom: { $gt: '2026-11-01' } });
+		expect(future.update).toEqual({ $set: { active: false } });
+		expect(open.update).toEqual({ $set: { effectiveTo: '2026-11-01' } });
+		expect(by('ManagerAssignment')).toHaveLength(1);
+		expect(by('User').map(c => c.update)).toEqual([
+			{ $set: { role: 'EMPLOYEE' } },
+			{ $set: { status: 'DISABLED' } },
+		]);
+		expect(by('UserSession')[0].update.$set).toHaveProperty('revokedAt');
+		expect(by('LeaveRequest')[0].filter).toMatchObject({ startDate: { $gt: '2026-11-01' } });
+		expect(updated.offboarding.contractsTerminated).toBe(1);
 	});
 
-	it('does not touch the login account on a non-terminal transition', async () => {
-		const users = buildRefModel({ org1: ['user1'] });
+	it('future resignation: employee remains working until effectiveDate, account not disabled yet', async () => {
+		cascadeCalls.length = 0;
 		const profiles = [seedProfile(EmploymentStatus.ACTIVE)];
-		const svc = new EmployeeService(
-			buildProfileModel(profiles) as never,
-			buildHistoryModel([]) as never,
-			buildRefModel({}) as never,
-			buildRefModel({}) as never,
-			users as never,
-			fakeConnection() as never,
-		);
-
-		await svc.changeStatus('org1', '1', 'hr-user', {
-			newStatus: EmploymentStatus.ON_LEAVE,
-			effectiveDate: '2026-11-01',
+		const svc = buildService(profiles, []);
+		const updated: any = await svc.changeStatus('org1', '1', 'hr-user', {
+			newStatus: EmploymentStatus.RESIGNED,
+			effectiveDate: '2026-11-30',
 		} as never);
 
-		expect(users.updateOne).not.toHaveBeenCalled();
+		// Status remains ACTIVE until endDate arrives
+		expect(updated.employmentStatus).toBe(EmploymentStatus.ACTIVE);
+		expect(new Date(updated.endDate as Date).toISOString().slice(0, 10)).toBe('2026-11-30');
+
+		const by = (model: string) => cascadeCalls.filter(c => c.model === model);
+		// Manager assignment is closed immediately so department is free
+		expect(by('ManagerAssignment')).toHaveLength(1);
+		expect(by('User').map(c => c.update)).toEqual([
+			{ $set: { role: 'EMPLOYEE' } },
+		]);
+		// User account and sessions are NOT disabled while employee is still working
+		expect(by('UserSession')).toHaveLength(0);
+	});
+
+	it('does not run the offboarding cascade for non-terminal transitions', async () => {
+		cascadeCalls.length = 0;
+		const svc = buildService([seedProfile(EmploymentStatus.PROBATION)], []);
+		await svc.changeStatus('org1', '1', 'hr-user', { newStatus: EmploymentStatus.ACTIVE, effectiveDate: '2026-11-01' } as never);
+		expect(cascadeCalls).toHaveLength(0);
 	});
 
 	it('never transitions out of the terminal RESIGNED state (SRS §176)', async () => {
