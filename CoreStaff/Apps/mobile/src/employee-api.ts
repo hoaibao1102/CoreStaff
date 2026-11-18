@@ -267,10 +267,25 @@ export const getMyLeaveRequest = (base: string, id: string) =>
 export const cancelMyLeaveRequest = (base: string, id: string) =>
   apiRequest<LeaveRequest>(base, `/api/leave-requests/mine/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
 
+export interface OvertimePreview {
+  workDate: string;
+  calculationContract?: 'OVERTIME_V2' | 'LEGACY_V1';
+  rawEligibleMinutes?: number;
+  payableMinutes?: number;
+  roundingDroppedMinutes?: number;
+  contextHash?: string;
+  canFile: boolean;
+  blockedReasons: string[];
+  policy?: { minimumOvertimeMinutes: number; overtimeRoundingMinutes: number };
+}
+
 export const getMyOvertimeRequests = (base: string) =>
   apiRequest<OvertimeRequest[]>(base, '/api/overtime/mine');
 
-export const createOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string; reason: string; workDescription?: string; retroactiveReason?: string }) =>
+export const previewOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string }) =>
+  apiRequest<OvertimePreview>(base, '/api/overtime/preview', { method: 'POST', body: JSON.stringify(payload) });
+
+export const createOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string; reason: string; workDescription?: string; retroactiveReason?: string; previewHash?: string }) =>
   apiRequest<OvertimeRequest>(base, '/api/overtime', { method: 'POST', body: JSON.stringify(payload) });
 
 /* ───────── Xác nhận công (cùng API với web: /api/requests/attendance-confirmation-preview) ───────── */
@@ -355,6 +370,8 @@ export interface TimesheetReviewCard {
 
 export interface TimesheetReviewDay {
   workDate: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
   scheduledObligationMinutes: number;
   workedScheduledMinutes: number;
   payableLeaveMinutes: number;
@@ -387,10 +404,15 @@ export const acknowledgeMyTimesheetReview = (base: string, review: TimesheetRevi
     body: JSON.stringify({ expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash }),
   });
 
-export const disputeMyTimesheetReview = (base: string, review: TimesheetReview, reason: string) =>
+export const disputeMyTimesheetReview = (base: string, review: TimesheetReview, reason: string, disputedWorkDates?: string[]) =>
   apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(review.periodId)}/my-review/dispute`, {
     method: 'POST',
-    body: JSON.stringify({ expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash, reason }),
+    body: JSON.stringify({
+      expectedPeriodVersion: review.periodVersion,
+      projectionHash: review.projectionHash,
+      reason,
+      ...(disputedWorkDates?.length ? { disputedWorkDates } : {}),
+    }),
   });
 
 function newIdempotencyKey(): string {
