@@ -1,16 +1,17 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { LeaveRequest, OvertimeRequest } from '../employee-api';
+import type { AttendanceConfirmationRequest, LeaveRequest, OvertimeRequest } from '../employee-api';
 import { colors, radius, spacing } from '../theme';
 import { todayKey } from './ui';
 
-export type RequestEntry = { type: 'leave'; value: LeaveRequest } | { type: 'overtime'; value: OvertimeRequest };
+export type RequestEntry = { type: 'leave'; value: LeaveRequest } | { type: 'overtime'; value: OvertimeRequest } | { type: 'attendance'; value: AttendanceConfirmationRequest };
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const two = (n: number) => String(n).padStart(2, '0');
 
 const LEAVE = { bg: '#ccfbf1', border: '#0d9488', fg: '#134e4a' };
 const OT = { bg: '#e0e7ff', border: '#4f46e5', fg: '#312e81' };
+const ATT = { bg: '#fef3c7', border: '#d97706', fg: '#78350f' };
 
 /** Màu chấm trạng thái duyệt — đơn chờ xử lý được ưu tiên hiển thị. */
 export const REQUEST_STATUS_DOT = { PENDING: '#f59e0b', APPROVED: '#16a34a', REJECTED: '#dc2626', CANCELLED: '#94a3b8' } as const;
@@ -36,11 +37,12 @@ function daysBetween(start: string, end: string): string[] {
 }
 
 /** Gom đơn theo ngày: đơn nghỉ trải đều trên mọi ngày trong khoảng, tăng ca theo ngày làm. */
-export function groupRequestsByDay(leaves: LeaveRequest[], overtime: OvertimeRequest[]): Map<string, RequestEntry[]> {
+export function groupRequestsByDay(leaves: LeaveRequest[], overtime: OvertimeRequest[], attendance: AttendanceConfirmationRequest[] = []): Map<string, RequestEntry[]> {
   const map = new Map<string, RequestEntry[]>();
   const add = (day: string, entry: RequestEntry) => { const list = map.get(day); if (list) list.push(entry); else map.set(day, [entry]); };
   for (const value of leaves) for (const day of daysBetween(value.startDate, value.endDate || value.startDate)) add(day, { type: 'leave', value });
   for (const value of overtime) add(value.workDate.slice(0, 10), { type: 'overtime', value });
+  for (const value of attendance) add(value.workDate.slice(0, 10), { type: 'attendance', value });
   return map;
 }
 
@@ -83,21 +85,23 @@ export function RequestsCalendar({ month, byDay, onSelect }: { month: string; by
         const leaves = entries.flatMap(e => e.type === 'leave' ? [e.value] : []);
         const hasLeave = leaves.length > 0;
         const hasOt = entries.some(e => e.type === 'overtime');
+        const hasAtt = entries.some(e => e.type === 'attendance');
         const groups = new Set(entries.map(e => requestStatusGroup(e.value.status)));
         const dot = PRIORITY.find(g => groups.has(g));
-        const look = hasLeave ? LEAVE : hasOt ? OT : null;
+        const look = hasLeave ? LEAVE : hasOt ? OT : hasAtt ? ATT : null;
         const isToday = cell.key === today;
         const body = <View style={[styles.box, look && { backgroundColor: look.bg, borderColor: look.border }, isToday && styles.today]}>
           <Text style={[styles.dayNum, { color: look ? look.fg : c === 6 ? colors.danger : colors.inkSoft }]}>{cell.day}</Text>
           <View style={styles.markRow}>
             {hasLeave ? <Text style={[styles.tag, { backgroundColor: LEAVE.border }]}>{leaveTag(leaves)}</Text> : null}
             {hasOt ? <Text style={[styles.tag, { backgroundColor: OT.border }]}>OT</Text> : null}
+            {hasAtt ? <Text style={[styles.tag, { backgroundColor: ATT.border }]}>CC</Text> : null}
             {dot ? <View style={[styles.dot, { backgroundColor: REQUEST_STATUS_DOT[dot] }]} /> : <View style={styles.dotSpace} />}
           </View>
         </View>;
         return <View key={c} style={styles.cell}>
           {entries.length
-            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${entries.length} đơn${hasLeave ? `, nghỉ phép ${leaveTag(leaves)}` : ''}${hasOt ? ', tăng ca' : ''}`} onPress={() => onSelect(cell.key)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
+            ? <Pressable accessibilityRole="button" accessibilityLabel={`Ngày ${cell.day}, ${entries.length} đơn${hasLeave ? `, nghỉ phép ${leaveTag(leaves)}` : ''}${hasOt ? ', tăng ca' : ''}${hasAtt ? ', xác nhận công' : ''}`} onPress={() => onSelect(cell.key)} style={({ pressed }) => [styles.fill, pressed && styles.pressed]}>{body}</Pressable>
             : body}
         </View>;
       })}
@@ -106,8 +110,8 @@ export function RequestsCalendar({ month, byDay, onSelect }: { month: string; by
       <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: LEAVE.border }]}>P</Text><Text style={styles.legendText}>Nghỉ cả ngày</Text></View>
       <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: LEAVE.border }]}>½S</Text><Text style={styles.legendText}>Nửa ngày sáng</Text></View>
       <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: LEAVE.border }]}>½C</Text><Text style={styles.legendText}>Nửa ngày chiều</Text></View>
-      <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: LEAVE.border }]}>2h</Text><Text style={styles.legendText}>Nghỉ theo giờ</Text></View>
       <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: OT.border }]}>OT</Text><Text style={styles.legendText}>Tăng ca</Text></View>
+      <View style={styles.legendItem}><Text style={[styles.tag, { backgroundColor: ATT.border }]}>CC</Text><Text style={styles.legendText}>Xác nhận công</Text></View>
       <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: REQUEST_STATUS_DOT.PENDING }]} /><Text style={styles.legendText}>Chờ duyệt</Text></View>
       <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: REQUEST_STATUS_DOT.APPROVED }]} /><Text style={styles.legendText}>Đã duyệt</Text></View>
       <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: REQUEST_STATUS_DOT.REJECTED }]} /><Text style={styles.legendText}>Từ chối</Text></View>

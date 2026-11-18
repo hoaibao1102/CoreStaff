@@ -49,6 +49,15 @@ export class ManagerScopeService {
     return [...new Set([...assignedIds, ...(profileDepartmentId ? [profileDepartmentId] : [])])];
   }
 
+  /** Departments that any active manager currently covers, across the tenant. */
+  async getDepartmentIdsWithActiveManagers(organizationId: string, now = new Date()): Promise<string[]> {
+    const rows = await this.assignments.find({ organizationId, active: true }).lean();
+    return [...new Set(rows
+      .filter(row => (!row.effectiveFrom || new Date(row.effectiveFrom) <= now)
+        && (!row.effectiveTo || new Date(row.effectiveTo) >= now))
+      .map(row => String(row.departmentId)))];
+  }
+
   /** New review authorization deliberately excludes profile-department fallback. */
   async getAuthorizedReviewDepartmentIds(
     organizationId: string,

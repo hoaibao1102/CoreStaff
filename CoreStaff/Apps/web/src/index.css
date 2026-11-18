@@ -56,7 +56,7 @@
   /* Sleek modern scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent) transparent;
   }
   ::-webkit-scrollbar {
     width: 6px;
@@ -66,11 +66,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.25);
+    background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.45);
+    background: color-mix(in oklch, var(--muted-foreground) 65%, transparent);
   }
 }
 

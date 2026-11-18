@@ -100,7 +100,7 @@ export function OverviewScreen({ user, apiBase, onNavigate, realtimeRevision = 0
         <QuickTile icon="calendar-outline" title="Xin nghỉ phép" onPress={() => onNavigate('requests')} />
         <QuickTile icon="time-outline" title="Đăng ký tăng ca" onPress={() => onNavigate('requests')} />
         <QuickTile icon="list-outline" title="Lịch sử công" onPress={() => onNavigate('attendance')} />
-        <QuickTile icon="cash-outline" title="Phiếu lương" onPress={() => onNavigate('payslips')} />
+        <QuickTile icon="cash-outline" title="Công & Lương" onPress={() => onNavigate('payslips')} />
       </>}
     </View>
   </ScrollView>;

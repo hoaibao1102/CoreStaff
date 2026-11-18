@@ -6,7 +6,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { getAttendanceHistory, getMyLeaveRequests, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type LeaveRequest, type PunchLocation, type TodayAttendance } from '../employee-api';
 import { DayDetailSheet } from '../components/DayDetailSheet';
 import { AttendanceCalendar, type LeaveMark } from '../components/AttendanceCalendar';
-import { TimesheetReviewSection } from '../components/TimesheetReviewSection';
 import { leaveShortTag } from '../components/RequestsCalendar';
 import { currentWifi } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, NoticeBanner, ScreenHeader, SectionTitle, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime, shiftTitle, todayKey } from '../components/ui';
@@ -174,7 +173,6 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
       {history ? <View style={styles.summaryRow}><Summary label="Ngày công" value={history.summary.workingDays} /><Summary label="Ngày đi muộn" value={history.summary.lateDays} /><Summary label="Ngày về sớm" value={history.summary.earlyDays ?? 0} /><Summary label="Tăng ca (giờ)" value={history.summary.otMinutes > 0 ? (history.summary.otMinutes / 60).toFixed(1) : history.summary.otDays ?? 0} /></View> : null}
       <AttendanceCalendar month={month} items={history?.items ?? []} leaveMarks={leaveMarks} onSelect={setSelectedDay} />
       {!history?.items.length ? <Text style={styles.emptyText}>Chưa có dữ liệu chấm công trong tháng này.</Text> : null}
-      <TimesheetReviewSection apiBase={apiBase} month={month} refreshKey={realtimeRevision} />
     </>}
     <DayDetailSheet day={selectedDay} policy={history?.workCreditPolicy} apiBase={apiBase} onClose={() => setSelectedDay(null)} />
   </ScrollView>{dialog}</>;

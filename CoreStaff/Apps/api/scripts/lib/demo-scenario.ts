@@ -9,7 +9,8 @@
  * Kỳ công:
  *   - 2026-09: kỳ lịch sử — đã chốt, đã chạy và phát hành lương.
  *   - 2026-10: kỳ demo — còn blocker, chưa xác nhận, chưa chốt.
- *   - 2026-11: kỳ hiện tại — chỉ dữ liệu tới ngày tham chiếu, chưa rà soát.
+ *   - 2026-11: kỳ hiện tại — dữ liệu tới ngày tham chiếu, chưa rà soát; kỳ này
+ *     KHÔNG được giao sẵn, HR tạo trên sân khấu sau khi chốt kỳ 10.
  */
 import { ContractType, Gender, LeaveDurationType, LeaveType, Role } from '../../src/database/schemas/enums';
 
