@@ -426,12 +426,10 @@ export function WorkCreditPolicyScreen({ apiBase }: { apiBase: string | null }) 
             <TableHeader>
               <TableRow>
                 <TableHead>Hiệu lực</TableHead>
-                <TableHead>Nửa ngày</TableHead>
-                <TableHead>Đủ ngày</TableHead>
+                <TableHead>Ngưỡng quy đổi</TableHead>
                 <TableHead>Phép hưởng lương</TableHead>
                 <TableHead>Ngày chưa hoàn tất</TableHead>
                 <TableHead>Tham chiếu</TableHead>
-                <TableHead>Phiên bản</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead />
               </TableRow>
@@ -439,15 +437,33 @@ export function WorkCreditPolicyScreen({ apiBase }: { apiBase: string | null }) 
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row._id}>
-                  <TableCell>{formatEffectiveRange(row.effectiveFrom, row.effectiveTo)}</TableCell>
-                  <TableCell>{row.halfDayMinimumRatio * 100}%</TableCell>
-                  <TableCell>{row.fullDayMinimumRatio * 100}%</TableCell>
-                  <TableCell>
-                    {row.paidLeaveCreditEnabled ? 'Có tính phép hưởng lương' : 'Không tính phép hưởng lương'}
+                  <TableCell className="whitespace-normal">
+                    <div>{formatEffectiveRange(row.effectiveFrom, row.effectiveTo)}</div>
+                    <div className="text-xs text-muted-foreground">v{row.version}</div>
                   </TableCell>
-                  <TableCell>Chặn khi chưa hoàn tất</TableCell>
-                  <TableCell>{row.businessReference || '—'}</TableCell>
-                  <TableCell>v{row.version}</TableCell>
+                  <TableCell className="whitespace-normal">
+                    <div className="text-xs">
+                      Nửa ngày <span className="font-medium tabular-nums">{row.halfDayMinimumRatio * 100}%</span>
+                    </div>
+                    <div className="text-xs">
+                      Đủ ngày <span className="font-medium tabular-nums">{row.fullDayMinimumRatio * 100}%</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-normal">
+                    <span
+                      className={
+                        row.paidLeaveCreditEnabled
+                          ? 'text-xs font-medium text-emerald-700 dark:text-emerald-300'
+                          : 'text-xs text-muted-foreground'
+                      }
+                    >
+                      {row.paidLeaveCreditEnabled ? 'Có' : 'Không'}
+                    </span>
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-xs">Chặn</TableCell>
+                  <TableCell className="max-w-[16rem] whitespace-normal break-words text-xs">
+                    {row.businessReference || '—'}
+                  </TableCell>
                   <TableCell>
                     <PolicyStatusBadge active={row.active} />
                   </TableCell>
