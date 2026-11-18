@@ -128,7 +128,7 @@ const DEVICES: Record<EmployeeCode, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 function printPlan() {
   console.log(`\n─── KẾ HOẠCH DỮ LIỆU DEMO [${ORG_CODE}] — ngày tham chiếu ${REFERENCE_DATE} ───`);
-  console.log(`Kỳ ${HISTORY_PERIOD}: CLOSED + phát hành lương | Kỳ ${ACTIVE_PERIOD}: ${ACTIVE_STATUS}, còn blocker | Kỳ ${CURRENT_PERIOD}: OPEN, dữ liệu tới ${REFERENCE_DATE}`);
+  console.log(`Kỳ ${HISTORY_PERIOD}: CLOSED + phát hành lương | Kỳ ${ACTIVE_PERIOD}: ${ACTIVE_STATUS}, còn blocker | Kỳ ${CURRENT_PERIOD}: HR tạo tay khi demo, dữ liệu tới ${REFERENCE_DATE}`);
   for (const period of [HISTORY_PERIOD, ACTIVE_PERIOD]) {
     console.log(`\n■ ${period}`);
     for (const [key, override] of Object.entries(DAY_OVERRIDES).filter(([k]) => k.startsWith(period)).sort()) {
@@ -680,8 +680,19 @@ async function finalizeStatuses(ctx: Ctx) {
   const periods = ctx.demo.model('TimesheetPeriod');
   const active = ACTIVE_STATUS === 'OPEN' ? TimesheetPeriodStatus.OPEN : TimesheetPeriodStatus.REVIEWING;
   await periods.updateOne({ _id: ctx.periods.get(ACTIVE_PERIOD), status: { $in: ['OPEN', 'REVIEWING'] } }, { $set: { status: active } });
-  // Kỳ hiện tại chỉ dùng để nhận chấm công; chưa đưa vào rà soát.
-  await periods.updateOne({ _id: ctx.periods.get(CURRENT_PERIOD), status: { $in: ['OPEN', 'REVIEWING'] } }, { $set: { status: TimesheetPeriodStatus.OPEN } });
+
+  // Kỳ hiện tại phải tồn tại trong lúc replay (chấm công tháng 11 và OT 01/11
+  // claim kỳ qua claimForWorkDate), nhưng tenant KHÔNG được giao sẵn nó: HR tạo
+  // kỳ 11 ngay trên sân khấu. create() chỉ cho một kỳ active mỗi tổ chức, nên
+  // bước tạo đó phải diễn ra sau khi chốt kỳ 10 — đúng thứ tự kịch bản demo.
+  // Xoá hẳn row (không set active:false) vì unique index (organizationId, period)
+  // vẫn chặn kỳ mới; bỏ periodId để create() tự link lại ngày công có sẵn.
+  const current = ctx.periods.get(CURRENT_PERIOD);
+  await ctx.demo.model('AttendanceDay').updateMany(
+    { organizationId: ctx.orgId, periodId: current },
+    { $unset: { periodId: 1 } },
+  );
+  await periods.deleteOne({ _id: current });
 }
 
 /**
@@ -787,6 +798,21 @@ async function verify() {
     const problems: string[] = [];
     if (org.attendanceOvertimeV2Enabled !== true) problems.push('Organization chưa bật attendanceOvertimeV2Enabled');
 
+    // Seed chỉ giao kỳ 09 (đã chốt) và kỳ 10 (đang rà soát); kỳ 11 do HR tạo
+    // trên sân khấu nên có mặt sau demo cũng hợp lệ — nhưng không kỳ nào khác.
+    const periodKeys: string[] = (await demo.model('TimesheetPeriod')
+      .find({ organizationId: orgId }).select('period').lean() as any[]).map(p => p.period).sort();
+    const allowedPeriods = [HISTORY_PERIOD, ACTIVE_PERIOD, CURRENT_PERIOD].sort();
+    const missing = [HISTORY_PERIOD, ACTIVE_PERIOD].filter(key => !periodKeys.includes(key));
+    const unexpected = periodKeys.filter(key => !allowedPeriods.includes(key));
+    if (missing.length) problems.push(`Thiếu kỳ ${missing.join(', ')}`);
+    if (unexpected.length) problems.push(`Có kỳ ngoài kịch bản: ${unexpected.join(', ')}`);
+    // Ngày công phải thuộc một kỳ; ngày tháng 11 chỉ mồ côi khi kỳ 11 chưa được
+    // tạo (đúng trạng thái sau seed) — ngày còn lại mồ côi là dấu hiệu seed hỏng.
+    const orphanDays = await demo.model('AttendanceDay').countDocuments({
+      organizationId: orgId, periodId: { $exists: false }, workDate: { $lt: `${CURRENT_PERIOD}-01` },
+    });
+    if (orphanDays) problems.push(`${orphanDays} ngày công trước ${CURRENT_PERIOD} không thuộc kỳ nào`);
 
     const enterprisePolicies: any[] = await demo.model('EnterpriseInsurancePolicy').find({ organizationId: orgId }).lean();
     if (!enterprisePolicies.length) problems.push('Thiếu EnterpriseInsurancePolicy');

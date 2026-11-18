@@ -87,7 +87,7 @@ Wi-Fi / GPS / Selfie          Xác nhận công phòng ban     Phát hành phi�
   - Trình bày trực quan: Lương cơ bản, Ngày công chuẩn, Lương Gross, các khoản trích nộp bắt buộc (BHXH 8%, BHYT 1.5%, BHTN 1%), Thuế TNCN lũy tiến từng phần, và số tiền thực lĩnh (Net Salary).
   - Số của `NV-KD-001` kỳ 09: **20/20 công**, gross `22.483.125`, bảo hiểm `1.760.850`, thuế TNCN `248.458`, thực lĩnh **`20.473.817`**.
 
-> **Lưu ý khi trình diễn chấm công trực tiếp:** ngày demo là **02/11**, thuộc kỳ **2026-11** đang `OPEN`. Seed cố ý không có dữ liệu tương lai, và tài khoản `NV-KD-001` được để trống ngày hôm nay để bấm chấm công thật. Nếu mạng/Wi-Fi văn phòng không khớp BSSID lúc demo, dùng phương án **GPS trong bán kính** hoặc **Selfie** — cả hai đều hợp lệ và đều được ghi nhận minh bạch trên timeline.
+> **Lưu ý khi trình diễn chấm công trực tiếp:** ngày demo là **02/11**, thuộc tháng **2026-11**. Seed cố ý **không tạo sẵn kỳ 11** (HR tạo ở bước 3.4) — hệ thống vẫn nhận punch khi chưa có kỳ bao phủ và tự gắn lại ngày công sau khi tạo kỳ. Tài khoản `NV-KD-001` được để trống ngày hôm nay để bấm chấm công thật. Nếu mạng/Wi-Fi văn phòng không khớp BSSID lúc demo, dùng phương án **GPS trong bán kính** hoặc **Selfie** — cả hai đều hợp lệ và đều được ghi nhận minh bạch trên timeline.
 
 ---
 
@@ -154,7 +154,7 @@ npm --prefix CoreStaff/Apps/api run demo:confirm
 
 ---
 
-### PHA 3: QUẢN TRỊ HR CHỐT KỲ CÔNG & TÍNH LƯƠNG TỰ ĐỘNG (5 Phút)
+### PHA 3: QUẢN TRỊ HR CHỐT KỲ CÔNG, TÍNH LƯƠNG & TẠO KỲ MỚI (5 Phút)
 
 > **Mục tiêu**: Minh họa "Flow chính của dự án" — Đóng gói dữ liệu chấm công thành Snapshot bất biến, kích hoạt Engine tính lương chuẩn Luật Lao động & Thuế Việt Nam.
 
@@ -188,6 +188,16 @@ npm --prefix CoreStaff/Apps/api run demo:confirm
 - Nhấn **"Khóa bảng lương"** (`Lock`) → Chuyển sang `LOCKED`.
 - Nhấn **"Phát hành phiếu lương"** (`Release Payslips`) → Chuyển sang **`RELEASED`**.
 - Hệ thống kích hoạt gửi thông báo và mở quyền truy cập phiếu lương cho toàn bộ 8 nhân viên.
+
+#### Bước 3.4: Tạo Kỳ công Tháng 11 ngay trên sân khấu
+- Vẫn ở tài khoản HR, vào **"Kỳ công"** (`/hr/timesheet-periods`) → nhấn **"Tạo kỳ công"**.
+- Nhập: **Tháng/Năm** `2026-11`, **Ngày bắt đầu** `2026-11-01`, **Ngày kết thúc** `2026-11-30` → **"Tạo kỳ công"**.
+- **Điểm nhấn giải thích:**
+  - Chỉ một kỳ được mở tại một thời điểm, nên nút này chỉ bấm được **sau khi chốt kỳ 10** — hệ thống vừa chặn bằng `PERIOD_ALREADY_ACTIVE` nếu bấm sớm.
+  - Tháng 11 đã có dữ liệu chấm công (tới hôm nay) nhưng chưa thuộc kỳ nào; vừa tạo kỳ, các ngày đó **tự động được gắn vào kỳ** — không phải chấm lại, không mất dữ liệu.
+  - Kiểm tra nhật ký tại **"Lịch sử hoạt động"**: sự kiện tạo kỳ do chính HR vừa thao tác.
+- Nếu hội đồng muốn xem tiếp tháng 11: mở kỳ vừa tạo để xem bảng công tới hôm nay, bảng lương tháng 11 để trống đúng nghiệp vụ.
+- Quay lại kỳ **2026-10** đã `CLOSED` để kết luận: kỳ cũ khoá vĩnh viễn, kỳ mới mở kế tiếp.
 
 **Bảng số liệu kỳ 10 để đối chiếu trên màn hình** (lấy từ lần chạy thật, không phải số minh họa):
 
