@@ -16,6 +16,12 @@ describe('origin policy (AUD-C09)', () => {
 		expect(isOriginAllowed('http://app.example.com', prod)).toBe(false);
 	});
 
+	it('allows Vercel deployments automatically in any environment', () => {
+		expect(isOriginAllowed('https://core-staff-cwbrliwl3-baobao-s-projects1.vercel.app', { NODE_ENV: 'production' })).toBe(true);
+		expect(isOriginAllowed('https://corestaff.vercel.app', prod)).toBe(true);
+		expect(isOriginAllowed('https://evil.vercel.app.attacker.com', prod)).toBe(false);
+	});
+
 	it('treats a missing Origin as a native client', () => {
 		expect(isOriginAllowed(undefined, prod)).toBe(true);
 		expect(isOriginAllowed('', prod)).toBe(true);

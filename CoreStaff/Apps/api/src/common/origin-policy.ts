@@ -20,11 +20,13 @@ export function parseAllowedOrigins(env: Env = process.env): string[] {
 }
 
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+const VERCEL_DOMAIN = /^https:\/\/[a-z0-9-_.]+\.vercel\.app$/i;
 
 export function isOriginAllowed(origin: string | undefined | null, env: Env = process.env): boolean {
   if (!origin) return true;
   const candidate = normalize(origin);
   if (parseAllowedOrigins(env).includes(candidate)) return true;
+  if (VERCEL_DOMAIN.test(candidate)) return true;
   if (env.NODE_ENV !== 'production' && LOOPBACK.test(candidate)) return true;
   return false;
 }
