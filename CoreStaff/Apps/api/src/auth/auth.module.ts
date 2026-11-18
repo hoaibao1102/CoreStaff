@@ -9,9 +9,11 @@ import { PasswordResetTokenSchema } from '../database/schemas/password-reset-tok
 import { EmployeeProfileSchema } from '../database/schemas/employee-profile.schema';
 import { OrganizationSchema } from '../database/schemas/organization.schema';
 import { ConsoleResetMailer, RESET_MAILER } from './strategies/reset-mailer';
+import { PlatformAuditModule } from '../platform/platform-audit.module';
 
 @Module({
 	imports: [
+		PlatformAuditModule, // admin sign-in / password events
 		MongooseModule.forFeature([
 			{ name: 'User', schema: UserSchema },
 			{ name: 'UserSession', schema: UserSessionSchema },

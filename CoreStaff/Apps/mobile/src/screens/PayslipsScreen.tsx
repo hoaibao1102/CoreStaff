@@ -5,9 +5,10 @@ import { AppIcon } from '../components/AppIcon';
 import { friendlyEmployeeError, getMyPayslips, markPayslipViewed, type Payslip } from '../employee-api';
 import { colors, radius, spacing } from '../theme';
 
-export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: string; realtimeRevision?: number }) {
+export function PayslipsScreen({ apiBase, realtimeRevision = 0, embedded = false }: { apiBase: string; realtimeRevision?: number; embedded?: boolean }) {
   const [items, setItems] = useState<Payslip[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,11 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
 
   useEffect(() => { void load(); }, [load]);
 
-  const newest = items[0];
+  // Lọc theo tháng (kỳ lương) — danh sách tháng lấy từ chính các phiếu đã phát hành.
+  const months = useMemo(() => [...new Set(items.map(item => item.periodLabel))].sort().reverse(), [items]);
+  const shown = useMemo(() => (monthFilter === 'all' ? items : items.filter(item => item.periodLabel === monthFilter)), [items, monthFilter]);
+  useEffect(() => { if (monthFilter !== 'all' && !months.includes(monthFilter)) setMonthFilter('all'); }, [months, monthFilter]);
+  const newest = shown[0];
   const unread = useMemo(() => items.filter(item => item.status === 'RELEASED').length, [items]);
 
   const open = async (item: Payslip) => {
@@ -39,7 +44,7 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
     contentContainerStyle={styles.content}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
   >
-    <ScreenHeader eyebrow="PHIẾU LƯƠNG" title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />
+    {embedded ? null : <ScreenHeader eyebrow="PHIẾU LƯƠNG" title="Phiếu lương" description="Theo dõi thu nhập và các khoản khấu trừ của bạn." />}
     {error ? <ErrorBanner message={error} /> : null}
     {loading ? <LoadingBlock /> : <>
       {newest ? <Card dark style={styles.summaryCard}>
@@ -49,8 +54,9 @@ export function PayslipsScreen({ apiBase, realtimeRevision = 0 }: { apiBase: str
         <Text style={styles.summaryMeta}>{newest.releasedAt ? `Phát hành ${formatDate(newest.releasedAt)}` : 'Chưa phát hành'}</Text>
       </Card> : null}
 
-      <View style={styles.sectionRow}><SectionTitle>Lịch sử phiếu lương</SectionTitle><Text style={styles.count}>{items.length} kỳ</Text></View>
-      {!items.length ? <EmptyState icon="wallet-outline" title="Chưa có phiếu lương" description="Phiếu lương sẽ xuất hiện khi HR phát hành kỳ lương." /> : items.map(item => {
+      {months.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} accessibilityRole="tablist">{['all', ...months].map(value => { const active = monthFilter === value; return <Pressable key={value} accessibilityRole="tab" accessibilityLabel={value === 'all' ? 'Tất cả các tháng' : `Tháng ${formatPeriod(value)}`} accessibilityState={{ selected: active }} onPress={() => setMonthFilter(value)} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{value === 'all' ? 'Tất cả' : formatPeriod(value)}</Text></Pressable>; })}</ScrollView> : null}
+      <View style={styles.sectionRow}><SectionTitle>Lịch sử phiếu lương</SectionTitle><Text style={styles.count}>{shown.length} kỳ</Text></View>
+      {!shown.length ? <EmptyState icon="wallet-outline" title={items.length ? 'Không có phiếu lương trong tháng này' : 'Chưa có phiếu lương'} description={items.length ? 'Chọn tháng khác hoặc Tất cả để xem các kỳ còn lại.' : 'Phiếu lương sẽ xuất hiện khi HR phát hành kỳ lương.'} /> : shown.map(item => {
         const isExpanded = expanded === item._id;
         return <Pressable
           key={item._id}
@@ -186,4 +192,5 @@ const styles = StyleSheet.create({
   group: { gap: spacing.sm },
   subRow: { paddingLeft: 12 }, subLabel: { flex: 1, color: colors.muted, fontSize: 11, lineHeight: 15 }, subValue: { color: colors.muted, fontSize: 11, fontWeight: '600' },
   pressed: { opacity: 0.74 },
+  chipRow: { gap: spacing.xs, paddingVertical: 2 }, chip: { minHeight: 38, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }, chipActive: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.inkSoft, fontSize: 12, fontWeight: '700' }, chipTextActive: { color: '#fff' },
 });

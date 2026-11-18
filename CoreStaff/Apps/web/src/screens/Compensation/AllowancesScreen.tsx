@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getOrganizationAllowances, type OrganizationAllowance } from '@/services/compensation.service';
 import { hrErrorMessage } from '@/services/hrService';
 import { AllowanceCreateDialog, AllowanceEditDialog } from './AllowanceDialogs';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -18,9 +19,7 @@ function formatVnd(val?: number): string {
 
 function formatDate(iso?: string | null): string {
   if (!iso) return 'Vô hạn';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('vi-VN');
+  return formatVN(iso);
 }
 
 export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: string | null; canManage?: boolean }) {
@@ -60,7 +59,7 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Danh mục phụ cấp tổ chức</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Quản lý các khoản phụ cấp độc lập hoặc từ danh mục chuẩn (TASK-033).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Quản lý các khoản phụ cấp độc lập hoặc từ danh mục chuẩn.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>
@@ -126,7 +125,7 @@ export function AllowancesScreen({ apiBase, canManage = true }: { apiBase: strin
                   <TableCell>
                     <div className="flex flex-wrap gap-1 text-[11px]">
                       <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">Chịu thuế TNCN</Badge>
-                      {row.insuranceBased && <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Tính BHXH</Badge>}
+                      {row.insuranceBased && <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Tính BH</Badge>}
                       {row.prorated ? (
                         <Badge variant="secondary" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">Theo ngày công</Badge>
                       ) : (

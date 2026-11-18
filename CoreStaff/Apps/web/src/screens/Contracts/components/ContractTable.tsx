@@ -6,6 +6,7 @@ import {
   CONTRACT_STATUS_BADGE,
   CONTRACT_TYPE_LABELS,
 } from '../../../lib/types';
+import { formatVN } from '@/lib/datetime';
 
 interface ContractTableProps {
   rows: any[];
@@ -79,8 +80,8 @@ export function ContractTable({ rows, total, current, pages, onNavigate, onViewD
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       {(CONTRACT_TYPE_LABELS as Record<string, string>)[row.contractType] ?? row.contractType}
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">{new Date(row.effectiveDate).toLocaleDateString('vi-VN')}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell">{row.expiryDate ? new Date(row.expiryDate).toLocaleDateString('vi-VN') : '—'}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell">{formatVN(row.effectiveDate)}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell">{row.expiryDate ? formatVN(row.expiryDate) : '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${(CONTRACT_STATUS_BADGE as Record<string, string>)[row.status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {(CONTRACT_STATUS_LABELS as Record<string, string>)[row.status]}

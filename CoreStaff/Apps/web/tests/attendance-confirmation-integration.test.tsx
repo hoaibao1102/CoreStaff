@@ -97,7 +97,11 @@ it('keeps old deep-link date but replaces manual time fields only after server c
   await act(async()=>root.render(<LeaveOvertimeScreen/>));
   const dialog=document.querySelector('[role=dialog]')!;
   expect(dialog.querySelector<HTMLInputElement>('input[type=date]')?.value).toBe('2026-09-29');
-  expect(dialog.querySelector('input[type=time]')).toBeNull();
+  // QC 1.2 — after the server cutover the form exposes the proposed times as
+  // editable inputs instead of the old free-form manual entry.
+  const times=Array.from(dialog.querySelectorAll<HTMLInputElement>('input[type=time]'));
+  expect(times.map(i=>i.getAttribute('aria-label'))).toEqual(['Giờ vào thực tế','Giờ ra thực tế']);
+  expect(times.every(i=>i.disabled||i.value===''||/^\d{2}:\d{2}$/.test(i.value))).toBe(true);
   expect(dialog.textContent).toContain('không xác nhận thời gian OT');
  } finally {await act(async()=>root.unmount());host.remove();}
 });

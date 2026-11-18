@@ -16,7 +16,7 @@ function buildService(assignments: Row[], departments: Row[] = [], employees: Ro
     find: jest.fn((filter: Row) => queryResult(assignments.filter(row =>
       String(row.organizationId) === String(filter.organizationId)
       && String(row.managerUserId) === String(filter.managerUserId)
-      && row.active === filter.active,
+      && (filter.active === undefined || row.active === filter.active),
     ))),
   };
   const departmentModel = {
@@ -106,6 +106,38 @@ describe('ManagerScopeService', () => {
       defaultDepartmentId: 'd1',
       managedDepartments: [{ id: 'd1', code: 'ENG', name: 'Engineering' }],
     });
+  });
+
+  // AUD-H02: the profile-department fallback is for managers that never had an
+  // assignment. Ending or deactivating the last assignment must revoke authority.
+  it('does not fall back to the profile department once the last assignment is deactivated', async () => {
+    const service = buildService([
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'd1', active: false, effectiveFrom: '2026-01-01' },
+    ], [{ _id: 'd1', organizationId: 'org-1', code: 'ENG', name: 'Engineering', active: true }], [],
+    { userId: 'manager-1', departmentId: 'd1' });
+    await expect(service.getManagedDepartmentIds('org-1', 'manager-1', now)).resolves.toEqual([]);
+    await expect(service.requireDepartment('org-1', 'manager-1', 'd1', now)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('does not fall back to the profile department once the only assignment has expired', async () => {
+    const service = buildService([
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'd1', active: true, effectiveFrom: '2025-01-01', effectiveTo: '2025-12-31' },
+    ], [], [], { userId: 'manager-1', departmentId: 'd1' });
+    await expect(service.getManagedDepartmentIds('org-1', 'manager-1', now)).resolves.toEqual([]);
+  });
+
+  it('with assignments, authority is exactly the effective assignments (no extra profile department)', async () => {
+    const service = buildService([
+      { organizationId: 'org-1', managerUserId: 'manager-1', departmentId: 'assigned', active: true, effectiveFrom: '2026-01-01' },
+    ], [], [], { userId: 'manager-1', departmentId: 'profile-only' });
+    await expect(service.getManagedDepartmentIds('org-1', 'manager-1', now)).resolves.toEqual(['assigned']);
+  });
+
+  it('assignment history of another tenant does not suppress the legacy fallback', async () => {
+    const service = buildService([
+      { organizationId: 'org-2', managerUserId: 'manager-1', departmentId: 'x', active: false },
+    ], [], [], { userId: 'manager-1', departmentId: 'd1' });
+    await expect(service.getManagedDepartmentIds('org-1', 'manager-1', now)).resolves.toEqual(['d1']);
   });
 
   it('uses only effective ManagerAssignment rows for new review authorization', async () => {

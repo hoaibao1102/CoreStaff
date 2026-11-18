@@ -44,13 +44,13 @@ export async function getAttendanceConfirmationPreview(base: string, date: strin
   const raw = await hrRequest<ConfirmationWire>(base, `/api/requests/attendance-confirmation-preview?date=${encodeURIComponent(date)}`, { method: 'GET' });
   return normalizeConfirmationPreview(raw);
 }
-export const createAttendanceConfirmation = (base: string, payload: { workDate: string; reason: string; previewHash: string; customCheckOutTime?: string }, key: string) => hrRequest<ManagerRequest>(base, '/api/requests', {
-  method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ requestKind: 'ATTENDANCE_CONFIRMATION', type: 'ATTENDANCE', workDate: payload.workDate, reason: payload.reason, previewHash: payload.previewHash, customCheckOutTime: payload.customCheckOutTime }),
+export const createAttendanceConfirmation = (base: string, payload: { workDate: string; reason: string; previewHash: string; customCheckInTime?: string; customCheckOutTime?: string }, key: string) => hrRequest<ManagerRequest>(base, '/api/requests', {
+  method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ requestKind: 'ATTENDANCE_CONFIRMATION', type: 'ATTENDANCE', workDate: payload.workDate, reason: payload.reason, previewHash: payload.previewHash, customCheckInTime: payload.customCheckInTime, customCheckOutTime: payload.customCheckOutTime }),
 });
 export interface ManagedDepartment { id: string; code: string; name: string }
 export interface ManagerContext { managerUserId: string; managedDepartments: ManagedDepartment[]; defaultDepartmentId: string | null; capabilities: string[] }
 export type RequestType = 'ATTENDANCE' | 'OVERTIME';
-export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CLARIFICATION_REQUESTED';
+export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CLARIFICATION_REQUESTED' | 'CANCELLED';
 
 export interface ManagerRequest {
   requestKind?: 'ATTENDANCE_CONFIRMATION';
@@ -164,7 +164,7 @@ export function managerRequestKind(request: Pick<ManagerRequest, 'type' | 'reque
   return request.evidenceId || request.metadata?.actionType ? 'SELFIE' : 'MANUAL';
 }
 export function canApproveConfirmation(request: ManagerRequest) {
-  return request.canApprove === true && request.contextValidity?.valid === true && request.period?.canMutate === true;
+  return request.canApprove === true && request.contextValidity?.valid === true && request.period?.canMutate !== false;
 }
 export const managerRequestLabel = (request: ManagerRequest) => ({
   OVERTIME: 'Làm thêm giờ (OT)',
@@ -188,8 +188,8 @@ export async function getManagerRequestDetail(base: string, id: string): Promise
   return { ...raw, confirmation, period: raw.period ?? confirmation?.period };
 }
 export const decideManagerRequest=(base:string,id:string,action:'approve'|'reject'|'request-clarification',payload:{expectedVersion:number;reason?:string;approvedStart?:string;approvedEnd?:string;operationId?:string},requestKind?:'ATTENDANCE_CONFIRMATION')=>hrRequest<ManagerRequest>(base,`/api/manager/approvals/${encodeURIComponent(id)}/${action}`,{method:'POST',body:JSON.stringify(requestKind === 'ATTENDANCE_CONFIRMATION' ? {expectedVersion:payload.expectedVersion,reason:payload.reason,operationId:payload.operationId} : payload)});
-export interface ManagerAssignment{_id:string;managerUserId:string;departmentId:string;effectiveFrom:string;effectiveTo?:string;active:boolean}
+export interface ManagerAssignment{_id:string;managerUserId:string;departmentId:string;effectiveFrom:string;effectiveTo?:string;active:boolean;managerName?:string|null;departmentName?:string|null}
 export const getManagerAssignments=(base:string)=>hrRequest<ManagerAssignment[]>(base,'/api/hr/manager-assignments',{method:'GET'});
-export const getManagerAssignmentCandidates=(base:string)=>hrRequest<{id:string;fullName:string}[]>(base,'/api/hr/manager-assignment-candidates',{method:'GET'});
+export const getManagerAssignmentCandidates=(base:string,departmentId?:string)=>hrRequest<{id:string;fullName:string}[]>(base,`/api/hr/manager-assignment-candidates${departmentId?`?departmentId=${encodeURIComponent(departmentId)}`:''}`,{method:'GET'});
 export const createManagerAssignment=(base:string,p:{managerUserId:string;departmentId:string;effectiveFrom:string;effectiveTo?:string})=>hrRequest<ManagerAssignment>(base,'/api/hr/manager-assignments',{method:'POST',body:JSON.stringify(p)});
 export const setManagerAssignmentActive=(base:string,id:string,active:boolean)=>hrRequest<ManagerAssignment>(base,`/api/hr/manager-assignments/${encodeURIComponent(id)}/${active?'activate':'deactivate'}`,{method:'PATCH'});

@@ -30,6 +30,7 @@ import {
 } from '../../services/platformService';
 import { OrganizationCreateDialog } from '../PlatformOrganizations/OrganizationCreateDialog';
 import { roleLabel, statusPill } from '../../lib/labels';
+import { formatWeekdayDateVN } from '@/lib/datetime';
 
 /* ───────── Metric Card Component ───────── */
 
@@ -124,12 +125,7 @@ export function SysAdminOverviewScreen({
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const dateStr = useMemo(() => {
-    return new Intl.DateTimeFormat('vi-VN', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date());
+    return formatWeekdayDateVN(new Date());
   }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {

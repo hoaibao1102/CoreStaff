@@ -3,8 +3,36 @@ import {Transform} from 'class-transformer';
 import {IsDateString,IsIn,IsInt,IsOptional,IsString,Length,Min,Validate,ValidatorConstraint,ValidatorConstraintInterface} from 'class-validator';
 @ValidatorConstraint({name:'confirmationVariant',async:false})
 class ConfirmationVariant implements ValidatorConstraintInterface {
- validate(_value:unknown,args:any){const d=args.object;if(d.requestKind!=='ATTENDANCE_CONFIRMATION')return true;return d.type==='ATTENDANCE'&&/^\d{4}-\d{2}-\d{2}$/.test(d.workDate)&&typeof d.previewHash==='string'&&/^[a-f0-9]{64}$/.test(d.previewHash)&&['requestedStart','requestedEnd','adjustmentType','workDescription','retroactiveReason'].every(k=>d[k]===undefined);}
- defaultMessage(){return 'ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID';}
+ private failureDetail = '';
+ validate(_value:unknown,args:any){
+   const d=args.object;
+   if(d.requestKind!=='ATTENDANCE_CONFIRMATION')return true;
+   if (d.type !== 'ATTENDANCE') {
+     this.failureDetail = 'Loại yêu cầu (type) phải là ATTENDANCE.';
+     return false;
+   }
+   if (!d.workDate || !/^\d{4}-\d{2}-\d{2}$/.test(d.workDate)) {
+     this.failureDetail = 'Ngày làm việc không hợp lệ (định dạng YYYY-MM-DD).';
+     return false;
+   }
+   if (typeof d.previewHash !== 'string' || !d.previewHash) {
+     this.failureDetail = 'Thiếu mã xác thực xem trước (previewHash). Vui lòng bấm "Tải lại xem trước".';
+     return false;
+   }
+   if (!/^[a-f0-9]{64}$/.test(d.previewHash)) {
+     this.failureDetail = 'Mã xác thực xem trước (previewHash) không hợp lệ (yêu cầu 64 ký tự). Vui lòng bấm "Tải lại xem trước".';
+     return false;
+   }
+   const forbidden = ['requestedStart','requestedEnd','adjustmentType','workDescription','retroactiveReason'].filter(k=>d[k]!==undefined);
+   if (forbidden.length) {
+     this.failureDetail = `Chứa các trường không được phép: ${forbidden.join(', ')}`;
+     return false;
+   }
+   return true;
+ }
+ defaultMessage(){
+   return this.failureDetail ? `ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: ${this.failureDetail}` : 'ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID';
+ }
 }
 export class CreateManagerRequestDto{
  @ApiProperty({enum:['ATTENDANCE','OVERTIME']}) @IsIn(['ATTENDANCE','OVERTIME']) @Validate(ConfirmationVariant) type:'ATTENDANCE'|'OVERTIME';
@@ -13,6 +41,7 @@ export class CreateManagerRequestDto{
  @IsOptional() @IsIn(['ATTENDANCE_CONFIRMATION']) requestKind?:'ATTENDANCE_CONFIRMATION';
  @IsOptional() @IsString() @Length(64,64) previewHash?:string;
  @IsOptional() @IsDateString() customCheckOutTime?:string;
+ @IsOptional() @IsDateString() customCheckInTime?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedStart?:string;
  @ApiProperty({required:false}) @IsOptional() @IsDateString() requestedEnd?:string;
  @ApiProperty({required:false,enum:['CHECK_IN','CHECK_OUT']}) @IsOptional() @IsIn(['CHECK_IN','CHECK_OUT']) adjustmentType?:'CHECK_IN'|'CHECK_OUT';

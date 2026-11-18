@@ -96,11 +96,11 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     return null;
   };
 
-  // Validate not in past (only for startDate)
+  // Reject only a period that has already fully ended (current month is allowed)
   const validateNotInPast = (dateStr: string): string | null => {
     if (!dateStr) return null;
     if (isDateInPast(dateStr)) {
-      return 'Ngày bắt đầu không được nằm trong quá khứ.';
+      return 'Kỳ công đã kết thúc hoàn toàn trong quá khứ, không thể tạo.';
     }
     return null;
   };
@@ -128,10 +128,8 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     // Clear server error when user changes inputs
     setServerError(null);
 
-    // Validate startDate for past date immediately
-    if (field === 'startDate') {
-      setPastError(validateNotInPast(value));
-    }
+    // Re-check whether the period has already fully ended
+    setPastError(validateNotInPast(field === 'endDate' ? value : endDate));
 
     // Validate day range and overlap when both dates are available
     if (value && (field === 'endDate' || startDate)) {
@@ -177,7 +175,7 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     // Run all validations using the dedicated functions
     const periodFormatErr = validatePeriodFormat(period);
     const dayRangeErr = validateDayRange(startDate, endDate);
-    const pastErr = validateNotInPast(startDate);
+    const pastErr = validateNotInPast(endDate);
     const overlapErr = validateNoOverlap(startDate, endDate);
 
     // Set each error to its own state — never overlap

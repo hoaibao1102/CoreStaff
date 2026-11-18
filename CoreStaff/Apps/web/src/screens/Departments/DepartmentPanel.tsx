@@ -15,6 +15,7 @@ import { PositionEditDialog } from './positions/PositionEditDialog';
 import { PositionActivateDialog } from './positions/PositionActivateDialog';
 import { PositionDeactivateDialog } from './positions/PositionDeactivateDialog';
 import { toast } from '@/components/toast';
+import { formatInstantDateTimeVN } from '@/lib/datetime';
 
 interface DepartmentPanelProps {
   apiBase: string;
@@ -27,7 +28,7 @@ interface DepartmentPanelProps {
 
 function formatDate(value?: string) {
   if (!value || Number.isNaN(Date.parse(value))) return 'Chưa có thông tin';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
+  return formatInstantDateTimeVN(value);
 }
 
 export function DepartmentPanel({ apiBase, organizationId, canManage, departmentId, onClose, onSaved }: DepartmentPanelProps) {

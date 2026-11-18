@@ -408,6 +408,16 @@ async function main() {
 
   // ── Employee assignments ─────────────────────────────────────────────────
   for (const emp of employees) {
+    // HR can only assign — and later edit — employees who are currently working
+    // (PROBATION / ACTIVE / ON_LEAVE). A user without such a profile would leave an
+    // assignment nobody can open in the UI, so skip it and say why.
+    if (APPLY) {
+      const profile: any = await EmployeeProfile.findOne({ organizationId, userId: userIds.get(emp.employeeCode) }).lean();
+      if (!profile || !['PROBATION', 'ACTIVE', 'ON_LEAVE'].includes(profile.employmentStatus)) {
+        console.log(`  ! SKIP EmployeeAssignment ${emp.employeeCode}: ${profile ? `trạng thái ${profile.employmentStatus} không còn làm việc` : 'chưa có hồ sơ nhân viên'}`);
+        continue;
+      }
+    }
     await insertIfMissing(
       Assignment,
       { organizationId, userId: userIds.get(emp.employeeCode) },
@@ -873,6 +883,7 @@ async function main() {
       insuranceService,
       pitService,
       payslipService,
+      TimesheetSummary as any,
     );
 
     const run = await payrollRunService.create({
@@ -882,9 +893,9 @@ async function main() {
       userId: payrollUserId,
     });
     const runId = String(run._id);
-    const calculated = await payrollRunService.calculate(runId, payrollUserId);
-    await payrollRunService.lock(runId, payrollUserId);
-    await payslipService.releaseForPayrollRun(runId, payrollUserId);
+    const calculated = await payrollRunService.calculate(String(organizationId), runId, payrollUserId);
+    await payrollRunService.lock(String(organizationId), runId, payrollUserId);
+    await payslipService.releaseForPayrollRun(String(organizationId), runId, payrollUserId);
 
     mark('TimesheetSummary', 'created');
     mark('PayrollInputSnapshot', 'created');

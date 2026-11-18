@@ -47,6 +47,26 @@ describe('StorageService', () => {
     void expect(s.upload('k', Buffer.from('x'), 'text/plain')).rejects.toThrow(BadRequestException);
   });
 
+  describe('credential resolution (AUD-H14)', () => {
+    const keys = { S3_ACCESS_KEY_ID: undefined, S3_SECRET_ACCESS_KEY: undefined, AWS_ACCESS_KEY_ID: undefined, AWS_SECRET_ACCESS_KEY: undefined };
+    afterEach(() => setEnv(keys));
+
+    it('is configured with bucket only, letting the provider chain (IAM role) supply credentials', () => {
+      setEnv(keys);
+      expect(new StorageService().isConfigured()).toBe(true);
+    });
+
+    it('is configured with a full explicit key pair', () => {
+      setEnv({ ...keys, S3_ACCESS_KEY_ID: 'id', S3_SECRET_ACCESS_KEY: 'secret' });
+      expect(new StorageService().isConfigured()).toBe(true);
+    });
+
+    it('rejects a half-specified key pair', () => {
+      setEnv({ ...keys, S3_ACCESS_KEY_ID: 'id' });
+      expect(new StorageService().isConfigured()).toBe(false);
+    });
+  });
+
   it('uploads with the exact bucket/key/body/content-type', async () => {
     const { s3, calls } = mockS3();
     const s = new StorageService(s3);

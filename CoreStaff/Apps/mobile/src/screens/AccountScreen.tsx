@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { AuthUser } from '../auth';
 import { getMyProfile, type EmployeeProfile } from '../employee-api';
 import { AppButton, ErrorBanner, ScreenHeader, formatDate, initialsOf } from '../components/ui';
 import { AppIcon } from '../components/AppIcon';
 import { colors, radius } from '../theme';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 
 interface AccountScreenProps {
   user: AuthUser;
@@ -37,9 +38,10 @@ export function AccountScreen({ user, apiBase, onOpenPayslips, onChangePassword,
       ['Số điện thoại', profile.phone || ''],
     ] as Array<[string, string]>) if (row[1]) rows.push(row);
   }
-  const confirmLogout = () => Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng CoreStaff?', [{ text: 'Hủy', style: 'cancel' }, { text: 'Đăng xuất', style: 'destructive', onPress: onLogout }]);
+  const { confirm, dialog } = useConfirmDialog();
+  const confirmLogout = () => confirm({ title: 'Đăng xuất', message: 'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng CoreStaff?', confirmLabel: 'Đăng xuất', tone: 'danger', icon: 'log-out-outline', onConfirm: onLogout });
 
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+  return <><ScrollView style={styles.screen} contentContainerStyle={styles.content}>
     <ScreenHeader eyebrow="TÀI KHOẢN" title="Hồ sơ cá nhân" description="Quản lý thông tin và bảo mật tài khoản." />
     {logoutError ? <ErrorBanner message={logoutError} /> : null}
     <View style={styles.hero}>
@@ -54,7 +56,7 @@ export function AccountScreen({ user, apiBase, onOpenPayslips, onChangePassword,
     <Pressable accessibilityRole="button" onPress={onChangePassword} style={({ pressed }) => [styles.menu, pressed && styles.pressed]}><View><Text style={styles.menuTitle}>Đổi mật khẩu</Text><Text style={styles.menuDesc}>Cập nhật thông tin bảo mật</Text></View><AppIcon name="chevron-forward" size={20} color={colors.faint} /></Pressable>
     <AppButton label="Đăng xuất" variant="danger" loading={logoutBusy} onPress={confirmLogout} />
     <Text style={styles.version}>CoreStaff Mobile · Phiên bản 0.1.0</Text>
-  </ScrollView>;
+  </ScrollView>{dialog}</>;
 }
 
 const styles = StyleSheet.create({

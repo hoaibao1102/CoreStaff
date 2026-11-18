@@ -109,6 +109,7 @@ export interface DayAttendance {
   earlyMinutes?: number;
   attendanceRequirements?: {
     durationTypes:string[];
+    leaveTypes?:string[];
     approvedLeaveIntervals:Array<{from:string;to:string}>;
     requiredWorkingIntervals:Array<{from:string;to:string}>;
     approvedLeaveMinutes:number;

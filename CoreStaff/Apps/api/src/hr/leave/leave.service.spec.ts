@@ -28,7 +28,7 @@ function build(initial: Row, managedDepartments = ['department-1']) {
   };
   const connection = { startSession: jest.fn(async () => session) };
   const events = { notifyLeaveChanged: jest.fn() };
-  const periodVersion = { bumpForWorkDates: jest.fn(async () => 1) };
+  const periodVersion = { claimForWorkDates: jest.fn(async () => 1) };
   const service = new LeaveService(
     requests as any, {} as any, actions as any, {} as any, {} as any, {} as any, {} as any,
     connection as any, scope as any, periodVersion as any, {} as any, events as any,
@@ -119,13 +119,13 @@ describe('leave projection invalidation', () => {
   it('bumps once when manager approval changes the projected leave facts', async () => {
     const ctx = build(pending({ startDate: '2026-10-06', endDate: '2026-10-07' }));
     await ctx.service.managerDecision('org-1', 'manager-1', 'leave-1', true);
-    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledTimes(1);
-    expect(ctx.periodVersion.bumpForWorkDates).toHaveBeenCalledWith('org-1', ['2026-10-06', '2026-10-07'], ctx.session);
+    expect(ctx.periodVersion.claimForWorkDates).toHaveBeenCalledTimes(1);
+    expect(ctx.periodVersion.claimForWorkDates).toHaveBeenCalledWith('org-1', ['2026-10-06', '2026-10-07'], ctx.session);
   });
 
   it('fails closed when manager approval invalidation fails', async () => {
     const ctx = build(pending({ startDate: '2026-10-06', endDate: '2026-10-06' }));
-    ctx.periodVersion.bumpForWorkDates.mockRejectedValueOnce(new Error('version unavailable'));
+    ctx.periodVersion.claimForWorkDates.mockRejectedValueOnce(new Error('version unavailable'));
     await expect(ctx.service.managerDecision('org-1', 'manager-1', 'leave-1', true)).rejects.toThrow('version unavailable');
     expect(ctx.events.notifyLeaveChanged).not.toHaveBeenCalled();
   });

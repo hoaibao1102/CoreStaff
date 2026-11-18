@@ -13,7 +13,7 @@ import { ChangePasswordScreen, ForgotScreen, LoginScreen, Logo, ResetScreen } fr
 import { OverviewScreen } from './src/screens/OverviewScreen';
 import { AttendanceScreen } from './src/screens/AttendanceScreen';
 import { RequestsScreen } from './src/screens/RequestsScreen';
-import { PayslipsScreen } from './src/screens/PayslipsScreen';
+import { CompensationScreen } from './src/screens/CompensationScreen';
 import { AccountScreen } from './src/screens/AccountScreen';
 import { ManagerApprovalsScreen } from './src/screens/ManagerApprovalsScreen';
 import { ManagerTeamScreen } from './src/screens/ManagerTeamScreen';
@@ -149,7 +149,7 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
     <View style={styles.flex}>
       {showPayslips ? <View style={styles.flex}>
         <Pressable accessibilityRole="button" accessibilityLabel="Quay lại tài khoản" onPress={() => setShowPayslips(false)} style={({ pressed }) => [styles.back, pressed && styles.backPressed]}><AppIcon name="chevron-back" size={20} color={colors.primary} /><Text style={styles.backText}>Tài khoản</Text></Pressable>
-        <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />
+        <CompensationScreen apiBase={apiBase} realtimeRevision={realtimeRevision} initialTab="payslip" />
       </View> : <>
         {isHr && activeTab === 'overview' && <HrOverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} />}
         {isHr && activeTab === 'employees' && <HrEmployeesScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
@@ -158,7 +158,7 @@ function EmployeeHome({ user, apiBase, onChangePassword, onLogout }: { user: Aut
         {!isHr && activeTab === 'overview' && <OverviewScreen user={user} apiBase={apiBase} onNavigate={navigate} realtimeRevision={realtimeRevision} pendingApprovals={isManager ? pendingApprovals : undefined} />}
         {!isHr && activeTab === 'attendance' && <AttendanceScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
         {!isHr && activeTab === 'requests' && !isManager && <RequestsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
-        {!isHr && activeTab === 'payslips' && !isManager && <PayslipsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
+        {!isHr && activeTab === 'payslips' && !isManager && <CompensationScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
         {activeTab === 'approvals' && isManager && <ManagerApprovalsScreen apiBase={apiBase} realtimeRevision={realtimeRevision} onCountChange={setPendingApprovals} />}
         {activeTab === 'team' && isManager && <ManagerTeamScreen apiBase={apiBase} realtimeRevision={realtimeRevision} />}
         {activeTab === 'account' && <AccountScreen user={user} apiBase={apiBase} onOpenPayslips={() => navigate('payslips')} onChangePassword={onChangePassword} onLogout={() => void signOut()} logoutBusy={busy} logoutError={error} realtimeRevision={realtimeRevision} />}

@@ -5,10 +5,11 @@ import { PayrollRunService } from './payroll-run.service';
 describe('PayrollRunService.recalculate', () => {
   const runId = '507f1f77bcf86cd799439011';
   const userId = '507f1f77bcf86cd799439012';
+  const orgId = '507f1f77bcf86cd799439013';
 
   function createService(status: PayrollRunStatus) {
     const payrollRunModel = {
-      findById: jest.fn().mockReturnValue({
+      findOne: jest.fn().mockReturnValue({
         lean: jest.fn().mockResolvedValue({
           _id: runId,
           status,
@@ -42,7 +43,7 @@ describe('PayrollRunService.recalculate', () => {
   it('deletes generated payslips, resets the calculated run, and calculates it again', async () => {
     const { service, payrollRunModel, payslipService } = createService(PayrollRunStatus.CALCULATED);
 
-    const result = await service.recalculate(runId, userId);
+    const result = await service.recalculate(orgId, runId, userId);
 
     expect(payslipService.deleteGeneratedForRecalculation).toHaveBeenCalledWith(runId);
     expect(payrollRunModel.findOneAndUpdate).toHaveBeenCalledWith(
@@ -59,7 +60,7 @@ describe('PayrollRunService.recalculate', () => {
       }),
       { new: true },
     );
-    expect(service.calculate).toHaveBeenCalledWith(runId, userId);
+    expect(service.calculate).toHaveBeenCalledWith(orgId, runId, userId);
     expect(result.employeesProcessed).toBe(6);
   });
 
@@ -68,7 +69,7 @@ describe('PayrollRunService.recalculate', () => {
     async (status) => {
       const { service, payslipService } = createService(status);
 
-      await expect(service.recalculate(runId, userId)).rejects.toEqual(
+      await expect(service.recalculate(orgId, runId, userId)).rejects.toEqual(
         new BadRequestException('CANNOT_RECALCULATE_NON_CALCULATED'),
       );
       expect(payslipService.deleteGeneratedForRecalculation).not.toHaveBeenCalled();

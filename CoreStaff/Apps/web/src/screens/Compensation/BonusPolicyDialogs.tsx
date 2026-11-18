@@ -151,9 +151,9 @@ export function BonusPolicyCreateDialog({
       prev.map((t, i) =>
         i === tierIndex
           ? {
-              ...t,
-              conditions: t.conditions.map((c, ci) => (ci === condIndex ? { ...c, [field]: field === 'value' ? Number(val) || 0 : val } : c)),
-            }
+            ...t,
+            conditions: t.conditions.map((c, ci) => (ci === condIndex ? { ...c, [field]: field === 'value' ? Number(val) || 0 : val } : c)),
+          }
           : t,
       ),
     );
@@ -219,7 +219,7 @@ export function BonusPolicyCreateDialog({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <DialogTitle>Tạo chính sách thưởng chuyên cần</DialogTitle>
-          <DialogDescription className="mt-1">Cấu hình điều kiện và mức thưởng cho chuyên cần theo phiên bản (TASK-034).</DialogDescription>
+          <DialogDescription className="mt-1">Cấu hình điều kiện và mức thưởng cho chuyên cần theo phiên bản.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -297,11 +297,10 @@ export function BonusPolicyCreateDialog({
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
-                    scope === 'ALL'
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${scope === 'ALL'
                       ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary'
                       : 'border-border bg-card hover:bg-muted/50'
-                  }`}
+                    }`}
                   onClick={() => setScope('ALL')}
                   disabled={submitting}
                 >
@@ -314,11 +313,10 @@ export function BonusPolicyCreateDialog({
 
                 <button
                   type="button"
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
-                    scope === 'DEPARTMENT'
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${scope === 'DEPARTMENT'
                       ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary'
                       : 'border-border bg-card hover:bg-muted/50'
-                  }`}
+                    }`}
                   onClick={() => setScope('DEPARTMENT')}
                   disabled={submitting}
                 >
@@ -367,11 +365,10 @@ export function BonusPolicyCreateDialog({
                         return (
                           <label
                             key={dept._id}
-                            className={`flex items-center gap-2 p-2 rounded-md border text-xs cursor-pointer select-none transition-colors ${
-                              isChecked
+                            className={`flex items-center gap-2 p-2 rounded-md border text-xs cursor-pointer select-none transition-colors ${isChecked
                                 ? 'border-primary bg-primary/10 font-medium text-foreground'
                                 : 'border-border bg-card text-muted-foreground hover:bg-muted/40'
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -429,63 +426,63 @@ export function BonusPolicyCreateDialog({
                     </div>
 
                     <div className="space-y-1.5 pt-1">
-                    <span className="text-[11px] text-muted-foreground font-medium">Điều kiện (Tất cả phải thỏa mãn):</span>
-                    {tier.conditions.map((cond, cIdx) => (
-                      <div key={cIdx} className="flex flex-wrap items-center gap-2">
-                        <select
-                          className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                          value={cond.metric}
-                          onChange={e => updateCondition(tIdx, cIdx, 'metric', e.target.value as BonusMetric)}
-                          disabled={submitting}
-                        >
-                          {Object.entries(METRIC_LABELS).map(([k, item]) => (
-                            <option key={k} value={k}>{item.label}</option>
-                          ))}
-                        </select>
+                      <span className="text-[11px] text-muted-foreground font-medium">Điều kiện (Tất cả phải thỏa mãn):</span>
+                      {tier.conditions.map((cond, cIdx) => (
+                        <div key={cIdx} className="flex flex-wrap items-center gap-2">
+                          <select
+                            className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                            value={cond.metric}
+                            onChange={e => updateCondition(tIdx, cIdx, 'metric', e.target.value as BonusMetric)}
+                            disabled={submitting}
+                          >
+                            {Object.entries(METRIC_LABELS).map(([k, item]) => (
+                              <option key={k} value={k}>{item.label}</option>
+                            ))}
+                          </select>
 
-                        <select
-                          className="h-8 w-36 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                          value={cond.operator}
-                          onChange={e => updateCondition(tIdx, cIdx, 'operator', e.target.value as BonusOperator)}
-                          disabled={submitting}
-                        >
-                          {Object.entries(OPERATOR_LABELS).map(([k, label]) => (
-                            <option key={k} value={k}>{label}</option>
-                          ))}
-                        </select>
+                          <select
+                            className="h-8 w-36 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                            value={cond.operator}
+                            onChange={e => updateCondition(tIdx, cIdx, 'operator', e.target.value as BonusOperator)}
+                            disabled={submitting}
+                          >
+                            {Object.entries(OPERATOR_LABELS).map(([k, label]) => (
+                              <option key={k} value={k}>{label}</option>
+                            ))}
+                          </select>
 
-                        <Input
-                          type="number"
-                          className="h-8 w-20 text-xs"
-                          value={cond.value}
-                          onChange={e => updateCondition(tIdx, cIdx, 'value', Number(e.target.value))}
-                        />
+                          <Input
+                            type="number"
+                            className="h-8 w-20 text-xs"
+                            value={cond.value}
+                            onChange={e => updateCondition(tIdx, cIdx, 'value', Number(e.target.value))}
+                          />
 
-                        {tier.conditions.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeCondition(tIdx, cIdx)}>
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px] text-primary" onClick={() => addCondition(tIdx)}>
-                      + Thêm điều kiện
-                    </Button>
+                          {tier.conditions.length > 1 && (
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeCondition(tIdx, cIdx)}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px] text-primary" onClick={() => addCondition(tIdx)}>
+                        + Thêm điều kiện
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
-          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
-          <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Tạo chính sách'}</Button>
-        </div>
-      </form>
-    </DialogContent>
-  </Dialog>
-);
+          <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Tạo chính sách'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ───────── Preview / Test Simulator Dialog ─────────
@@ -755,11 +752,10 @@ export function BonusPolicyEditDialog({
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
-                    scope === 'ALL'
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${scope === 'ALL'
                       ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary'
                       : 'border-border bg-card hover:bg-muted/50'
-                  }`}
+                    }`}
                   onClick={() => setScope('ALL')}
                   disabled={submitting}
                 >
@@ -772,11 +768,10 @@ export function BonusPolicyEditDialog({
 
                 <button
                   type="button"
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
-                    scope === 'DEPARTMENT'
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${scope === 'DEPARTMENT'
                       ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary'
                       : 'border-border bg-card hover:bg-muted/50'
-                  }`}
+                    }`}
                   onClick={() => setScope('DEPARTMENT')}
                   disabled={submitting}
                 >

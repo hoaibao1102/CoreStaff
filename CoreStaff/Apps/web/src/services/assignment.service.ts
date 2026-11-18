@@ -1,4 +1,5 @@
 import { hrRequest, mapHrError } from './hrService';
+import { isoDatesToVN } from '@/lib/datetime';
 
 export interface Assignment {
   _id: string;
@@ -6,8 +7,9 @@ export interface Assignment {
   userId: string;
   departmentId: string;
   workplaceId?: string;
-  effectiveFrom: string;
-  effectiveTo: string;
+  effectiveFrom?: string;
+  /** Absent for open-ended (seeded) assignments. */
+  effectiveTo?: string;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -77,30 +79,75 @@ export function deactivateAssignment(base: string, id: string): Promise<Assignme
   return hrRequest<Assignment>(base, `/api/hr/assignments/${encodeURIComponent(id)}/deactivate`, { method: 'PATCH' });
 }
 
-/** Public mapper for assignment screens; technical backend messages stay hidden. */
-export function assignmentErrorMessage(error: unknown): string {
-  const err = error as { code?: string; status?: number; message?: string } | null;
-  const raw = `${err?.code || ''} ${err?.message || ''}`;
+/** SRS §176: only PROBATION / ACTIVE / ON_LEAVE employees are still working. */
+export const WORKING_EMPLOYMENT_STATUSES: readonly string[] = ['PROBATION', 'ACTIVE', 'ON_LEAVE'];
 
-  if (raw.includes('EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST')) {
-    return 'Ngày bắt đầu phân công không thể ở trong quá khứ.';
-  }
-  if (raw.includes('EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM')) {
-    return 'Ngày kết thúc phân công phải sau ngày bắt đầu.';
-  }
-  if (raw.includes('OVERLAPPING_ASSIGNMENT_EXISTS') || err?.status === 409) {
-    return 'Khoảng thời gian phân công của nhân viên đang bị trùng. Hãy chọn ngày khác hoặc ngưng phân công cũ trước.';
-  }
-  if (raw.includes('WORKPLACE_NOT_FOUND')) {
-    return 'Nơi làm việc được chọn không tồn tại hoặc đã ngừng hoạt động.';
-  }
-  if (raw.includes('DEPARTMENT_NOT_FOUND')) {
-    return 'Phòng ban được chọn không tồn tại hoặc đã ngừng hoạt động.';
-  }
-  if (raw.includes('USER_NOT_FOUND')) {
-    return 'Không tìm thấy thông tin nhân viên trong tổ chức.';
-  }
-
-  return mapHrError(err?.code, err?.message || 'Không thể xử lý phân công. Vui lòng thử lại.');
+export function isWorkingEmployee(status?: string | null): boolean {
+  return !!status && WORKING_EMPLOYMENT_STATUSES.includes(status);
 }
 
+/** Today as YYYY-MM-DD in Vietnam time — the lower bound for an assignment start date. */
+export function todayIso(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+const ASSIGNMENT_CODE_MESSAGES: Record<string, string> = {
+  EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST: 'Ngày bắt đầu phân công phải từ hôm nay trở đi, không thể chọn ngày trong quá khứ.',
+  EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM: 'Ngày kết thúc phân công không được trước ngày bắt đầu.',
+  OVERLAPPING_ASSIGNMENT_EXISTS: 'Nhân viên đã có phân công trùng khoảng thời gian này ở cùng phòng ban. Hãy chọn ngày khác hoặc ngưng phân công cũ trước.',
+  ASSIGNMENT_ALREADY_EXISTS: 'Phân công này đã tồn tại (trùng nhân viên, phòng ban và thời gian).',
+  ASSIGNMENT_NOT_FOUND: 'Không tìm thấy phân công này. Có thể phân công đã bị xóa, hãy tải lại danh sách.',
+  WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT: 'Nơi làm việc được chọn không còn tồn tại trong tổ chức.',
+  DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT: 'Phòng ban được chọn không còn tồn tại trong tổ chức.',
+  EMPLOYEE_PROFILE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân viên trong tổ chức nên không thể phân công.',
+  EMPLOYEE_NOT_WORKING: 'Chỉ phân công được nhân viên đang làm việc. Nhân viên này đã nghỉ việc hoặc không còn làm việc.',
+  AT_LEAST_ONE_USER_REQUIRED: 'Vui lòng chọn ít nhất một nhân viên để phân công.',
+  AT_LEAST_ONE_FILTER_REQUIRED: 'Cần chọn bộ lọc (trạng thái hoặc nơi làm việc) để xem danh sách phân công.',
+};
+
+/**
+ * The API sends `CODE: chi tiết tiếng Việt` (several joined by "; "). Show the
+ * detail — it names the employee, dates and department — and only fall back to
+ * a per-code sentence when the server sent a bare code.
+ */
+function specificApiMessages(message: string): string[] {
+  const found: string[] = [];
+  for (const part of message.split(';')) {
+    const match = part.match(/\b[A-Z][A-Z0-9_]{3,}:\s+(.+)$/);
+    if (match?.[1]) found.push(isoDatesToVN(match[1].trim()));
+  }
+  return found;
+}
+
+/** Public mapper for assignment screens: always tells HR what exactly went wrong. */
+export function assignmentErrorMessage(error: unknown): string {
+  const err = error as { code?: string; status?: number; message?: string; details?: unknown } | null;
+  const message = err?.message ?? '';
+
+  const specific = specificApiMessages(message);
+  if (specific.length) return specific.join(' ');
+
+  // DTO validation (class-validator) sends its Vietnamese messages in `details`.
+  if (Array.isArray(err?.details)) {
+    const lines = (err!.details as unknown[]).map(item => typeof item === 'string'
+      ? item
+      : (item as { message?: string } | null)?.message).filter((line): line is string => !!line);
+    const detailed = lines.flatMap(line => specificApiMessages(line).length ? specificApiMessages(line) : [line]);
+    if (detailed.length) return detailed.join(' ');
+  }
+
+  const raw = `${err?.code || ''} ${message}`;
+  for (const [code, text] of Object.entries(ASSIGNMENT_CODE_MESSAGES)) {
+    if (raw.includes(code)) return text;
+  }
+
+  if (err?.status === 400) return `Thông tin phân công chưa hợp lệ${message && message !== 'Bad Request' ? `: ${message}` : '. Vui lòng kiểm tra lại các trường đã nhập.'}`;
+  if (err?.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (err?.status === 403) return 'Bạn không có quyền thực hiện thao tác phân công này (chỉ HR được phép).';
+  if (err?.status === 404) return 'Không tìm thấy dữ liệu phân công được yêu cầu. Hãy tải lại danh sách.';
+  if (err?.status === 409) return 'Phân công xung đột với dữ liệu hiện có (nhân viên đã có phân công trùng). Hãy tải lại danh sách rồi thử lại.';
+  if (err?.status && err.status >= 500) return `Máy chủ gặp lỗi khi xử lý phân công${err.code ? ` (mã ${err.code})` : ''}. Vui lòng thử lại sau hoặc báo bộ phận kỹ thuật.`;
+  if (!err?.status) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng rồi thử lại.';
+
+  return mapHrError(err?.code, message || 'Không thể xử lý phân công. Vui lòng thử lại.');
+}

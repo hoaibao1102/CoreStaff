@@ -18,8 +18,8 @@ import { Input } from '../../components/input';
 import { Skeleton } from '../../components/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '../../components/alert';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
-import { EMPLOYMENT_STATUS_LABELS } from '../../lib/types';
-import { hrErrorMessage, paginateEmployees, type EligibleEmployeeAccount } from '../../services/hrService';
+import { EMPLOYMENT_STATUS_LABELS, CORE_EMPLOYMENT_STATUSES } from '../../lib/types';
+import { hrErrorMessage, paginateEmployees, type EligibleEmployeeAccount, type EmployeeProfile } from '../../services/hrService';
 import { useHrResource } from '../../lib/useHrResource';
 import { EmployeeTable } from './components/EmployeeTable';
 import { EmployeeCreateDialog } from './components/EmployeeCreateDialog';
@@ -150,8 +150,8 @@ function FilterBar({
               onChange={(e) => onStatusChange(e.target.value)}
             >
               <option value="">Tất cả trạng thái</option>
-              {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
+              {CORE_EMPLOYMENT_STATUSES.map(({ value, label }) => (
+                <option key={value} value={value}>
                   {label}
                 </option>
               ))}
@@ -203,6 +203,8 @@ export function EmployeeDirectoryScreen({
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // Hồ sơ cũ được chọn làm nguồn prefill khi tuyển lại.
+  const [rehireFrom, setRehireFrom] = useState<EmployeeProfile | undefined>(undefined);
 
   const loader = useCallback(async () => {
     const [employees, departments, positions] = await Promise.all([
@@ -356,14 +358,15 @@ export function EmployeeDirectoryScreen({
             departments={departments}
             positions={positions}
             accounts={accounts}
-            managers={resource.data?.managers ?? []}
             accountsFailed={resource.data?.accountsFailed}
             onRetryAccounts={loadEmployees}
-            onOpenChange={setCreateOpen}
+            rehireFrom={rehireFrom}
+            onOpenChange={(open) => { setCreateOpen(open); if (!open) setRehireFrom(undefined); }}
             onCreated={(created) => {
               loadEmployees();
               if (!created?.tempPassword) {
                 setCreateOpen(false);
+                setRehireFrom(undefined);
               }
             }}
           />
@@ -380,6 +383,12 @@ export function EmployeeDirectoryScreen({
               employeeId={employeeId}
               onClose={handleCloseDetail}
               onChanged={loadEmployees}
+              onRehire={(employee) => {
+                // Đóng hồ sơ cũ rồi mở form tạo: hồ sơ mới là một bản ghi độc lập.
+                handleCloseDetail();
+                setRehireFrom(employee);
+                setCreateOpen(true);
+              }}
             />
           )}
         </>

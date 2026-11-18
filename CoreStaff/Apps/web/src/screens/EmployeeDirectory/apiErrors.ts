@@ -7,9 +7,9 @@ const formatErrors: Record<string, [keyof EmployeeFormErrors, string]> = {
     CITIZEN_ID_INVALID: ['citizenId', 'CCCD/CMND phải gồm từ 9 đến 12 chữ số.'],
     TAX_CODE_INVALID: ['taxCode', 'Mã số thuế phải gồm 10 đến 12 chữ số.'],
     SOCIAL_INSURANCE_CODE_INVALID: ['socialInsuranceCode', 'Số BHXH phải gồm tối đa 12 chữ số.'],
-    BANK_ACCOUNT_INVALID: ['bankAccount', 'Tài khoản ngân hàng phải gồm từ 6 đến 17 chữ số.'],
     EMAIL_TAKEN: ['email', 'Email nhân sự này đã được sử dụng.'],
     PHONE_TAKEN: ['phone', 'Số điện thoại này đã được sử dụng.'],
+    DOB_MINIMUM_AGE: ['dateOfBirth', 'Nhân viên phải đủ 15 tuổi theo Luật Lao động 2019 (Điều 143).'],
 };
 
 /** Translate only known API fields; never render raw database/validator messages. */
@@ -23,7 +23,6 @@ export function mapEmployeeValidationErrors(error: unknown): EmployeeFormErrors 
         if (format) { result[format[0]] = format[1]; continue; }
         const field = EMPLOYEE_FORM_FIELDS.find(item => message.startsWith(`${item.key} `));
         if (field) result[field.key] = `${field.label} chưa hợp lệ. Vui lòng kiểm tra lại.`;
-        if (message.startsWith('employmentType ')) result.employmentType = 'Vui lòng chọn loại lao động trong danh sách.';
     }
     return result;
 }

@@ -6,6 +6,6 @@ export class UpdateAssignmentDto extends PartialType(CreateAssignmentDto) {
     // PATCH targets a single assignment, so it accepts a single userId
     // (CreateAssignmentDto assigns many users via userIds).
     @IsOptional()
-    @IsMongoId()
+    @IsMongoId({ message: 'Mã nhân viên (userId) không hợp lệ.' })
     userId?: string;
 }

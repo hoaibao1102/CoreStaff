@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getAttendanceBonusPolicies, type AttendanceBonusPolicy } from '@/services/compensation.service';
 import { getDepartments, hrErrorMessage, type Department } from '@/services/hrService';
 import { BonusPolicyCreateDialog, BonusPolicyEditDialog, BonusPolicyPreviewDialog } from './BonusPolicyDialogs';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -18,9 +19,7 @@ function formatVnd(val?: number): string {
 
 function formatDate(iso?: string | null): string {
   if (!iso) return 'Vô hạn';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('vi-VN');
+  return formatVN(iso);
 }
 
 export function BonusPoliciesScreen({ apiBase, canManage = true }: { apiBase: string | null; canManage?: boolean }) {
@@ -72,7 +71,7 @@ export function BonusPoliciesScreen({ apiBase, canManage = true }: { apiBase: st
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Chính sách thưởng chuyên cần</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Cấu hình quy tắc đánh giá chuyên cần có phiên bản (TASK-034).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Cấu hình quy tắc đánh giá chuyên cần có phiên bản.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>

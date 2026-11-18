@@ -14,7 +14,7 @@ export class ManagerRequest{
  @Prop({type:Date}) requestedEnd?:Date;
  @Prop({type:Date}) approvedStart?:Date;
  @Prop({type:Date}) approvedEnd?:Date;
- @Prop({required:true,enum:['PENDING','APPROVED','REJECTED','CLARIFICATION_REQUESTED'],default:'PENDING',index:true}) status:string;
+ @Prop({required:true,enum:['PENDING','APPROVED','REJECTED','CLARIFICATION_REQUESTED','CANCELLED'],default:'PENDING',index:true}) status:string;
  @Prop({type:'ObjectId',ref:'AttendanceDay',required:false,index:true}) attendanceDayId?:string;
  @Prop({type:'ObjectId',ref:'Evidence',required:false}) evidenceId?:string;
  @Prop({type:Object,required:false}) metadata?:Record<string,any>;
@@ -32,6 +32,9 @@ export class ManagerRequest{
  @Prop({type:Boolean,default:false}) isSelfApproved?:boolean;
  @Prop({type:String,maxlength:64}) auditTag?:string;
  @Prop({type:String,maxlength:500}) auditNote?:string;
+ /** QC 2.4 — set when another request for the same day settled the outcome. */
+ @Prop({type:Date}) closedAt?:Date;
+ @Prop({type:String,maxlength:500}) closedReason?:string;
  /**
   * TASK-068 §15.11 additions for `type:'OVERTIME'`. All optional: existing web
   * payloads and existing rows stay valid, and `ATTENDANCE` requests ignore them.
@@ -50,3 +53,7 @@ ManagerRequestSchema.index({organizationId:1,departmentId:1,status:1,createdAt:-
 ManagerRequestSchema.index({organizationId:1,employeeUserId:1,createdAt:-1});
 ManagerRequestSchema.index({organizationId:1,employeeUserId:1,workDate:1},{unique:true,partialFilterExpression:{source:'ATTENDANCE_CONFIRMATION',confirmationSlotActive:true}});
 ManagerRequestSchema.index({organizationId:1,employeeUserId:1,confirmationIdempotencyKey:1},{unique:true,partialFilterExpression:{source:'ATTENDANCE_CONFIRMATION',confirmationIdempotencyKey:{$type:'string'}}});
+// QC 2.1 — one open HR explanation per attendance day. Partial so closed rows
+// (approved/rejected/forfeited) can pile up as history (BR-DELETE-01).
+ManagerRequestSchema.index({organizationId:1,attendanceDayId:1},{unique:true,partialFilterExpression:{source:'HR_MISSING_PUNCH_EXPLANATION',status:{$in:['CLARIFICATION_REQUESTED','PENDING']}}});
+ManagerRequestSchema.index({organizationId:1,attendanceDayId:1,status:1});

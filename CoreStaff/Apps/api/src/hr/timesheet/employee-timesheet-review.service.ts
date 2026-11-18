@@ -15,6 +15,9 @@ function toDateOnly(value: string | Date): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
 }
 
+/** Past CLOSED periods an employee can still open, newest first. */
+const CLOSED_PERIODS_LISTED = 12;
+
 @Injectable()
 export class EmployeeTimesheetReviewService {
   constructor(
@@ -32,7 +35,11 @@ export class EmployeeTimesheetReviewService {
     // missing future days. Employees only review a period after HR moves it to
     // the review workflow; exposing OPEN here made the UI request an incomplete
     // projection and surface MISSING_ATTENDANCE_DAY as a bad request.
-    const periods: any[] = await this.periods.find({ organizationId, active: true, status: { $in: ['REVIEWING', 'READY_TO_CLOSE'] } }).sort({ period: -1 }).lean();
+    // CLOSED periods stay listed (read-only) so the employee can look a past
+    // month up after HR has closed it; the list is bounded to the latest twelve.
+    const inReview: any[] = await this.periods.find({ organizationId, active: true, status: { $in: ['REVIEWING', 'READY_TO_CLOSE'] } }).lean();
+    const closed: any[] = await this.periods.find({ organizationId, active: true, status: 'CLOSED' }).sort({ period: -1 }).limit(CLOSED_PERIODS_LISTED).lean();
+    const periods = [...inReview, ...closed].sort((a, b) => String(b.period).localeCompare(String(a.period)));
     const result = [];
     for (const period of periods) {
       const latest: any = await this.actions.findOne({
@@ -41,7 +48,7 @@ export class EmployeeTimesheetReviewService {
         periodVersion: period.version,
         userId: new Types.ObjectId(userId),
       }).sort({ actedAt: -1 }).lean();
-      result.push({ periodId: String(period._id), periodKey: period.period, periodVersion: period.version, startDate: period.startDate, endDate: period.endDate, state: this.stateOf(latest) });
+      result.push({ periodId: String(period._id), periodKey: period.period, periodVersion: period.version, startDate: period.startDate, endDate: period.endDate, periodStatus: period.status, state: this.stateOf(latest) });
     }
     return result;
   }
@@ -52,6 +59,7 @@ export class EmployeeTimesheetReviewService {
 
   async acknowledge(organizationId: string, periodId: string, userId: string, dto: AcknowledgeTimesheetDto) {
     const review: any = await this.buildOwnReview(organizationId, periodId, userId);
+    this.assertOpenForAction(review);
     this.assertCurrent(review, dto.expectedPeriodVersion, dto.projectionHash);
     if (review.hasUnresolvedDays) throw new ConflictException('TIMESHEET_HAS_UNRESOLVED_DAYS');
     if (review.state === 'ACKNOWLEDGED') return mapEmployeeTimesheetReview(review);
@@ -61,6 +69,7 @@ export class EmployeeTimesheetReviewService {
 
   async dispute(organizationId: string, periodId: string, userId: string, dto: DisputeTimesheetDto) {
     const review: any = await this.buildOwnReview(organizationId, periodId, userId);
+    this.assertOpenForAction(review);
     this.assertCurrent(review, dto.expectedPeriodVersion, dto.projectionHash);
     if (review.state === 'ACKNOWLEDGED') throw new ConflictException('TIMESHEET_ALREADY_ACKNOWLEDGED');
     if (review.state === 'DISPUTED' && review.history.at(-1)?.disputeReason === dto.reason.trim()) return mapEmployeeTimesheetReview(review);
@@ -150,11 +159,16 @@ export class EmployeeTimesheetReviewService {
       projectionHash: evaluated.sourceHash,
     }).sort({ actedAt: 1 });
     const history: any[] = session ? await historyQuery.session(session).lean() : await historyQuery.lean();
-    return { periodId: String(period._id), periodKey: period.period, periodVersion: period.version, projectionHash: evaluated.sourceHash,
+    return { periodId: String(period._id), periodKey: period.period, periodVersion: period.version, periodStatus: period.status, projectionHash: evaluated.sourceHash,
       state: this.stateOf(history.at(-1)), standardWorkUnits: evaluated.standardWorkUnits, standardWorkMinutes: evaluated.standardWorkMinutes,
       payableWorkUnits: evaluated.payableWorkUnits, hasUnresolvedDays: evaluated.hasUnresolvedDays,
       days: evaluated.dailyWorkCredits, history, profileId: String(profile._id), userId,
       departmentId: days[0].departmentId };
+  }
+
+  /** A closed period is read-only: its timesheet is frozen into summaries and payroll snapshots. */
+  private assertOpenForAction(review: any) {
+    if (review.periodStatus === 'CLOSED') throw new ConflictException('PERIOD_CLOSED');
   }
 
   private assertCurrent(review: any, expectedVersion: number, projectionHash: string) {

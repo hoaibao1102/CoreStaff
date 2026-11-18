@@ -13,7 +13,6 @@ import {
     validateCitizenId,
     validateTaxCode,
     validateSocialInsuranceCode,
-    validateBankAccount,
     validateOptionalDateOfBirth,
     validateAddress,
 } from '../validation';
@@ -71,9 +70,6 @@ function validateField(field: keyof EmployeeFormState, form: EmployeeFormState, 
             break;
         case 'socialInsuranceCode':
             errorMessage = validateSocialInsuranceCode(form.socialInsuranceCode);
-            break;
-        case 'bankAccount':
-            errorMessage = validateBankAccount(form.bankAccount);
             break;
     }
 
@@ -136,7 +132,6 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>, mode
         const sanitized = sanitizeForm();
         const payload: EmployeeCreatePayload = {
             employeeCode: sanitized.employeeCode,
-            employmentType: sanitized.employmentType || undefined,
             joinDate: sanitized.joinDate,
             dateOfBirth: sanitized.dateOfBirth || undefined,
             gender: sanitized.gender || undefined,
@@ -146,11 +141,8 @@ export function useFormEmployee(initialValues?: Partial<EmployeeFormState>, mode
             citizenId: sanitized.citizenId.trim() || undefined,
             taxCode: sanitized.taxCode.trim() || undefined,
             socialInsuranceCode: sanitized.socialInsuranceCode.trim() || undefined,
-            bankAccount: sanitized.bankAccount.trim() || undefined,
             departmentId: sanitized.departmentId || undefined,
             positionId: sanitized.positionId || undefined,
-            directManagerId: sanitized.directManagerId.trim() || undefined,
-            workplaceId: sanitized.workplaceId.trim() || undefined,
         };
         if (mode === 'link') payload.userId = sanitized.userId;
         // 'new' mode provisions the account — the server mints the EMPLOYEE login

@@ -470,6 +470,26 @@ export const HR_ERROR_CODES: Record<string, string> = {
     // Payroll export errors
     PAYROLL_RUN_NOT_EXPORTABLE: 'Chỉ có thể xuất Excel khi bảng lương ở trạng thái Đã khóa hoặc Đã phát hành.',
 
+    // Payroll / period lifecycle (API hardening: separation of duties, atomic lifecycle)
+    PAYROLL_SEPARATION_OF_DUTIES: 'Người đã tạo hoặc tính bảng lương không được tự khóa hoặc phát hành. Vui lòng nhờ HR khác thực hiện.',
+    PAYROLL_SNAPSHOT_INCOMPLETE_POPULATION: 'Dữ liệu lương đầu vào chưa đủ nhân viên của kỳ công. Hãy tạo lại dữ liệu đầu vào cho toàn bộ phòng ban rồi thử lại.',
+    PAYROLL_SNAPSHOT_DUPLICATE_EMPLOYEE: 'Dữ liệu lương đầu vào bị trùng nhân viên. Vui lòng tạo lại dữ liệu đầu vào của kỳ công.',
+    PAYROLL_SNAPSHOT_FOREIGN_EMPLOYEE: 'Dữ liệu lương đầu vào có nhân viên không thuộc kỳ công này. Vui lòng tạo lại dữ liệu đầu vào.',
+    NO_PAYROLL_SNAPSHOTS_FOR_PERIOD: 'Kỳ công chưa có dữ liệu lương đầu vào hợp lệ.',
+    PAYROLL_REQUIRES_CLOSED_PERIOD: 'Chỉ tạo bảng lương cho kỳ công đã chốt.',
+    PAYROLL_PERIOD_CLAIM_CONFLICT: 'Kỳ công vừa thay đổi hoặc đã được dùng cho bảng lương khác. Hãy tải lại rồi thử lại.',
+    PAYROLL_RUN_CAS_CONFLICT: 'Bảng lương vừa được người khác thay đổi. Hãy tải lại rồi thử lại.',
+    PAYROLL_PERIOD_CAS_CONFLICT: 'Kỳ công vừa thay đổi trạng thái. Hãy tải lại rồi thử lại.',
+    PAYROLL_RUN_NOT_FOUND: 'Không tìm thấy bảng lương.',
+    PERIOD_NOT_FOUND: 'Không tìm thấy kỳ công.',
+    PERIOD_ALREADY_ACTIVE: 'Đang có kỳ công chưa đóng. Hãy đóng hoặc mở lại kỳ hiện tại trước khi tạo kỳ mới.',
+    PERIOD_ALREADY_EXISTS: 'Kỳ công này đã tồn tại.',
+    USE_CLOSE_OR_REOPEN_WORKFLOW: 'Không thể đóng hoặc mở lại kỳ công bằng thao tác này. Hãy dùng chức năng Đóng kỳ / Mở lại kỳ.',
+
+    // Assignments
+    ASSIGNMENT_OVERLAP: 'Nhân viên có hai phân công cùng ngày bắt đầu nên chưa xác định được phân công áp dụng. Vui lòng nhờ HR chỉnh lại phân công.',
+    MANAGER_ASSIGNMENT_OVERLAP: 'Quản lý này đã được phân công cho phòng ban trong khoảng thời gian trùng.',
+
     // Bulk employee import errors
     EMPLOYEE_IMPORT_FILE_REQUIRED: 'Vui lòng chọn tệp Excel (.xlsx) để import.',
     EMPLOYEE_IMPORT_FILE_TYPE_NOT_ALLOWED: 'Chỉ chấp nhận tệp Excel định dạng .xlsx.',
@@ -862,7 +882,7 @@ export async function deactivatePosition(base: string, id: string): Promise<Posi
 
 export type TimesheetPeriodStatus = 'OPEN' | 'REVIEWING' | 'READY_TO_CLOSE' | 'CLOSED';
 
-export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
+export interface TimesheetReviewCard { periodId: string; periodKey: string; periodVersion: number; periodStatus?: string; startDate?: string; endDate?: string; state: 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED' }
 export interface EmployeeTimesheetReview extends TimesheetReviewCard {
     projectionHash: string; standardWorkUnits: number; standardWorkMinutes: number; payableWorkUnits: number;
     hasUnresolvedDays: boolean; canAcknowledge: boolean;
@@ -1042,6 +1062,10 @@ export interface PeriodBlockerRow {
     overallApprovalStatus?: string;
     checkInAt?: string | null;
     checkOutAt?: string | null;
+    /** QC 2.1 — an HR explanation request is already open for this day. */
+    hasOpenExplanation?: boolean;
+    openRequestStatus?: string;
+    requestId?: string;
 }
 
 export interface PeriodBlockerPage {

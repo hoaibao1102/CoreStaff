@@ -11,16 +11,22 @@ describe('confirmation preview UI', () => {
  afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
  it('maps validation codes to user-facing copy without exposing internal identifiers', () => {
   expect(api.confirmationError('ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED')).toBe('Chỉ có thể gửi xác nhận công cho ngày đã qua.');
+  expect(api.confirmationError('ALREADY_FULL_WORK_CREDIT')).toBe('Ngày này bạn đã chấm đủ 1 công theo ca làm việc, không thể gửi yêu cầu xác nhận công.');
   expect(api.confirmationError('SOME_INTERNAL_CONFIRMATION_CODE')).toBe('Không thể xử lý xác nhận công cho ngày này. Vui lòng thử lại hoặc liên hệ HR.');
   expect(api.confirmationError('SOME_INTERNAL_CONFIRMATION_CODE')).not.toContain('SOME_INTERNAL_CONFIRMATION_CODE');
+  expect(api.confirmationError('ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: Lý do xác nhận công quá ngắn (hiện có 5 ký tự, tối thiểu 10 ký tự).'))
+    .toBe('Lý do xác nhận công quá ngắn (hiện có 5 ký tự, tối thiểu 10 ký tự).');
  });
- it('shows safe preview, no editable times, and blocks submission until a valid reason', async () => {
+ it('shows safe preview, prefills editabie times from the shift proposal, and blocks submission until a valid reason', async () => {
   (hrRequest as jest.Mock).mockResolvedValue({ enabled:true, workDate:'2026-10-29', canSubmit:true, actionType:'CHECK_OUT', previewHash:'h', blockedReasons:[], existingPunches:{checkInAt:'2026-10-29T01:00:00Z'}, proposedChanges:{checkOutAt:'2026-10-29T10:00:00Z'}, quota:{monthKey:'2026-10',usedSlots:1,limit:3,remaining:2}, period:{status:'OPEN',canMutate:true} });
   await act(async () => root.render(<api.AttendanceConfirmationForm apiBase="base" workDate="2026-10-29" onDateChange={()=>{}} onCreated={()=>{}} legacy={<p>Legacy</p>} />));
   expect(host.textContent).toContain('không xác nhận thời gian OT');
   expect(host.textContent).toContain('2026-10');
-  expect(host.textContent).toContain('17:00');
-  expect(host.querySelector('input[type=time]')).toBeNull();
+  // QC 1.2 — check-out defaults to the proposed 17:00 VN clock, not a literal,
+  // and both endpoints are editable.
+  const out = host.querySelector<HTMLInputElement>('input[type=time][aria-label="Giờ ra thực tế"]');
+  expect(out?.value).toBe('17:00');
+  expect(host.querySelector<HTMLInputElement>('input[type=time][aria-label="Giờ vào thực tế"]')?.disabled).toBe(false);
   expect(host.querySelector<HTMLButtonElement>('button[type=submit]')?.disabled).toBe(true);
  });
  it('drops old-date responses and never allows unknown/loading/error previews to submit', async () => {
@@ -96,5 +102,21 @@ describe('confirmation preview UI', () => {
   (hrRequest as jest.Mock).mockResolvedValue({enabled:false});
   await act(async()=>root.render(<api.AttendanceConfirmationForm apiBase="base" workDate="2026-10-29" onDateChange={()=>{}} onCreated={()=>{}} legacy={<p>Legacy form</p>}/>));
   expect(host.textContent).toContain('Legacy form');
+ });
+ it('disables submit and shows error message when ALREADY_FULL_WORK_CREDIT is returned', async () => {
+  (hrRequest as jest.Mock).mockResolvedValue({
+    enabled: true,
+    workDate: '2026-10-29',
+    canSubmit: false,
+    actionType: 'FULL_DAY',
+    previewHash: 'h',
+    blockedReasons: ['ALREADY_FULL_WORK_CREDIT'],
+    existingPunches: { checkInAt: '2026-10-29T01:00:00Z', checkOutAt: '2026-10-29T10:00:00Z' },
+    quota: { monthKey: '2026-10', usedSlots: 1, limit: 3, remaining: 2 },
+    period: { status: 'OPEN', canMutate: true },
+  });
+  await act(async () => root.render(<api.AttendanceConfirmationForm apiBase="base" workDate="2026-10-29" onDateChange={()=>{}} onCreated={()=>{}} legacy={<p>Legacy</p>} />));
+  expect(host.textContent).toContain('Ngày này bạn đã chấm đủ 1 công theo ca làm việc, không thể gửi yêu cầu xác nhận công.');
+  expect(host.querySelector<HTMLButtonElement>('button[type=submit]')?.disabled).toBe(true);
  });
 });

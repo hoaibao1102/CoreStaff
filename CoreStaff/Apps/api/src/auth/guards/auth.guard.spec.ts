@@ -67,7 +67,7 @@ describe('AuthGuard — session + tenant derivation (TASK-016/017)', () => {
 		// Session org is authoritative; the user doc's own org must be ignored.
 		const guard = makeGuard({
 			session: { tokenHash: TH, userId: 'u1', organizationId: ORG, expiresAt: future, revokedAt: null },
-			user: { _id: 'u1', role: 'HR', organizationId: 'DIFFERENT-ORG' },
+			user: { _id: 'u1', role: 'HR', status: 'ACTIVE', organizationId: 'DIFFERENT-ORG' },
 		});
 		const req = reqWithCookie(`sid=${RAW}`);
 		const ok = await guard.canActivate(ctxFor(req));
@@ -80,7 +80,7 @@ describe('AuthGuard — session + tenant derivation (TASK-016/017)', () => {
 	it('platform SYSTEM_ADMIN session (no org) → tenantContext.organizationId null', async () => {
 		const guard = makeGuard({
 			session: { tokenHash: TH, userId: 'admin', organizationId: null, expiresAt: future, revokedAt: null },
-			user: { _id: 'admin', role: 'SYSTEM_ADMIN' },
+			user: { _id: 'admin', role: 'SYSTEM_ADMIN', status: 'ACTIVE' },
 		});
 		const req = reqWithCookie(`sid=${RAW}`);
 		await guard.canActivate(ctxFor(req));
@@ -100,7 +100,7 @@ describe('AuthGuard — session + tenant derivation (TASK-016/017)', () => {
 describe('AuthGuard — forced password change (AC-AUTH-07 / FR-AUTH-01)', () => {
 	const valid = {
 		session: { tokenHash: TH, userId: 'u1', organizationId: ORG, expiresAt: future, revokedAt: null },
-		user: { _id: 'u1', role: 'HR', organizationId: ORG },
+		user: { _id: 'u1', role: 'HR', status: 'ACTIVE', organizationId: ORG },
 	};
 
 	it('temp-password user on a non-exempt route → 403 AUTH_PASSWORD_CHANGE_REQUIRED', async () => {
@@ -125,5 +125,22 @@ describe('AuthGuard — forced password change (AC-AUTH-07 / FR-AUTH-01)', () =>
 
 	it('exemption key name is stable (decorator/guard contract)', () => {
 		expect(PASSWORD_CHANGE_EXEMPT_KEY).toBe('auth:allowedWithTempPassword');
+	});
+});
+
+describe('AuthGuard — account status (AUD-H08)', () => {
+	const session = { tokenHash: TH, userId: 'u1', organizationId: ORG, expiresAt: future, revokedAt: null };
+
+	it.each(['DISABLED', 'LOCKED'])('a %s user with a live session row is rejected with 401', async (status) => {
+		const guard = makeGuard({ session, user: { _id: 'u1', role: 'HR', status, organizationId: ORG } });
+		const req = reqWithCookie(`sid=${RAW}`);
+		await expect(guard.canActivate(ctxFor(req))).rejects.toMatchObject({ status: 401 });
+		expect(req.user).toBeUndefined();
+		expect(req.tenantContext).toBeUndefined();
+	});
+
+	it('an ACTIVE user is still allowed', async () => {
+		const guard = makeGuard({ session, user: { _id: 'u1', role: 'HR', status: 'ACTIVE', organizationId: ORG } });
+		await expect(guard.canActivate(ctxFor(reqWithCookie(`sid=${RAW}`)))).resolves.toBe(true);
 	});
 });

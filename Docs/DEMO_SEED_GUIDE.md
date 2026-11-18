@@ -79,8 +79,9 @@ Các vướng ở phòng KT đều được xử lý sẵn bên trong seed (khô
 
 > ⚠️ **Ảnh selfie là metadata, không có file thật.** Seed ghi bản ghi `Evidence` nhưng **không upload ảnh lên S3/R2** — với tenant ANPHAT, storage có 0 object. QL mở selfie `NV-KD-002` (15/10) sẽ thấy ảnh lỗi. Khi demo: duyệt dựa trên thông tin vị trí/giờ trong dialog, **không bấm xem ảnh**; nếu giảng viên hỏi, nói thẳng đây là dữ liệu minh họa và ảnh được bổ sung sau khi chấm công thật.
 
-### 3.3. Kỳ Hiện tại — `2026-11` (`OPEN`, chưa rà soát)
-- Chỉ có dữ liệu chấm công tới ngày tham chiếu, **không có dữ liệu tương lai**.
+### 3.3. Kỳ Hiện tại — `2026-11` (seed **không** tạo sẵn)
+- **Cố ý không có bản ghi kỳ**: HR tạo kỳ 11 ngay trên sân khấu (xem `KICH_BAN_DEMO_CORESTAFF.md` bước 3.4), sau khi chốt kỳ 10 — vì `create()` chỉ cho phép một kỳ đang mở trên mỗi tổ chức.
+- Dữ liệu chấm công tháng 11 **vẫn có sẵn** (tới ngày tham chiếu, không có dữ liệu tương lai), chỉ chưa gắn `periodId`; bấm "Tạo kỳ công" là hệ thống tự link lại các ngày đã chấm.
 - **Chưa tạo bản ghi rà soát, chưa chốt, chưa có lương** — đúng thực tế: tháng chưa kết thúc, chưa tới kỳ tính lương.
 - Có 2 đơn nghỉ phép để demo luồng duyệt đơn: 1 đơn đã duyệt (NV-KD-002, 20/11), 1 đơn chờ QL duyệt (NV-KT-002, 13/11).
 - Chủ nhật **01/11** có 4 người đi làm: NV-KT-001 (đã khai + duyệt OT), NV-KD-002 (đã khai + duyệt OT), NV-KT-002 (đã khai, **chờ duyệt**), NV-KD-001 (**đi làm nhưng chưa khai OT** — dùng để demo tạo đơn OT cuối tuần trên app).
@@ -241,6 +242,9 @@ Mật khẩu chung: `Demo123456!`
 | 10 | Chạy `npm run demo:confirm` | Bấm hộ phòng KT; phòng KD vừa xác nhận tay xong nên sẽ in `đã xác nhận trước đó`. Cả 2 phòng xong → kỳ chuyển `READY_TO_CLOSE`. |
 | 11 | Tab 2 (HR) → chốt kỳ + chạy lương | Hoặc `npm run demo:close`. Bốn bước: tạo bảng lương → tính → khóa → phát hành. |
 | 12 | Mở 1 phiếu lương bất kỳ | So sánh với kỳ 9: `NV-KD-002` 21.5/22 nên gross thấp hơn `NV-KD-001` (22/22) dù có OT. Đây là phần "ăn điểm" — số liệu khớp nhau qua 4 tầng: chấm công → bảng công → snapshot → phiếu lương. |
+| 13 | Tab 2 (HR) → **Kỳ công** → **"Tạo kỳ công"** `2026-11` | "Chỉ một kỳ mở tại một thời điểm, nên chỉ tạo được **sau khi chốt kỳ 10**." Nhập Tháng `2026-11`, bắt đầu `2026-11-01`, kết thúc `2026-11-30`. Kết quả: dữ liệu chấm công tháng 11 **tự gắn vào kỳ mới**, không mất ngày công nào. |
+
+> **Kỳ 11 không có trong ảnh chụp.** `demo:rollback` tua tenant về đúng trạng thái sau seed — tức là **kỳ 11 biến mất** và bước 13 làm lại được. Đó là chủ ý: mỗi lần diễn lại đều có phần "Tạo kỳ công" để trình diễn.
 
 > **Hội đồng hỏi tình huống khác (VD: "nếu nhân viên không giải trình thì sao?"):** chạy `npm run demo:rollback -- --to=alt` — tenant về trạng thái 4 blocker trong vài giây, các tab vẫn đăng nhập. Demo nhánh phụ xong thì `npm run demo:rollback` để về `main`.
 
@@ -296,7 +300,7 @@ Bộ seed để sẵn **người đã chấm công ngày lễ/cuối tuần như
 | `nv.ky.thuat.2@anphat.local` (NV-KT-002) | **31/10** | `PUBLIC_HOLIDAY` rơi thứ Bảy | QL Kỹ thuật duyệt | OT lễ **300%**, 540 phút |
 | `nv.kinh-doanh.1@anphat.local` (NV-KD-001) | **01/11** | `WEEKLY_OFF` (Chủ nhật) | QL Kinh doanh duyệt | OT cuối tuần **200%**, 240 phút |
 
-Cả hai đều đang ở kỳ `2026-11` (`OPEN`) nên tạo đơn không bị chặn bởi chốt kỳ. Lưu ý khi thao tác:
+Cả hai đều thuộc tháng 11, mà seed **không tạo sẵn kỳ 11** — phải làm bước "Tạo kỳ công 2026-11" (bước 3.4 kịch bản demo) trước, nếu không OT V2 trả `PERIOD_REQUIRED` khi nộp đơn. Sau khi có kỳ, tạo đơn không bị chặn bởi chốt kỳ. Lưu ý khi thao tác:
 
 - Ngày **31/10** đã quá hạn khai thường (`RETROACTIVE_GRACE_DAYS = 1`), nên form OT sẽ **bắt buộc nhập lý do bổ sung** (`OVERTIME_RETROACTIVE_REASON_REQUIRED`) — đúng nghiệp vụ, nói rõ cho người xem đây là khai bổ sung sau ca.
 - Ngày **01/11** vẫn trong hạn khai thường → nộp thẳng, không cần lý do bổ sung.

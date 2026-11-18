@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { deriveInsuranceSalary, listSalaryProfiles, type SalaryProfile } from '@/services/compensation.service';
 import { hrErrorMessage } from '@/services/hrService';
 import { SalaryProfileCreateDialog, SalaryProfileDetailDialog, SalaryProfileEditDialog } from './SalaryProfileDialogs';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -18,9 +19,7 @@ function formatVnd(val?: number): string {
 
 function formatDate(iso?: string | null): string {
   if (!iso) return 'Vô hạn';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('vi-VN');
+  return formatVN(iso);
 }
 
 export function SalaryProfilesScreen({ apiBase, canManage = true }: { apiBase: string | null; canManage?: boolean }) {
@@ -61,7 +60,7 @@ export function SalaryProfilesScreen({ apiBase, canManage = true }: { apiBase: s
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Hồ sơ lương nhân viên</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Quản lý mức lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian (TASK-031/032).</p>
+          <p className="mt-2 text-sm text-muted-foreground">Quản lý mức lương cơ bản, lương bảo hiểm và hiệu lực theo thời gian.</p>
         </div>
         {canManage && (
           <Button className="min-h-11" onClick={() => setCreateOpen(true)}>

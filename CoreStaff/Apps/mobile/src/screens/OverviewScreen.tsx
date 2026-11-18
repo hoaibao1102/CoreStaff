@@ -15,7 +15,7 @@ function greeting() {
 function todayLabel() {
   const days = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
   const d = new Date(Date.now() + 7 * 3600 * 1000);
-  return `${days[d.getUTCDay()]}, ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  return `${days[d.getUTCDay()]}, ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 export function OverviewScreen({ user, apiBase, onNavigate, realtimeRevision = 0, pendingApprovals }: { user: AuthUser; apiBase: string; onNavigate: (tab: BottomTabKey) => void; realtimeRevision?: number; pendingApprovals?: number }) {
@@ -100,7 +100,7 @@ export function OverviewScreen({ user, apiBase, onNavigate, realtimeRevision = 0
         <QuickTile icon="calendar-outline" title="Xin nghỉ phép" onPress={() => onNavigate('requests')} />
         <QuickTile icon="time-outline" title="Đăng ký tăng ca" onPress={() => onNavigate('requests')} />
         <QuickTile icon="list-outline" title="Lịch sử công" onPress={() => onNavigate('attendance')} />
-        <QuickTile icon="cash-outline" title="Phiếu lương" onPress={() => onNavigate('payslips')} />
+        <QuickTile icon="cash-outline" title="Công & Lương" onPress={() => onNavigate('payslips')} />
       </>}
     </View>
   </ScrollView>;

@@ -73,13 +73,15 @@ export function GpsAttendanceFlow({
   const accuracyMeters = coords?.accuracyMeters ? Math.round(coords.accuracyMeters) : 18;
 
   const isCheckOutAction = today.availableAction === 'CHECK_OUT';
+  // QC 1.1 — outside the geofence the button must stay usable: the submit
+  // handler decides whether to send GPS or open the camera fallback.
   const buttonLabel = isCompleted
     ? 'Đã hoàn thành ca hôm nay'
     : isCheckOutAction
       ? 'Ghi nhận Tan ca (Check-out)'
       : 'Ghi nhận Vào ca (Check-in)';
 
-  const isDisabled = !isInside || submitting || today.availableAction === 'NONE' || isCompleted;
+  const isDisabled = submitting || today.availableAction === 'NONE' || isCompleted;
 
   const workplaceLat = workplaceGps?.latitude;
   const workplaceLon = workplaceGps?.longitude;

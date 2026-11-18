@@ -14,6 +14,7 @@ import { UserSessionDocument } from '../../database/schemas/user-session.schema'
 import { hashToken } from '../strategies/token-strategy';
 import { getCookie } from '../../common/parse-cookies';
 import { COOKIE_NAME } from '../session-cookies';
+import { UserStatus } from '../../database/schemas/enums';
 
 export const PASSWORD_CHANGE_EXEMPT_KEY = 'auth:allowedWithTempPassword';
 
@@ -55,6 +56,11 @@ export class AuthGuard implements CanActivate {
 
 		const doc = await this.userModel.findById(session.userId).select('-passwordHash').lean();
 		if (!doc) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
+
+		// AUD-H08: refresh and /me already require an ACTIVE account; the guard
+		// that protects every other route must apply the same rule, so disabling
+		// or locking a user cuts off API access even if a session row survives.
+		if (doc.status !== UserStatus.ACTIVE) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 
 		// AC-AUTH-07: temp password locks out every API the change-password
 		// screen does not explicitly need. Backend-enforced (FR-AUTH-06: FE

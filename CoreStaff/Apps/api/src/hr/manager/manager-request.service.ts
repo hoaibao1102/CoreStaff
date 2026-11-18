@@ -11,6 +11,7 @@ import {OvertimeService} from '../overtime/overtime.service';
 import {PeriodVersionService} from '../timesheet/period-version.service';
 import {EmployeeAssignmentDocument} from '../../database/schemas/assignment.schema';
 import {AttendanceApprovalStatus,AttendanceEventType,AttendanceMethod,AttendanceStatus,DayResult} from '../../database/schemas/enums';
+import {closeSiblingRequests} from './close-sibling-requests';
 @Injectable()
 export class ManagerRequestService {
   constructor(
@@ -159,7 +160,7 @@ export class ManagerRequestService {
   }
 
   async listMine(org: string, userId: string) {
-    return this.requests.find({ organizationId: org, employeeUserId: userId }).sort({ createdAt: -1 }).lean();
+    return this.requests.find({ organizationId: org, employeeUserId: userId, status: { $ne: 'CANCELLED' } }).sort({ createdAt: -1 }).lean();
   }
 
   async respondClarification(org: string, userId: string, requestId: string, dto: RespondClarificationDto) {
@@ -177,6 +178,15 @@ export class ManagerRequestService {
     }
     if (dto.expectedVersion && req.version !== dto.expectedVersion) {
       throw new ConflictException('REQUEST_STATE_CHANGED');
+    }
+
+    // QC 2.4 — a forfeited day is settled; replying to a stale explanation
+    // must not resurrect it.
+    const linkedDay: any = req.attendanceDayId
+      ? await this.attendanceDays.findOne({ _id: req.attendanceDayId, organizationId: org }).lean()
+      : null;
+    if (linkedDay?.resolution?.type === 'FORFEITED_MISSING_PUNCH') {
+      throw new ConflictException('DAY_ALREADY_FORFEITED');
     }
 
     const workDateStr = req.workDate ? new Date(req.workDate).toISOString().slice(0, 10) : '';
@@ -287,13 +297,22 @@ export class ManagerRequestService {
     const departments = filter.departmentId ? [filter.departmentId] : ids;
     if (!departments.length) return [];
     const employeeUserIds = await this.scope.resolveEmployeeIdsForDepartments(org, departments);
-    // The employee scope branch recovers pending legacy requests that were
-    // stamped with a stale profile department before assignment-aware routing.
+    // A request belongs to the department stamped on it — that is also the one
+    // `decide()` authorizes against. The employee branch exists only to recover
+    // legacy rows stamped with a stale profile department before routing became
+    // assignment-aware, so it must skip departments that already have a manager:
+    // otherwise an employee who transfers shows up in BOTH queues, the old
+    // manager holding the row by department and the new one by employee.
+    const covered = await this.scope.getDepartmentIdsWithActiveManagers(org);
     const query: any = {
       organizationId: org,
+      status: { $ne: 'CANCELLED' },
       $or: [
         { departmentId: { $in: departments } },
-        { employeeUserId: { $in: employeeUserIds } },
+        {
+          employeeUserId: { $in: employeeUserIds },
+          ...(covered.length ? { departmentId: { $nin: covered } } : {}),
+        },
       ],
     };
     if (filter.type && filter.type !== 'ALL') query.type = filter.type;
@@ -338,14 +357,19 @@ export class ManagerRequestService {
       if (!this.confirmation) return { ...row, isSelfRequest: isSelfApproval, isSelfApproval, canApprove: false, contextValidity: { valid: false } };
       try {
         const { snapshot, ...confirmation } = await this.confirmation.preview(org, employee, new Date(row.workDate).toISOString().slice(0, 10));
-        const valid = confirmation.contextHash === row.confirmationContextHash;
+        const valid = confirmation.contextHash === row.confirmationContextHash || Boolean(
+          (row as any).confirmationSnapshot &&
+          ((row as any).confirmationSnapshot.punches?.checkInAt ?? undefined) === (confirmation.existingPunches?.checkInAt ?? undefined) &&
+          ((row as any).confirmationSnapshot.punches?.checkOutAt ?? undefined) === (confirmation.existingPunches?.checkOutAt ?? undefined),
+        );
         const blockers = confirmation.blockedReasons.filter(code => code !== 'MONTHLY_CONFIRMATION_LIMIT_EXCEEDED');
         return {
           ...row,
           isSelfRequest: isSelfApproval,
           isSelfApproval,
+          period: confirmation.period ?? { status: 'OPEN', canMutate: true },
           confirmation: { ...confirmation, enabled: true },
-          canApprove: row.status === 'PENDING' && valid && blockers.length === 0 && confirmation.period?.canMutate === true,
+          canApprove: row.status === 'PENDING' && valid && blockers.length === 0 && confirmation.period?.canMutate !== false,
           contextValidity: { valid },
         };
       } catch (error: any) {
@@ -408,6 +432,9 @@ export class ManagerRequestService {
       (current.employeeId?._id ?? current.employeeId)
     );
     const isSelfApproved = currentEmpUserId === String(managerId);
+    // SRS BR-SELF-APPROVAL-01 / AC-SELF-APPROVAL-01: a manager or HR user can never
+    // decide a request whose employee is themselves. Rejected before any write.
+    if (isSelfApproved) throw new ForbiddenException('SELF_APPROVAL_FORBIDDEN');
     const selfApprovalAudit = isSelfApproved
       ? {
           isSelfApproved: true,
@@ -418,8 +445,12 @@ export class ManagerRequestService {
     if ((status === 'REJECTED' || status === 'CLARIFICATION_REQUESTED') && (!reason || reason.trim().length < 10)) {
       throw new ConflictException('REVIEW_REASON_REQUIRED');
     }
-    if (current.type === 'OVERTIME' && status === 'APPROVED' && approvedStart && approvedEnd && new Date(approvedStart) >= new Date(approvedEnd)) {
-      throw new ConflictException('OVERTIME_WINDOW_INVALID');
+    // AUD-M01: an approved window is both endpoints or neither (neither = approve as requested).
+    // A lone endpoint used to be stored and left the interval half-defined.
+    if (current.type === 'OVERTIME' && status === 'APPROVED' && (approvedStart || approvedEnd)) {
+      if (!approvedStart || !approvedEnd || !(new Date(approvedStart) < new Date(approvedEnd))) {
+        throw new ConflictException('OVERTIME_WINDOW_INVALID');
+      }
     }
     if (current.type === 'ATTENDANCE' && this.requests.db) {
       return this.decideAttendance(org, managerId, id, status, expectedVersion, reason, current);
@@ -872,6 +903,15 @@ export class ManagerRequestService {
     }
     day.overallApprovalStatus = AttendanceApprovalStatus.APPROVED;
     await day.save({ session });
+    // QC 2.4 — the day is settled; cancel every other open request on it,
+    // including the explanation row that produced this approval.
+    await closeSiblingRequests(this.requests, {
+      organizationId: org,
+      attendanceDayId: day._id,
+      exceptId: request._id,
+      reason: 'EXPLANATION_APPROVED',
+      session,
+    });
   }
 
 }

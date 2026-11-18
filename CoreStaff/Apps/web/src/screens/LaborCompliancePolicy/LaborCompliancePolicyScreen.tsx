@@ -231,7 +231,7 @@ function LaborDetailDialog({
             Bản v{policy.version} — {policy.legalReference}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-6 px-6 pb-6 pt-4">
+        <div className="space-y-4 px-6 pb-6 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm">
               Hiệu lực: <strong>{formatEffectiveRange(policy.effectiveFrom, policy.effectiveTo)}</strong>
@@ -239,26 +239,59 @@ function LaborDetailDialog({
             <PolicyStatusBadge active={policy.active} />
           </div>
 
-          <div className="divide-y divide-border rounded-lg border border-border">
-            {[
-              { label: "Giờ làm thường ngày tối đa", value: formatHours(policy.normalDailyMinutes) },
-              { label: "Giờ làm thường tuần tối đa", value: formatHours(policy.normalWeeklyMinutes) },
-              { label: "Tổng giờ (thường + tăng ca) mỗi ngày", value: formatHours(policy.maxCombinedDailyMinutes) },
-              { label: "Tăng ca tháng tối đa", value: formatHours(policy.maxMonthlyOvertimeMinutes) },
-              { label: "Tăng ca năm tối đa", value: formatHours(policy.maxAnnualOvertimeMinutes) },
-              { label: "Hạn mức ngoại lệ tăng ca năm", value: formatHours(policy.exceptionalAnnualOvertimeMinutes) },
-              { label: "Ngưỡng cảnh báo", value: `${policy.warningThresholdPercent}%` },
-              ...V2_FIELDS.map((key) => ({ label: LABELS[key], value: policy[key] === undefined ? 'Chưa cấu hình (legacy V1)' : String(policy[key]) })),
-              { label: "Mức lương thử việc tối thiểu", value: `${Math.round(policy.probationMinimumRate * 100)}%` },
-              { label: "Tham chiếu pháp lý", value: policy.legalReference },
-              { label: "Phiên bản", value: `v${policy.version}` },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                <span className="text-muted-foreground">{row.label}</span>
-                <span className="text-right font-medium text-foreground">{row.value}</span>
-              </div>
-            ))}
-          </div>
+          {[
+            {
+              title: "Giờ làm thường",
+              rows: [
+                { label: "Tối đa mỗi ngày", value: formatHours(policy.normalDailyMinutes) },
+                { label: "Tối đa mỗi tuần", value: formatHours(policy.normalWeeklyMinutes) },
+                { label: "Tổng thường + tăng ca mỗi ngày", value: formatHours(policy.maxCombinedDailyMinutes) },
+              ],
+            },
+            {
+              title: "Tăng ca",
+              rows: [
+                { label: "Tối đa mỗi tháng", value: formatHours(policy.maxMonthlyOvertimeMinutes) },
+                { label: "Tối đa mỗi năm", value: formatHours(policy.maxAnnualOvertimeMinutes) },
+                { label: "Hạn mức ngoại lệ mỗi năm", value: formatHours(policy.exceptionalAnnualOvertimeMinutes) },
+                { label: "Ngưỡng cảnh báo", value: `${policy.warningThresholdPercent}%` },
+              ],
+            },
+            {
+              title: "Cấu hình V2",
+              rows: V2_FIELDS.map((key) => ({
+                label: LABELS[key],
+                value: policy[key] === undefined ? "Chưa cấu hình (legacy V1)" : String(policy[key]),
+              })),
+            },
+            {
+              title: "Khác",
+              rows: [
+                { label: "Mức lương thử việc tối thiểu", value: `${Math.round(policy.probationMinimumRate * 100)}%` },
+                { label: "Tham chiếu pháp lý", value: policy.legalReference },
+                { label: "Phiên bản", value: `v${policy.version}` },
+              ],
+            },
+          ].map((group) => (
+            <section key={group.title} className="overflow-hidden rounded-lg border border-border">
+              <h3 className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.title}
+              </h3>
+              <dl className="grid gap-px bg-border sm:grid-cols-2">
+                {group.rows.map((row, i) => (
+                  <div
+                    key={row.label}
+                    className={`flex items-baseline justify-between gap-3 bg-card px-4 py-2.5 text-sm${
+                      group.rows.length % 2 === 1 && i === group.rows.length - 1 ? " sm:col-span-2" : ""
+                    }`}
+                  >
+                    <dt className="text-muted-foreground">{row.label}</dt>
+                    <dd className="text-right font-medium text-foreground">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
         </div>
       </DialogContent>
     </Dialog>

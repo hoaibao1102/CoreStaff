@@ -7,6 +7,14 @@ import { canonicalPayloadHash } from './payroll-artifact-foundation';
 
 const oid = () => new Types.ObjectId().toString();
 
+export function fakeSession() {
+  const session: any = {
+    withTransaction: jest.fn(async (fn: () => Promise<unknown>) => fn()),
+    endSession: jest.fn().mockResolvedValue(undefined),
+  };
+  return session;
+}
+
 function query<T>(value: T) {
   return { lean: jest.fn().mockResolvedValue(value), session: jest.fn().mockReturnThis(), sort: jest.fn().mockReturnThis() };
 }
@@ -48,7 +56,8 @@ function createRunService(overrides: Record<string, any> = {}) {
   const payrollRunModel: any = {
     findOne: jest.fn().mockImplementation((filter) => query(filter._id ? createdRun : null)),
     findById: jest.fn().mockImplementation(() => query(createdRun)),
-    create: jest.fn().mockResolvedValue(createdRun),
+    create: jest.fn().mockResolvedValue([createdRun]),
+    db: { startSession: jest.fn().mockImplementation(async () => fakeSession()) },
     findOneAndUpdate: jest.fn().mockResolvedValue({ ...createdRun, status: PayrollRunStatus.CALCULATED, toObject() { return this; } }),
     deleteOne: jest.fn().mockResolvedValue({ deletedCount: 1 }),
     countDocuments: jest.fn().mockResolvedValue(0),
@@ -78,18 +87,46 @@ describe('PayrollRunService append-only lineage integration', () => {
   it('creates only from CLOSED and binds the exact current-version snapshot IDs/hash', async () => {
     const f = createRunService();
     const result = await f.service.create({ organizationId: f.organizationId, timesheetPeriodId: f.periodId, userId: oid() });
-    expect(f.payrollRunModel.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(f.payrollRunModel.create).toHaveBeenCalledWith([expect.objectContaining({
       sourcePeriodVersion: 4,
       sourceSnapshotIds: f.snapshots.map((row: any) => row._id),
       sourceSnapshotSetHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       totalEmployeeCount: 2,
-    }));
+    })], expect.objectContaining({ session: expect.anything() }));
     expect(f.periodModel.findOneAndUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: TimesheetPeriodStatus.CLOSED, version: 4, payrollRunId: { $exists: false } }),
       expect.any(Object),
-      expect.objectContaining({ new: true }),
+      expect.objectContaining({ new: true, session: expect.anything() }),
     );
     expect(result.sourcePeriodVersion).toBe(4);
+  });
+
+  // AUD-C07: claim and insert are one unit of work.
+  it('runs the period claim and the run insert in the same transaction session', async () => {
+    const f = createRunService();
+    await f.service.create({ organizationId: f.organizationId, timesheetPeriodId: f.periodId, userId: oid() });
+    const session = await f.payrollRunModel.db.startSession.mock.results[0].value;
+    expect(session.withTransaction).toHaveBeenCalledTimes(1);
+    expect(f.periodModel.findOneAndUpdate.mock.calls[0][2].session).toBe(session);
+    expect(f.payrollRunModel.create.mock.calls[0][1].session).toBe(session);
+    expect(session.endSession).toHaveBeenCalled();
+  });
+
+  it('propagates an insert failure out of the transaction so the claim is not committed', async () => {
+    const f = createRunService();
+    f.payrollRunModel.create.mockRejectedValue(new Error('INSERT_FAILED'));
+    await expect(f.service.create({ organizationId: f.organizationId, timesheetPeriodId: f.periodId, userId: oid() }))
+      .rejects.toThrow('INSERT_FAILED');
+    const session = await f.payrollRunModel.db.startSession.mock.results[0].value;
+    expect(session.endSession).toHaveBeenCalled();
+  });
+
+  it('reports a lost claim race as PAYROLL_PERIOD_CLAIM_CONFLICT and inserts nothing', async () => {
+    const f = createRunService();
+    f.periodModel.findOneAndUpdate.mockResolvedValue(null);
+    await expect(f.service.create({ organizationId: f.organizationId, timesheetPeriodId: f.periodId, userId: oid() }))
+      .rejects.toThrow('PAYROLL_PERIOD_CLAIM_CONFLICT');
+    expect(f.payrollRunModel.create).not.toHaveBeenCalled();
   });
 
   it('rejects READY_TO_CLOSE without mutating the period', async () => {
@@ -103,7 +140,7 @@ describe('PayrollRunService append-only lineage integration', () => {
   it('fails calculation on one employee error and never publishes CALCULATED or payslips', async () => {
     const f = createRunService();
     (f.service as any).calculateEmployee = jest.fn().mockResolvedValueOnce({ grossEarnings: 10, netSalary: 10 }).mockRejectedValueOnce(new Error('EMPLOYEE_FAILED'));
-    await expect(f.service.calculate(f.runId, oid())).rejects.toThrow('EMPLOYEE_FAILED');
+    await expect(f.service.calculate(String(f.organizationId), String(f.runId), String(oid()))).rejects.toThrow('EMPLOYEE_FAILED');
     expect(f.payslipService.generateForPayrollRun).not.toHaveBeenCalled();
     expect(f.payrollRunModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
@@ -111,14 +148,14 @@ describe('PayrollRunService append-only lineage integration', () => {
   it('does not publish CALCULATED when payslip count does not reconcile', async () => {
     const f = createRunService();
     f.payslipService.generateForPayrollRun.mockResolvedValue(1);
-    await expect(f.service.calculate(f.runId, oid())).rejects.toThrow('PAYROLL_OUTPUT_RECONCILIATION_FAILED');
+    await expect(f.service.calculate(String(f.organizationId), String(f.runId), String(oid()))).rejects.toThrow('PAYROLL_OUTPUT_RECONCILIATION_FAILED');
     expect(f.payrollRunModel.findOneAndUpdate).not.toHaveBeenCalled();
     expect(f.payslipService.deleteGeneratedForRecalculation).toHaveBeenCalledWith(f.runId);
   });
 
   it('publishes CALCULATED through a version/status CAS only after all outputs reconcile', async () => {
     const f = createRunService();
-    const result = await f.service.calculate(f.runId, oid());
+    const result = await f.service.calculate(String(f.organizationId), String(f.runId), String(oid()));
     expect(f.payrollRunModel.findOneAndUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ _id: f.runId, status: PayrollRunStatus.DRAFT, version: 1 }),
       expect.objectContaining({ $set: expect.objectContaining({ status: PayrollRunStatus.CALCULATED, processedEmployeeCount: 2 }) }),

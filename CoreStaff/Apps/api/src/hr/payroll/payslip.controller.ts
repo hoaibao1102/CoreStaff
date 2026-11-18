@@ -87,16 +87,16 @@ export class PayslipController {
   @Get('run/:payrollRunId')
   @Roles('HR')
   @ApiOperation({ summary: 'List all payslips for a payroll run' })
-  async findByPayrollRun(@Param('payrollRunId') payrollRunId: string) {
-    const slips = await this.payslipService.findByPayrollRun(payrollRunId);
+  async findByPayrollRun(@CurrentUser() user: any, @Param('payrollRunId') payrollRunId: string) {
+    const slips = await this.payslipService.findByPayrollRun(user.organizationId, payrollRunId);
     return { success: true, data: slips };
   }
 
   @Get('run/:payrollRunId/summary')
   @Roles('HR')
   @ApiOperation({ summary: 'Get payslips summary for payroll run dashboard' })
-  async getSummary(@Param('payrollRunId') payrollRunId: string) {
-    const summary = await this.payslipService.getSummary(payrollRunId);
+  async getSummary(@CurrentUser() user: any, @Param('payrollRunId') payrollRunId: string) {
+    const summary = await this.payslipService.getSummary(user.organizationId, payrollRunId);
     return { success: true, data: summary };
   }
 
@@ -116,7 +116,7 @@ export class PayslipController {
   @Roles('HR')
   @ApiOperation({ summary: 'Release payslips for a payroll run' })
   async release(@CurrentUser() user: any, @Param('payrollRunId') payrollRunId: string) {
-    await this.payslipService.releaseForPayrollRun(payrollRunId, user.id);
+    await this.payslipService.releaseForPayrollRun(user.organizationId, payrollRunId, String(user._id));
     return { success: true, message: 'PAYSLIPS_RELEASED' };
   }
 }

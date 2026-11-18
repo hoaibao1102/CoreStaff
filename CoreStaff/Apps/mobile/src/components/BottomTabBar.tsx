@@ -29,7 +29,7 @@ export const EMPLOYEE_TABS: BottomTabItem[] = [
   { key: 'overview', label: 'Tổng quan', icon: 'home-outline', activeIcon: 'home' },
   { key: 'requests', label: 'Đơn từ', icon: 'document-text-outline', activeIcon: 'document-text' },
   { key: 'attendance', label: 'Chấm công', icon: 'finger-print', activeIcon: 'finger-print', primary: true },
-  { key: 'payslips', label: 'Phiếu lương', icon: 'wallet-outline', activeIcon: 'wallet' },
+  { key: 'payslips', label: 'Công & Lương', icon: 'wallet-outline', activeIcon: 'wallet' },
   { key: 'account', label: 'Tài khoản', icon: 'person-outline', activeIcon: 'person' },
 ];
 

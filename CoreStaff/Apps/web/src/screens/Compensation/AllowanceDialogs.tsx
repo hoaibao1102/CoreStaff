@@ -102,7 +102,7 @@ export function AllowanceCreateDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="border-b border-border px-6 py-5 pr-14">
           <DialogTitle>Tạo phụ cấp tổ chức mới</DialogTitle>
-          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào danh mục chính sách của tổ chức (TASK-033).</DialogDescription>
+          <DialogDescription className="mt-1">Bổ sung khoản phụ cấp vào danh mục chính sách của tổ chức.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -196,8 +196,8 @@ export function AllowanceCreateDialog({
                 <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${insuranceBased ? 'bg-blue-50/60 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800' : 'bg-card border-border hover:bg-muted/40'}`}>
                   <input type="checkbox" checked={insuranceBased} onChange={e => setInsuranceBased(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />
                   <div>
-                    <div className="text-xs font-semibold text-foreground">Tính vào căn cứ đóng BHXH</div>
-                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này được tính vào mức lương đóng BHXH bắt buộc</div>
+                    <div className="text-xs font-semibold text-foreground">Tính vào căn cứ đóng BH</div>
+                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này được tính vào mức lương đóng BH bắt buộc</div>
                   </div>
                 </label>
 
@@ -342,8 +342,8 @@ export function AllowanceEditDialog({
                 <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer select-none transition-colors ${insuranceBased ? 'bg-blue-50/60 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800' : 'bg-card border-border hover:bg-muted/40'}`}>
                   <input type="checkbox" checked={insuranceBased} onChange={e => setInsuranceBased(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4 mt-0.5" disabled={submitting} />
                   <div>
-                    <div className="text-xs font-semibold text-foreground">Tính vào căn cứ đóng BHXH</div>
-                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này được tính vào mức lương đóng BHXH bắt buộc</div>
+                    <div className="text-xs font-semibold text-foreground">Tính vào căn cứ đóng BH</div>
+                    <div className="text-[11px] text-muted-foreground">Khoản phụ cấp này được tính vào mức lương đóng BH bắt buộc</div>
                   </div>
                 </label>
 

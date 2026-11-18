@@ -23,6 +23,8 @@
     "ensure:work-credit-policies": "ts-node-script scripts/ensure-work-credit-policies.ts --apply",
     "ensure:orgs:ready": "ts-node-script scripts/ensure-organizations-ready.ts",
     "ensure:orgs:ready:dry": "ts-node-script scripts/ensure-organizations-ready.ts --dry-run",
+    "repair:assignments:dry": "ts-node-script scripts/repair-assignments.ts",
+    "repair:assignments": "ts-node-script scripts/repair-assignments.ts --apply",
     "migrate:partial-day-leave:dry": "ts-node-script scripts/migrate-partial-day-leave.ts",
     "migrate:partial-day-leave": "ts-node-script scripts/migrate-partial-day-leave.ts --apply",
     "seed:compensation:dry": "ts-node-script scripts/seed-compensation.ts",

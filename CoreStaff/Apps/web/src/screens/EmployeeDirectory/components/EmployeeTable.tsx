@@ -1,6 +1,6 @@
 import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../../../components/button';
-import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_BADGE } from '../../../lib/types';
+import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_BADGE, getEffectiveStatus } from '../../../lib/types';
 
 interface EmployeeTableProps {
     rows: any[];
@@ -69,9 +69,14 @@ export function EmployeeTable({ rows, total, current, pages, onNavigate, onViewD
                                             {row.positionName || '—'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[row.employmentStatus] ?? 'bg-slate-100 text-slate-600'}`}>
-                                                {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[row.employmentStatus]}
-                                            </span>
+                                            {(() => {
+                                                const eff = getEffectiveStatus(row.employmentStatus, row.endDate);
+                                                return (
+                                                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[eff] ?? 'bg-slate-100 text-slate-600'}`}>
+                                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[eff]}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-4 py-3">
                                             <Button

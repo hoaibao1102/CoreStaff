@@ -108,6 +108,21 @@ function build(userOrUsers: UserRow | UserRow[] | null, profiles: ProfileRow[] =
 		},
 		findOneAndUpdate: async () => one,
 		findByIdAndUpdate: (_id: string, _u: unknown) => ({ exec: async () => one }),
+		// Minimal Mongo semantics for the atomic lockout counter (AUD-H06).
+		updateOne(q: Record<string, any>, u: Record<string, any>) {
+			const run = async () => {
+				const row = users.find((x) => x._id === q._id) as any;
+				if (!row) return { modifiedCount: 0 };
+				if (q.lockedUntil?.$lte && !(row.lockedUntil && row.lockedUntil <= q.lockedUntil.$lte)) return { modifiedCount: 0 };
+				if (q.lockedUntil?.$exists === false && row.lockedUntil !== undefined) return { modifiedCount: 0 };
+				if (q.failedLoginCount?.$gte !== undefined && !(row.failedLoginCount >= q.failedLoginCount.$gte)) return { modifiedCount: 0 };
+				Object.assign(row, u.$set ?? {});
+				for (const [k, v] of Object.entries(u.$inc ?? {})) row[k] = (row[k] ?? 0) + (v as number);
+				for (const k of Object.keys(u.$unset ?? {})) delete row[k];
+				return { modifiedCount: 1 };
+			};
+			return { exec: run };
+		},
 	};
 	// EmployeeProfile owns employeeCode (TASK-120): login resolves codes here.
 	const profileModel = {
@@ -379,6 +394,44 @@ describe('AuthService.login (TASK-016)', () => {
 		}
 		expect(user.failedLoginCount).toBe(5);
 		expect(user.lockedUntil).toBeInstanceOf(Date);
+	});
+
+	// AUD-H06: lockout only sets lockedUntil; the user stays ACTIVE.
+	it('an ACTIVE user inside lockedUntil gets 423 even with the correct password', async () => {
+		const user = await activeUser();
+		user.lockedUntil = new Date(Date.now() + 60_000);
+		const { service } = build(user);
+		await expect(service.login({ identifier: 'hr@tvs.local', password: PASSWORD })).rejects.toMatchObject({ status: 423 });
+	});
+
+	it('5 wrong passwords then the correct one is still rejected with 423', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		for (let i = 0; i < 5; i++) {
+			await service.login({ identifier: 'hr@tvs.local', password: 'WRONG' }).catch(() => undefined);
+		}
+		expect(user.status).toBe(UserStatus.ACTIVE);
+		await expect(service.login({ identifier: 'hr@tvs.local', password: PASSWORD })).rejects.toMatchObject({ status: 423 });
+	});
+
+	it('parallel wrong attempts are all counted and trigger the lock', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		await Promise.all(
+			Array.from({ length: 5 }, () => service.login({ identifier: 'hr@tvs.local', password: 'WRONG' }).catch(() => undefined)),
+		);
+		expect(user.failedLoginCount).toBe(5);
+		expect(user.lockedUntil).toBeInstanceOf(Date);
+	});
+
+	it('an expired lock starts a fresh attempt window after the next wrong password', async () => {
+		const user = await activeUser();
+		user.failedLoginCount = 5;
+		user.lockedUntil = new Date(Date.now() - 1000);
+		const { service } = build(user);
+		await service.login({ identifier: 'hr@tvs.local', password: 'WRONG' }).catch(() => undefined);
+		expect(user.failedLoginCount).toBe(1);
+		expect(user.lockedUntil).toBeUndefined();
 	});
 
 	it('resets counters on success after prior failures', async () => {
@@ -676,5 +729,35 @@ describe('AuthService forgot/reset password (TASK-016, FR-AUTH-05)', () => {
 		const { comparePassword } = await import('./strategies/bcrypt.strategy');
 		expect(await comparePassword('NewPass1!', a.passwordHash)).toBe(true);
 		expect(await comparePassword(PASSWORD, b.passwordHash)).toBe(true);
+	});
+});
+
+describe('AuthService revocation disconnects realtime channels (AUD-H07)', () => {
+	const gatewayFake = () => ({ disconnectSession: jest.fn(), disconnectUser: jest.fn(), disconnectOrganization: jest.fn() });
+
+	it('logout disconnects the sockets bound to that session token', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		const gw = gatewayFake();
+		(service as any).eventsGateway = gw;
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+		await service.logout(login.sessionId);
+		expect(gw.disconnectSession).toHaveBeenCalledWith(hashToken(login.sessionId));
+	});
+
+	it('admin reset disconnects every socket of that user', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		const gw = gatewayFake();
+		(service as any).eventsGateway = gw;
+		await service.adminResetPassword(user._id, 'Temp#12345');
+		expect(gw.disconnectUser).toHaveBeenCalledWith(user._id);
+	});
+
+	it('works without a gateway (it is optional)', async () => {
+		const user = await activeUser();
+		const { service } = build(user);
+		const login = await service.login({ identifier: 'hr@tvs.local', password: PASSWORD });
+		await expect(service.logout(login.sessionId)).resolves.toBeUndefined();
 	});
 });

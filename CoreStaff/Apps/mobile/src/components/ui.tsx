@@ -1,14 +1,32 @@
 import { useState, type ReactNode } from 'react';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Modal, NativeModules, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TurboModuleRegistry, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, spacing } from '../theme';
 import { AppIcon, type AppIconName } from './AppIcon';
+import { formatDate, isoDatesToVN, maskDateInput, parseDateVN } from '../date';
 
 let cachedDateTimePicker: any = undefined;
 function getNativeDatePicker(): any {
   if (cachedDateTimePicker !== undefined) return cachedDateTimePicker;
   try {
-    // Dynamic require để app không bị crash Invariant Violation khi chạy với APK dev-client cũ hoặc Expo Go
+    if (Platform.OS === 'web') {
+      cachedDateTimePicker = null;
+      return null;
+    }
+    // Kiểm tra bằng TurboModuleRegistry.get() (không phải getEnforcing) trước khi require
+    // để tránh kích hoạt RedBox Invariant Violation khi binary chưa có RNCDatePicker.
+    const hasDateModule = Boolean(
+      TurboModuleRegistry?.get?.('RNCDatePicker') ||
+      (NativeModules as any)?.RNCDatePicker
+    );
+    const hasTimeModule = Platform.OS !== 'android' || Boolean(
+      TurboModuleRegistry?.get?.('RNCTimePicker') ||
+      (NativeModules as any)?.RNCTimePicker
+    );
+    if (!hasDateModule || !hasTimeModule) {
+      cachedDateTimePicker = null;
+      return null;
+    }
     const mod = require('@react-native-community/datetimepicker');
     cachedDateTimePicker = mod?.default ?? mod;
   } catch {
@@ -43,6 +61,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function DateTimeField({ label, mode, value, onChange, required, disabled, error }: { label: string; mode: 'date' | 'time'; value: string; onChange: (value: string) => void; required?: boolean; disabled?: boolean; error?: string }) {
   const NativePicker = getNativeDatePicker();
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState<string | null>(null);
   const current = (() => {
     const base = new Date();
     if (mode === 'date') { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value); if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])); }
@@ -56,7 +75,30 @@ export function DateTimeField({ label, mode, value, onChange, required, disabled
   };
 
   if (!NativePicker) {
-    return <Field label={label} value={value} onChangeText={onChange} placeholder={mode === 'date' ? 'YYYY-MM-DD' : 'HH:mm'} required={required} editable={!disabled} error={error} />;
+    if (Platform.OS === 'web') {
+      if (mode === 'date') {
+        const onType = (text: string) => {
+          const masked = maskDateInput(text);
+          const iso = masked.length === 10 ? parseDateVN(masked) : null;
+          if (iso) { setTyped(null); onChange(iso); return; }
+          setTyped(masked);
+          if (!masked) onChange('');
+        };
+        return <Field label={label} value={typed ?? (value ? formatDate(value) : '')} onChangeText={onType} placeholder="dd/mm/yyyy" keyboardType="number-pad" maxLength={10} required={required} editable={!disabled} error={error} />;
+      }
+      return <Field label={label} value={value} onChangeText={onChange} placeholder="HH:mm" required={required} editable={!disabled} error={error} />;
+    }
+
+    const displayFallback = mode === 'date' ? (value ? formatDate(value) : 'Chọn ngày') : (value || 'Chọn giờ');
+    return <View style={styles.field}>
+      <Text style={styles.label}>{label}{required ? <Text style={styles.required}> *</Text> : null}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${displayFallback}`} disabled={disabled} onPress={() => { setTyped(mode === 'date' ? (value ? formatDate(value) : '') : (value || '08:00')); setOpen(true); }} style={({ pressed }) => [styles.input, styles.pickerInput, error && styles.inputError, disabled && styles.disabled, pressed && styles.pressed]}>
+        <Text style={styles.pickerText}>{displayFallback}</Text>
+        <AppIcon name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={19} color={colors.muted} />
+      </Pressable>
+      {error ? <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text> : null}
+      {open ? <FallbackPickerModal label={label} mode={mode} current={current} value={value} typed={typed ?? ''} setTyped={setTyped} onClose={() => setOpen(false)} onSelect={v => { onChange(v); setOpen(false); }} /> : null}
+    </View>;
   }
 
   const display = mode === 'date' ? formatDate(value) : value || '--:--';
@@ -69,6 +111,104 @@ export function DateTimeField({ label, mode, value, onChange, required, disabled
     {error ? <Text accessibilityRole="alert" style={styles.fieldError}>{error}</Text> : null}
     {open ? <NativePicker value={current} mode={mode} is24Hour display={mode === 'date' ? 'default' : 'default'} onChange={handle} /> : null}
   </View>;
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+const MINUTES = Array.from({ length: 12 }, (_, i) => pad(i * 5));
+
+function FallbackPickerModal({ label, mode, current, value, typed, setTyped, onClose, onSelect }: { label: string; mode: 'date' | 'time'; current: Date; value: string; typed: string; setTyped: (v: string | null) => void; onClose: () => void; onSelect: (v: string) => void }) {
+  const [viewYear, setViewYear] = useState(() => current.getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => current.getMonth() + 1);
+  const [selHour, setSelHour] = useState(() => pad(current.getHours()));
+  const [selMin, setSelMin] = useState(() => pad(current.getMinutes()));
+
+  if (mode === 'date') {
+    const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+    const firstDow = (new Date(viewYear, viewMonth - 1, 1).getDay() + 6) % 7;
+    const cells: Array<number | null> = [...Array.from({ length: firstDow }, () => null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+    const stepMonth = (delta: number) => {
+      const next = new Date(viewYear, viewMonth - 1 + delta, 1);
+      setViewYear(next.getFullYear());
+      setViewMonth(next.getMonth() + 1);
+    };
+    return (
+      <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+        <Pressable style={styles.modalBackdrop} onPress={onClose}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{label}</Text>
+              <Pressable onPress={() => onSelect(todayKey())} style={styles.todayChip}><Text style={styles.todayChipText}>Hôm nay</Text></Pressable>
+            </View>
+            <View style={styles.calNav}>
+              <Pressable onPress={() => stepMonth(-1)} style={styles.calNavBtn}><AppIcon name="chevron-back" size={18} color={colors.primary} /></Pressable>
+              <Text style={styles.calMonthLabel}>Tháng {pad(viewMonth)}/{viewYear}</Text>
+              <Pressable onPress={() => stepMonth(1)} style={styles.calNavBtn}><AppIcon name="chevron-forward" size={18} color={colors.primary} /></Pressable>
+            </View>
+            <View style={styles.calWeekRow}>
+              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(w => <Text key={w} style={styles.calWeekDay}>{w}</Text>)}
+            </View>
+            <View style={styles.calGrid}>
+              {cells.map((day, idx) => {
+                if (!day) return <View key={`e-${idx}`} style={styles.calCell} />;
+                const iso = `${viewYear}-${pad(viewMonth)}-${pad(day)}`;
+                const selected = iso === value;
+                return (
+                  <Pressable key={iso} onPress={() => onSelect(iso)} style={[styles.calCell, selected && styles.calCellSelected]}>
+                    <Text style={[styles.calCellText, selected && styles.calCellTextSelected]}>{day}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <TextInput
+              value={typed}
+              onChangeText={t => {
+                const m = maskDateInput(t);
+                setTyped(m);
+                const iso = m.length === 10 ? parseDateVN(m) : null;
+                if (iso) onSelect(iso);
+              }}
+              placeholder="Hoặc nhập dd/mm/yyyy"
+              placeholderTextColor={colors.faint}
+              keyboardType="number-pad"
+              maxLength={10}
+              style={styles.input}
+            />
+            <AppButton label="Đóng" variant="secondary" onPress={onClose} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <Text style={styles.modalTitle}>{label} ({selHour}:{selMin})</Text>
+          <View style={styles.timeColumns}>
+            <ScrollView style={styles.timeCol} contentContainerStyle={styles.timeColContent}>
+              {HOURS.map(h => (
+                <Pressable key={h} onPress={() => setSelHour(h)} style={[styles.timeItem, selHour === h && styles.calCellSelected]}>
+                  <Text style={[styles.calCellText, selHour === h && styles.calCellTextSelected]}>{h} giờ</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <ScrollView style={styles.timeCol} contentContainerStyle={styles.timeColContent}>
+              {MINUTES.map(m => (
+                <Pressable key={m} onPress={() => setSelMin(m)} style={[styles.timeItem, selMin === m && styles.calCellSelected]}>
+                  <Text style={[styles.calCellText, selMin === m && styles.calCellTextSelected]}>{m} phút</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+          <View style={styles.modalFooter}>
+            <View style={{ flex: 1 }}><AppButton label="Hủy" variant="secondary" onPress={onClose} /></View>
+            <View style={{ flex: 1 }}><AppButton label="Chọn giờ" onPress={() => onSelect(`${selHour}:${selMin}`)} /></View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 }
 
 export function SegmentedControl<T extends string>({ value, options, onChange }: { value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void }) {
@@ -89,14 +229,14 @@ export function LoadingBlock({ label = 'Đang tải dữ liệu…' }: { label?:
 export function EmptyState({ icon, title, description }: { icon: AppIconName; title: string; description: string }) { return <Card style={styles.empty}><View style={styles.emptySymbol}><AppIcon name={icon} size={26} color={colors.primaryDark} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyDescription}>{description}</Text></Card>; }
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <Card style={styles.empty}><View style={[styles.emptySymbol, styles.errorSymbol]}><Text style={styles.errorSymbolText}>!</Text></View><Text style={styles.emptyTitle}>Chưa tải được dữ liệu</Text><Text style={styles.emptyDescription}>{message}</Text><AppButton label="Thử lại" variant="secondary" onPress={onRetry} /></Card>; }
 export function formatTime(value?: string | null) { if (!value) return '--:--'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '--:--' : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }); }
-export function formatDate(value?: string | null) { if (!value) return '-'; const raw = value.slice(0, 10); const parts = raw.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : value; }
+export { formatDate, isoDatesToVN, maskDateInput, parseDateVN };
 /** 125 -> "2 giờ 5 phút", 40 -> "40 phút", 120 -> "2 giờ", null -> "-". */
 export function formatMinutes(value?: number | null) { if (value == null) return '-'; const total = Math.max(0, Math.round(value)); const hours = Math.floor(total / 60); const minutes = total % 60; if (!hours) return `${minutes} phút`; return minutes ? `${hours} giờ ${minutes} phút` : `${hours} giờ`; }
 /** "2026-09" -> "09/2026"; giá trị khác định dạng giữ nguyên. */
 export function formatPeriod(value?: string | null) { const m = /^(\d{4})-(\d{2})$/.exec(value || ''); return m ? `${m[2]}/${m[1]}` : value || '-'; }
 /** "Ca hành chính (08:00 - 17:00)" -> "Ca hành chính" (giờ đã có dòng riêng). */
 export function shiftTitle(name?: string | null, fallback = '') { const t = (name || '').replace(/\s*\(.*\)\s*$/, '').trim(); return t || fallback; }
-export function formatDateTime(value?: string | null) { return value ? `${formatTime(value)} ${formatDate(new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }))}` : '-'; }
+export function formatDateTime(value?: string | null) { return value ? `${formatTime(value)} ${formatDate(value)}` : '-'; }
 export function todayKey() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }); }
 export function initialsOf(fullName?: string | null) { const parts = (fullName || '').trim().split(/\s+/).filter(p => /^\p{L}/u.test(p)); if (!parts.length) return 'NV'; if (parts.length === 1) return parts[0][0].toUpperCase(); return parts.slice(-2).map(p => p[0].toUpperCase()).join(''); }
 export function formatMoney(value?: number | null) { const v = Math.round(value || 0); return `${v < 0 ? '-' : ''}${String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`; }
@@ -111,4 +251,25 @@ const styles = StyleSheet.create({
   badge: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: colors.surfaceMuted }, badgeInfo: { backgroundColor: colors.infoSoft }, badgeSuccess: { backgroundColor: colors.successSoft }, badgeWarning: { backgroundColor: colors.warningSoft }, badgeDanger: { backgroundColor: colors.dangerSoft }, badgeText: { color: colors.muted, fontSize: 11, fontWeight: '800' }, badgeTextInfo: { color: colors.info }, badgeTextSuccess: { color: colors.successText }, badgeTextWarning: { color: colors.warningText }, badgeTextDanger: { color: colors.dangerText },
   error: { borderWidth: 1, borderColor: colors.borderDanger, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.sm }, errorText: { color: colors.dangerText, fontSize: 13, lineHeight: 19 }, success: { borderWidth: 1, borderColor: colors.successBorder, backgroundColor: colors.successSoft, borderRadius: radius.md, padding: spacing.sm }, successText: { color: colors.successText, fontSize: 13, lineHeight: 19 },
   loading: { minHeight: 160, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, loadingText: { color: colors.muted, fontSize: 13 }, empty: { minHeight: 220, alignItems: 'center', justifyContent: 'center', padding: 24 }, emptySymbol: { width: 54, height: 54, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md }, errorSymbol: { backgroundColor: colors.dangerSoft }, errorSymbolText: { color: colors.danger, fontSize: 22, fontWeight: '800' }, emptyTitle: { color: colors.ink, fontSize: 17, fontWeight: '800', textAlign: 'center' }, emptyDescription: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.md, maxWidth: 280 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', alignItems: 'center', justifyContent: 'center', padding: spacing.md },
+  modalSheet: { width: '100%', maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm, ...shadow },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  todayChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
+  todayChipText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
+  calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 4 },
+  calNavBtn: { width: 34, height: 34, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  calMonthLabel: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  calWeekRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  calWeekDay: { width: '14.28%', textAlign: 'center', color: colors.muted, fontSize: 11, fontWeight: '700' },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: { width: '14.28%', height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
+  calCellSelected: { backgroundColor: colors.primary },
+  calCellText: { color: colors.ink, fontSize: 14, fontWeight: '600' },
+  calCellTextSelected: { color: '#fff', fontWeight: '800' },
+  timeColumns: { flexDirection: 'row', gap: spacing.sm, height: 220 },
+  timeCol: { flex: 1, borderWidth: 1, borderColor: colors.borderLight, borderRadius: radius.md },
+  timeColContent: { padding: 4, gap: 2 },
+  timeItem: { height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
+  modalFooter: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
 });
