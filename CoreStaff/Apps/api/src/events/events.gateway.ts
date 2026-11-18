@@ -38,10 +38,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: Socket) {
     try {
       const rawCookie = client.handshake.headers.cookie;
-      const authHeader = client.handshake.headers.authorization;
-      const authObjToken = client.handshake.auth?.token;
-      const bearerToken = (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null) || (typeof authObjToken === 'string' ? authObjToken : null);
-      const sid = bearerToken || (rawCookie ? getCookie(rawCookie, 'sid') : null);
+      const sid = getCookie(rawCookie, 'sid');
 
       if (!sid) {
         client.disconnect(true);
