@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { getSessionToken } from './auth';
 
 let socketInstance: Socket | null = null;
 let currentTargetKey: string | null = null;
@@ -54,12 +55,15 @@ export function getSocket(apiBase?: string | null): Socket {
 
   if (!socketInstance) {
     currentTargetKey = targetKey;
+    const token = getSessionToken();
     socketInstance = io(`${targetOrigin}/events`, {
       path: socketPath,
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      auth: token ? { token } : undefined,
+      extraHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
+      transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     });
 
