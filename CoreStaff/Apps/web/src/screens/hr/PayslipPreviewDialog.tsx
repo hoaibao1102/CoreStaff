@@ -231,8 +231,8 @@ export function getStatusBadgeVariant(status: string): BadgeVariant {
 const grossFormula = (hasLegacyKpi: boolean) =>
   `Tổng Gross = Lương cơ bản theo ngày công + Phụ cấp + Thưởng chuyên cần${hasLegacyKpi ? ' + Thưởng KPI' : ''} + Tiền làm thêm giờ.`;
 const TAX_DEDUCTION_FORMULA =
-  'Ba khoản này được trừ khỏi Thu nhập chịu thuế (mục 1): Bảo hiểm (BHXH + BHYT + BHTN), Giảm trừ bản thân, '
-  + 'Giảm trừ người phụ thuộc. Phần còn lại là Thu nhập tính thuế — in ở đầu mục 3.';
+  'Bảo hiểm (BHXH + BHYT + BHTN) được trừ khỏi Thu nhập chịu thuế (mục 1). '
+  + 'Giảm trừ gia cảnh (bản thân, người phụ thuộc) không in ở mục này — vẫn được tính vào Thu nhập tính thuế ở mục 3.';
 const INSURANCE_BASE_FORMULA =
   'Lương đóng bảo hiểm = Lương cơ bản hợp đồng − Tổng phụ cấp (không âm), rồi kẹp sàn/trần riêng của từng khoản. '
   + 'BHXH, BHYT, BHTN = Lương đóng bảo hiểm × tỷ lệ của khoản đó.';
@@ -481,7 +481,7 @@ export function GrossEarningsCard({
   );
 }
 
-/** §2 — Các khoản giảm trừ khỏi Thu nhập chịu thuế. Kết quả để ở đầu mục 3. */
+/** §2 — Bảo hiểm trích từ lương. Giảm trừ gia cảnh in ở mục 3. */
 export function TaxDeductionsCard({
   payslip,
   variant,
@@ -497,7 +497,6 @@ export function TaxDeductionsCard({
     (payslip.socialInsurance || 0) +
     (payslip.healthInsurance || 0) +
     (payslip.unemploymentInsurance || 0);
-  const dependents = payslip.dependents?.length || 0;
   const insuranceDetail =
     payslip.contributionBase && payslip.contributionBase > 0
       ? `Trích trên lương đóng bảo hiểm ${formatCurrency(payslip.contributionBase)}`
@@ -506,8 +505,8 @@ export function TaxDeductionsCard({
   const insuranceLabel = (name: string, rate?: number) =>
     rate ? `${name} (${formatRate(rate)}%)` : name;
 
-  // Ba khoản giảm trừ luôn là 3 hàng cố định của card; bảo hiểm gập sẵn,
-  // bấm mới xổ ra phần trích BHXH/BHYT/BHTN.
+  // Bảo hiểm là hàng duy nhất của card và nó gập sẵn; bấm mới xổ ra phần
+  // trích BHXH/BHYT/BHTN.
   const [showInsuranceParts, setShowInsuranceParts] = useState(false);
   // Ba khoản trích luôn đủ mặt khi xổ ra — khoản 0 ₫ vẫn in, để thấy rõ là
   // kỳ này không trích chứ không phải hệ thống bỏ sót.
@@ -527,8 +526,7 @@ export function TaxDeductionsCard({
         <TableRow>
           <TableHead>Khoản giảm trừ</TableHead>
           <TableHead className="text-right">Số tiền</TableHead>
-        </TableRow>
-      </TableHeader>
+        </TableRow>      </TableHeader>
       <TableBody>
         <TableRow>
           <TableCell>
@@ -580,30 +578,12 @@ export function TaxDeductionsCard({
               </TableCell>
             </TableRow>
           ))}
-        <TableRow>
-          <TableCell>
-            <span className="font-medium text-foreground">Giảm trừ bản thân</span>
-            <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">
-              Mức giảm trừ gia cảnh cho người nộp thuế
-            </span>
-          </TableCell>
-          <TableCell className="text-right font-mono text-destructive">{formatDeduction(payslip.personalDeduction)}</TableCell>
-        </TableRow>
-        <TableRow>
-          <TableCell>
-            <span className="font-medium text-foreground">Giảm trừ người phụ thuộc</span>
-            <span className="mt-0.5 block text-[11.5px] font-normal text-muted-foreground">
-              {dependents > 0 ? `${dependents} người phụ thuộc đã đăng ký` : 'Chưa đăng ký người phụ thuộc'}
-            </span>
-          </TableCell>
-          <TableCell className="text-right font-mono text-destructive">{formatDeduction(payslip.dependentDeduction)}</TableCell>
-        </TableRow>
       </TableBody>
     </Table>
   );
 
   return (
-    <PayslipSection index={2} title="Các khoản giảm trừ thuế" subtitle="Bảo hiểm trích lương và giảm trừ gia cảnh." formula={showFormula ? TAX_DEDUCTION_FORMULA : undefined} variant={variant}>
+    <PayslipSection index={2} title="Các khoản giảm trừ bảo hiểm" subtitle="Bảo hiểm trích từ lương người lao động." formula={showFormula ? TAX_DEDUCTION_FORMULA : undefined} variant={variant}>
       {body}
     </PayslipSection>
   );

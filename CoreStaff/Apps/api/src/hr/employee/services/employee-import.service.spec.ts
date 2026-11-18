@@ -80,8 +80,8 @@ function fakeConnection() {
 const HEADERS = [
 	'employeeCode', 'fullName', 'email', 'role', 'phone',
 	'joinDate', 'dateOfBirth', 'gender', 'citizenId', 'taxCode',
-	'socialInsuranceCode', 'bankAccount', 'address',
-	'departmentCode', 'positionCode', 'directManagerCode',
+	'socialInsuranceCode', 'address',
+	'departmentCode', 'positionCode',
 	'baseSalary', 'salaryEffectiveFrom',
 	'attendanceBonusPolicyCode', 'insuranceEffectiveFrom', 'insuranceEffectiveTo',
 	'contractType', 'contractEffectiveDate', 'contractExpiryDate',
@@ -91,8 +91,8 @@ const HEADERS = [
 const VI_HEADERS = [
 	'Mã nhân viên', 'Họ và tên', 'Email', 'Vai trò', 'Số điện thoại',
 	'Ngày vào làm', 'Ngày sinh', 'Giới tính', 'Số CCCD', 'Mã số thuế',
-	'Số BHXH', 'Số tài khoản ngân hàng', 'Địa chỉ',
-	'Phòng ban', 'Chức danh', 'Quản lý trực tiếp',
+	'Số BHXH', 'Địa chỉ',
+	'Phòng ban', 'Chức danh',
 	'Lương cơ bản', 'Lương hiệu lực từ ngày',
 	'Chính sách thưởng chuyên cần', 'Bảo hiểm hiệu lực từ ngày', 'Bảo hiểm hiệu lực đến ngày',
 	'Loại hợp đồng', 'Ngày hiệu lực hợp đồng', 'Ngày hết hạn hợp đồng',
@@ -557,14 +557,12 @@ describe('EmployeeImportService.parseWorkbook — field rules', () => {
 		expect(await codesFor({ citizenId: '12345678' })).toContain('CITIZEN_ID_INVALID');
 		expect(await codesFor({ taxCode: '123456789' })).toContain('TAX_CODE_INVALID');
 		expect(await codesFor({ socialInsuranceCode: '1234567890123' })).toContain('SOCIAL_INSURANCE_CODE_INVALID');
-		expect(await codesFor({ bankAccount: '12345' })).toContain('BANK_ACCOUNT_INVALID');
 	});
 
 	it('accepts the shortest and longest legal identity numbers', async () => {
 		expect(await codesFor({ citizenId: '123456789' })).toEqual([]);
 		expect(await codesFor({ citizenId: '123456789012' })).toEqual([]);
 		expect(await codesFor({ taxCode: '1234567890' })).toEqual([]);
-		expect(await codesFor({ bankAccount: '123456' })).toEqual([]);
 	});
 
 	it('caps the address at 256 characters', async () => {
@@ -620,28 +618,15 @@ describe('EmployeeImportService.import — catalog lookups', () => {
 		return result.errors.map((e) => e.code);
 	}
 
-	it('reports a manager code that is in no row and in no profile', async () => {
-		expect(await codesFor({}, { directManagerCode: 'KHONG-CO' })).toContain('MANAGER_NOT_FOUND');
+	it('ignores a manager column left over from the older template', async () => {
+		// The template no longer writes `Quản lý trực tiếp`; manager authority is
+		// `ManagerAssignment`. A file saved before that change must still import —
+		// the column parses into no key, so it is skipped and never validated.
+		expect(await codesFor({}, { directManagerCode: 'KHONG-CO' })).toEqual([]);
 	});
 
-	it('accepts a manager that is another row in the same file', async () => {
-		// The lookup counts same-file codes as existing, because pass 3 links them
-		// after everyone is created — rejecting the reference here would make the
-		// feature unusable.
-		const { service } = buildFixture();
-		const result = await service.import(ORG, ACTOR, await workbook([
-			validRow({ employeeCode: 'TVS-010', email: 'lead@tvs.vn' }),
-			validRow({ employeeCode: 'TVS-011', email: 'dev@tvs.vn', directManagerCode: 'TVS-010' }),
-		]), true);
-
-		expect(result.errors).toEqual([]);
-	});
-
-	it('accepts a manager who is already an employee of the tenant', async () => {
-		expect(await codesFor(
-			{ profiles: [{ _id: 'pf0', organizationId: ORG, employeeCode: 'TVS-000', userId: 'u0' }] },
-			{ directManagerCode: 'TVS-000' },
-		)).toEqual([]);
+	it('ignores a bank-account column left over from the older template', async () => {
+		expect(await codesFor({}, { bankAccount: '12345' })).toEqual([]);
 	});
 
 	it('reports DUPLICATE_IN_FILE for a repeated email, not just a repeated code', async () => {
@@ -906,19 +891,17 @@ describe('EmployeeImportService.import', () => {
 		expect(result.errors.map((e) => e.code)).toContain('ATTENDANCE_BONUS_POLICY_NOT_FOUND');
 	});
 
-	it('assigns directManagerId when the manager is another row in the same file', async () => {
+	it('writes no directManagerId — the template no longer carries a manager column', async () => {
 		const { service, profiles } = buildFixture();
 		const buffer = await workbook([
 			validRow({ employeeCode: 'TVS-010', email: 'lead@tvs.vn' }),
-			validRow({ employeeCode: 'TVS-011', email: 'dev@tvs.vn', directManagerCode: 'TVS-010' }),
+			validRow({ employeeCode: 'TVS-011', email: 'dev@tvs.vn' }),
 		]);
 
 		const result = await service.import(ORG, ACTOR, buffer);
 
 		expect(result.created).toBe(2);
-		const dev = profiles.rows.find((r) => r.employeeCode === 'TVS-011');
-		const lead = profiles.rows.find((r) => r.employeeCode === 'TVS-010');
-		expect(dev?.directManagerId).toBe(lead?.userId);
+		for (const row of profiles.rows) expect(row.directManagerId).toBeUndefined();
 	});
 
 	it('reports DUPLICATE_IN_FILE for a repeated employeeCode and creates nothing', async () => {
@@ -1146,10 +1129,6 @@ describe('EmployeeImportService.buildTemplate', () => {
 			],
 			allowances: [{ _id: 'a1', organizationId: ORG, code: 'PHONE', name: 'Điện thoại', active: true }],
 			bonusPolicies: [{ _id: 'b1', organizationId: ORG, name: 'Thưởng chuyên cần 09/2026', active: true }],
-			// One existing employee, so the manager dropdown has something to list
-			// (its label needs the name, which lives on `User`).
-			profiles: [{ _id: 'pf0', organizationId: ORG, employeeCode: 'TVS-000', userId: 'u0' }],
-			users: [{ _id: 'u0', organizationId: ORG, fullName: 'Trần Quản Lý' }],
 		});
 	}
 
@@ -1207,12 +1186,11 @@ describe('EmployeeImportService.buildTemplate', () => {
 		expect(formulae).toContain('DanhMuc!$B$2:$B$4'); // GioiTinh — 3 genders
 		expect(formulae).toContain('DanhMuc!$C$2:$C$3'); // PhongBan — 2 departments
 		expect(formulae).toContain('DanhMuc!$D$2:$D$3'); // ChucDanh — flat, both departments
-		expect(formulae).toContain('DanhMuc!$E$2:$E$2'); // QuanLy — the one seeded employee
-		expect(formulae).toContain('DanhMuc!$G$2:$G$3'); // ThuongCC — sentinel + 1 policy
-		expect(formulae).toContain('DanhMuc!$H$2:$H$4'); // LoaiHopDong — 3 fixed contract types
+		expect(formulae).toContain('DanhMuc!$F$2:$F$3'); // ThuongCC — sentinel + 1 policy
+		expect(formulae).toContain('DanhMuc!$G$2:$G$4'); // LoaiHopDong — 3 fixed contract types
 
 		// QuanHe is the dependent sheet's only list.
-		expect(validationFormulae(dependents)).toEqual(['DanhMuc!$F$2:$F$5']);
+		expect(validationFormulae(dependents)).toEqual(['DanhMuc!$E$2:$E$5']);
 	});
 
 	it('formats every date column mm/dd/yyyy so Excel stores a real date', async () => {
@@ -1296,8 +1274,7 @@ describe('EmployeeImportService.buildTemplate', () => {
 		await wb.xlsx.load(buffer as unknown as ExcelJS.Buffer);
 
 		// Role, gender, the bonus-policy list (sentinel only) and the contract-type
-		// list (fixed, tenant-independent) survive — department, position and
-		// manager do not.
+		// list (fixed, tenant-independent) survive — department and position do not.
 		expect(validationFormulae(wb.getWorksheet('NhanVien')!)).toHaveLength(4);
 		expect(validationFormulae(wb.getWorksheet('NguoiPhuThuoc')!)).toHaveLength(1);
 	});

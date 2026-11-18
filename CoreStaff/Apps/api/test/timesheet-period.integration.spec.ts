@@ -112,7 +112,7 @@ describe('TASK-072 — Create Period Validations', () => {
     expect(res.body.error.code).toBe('PERIOD_IN_PAST');
   });
 
-  it('should reject duplicate period for same organization', async () => {
+  it('should reject a period whose dates overlap an existing one', async () => {
     await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
       .send(validPeriod());
@@ -121,23 +121,26 @@ describe('TASK-072 — Create Period Validations', () => {
       .set('Cookie', hrCookie)
       .send(validPeriod());
 
-    // Duplicate of an currently-active period is rejected as PERIOD_ALREADY_ACTIVE.
-    // The unique index would only surface if the first period were CLOSED/soft-deleted.
+    // Same date range → the overlap guard fires before the unique index can.
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('PERIOD_ALREADY_ACTIVE');
+    expect(res.body.error.code).toBe('PERIOD_OVERLAP');
   });
 
-  it('should block creation when active period exists', async () => {
+  it('should allow any number of unclosed periods as long as their dates do not overlap', async () => {
     await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
       .send(validPeriod());
 
+    // The first period is still OPEN; a later, non-overlapping one is fine.
     const res = await http.post(API_PREFIX)
       .set('Cookie', hrCookie)
       .send(nextValidPeriod());
 
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('PERIOD_ALREADY_ACTIVE');
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('OPEN');
+
+    const list = await http.get(API_PREFIX).set('Cookie', hrCookie);
+    expect(list.body.data.filter((p: any) => p.status === 'OPEN')).toHaveLength(2);
   });
 
   it('should allow creating new period after closing previous one', async () => {

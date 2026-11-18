@@ -191,13 +191,16 @@ test('§1 — thiếu taxableIncome thì tự cộng từ các dòng chịu thu�
   expect(html).toContain('22.130.000');
 });
 
-test('§2 TAX DEDUCTIONS — insurance + family deductions yield taxable earnings', () => {
+test('§2 BẢO HIỂM — chỉ khoản trích bảo hiểm, không còn giảm trừ gia cảnh', () => {
   const html = renderToStaticMarkup(<TaxDeductionsCard payslip={basePayslip} />);
 
-  for (const label of ['Các khoản giảm trừ thuế', 'Bảo hiểm (BHXH + BHYT + BHTN)', 'Giảm trừ bản thân']) {
+  for (const label of ['Các khoản giảm trừ bảo hiểm', 'Bảo hiểm (BHXH + BHYT + BHTN)']) {
     expect(html).toContain(label);
   }
-  expect(html).toContain('15.500.000');
+  // Giảm trừ gia cảnh không in ở mục 2 — nó vẫn được tính ở mục 3.
+  expect(html).not.toContain('Giảm trừ bản thân');
+  expect(html).not.toContain('Giảm trừ người phụ thuộc');
+  expect(html).not.toContain('người phụ thuộc đã đăng ký');
   // Kết quả Thu nhập tính thuế đã chuyển sang mục 3 — mục 2 chỉ liệt kê khoản giảm trừ.
   expect(html).not.toContain('Thu nhập tính thuế');
   // Căn cứ trích in ở dòng phụ của mục bảo hiểm, không lặp thành dòng riêng.
@@ -205,31 +208,15 @@ test('§2 TAX DEDUCTIONS — insurance + family deductions yield taxable earning
   expect(html).not.toContain('Lương đóng BHXH (căn cứ trích)');
 });
 
-test('§2 — ba khoản giảm trừ luôn là mục cố định, dòng người phụ thuộc không bị ẩn', () => {
-  const html = renderToStaticMarkup(<TaxDeductionsCard payslip={basePayslip} />);
-
-  // Không có người phụ thuộc → vẫn in dòng, số tiền bằng 0.
-  expect(html).toContain('Giảm trừ người phụ thuộc');
-  expect(html).toContain('Chưa đăng ký người phụ thuộc');
-});
-
-test('§2 — hiển thị giảm trừ người phụ thuộc khi có', () => {
+test('§2 — bảo hiểm là mục cố định, in đủ cả khi kỳ này không trích', () => {
   const html = renderToStaticMarkup(
     <TaxDeductionsCard
-      payslip={{
-        ...basePayslip,
-        dependentDeduction: 12_400_000,
-        dependents: [
-          { fullName: 'Bé A', relationship: 'CON' },
-          { fullName: 'Bé B', relationship: 'CON' },
-        ],
-      }}
+      payslip={{ ...basePayslip, socialInsurance: 0, healthInsurance: 0, unemploymentInsurance: 0 }}
     />,
   );
 
-  expect(html).toContain('Giảm trừ người phụ thuộc');
-  expect(html).toContain('2 người phụ thuộc đã đăng ký');
-  expect(html).toContain('12.400.000');
+  expect(html).toContain('Bảo hiểm (BHXH + BHYT + BHTN)');
+  expect(html).toContain('Kỳ này không trích bảo hiểm');
 });
 
 test('§3 PIT — biểu thuế lũy tiến từng phần dạng bảng', () => {

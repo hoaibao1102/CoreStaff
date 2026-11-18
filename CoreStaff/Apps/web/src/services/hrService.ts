@@ -483,6 +483,7 @@ export const HR_ERROR_CODES: Record<string, string> = {
     PAYROLL_RUN_NOT_FOUND: 'Không tìm thấy bảng lương.',
     PERIOD_NOT_FOUND: 'Không tìm thấy kỳ công.',
     PERIOD_ALREADY_ACTIVE: 'Đang có kỳ công chưa đóng. Hãy đóng hoặc mở lại kỳ hiện tại trước khi tạo kỳ mới.',
+    PERIOD_OVERLAP: 'Khoảng ngày của kỳ công mới trùng với một kỳ công đã có. Vui lòng chọn khoảng ngày khác.',
     PERIOD_ALREADY_EXISTS: 'Kỳ công này đã tồn tại.',
     USE_CLOSE_OR_REOPEN_WORKFLOW: 'Không thể đóng hoặc mở lại kỳ công bằng thao tác này. Hãy dùng chức năng Đóng kỳ / Mở lại kỳ.',
 

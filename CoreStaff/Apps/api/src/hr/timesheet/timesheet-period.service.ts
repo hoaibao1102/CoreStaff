@@ -95,8 +95,8 @@ export class TimesheetPeriodService {
 	 * Create a new timesheet period for an organization.
 	 * Only one period per (organization, month) is allowed.
 	 * Validates that the period has between 28-31 days (inclusive).
-	 * Blocks creation if there's already an active (OPEN/REVIEWING/READY_TO_CLOSE) period.
-	 * Blocks creation if the period is in the past or overlaps with existing periods.
+	 * Blocks creation if the period is in the past or overlaps a closed period.
+	 * Any number of unclosed periods may coexist — HR opens as many as it needs.
 	 */
 	async create(organizationId: string, dto: CreateTimesheetPeriodDto): Promise<any> {
 		// Validate day range (28-31 days)
@@ -112,44 +112,29 @@ export class TimesheetPeriodService {
 		const newStartDate = new Date(dto.startDate);
 		const newEndDate = new Date(dto.endDate);
 
-		// AUD-H11: the active-slot and overlap checks and the insert share one
-		// transaction serialized per tenant, so two different period keys cannot
-		// both become active.
+		// AUD-H11: the overlap check and the insert share one transaction
+		// serialized per tenant, so two concurrent creates cannot both pass the
+		// date-overlap test.
 		const session = await this.periodModel.db.startSession();
 		try {
 			let created: any;
 			await session.withTransaction(async () => {
 				await acquireSerializationLock(this.periodModel.db, `timesheet-period:${organizationId}`, session);
 
-				// Check if there's already an active period (OPEN, REVIEWING, or READY_TO_CLOSE)
-				const existingActivePeriod = await this.periodModel.findOne({
+				// Date ranges must not overlap — against ANY period, not just a
+				// closed one. Periods are resolved by work date (`resolvePeriodId`,
+				// snapshot population), so two periods covering the same day would
+				// make those lookups pick one arbitrarily.
+				const existingPeriods = await this.periodModel.find({
 					organizationId,
-					status: { $in: [
-						TimesheetPeriodStatus.OPEN,
-						TimesheetPeriodStatus.REVIEWING,
-						TimesheetPeriodStatus.READY_TO_CLOSE,
-					]},
 					active: true,
 				}).session(session);
 
-				if (existingActivePeriod) {
-					throw new BadRequestException(
-						`PERIOD_ALREADY_ACTIVE: Cannot create a new period when there is already an active period (${existingActivePeriod.period} - ${existingActivePeriod.status}). Please close or reopen the existing period first.`
-					);
-				}
-
-				// Check for overlap with any closed periods
-				const allClosedPeriods = await this.periodModel.find({
-					organizationId,
-					status: TimesheetPeriodStatus.CLOSED,
-					active: true,
-				}).session(session);
-
-				if (allClosedPeriods.length > 0) {
+				if (existingPeriods.length > 0) {
 					dto.validateNoOverlap(
 						newStartDate,
 						newEndDate,
-						allClosedPeriods.map(p => ({
+						existingPeriods.map(p => ({
 							startDate: new Date(p.startDate),
 							endDate: new Date(p.endDate),
 							status: p.status,

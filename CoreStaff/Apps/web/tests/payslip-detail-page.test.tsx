@@ -83,7 +83,7 @@ test('phiếu lương mở dạng trang: đủ 4 mục, sơ đồ công thức v
   const html = scope().innerHTML;
 
   // React escape `&` thành `&amp;` trong innerHTML.
-  for (const label of ['Tổng thu nhập (Gross)', 'Thu nhập chịu thuế trước giảm trừ', 'Các khoản giảm trừ thuế', 'Thuế TNCN (PIT)', 'Tổng kết &amp; đối soát thực nhận']) {
+  for (const label of ['Tổng thu nhập (Gross)', 'Thu nhập chịu thuế trước giảm trừ', 'Các khoản giảm trừ bảo hiểm', 'Thuế TNCN (PIT)', 'Tổng kết &amp; đối soát thực nhận']) {
     expect(html).toContain(label);
   }
   // Mỗi mục là một bảng thật, không còn dropdown chi tiết.
@@ -128,7 +128,7 @@ test('bố cục A: mục 2+3 xếp chồng cột phải, mục 4+5 ghép hàng 
   expect(right.className).toContain('flex-col');
   // Thứ tự đọc cột phải trên→dưới vẫn là 2 rồi 3.
   expect([...right.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
-    'Các khoản giảm trừ thuế',
+    'Các khoản giảm trừ bảo hiểm',
     'Thu nhập tính thuế',
   ]);
 
@@ -233,7 +233,7 @@ test('từng mục có nút "?" mở công thức bằng chữ', async () => {
   const helpButtons = [...scope().querySelectorAll<HTMLButtonElement>('button[aria-label^="Cách tính:"]')];
   expect(helpButtons.map((btn) => btn.getAttribute('aria-label'))).toEqual([
     'Cách tính: Tổng thu nhập (Gross)',
-    'Cách tính: Các khoản giảm trừ thuế',
+    'Cách tính: Các khoản giảm trừ bảo hiểm',
     'Cách tính: Lương đóng bảo hiểm',
     'Cách tính: Thu nhập tính thuế',
     'Cách tính: Thuế TNCN (PIT)',
