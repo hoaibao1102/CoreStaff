@@ -18,11 +18,11 @@ export const REFRESH_COOKIE_NAME = 'rt';
  * POST /api/auth/refresh accepts, not by its path.
  */
 export function sessionCookieOptions(): CookieOptions {
-	const production = process.env.NODE_ENV === 'production';
+	const dev = process.env.NODE_ENV === 'development';
 	return {
 		httpOnly: true,
-		secure: production,
-		sameSite: production ? 'none' : 'lax',
+		secure: !dev,
+		sameSite: dev ? 'lax' : 'none',
 		path: '/',
 	};
 }

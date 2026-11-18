@@ -1,5 +1,5 @@
 import { apiUrl } from '../config/api';
-import { notifySignedOut, tryRefreshSession } from './auth';
+import { getSessionToken, notifySignedOut, tryRefreshSession } from './auth';
 import type {
     ContractStatus,
     ContractType,
@@ -621,12 +621,14 @@ export async function hrRequest<T>(base: string, path: string, options?: Request
  * `allowRefresh=false` on the retry stops a second expiry from looping.
  */
 async function send<T>(base: string, path: string, options: RequestInit | undefined, allowRefresh: boolean): Promise<T> {
+    const token = getSessionToken();
     const res = await fetch(apiUrl(base, path), {
         ...options,
         credentials: 'include',
         cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...(options?.headers || {}),
         },
     });
@@ -1278,7 +1280,12 @@ export function uploadDocument(
 }
 
 async function fetchRaw<T>(base: string, path: string, options: RequestInit, allowRefresh: boolean): Promise<T> {
-    const res = await fetch(apiUrl(base, path), { ...options, credentials: 'include' });
+    const token = getSessionToken();
+    const headers = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+    };
+    const res = await fetch(apiUrl(base, path), { ...options, headers, credentials: 'include' });
 
     if (res.status === 401 && allowRefresh) {
         if (await tryRefreshSession(base)) return fetchRaw<T>(base, path, options, false);
@@ -1305,9 +1312,13 @@ async function fetchRaw<T>(base: string, path: string, options: RequestInit, all
  * the server derives Content-Disposition from the stored originalName, and the
  * endpoint is tenant+owner scoped. */
 export async function downloadDocument(base: string, id: string): Promise<void> {
+    const token = getSessionToken();
     const res = await fetch(apiUrl(base, `/api/hr/documents/${encodeURIComponent(id)}/download`), {
         method: 'GET',
         credentials: 'include',
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
     });
     if (!res.ok) {
         const body = await parseJson<ApiFailure>(res);

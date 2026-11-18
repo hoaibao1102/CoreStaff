@@ -11,6 +11,7 @@ export function configureApp(app: INestApplication): void {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) =>
       callback(null, isOriginAllowed(origin)),
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With', 'Accept'],
   });
   app.use(originGate());
   app.setGlobalPrefix('api');

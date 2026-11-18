@@ -31,14 +31,14 @@ export class AuthController {
 		@Res({ passthrough: true }) res: Response,
 		@Body() dto: LoginDto,
 		@Req() req?: Request,
-	): Promise<{ success: true; data: { user: Record<string, unknown>; mustChangePassword: boolean } }> {
+	): Promise<{ success: true; data: { user: Record<string, unknown>; mustChangePassword: boolean; token?: string } }> {
 		const result = await this.authService.login(dto, { ip: req?.ip, userAgent: req?.headers?.['user-agent'] });
 
 		setSessionCookies(res, result.sessionId, result.refreshToken);
 
 		return {
 			success: true,
-			data: { user: result.user, mustChangePassword: result.mustChangePassword },
+			data: { user: result.user, mustChangePassword: result.mustChangePassword, token: result.sessionId },
 		};
 	}
 
@@ -56,8 +56,10 @@ export class AuthController {
 	async refresh(
 		@Req() req: Request,
 		@Res({ passthrough: true }) res: Response,
-	): Promise<{ success: true; data: { user: Record<string, unknown> } }> {
-		const rt = getCookie(req.headers.cookie, REFRESH_COOKIE_NAME);
+	): Promise<{ success: true; data: { user: Record<string, unknown>; token?: string } }> {
+		const authHeader = req.headers.authorization;
+		const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+		const rt = getCookie(req.headers.cookie, REFRESH_COOKIE_NAME) || bearerToken;
 		if (!rt) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 
 		const result = await this.authService.refreshSession(rt);
@@ -75,7 +77,9 @@ export class AuthController {
 		@Req() req: Request,
 		@Res({ passthrough: true }) res: Response,
 	): Promise<{ success: true }> {
-		const sid = getCookie(req.headers.cookie, COOKIE_NAME);
+		const authHeader = req.headers.authorization;
+		const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+		const sid = getCookie(req.headers.cookie, COOKIE_NAME) || bearerToken;
 		if (sid) await this.authService.logout(sid);
 		clearSessionCookies(res);
 		return { success: true };

@@ -17,6 +17,24 @@ export interface AuthUser {
 export interface LoginResult {
   user: AuthUser;
   mustChangePassword: boolean;
+  token?: string;
+}
+
+const TOKEN_KEY = 'corestaff_session_token';
+
+export function getSessionToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setSessionToken(token?: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {}
 }
 
 interface ApiSuccess<T> {
@@ -49,6 +67,7 @@ export const signedOutEvent = 'corestaff:signed-out';
 
 /** Guarded: the service modules are also imported by unit tests with no DOM. */
 export function notifySignedOut(): void {
+  setSessionToken(null);
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(signedOutEvent));
 }
 
@@ -76,13 +95,16 @@ const NO_REFRESH_PATHS = new Set([
 ]);
 
 async function request<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
+  const token = getSessionToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(init?.headers as Record<string, string> || {}),
+  };
   const res = await fetch(apiUrl(base, path), {
     ...init,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
+    headers,
   });
 
   // SRS §4.4: the session cookie is short-lived, so a 401 usually means
@@ -118,7 +140,10 @@ let refreshInflight: Promise<boolean> | null = null;
 
 export function tryRefreshSession(base: string): Promise<boolean> {
   refreshInflight ??= request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
-    .then(() => true)
+    .then(result => {
+      if (result.token) setSessionToken(result.token);
+      return true;
+    })
     .catch(() => false)
     .finally(() => {
       refreshInflight = null;
@@ -126,11 +151,13 @@ export function tryRefreshSession(base: string): Promise<boolean> {
   return refreshInflight;
 }
 
-export function login(base: string, identifier: string, password: string): Promise<LoginResult> {
-  return request<LoginResult>(base, '/api/auth/login', {
+export async function login(base: string, identifier: string, password: string): Promise<LoginResult> {
+  const result = await request<LoginResult>(base, '/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ identifier: identifier.trim(), password }),
   });
+  if (result.token) setSessionToken(result.token);
+  return result;
 }
 
 export function me(base: string): Promise<AuthUser> {
@@ -164,10 +191,15 @@ export function resetPassword(base: string, token: string, newPassword: string):
 }
 
 export async function logout(base: string): Promise<void> {
+  const token = getSessionToken();
+  setSessionToken(null);
   await fetch(apiUrl(base, '/api/auth/logout'), {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
 }
 

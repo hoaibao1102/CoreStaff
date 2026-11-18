@@ -1,4 +1,5 @@
 import { apiUrl } from '../config/api';
+import { getSessionToken } from './auth';
 
 export interface TodayAttendanceData {
   workDate: string;
@@ -92,8 +93,10 @@ export interface CheckOutPayload {
 async function request<T>(base: string, path: string, options: RequestInit = {}): Promise<T> {
   const url = apiUrl(base, path);
   const isFormData = options.body instanceof FormData;
+  const token = getSessionToken();
 
   const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string>),
   };
 

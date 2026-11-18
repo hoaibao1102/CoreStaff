@@ -41,9 +41,9 @@ export class AuthGuard implements CanActivate {
 	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const req = context.switchToHttp().getRequest();
 		const rawCookie = req.headers.cookie;
-		if (!rawCookie) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
-
-		const sid = getCookie(rawCookie, COOKIE_NAME);
+		const authHeader = req.headers.authorization;
+		const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+		const sid = bearerToken || (rawCookie ? getCookie(rawCookie, COOKIE_NAME) : null);
 		if (!sid) throw new UnauthorizedException('AUTH_SESSION_EXPIRED');
 
 		const session = await this.sessionModel.findOne({
