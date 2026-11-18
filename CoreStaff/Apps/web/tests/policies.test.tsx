@@ -170,8 +170,19 @@ test('labor lists effective-dated policies with version and status badge', async
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
-test('labor empty state when the list endpoint returns nothing', async () => {
-  laborRows = [];
+test('labor detail dialog groups values into categories', async () => {
+  await render(<LaborCompliancePolicyScreen apiBase="https://api.test" />);
+  await openRowMenu('Mở thao tác chính sách', 'Xem chi tiết');
+  const dialog = document.body.querySelector('[role="dialog"]');
+  expect(dialog).not.toBeNull();
+  const headings = [...dialog!.querySelectorAll('h3')].map((h) => h.textContent);
+  expect(headings).toEqual(['Giờ làm thường', 'Tăng ca', 'Cấu hình V2', 'Khác']);
+  expect(dialog!.textContent).toContain('Tối đa mỗi tuần');
+  expect(dialog!.textContent).toContain('48 giờ'); // 2880 phút
+  expect(dialog!.textContent).toContain('Chưa cấu hình (legacy V1)');
+});
+
+test('labor empty state when the list endpoint returns nothing', async () => {  laborRows = [];
   await render(<LaborCompliancePolicyScreen apiBase="https://api.test" />);
   expect(container.textContent).toContain('Chưa có chính sách tuân thủ lao động nào.');
 });
