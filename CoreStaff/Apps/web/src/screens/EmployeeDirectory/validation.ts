@@ -71,7 +71,28 @@ export function validateEmail(value: string): string | null {
 }
 
 export function validateOptionalDateOfBirth(value: string): string | null {
-    return value.trim() ? validateDateNotFuture(value, 'ngày sinh') : null;
+    if (!value.trim()) return null;
+    return validateDateNotFuture(value, 'ngày sinh') ?? validateMinimumWorkingAge(value);
+}
+
+/**
+ * QC 3.1 — Bộ luật Lao động 2019 Điều 143: người lao động phải đủ 15 tuổi.
+ * Compares calendar days, not instants, so a birthday counts from 00:00 local.
+ */
+export const MINIMUM_WORKING_AGE = 15;
+
+export function validateMinimumWorkingAge(value: string): string | null {
+    const [year, month, day] = value.split('-').map(Number);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !year || !month || !day) return null; // format handled elsewhere
+    const dob = new Date(year, month - 1, day);
+    if (Number.isNaN(dob.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fifteenth = new Date(dob.getFullYear() + MINIMUM_WORKING_AGE, dob.getMonth(), dob.getDate());
+    if (fifteenth > today) {
+        return `Nhân viên phải đủ ${MINIMUM_WORKING_AGE} tuổi theo Luật Lao động 2019 (Điều 143).`;
+    }
+    return null;
 }
 
 export function validateAddress(value: string): string | null {

@@ -16,6 +16,7 @@ import {
   type UpdateSalaryProfilePayload,
 } from '@/services/compensation.service';
 import { getEmployees, hrErrorMessage, type EmployeeProfile } from '@/services/hrService';
+import { formatVN } from '@/lib/datetime';
 
 function formatVnd(val?: number): string {
   if (val === undefined || val === null || Number.isNaN(val)) return '—';
@@ -46,7 +47,6 @@ export function SalaryProfileCreateDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
   const [effectiveTo, setEffectiveTo] = useState('');
   const [baseSalary, setBaseSalary] = useState('');
-  const [isProbation, setIsProbation] = useState(false);
   const [probationJobSalary, setProbationJobSalary] = useState('');
   const [probationAgreedSalary, setProbationAgreedSalary] = useState('');
   const [assignedAllowances, setAssignedAllowances] = useState<Record<string, { enabled: boolean; amount: string }>>({});
@@ -112,7 +112,9 @@ export function SalaryProfileCreateDialog({
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
-    if (isProbation) {
+    // QC 4.12 — no checkbox: leaving both blank means "no probation wage".
+    // Filling only one is an error, since the server requires both together.
+    if (probationJobSalary.trim() || probationAgreedSalary.trim()) {
       jobSal = Number(probationJobSalary);
       agreedSal = Number(probationAgreedSalary);
       if (Number.isNaN(jobSal) || jobSal <= 0) return setError('Lương công việc thử việc không hợp lệ.');
@@ -151,12 +153,16 @@ export function SalaryProfileCreateDialog({
     }
   };
 
-  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  // Lương đóng BH là số dẫn xuất (chỉ trừ phụ cấp có tích BH) — hiện trước để HR thấy ngay.
   const derivedInsuranceSalary = deriveInsuranceSalary(
     Number(baseSalary) || 0,
     Object.entries(assignedAllowances)
       .filter(([_, v]) => v.enabled)
-      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+      .map(([allowanceId, v]) => ({
+        allowanceId,
+        amount: Number(v.amount) || 0,
+        insuranceBased: allowances.find(a => a._id === allowanceId)?.insuranceBased === true,
+      })),
   );
 
   return (
@@ -174,55 +180,53 @@ export function SalaryProfileCreateDialog({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Nhân viên <span className="text-red-500">*</span></label>
-            <select
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              value={employeeId}
-              onChange={e => setEmployeeId(e.target.value)}
-              disabled={loadingOpts || submitting}
-            >
-              <option value="">{loadingOpts ? 'Đang tải danh sách nhân viên…' : 'Chọn nhân viên…'}</option>
-              {employees.map(emp => (
-                <option key={emp._id} value={emp._id}>
-                  {emp.employeeCode} — {emp.fullName || 'Chưa đặt tên'}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nhân viên <span className="text-red-500">*</span></label>
+              <select
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={employeeId}
+                onChange={e => setEmployeeId(e.target.value)}
+                disabled={loadingOpts || submitting}
+              >
+                <option value="">{loadingOpts ? 'Đang tải danh sách nhân viên…' : 'Chọn nhân viên…'}</option>
+                {employees.map(emp => (
+                  <option key={emp._id} value={emp._id}>
+                    {emp.employeeCode} — {emp.fullName || 'Chưa đặt tên'}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Ngày bắt đầu hiệu lực <span className="text-red-500">*</span></label>
-              <Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} disabled={submitting} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Ngày kết thúc hiệu lực (tùy chọn)</label>
-              <Input type="date" value={effectiveTo} onChange={e => setEffectiveTo(e.target.value)} disabled={submitting} placeholder="Để trống nếu vô hạn" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Lương cơ bản (VND) <span className="text-red-500">*</span></label>
-              <Input type="number" min="0" step="500000" placeholder="15000000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
-              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
-                {formatVnd(derivedInsuranceSalary)}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ngày bắt đầu hiệu lực <span className="text-red-500">*</span></label>
+                <Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} disabled={submitting} />
               </div>
-              <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ngày kết thúc hiệu lực (tùy chọn)</label>
+                <Input type="date" value={effectiveTo} onChange={e => setEffectiveTo(e.target.value)} disabled={submitting} placeholder="Để trống nếu vô hạn" />
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="isProbation" checked={isProbation} onChange={e => setIsProbation(e.target.checked)} className="h-4 w-4 rounded border-input cursor-pointer" disabled={submitting} />
-              <label htmlFor="isProbation" className="text-sm font-medium cursor-pointer">Cấu hình lương thử việc (TASK-031)</label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Lương cơ bản (VND) <span className="text-red-500">*</span></label>
+                <Input type="number" min="0" step="500000" placeholder="15000000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Lương đóng BH (VND)</label>
+                <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
+                  {formatVnd(derivedInsuranceSalary)}
+                </div>
+                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp có tích tính BH.</p>
+              </div>
             </div>
-            {isProbation && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
+
+            {/* QC 4.12 — loại hợp đồng đã có trạng thái Thử việc/Chính thức nên
+                không cần checkbox; để trống cả hai ô = không cấu hình thử việc. */}
+            <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
+              <div className="text-sm font-medium text-foreground">Lương thử việc (tuỳ chọn)</div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium">Lương công việc (VND)</label>
                   <Input type="number" placeholder="15000000" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
@@ -237,94 +241,92 @@ export function SalaryProfileCreateDialog({
                   </p>
                 )}
               </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Phụ cấp áp dụng cho nhân viên</label>
-              <span className="text-[11px] text-muted-foreground">Tùy chỉnh số tiền phụ cấp theo nhân viên</span>
             </div>
-            {allowances.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có phụ cấp nào trong tổ chức.</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/10">
-                {allowances.map(item => {
-                  const assignment = assignedAllowances[item._id] || { enabled: false, amount: '' };
-                  return (
-                    <div
-                      key={item._id}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-md border transition-colors ${
-                        assignment.enabled ? 'border-primary/40 bg-background shadow-xs' : 'border-border/60 hover:bg-muted/40'
-                      }`}
-                    >
-                      <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1">
-                        <input
-                          type="checkbox"
-                          checked={assignment.enabled}
-                          onChange={e => handleToggleAllowance(item._id, e.target.checked, item.amount)}
-                          className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20"
-                          disabled={submitting}
-                        />
-                        <div>
-                          <div className="font-medium text-foreground">{item.name}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            Mã: <code className="font-mono">{item.code}</code>
-                            {item.description ? ` • ${item.description}` : ''}
-                            {item.taxable ? ' • Thuế PIT' : ''}
-                            {item.insuranceBased ? ' • Đóng BHXH' : ''}
-                            {item.prorated ? ' • Tính theo ngày công' : ''}
-                          </div>
-                        </div>
-                      </label>
-                      {assignment.enabled && (
-                        <div className="flex items-center gap-1.5 pl-6 sm:pl-0 sm:w-48 shrink-0">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="50000"
-                            placeholder="Số tiền phụ cấp..."
-                            value={assignment.amount}
-                            onChange={e => handleAllowanceAmountChange(item._id, e.target.value)}
-                            disabled={submitting}
-                            className="h-8 text-xs font-semibold"
-                          />
-                          <span className="text-xs text-muted-foreground font-medium">đ</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Phụ cấp áp dụng cho nhân viên</label>
+                <span className="text-[11px] text-muted-foreground">Tùy chỉnh số tiền phụ cấp theo nhân viên</span>
               </div>
-            )}
+              {allowances.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Chưa có phụ cấp nào trong tổ chức.</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/10">
+                  {allowances.map(item => {
+                    const assignment = assignedAllowances[item._id] || { enabled: false, amount: '' };
+                    return (
+                      <div
+                        key={item._id}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-md border transition-colors ${assignment.enabled ? 'border-primary/40 bg-background shadow-xs' : 'border-border/60 hover:bg-muted/40'
+                          }`}
+                      >
+                        <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1">
+                          <input
+                            type="checkbox"
+                            checked={assignment.enabled}
+                            onChange={e => handleToggleAllowance(item._id, e.target.checked, item.amount)}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20"
+                            disabled={submitting}
+                          />
+                          <div>
+                            <div className="font-medium text-foreground">{item.name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Mã: <code className="font-mono">{item.code}</code>
+                              {item.description ? ` • ${item.description}` : ''}
+                              {item.taxable ? ' • Thuế PIT' : ''}
+                              {item.insuranceBased ? ' • Đóng BH' : ''}
+                              {item.prorated ? ' • Tính theo ngày công' : ''}
+                            </div>
+                          </div>
+                        </label>
+                        {assignment.enabled && (
+                          <div className="flex items-center gap-1.5 pl-6 sm:pl-0 sm:w-48 shrink-0">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="50000"
+                              placeholder="Số tiền phụ cấp..."
+                              value={assignment.amount}
+                              onChange={e => handleAllowanceAmountChange(item._id, e.target.value)}
+                              disabled={submitting}
+                              className="h-8 text-xs font-semibold"
+                            />
+                            <span className="text-xs text-muted-foreground font-medium">đ</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Chính sách thưởng chuyên cần</label>
+              <select
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={bonusPolicyId}
+                onChange={e => setBonusPolicyId(e.target.value)}
+                disabled={loadingOpts || submitting}
+              >
+                <option value="">Không áp dụng thưởng chuyên cần</option>
+                {bonusPolicies.map(pol => (
+                  <option key={pol._id} value={pol._id}>
+                    {pol.name} — Thưởng tối đa {formatVnd(pol.bonusAmount)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Chính sách thưởng chuyên cần</label>
-            <select
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              value={bonusPolicyId}
-              onChange={e => setBonusPolicyId(e.target.value)}
-              disabled={loadingOpts || submitting}
-            >
-              <option value="">Không áp dụng thưởng chuyên cần</option>
-              {bonusPolicies.map(pol => (
-                <option key={pol._id} value={pol._id}>
-                  {pol.name} — Thưởng tối đa {formatVnd(pol.bonusAmount)}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Tạo hồ sơ lương'}</Button>
           </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
-          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
-          <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Tạo hồ sơ lương'}</Button>
-        </div>
-      </form>
-    </DialogContent>
-  </Dialog>
-);
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ───────── Edit Salary Profile Dialog ─────────
@@ -349,7 +351,6 @@ export function SalaryProfileEditDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(profile.effectiveFrom ? profile.effectiveFrom.split('T')[0] : '');
   const [effectiveTo, setEffectiveTo] = useState(profile.effectiveTo ? profile.effectiveTo.split('T')[0] : '');
   const [baseSalary, setBaseSalary] = useState(String(profile.baseSalary ?? ''));
-  const [isProbation, setIsProbation] = useState(!!profile.probationJobSalary);
   const [probationJobSalary, setProbationJobSalary] = useState(String(profile.probationJobSalary ?? ''));
   const [probationAgreedSalary, setProbationAgreedSalary] = useState(String(profile.probationAgreedSalary ?? ''));
   const [assignedAllowances, setAssignedAllowances] = useState<Record<string, { enabled: boolean; amount: string }>>({});
@@ -414,7 +415,9 @@ export function SalaryProfileEditDialog({
 
     let jobSal: number | undefined;
     let agreedSal: number | undefined;
-    if (isProbation) {
+    // QC 4.12 — no checkbox any more: keep whatever probation amounts were
+    // already saved so the update does not silently drop them.
+    if (probationJobSalary && probationAgreedSalary) {
       jobSal = Number(probationJobSalary);
       agreedSal = Number(probationAgreedSalary);
       if (Number.isNaN(jobSal) || jobSal <= 0) return setError('Lương công việc thử việc không hợp lệ.');
@@ -436,8 +439,8 @@ export function SalaryProfileEditDialog({
         effectiveFrom: effectiveFrom || undefined,
         effectiveTo: effectiveTo || null,
         baseSalary: base,
-        probationJobSalary: isProbation ? jobSal : undefined,
-        probationAgreedSalary: isProbation ? agreedSal : undefined,
+        probationJobSalary: jobSal,
+        probationAgreedSalary: agreedSal,
         organizationAllowanceIds: enabledList.map(x => x.allowanceId),
         allowances: enabledList,
         attendanceBonusPolicyId: bonusPolicyId || null,
@@ -452,12 +455,16 @@ export function SalaryProfileEditDialog({
     }
   };
 
-  // Lương đóng BHXH là số dẫn xuất — hiện trước để HR thấy ngay, không nhập tay.
+  // Lương đóng BH là số dẫn xuất (chỉ trừ phụ cấp có tích BH) — hiện trước để HR thấy ngay.
   const editDerivedInsuranceSalary = deriveInsuranceSalary(
     Number(baseSalary) || 0,
     Object.entries(assignedAllowances)
       .filter(([_, v]) => v.enabled)
-      .map(([allowanceId, v]) => ({ allowanceId, amount: Number(v.amount) || 0 })),
+      .map(([allowanceId, v]) => ({
+        allowanceId,
+        amount: Number(v.amount) || 0,
+        insuranceBased: allowances.find(a => a._id === allowanceId)?.insuranceBased === true,
+      })),
   );
 
   return (
@@ -475,135 +482,133 @@ export function SalaryProfileEditDialog({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Ngày bắt đầu hiệu lực</label>
-              <Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} disabled={submitting} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Ngày kết thúc hiệu lực</label>
-              <Input type="date" value={effectiveTo} onChange={e => setEffectiveTo(e.target.value)} disabled={submitting} placeholder="Để trống nếu vô hạn" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Lương cơ bản (VND)</label>
-              <Input type="number" min="0" step="500000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Lương đóng BHXH (VND)</label>
-              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
-                {formatVnd(editDerivedInsuranceSalary)}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ngày bắt đầu hiệu lực</label>
+                <Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} disabled={submitting} />
               </div>
-              <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp được chọn.</p>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ngày kết thúc hiệu lực</label>
+                <Input type="date" value={effectiveTo} onChange={e => setEffectiveTo(e.target.value)} disabled={submitting} placeholder="Để trống nếu vô hạn" />
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="editIsProbation" checked={isProbation} onChange={e => setIsProbation(e.target.checked)} className="h-4 w-4 rounded border-input cursor-pointer" disabled={submitting} />
-              <label htmlFor="editIsProbation" className="text-sm font-medium cursor-pointer">Cấu hình lương thử việc</label>
-            </div>
-            {isProbation && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Lương công việc (VND)</label>
-                  <Input type="number" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Lương cơ bản (VND)</label>
+                <Input type="number" min="0" step="500000" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} disabled={submitting} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Lương đóng BH (VND)</label>
+                <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 font-mono text-sm text-muted-foreground">
+                  {formatVnd(editDerivedInsuranceSalary)}
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Lương thỏa thuận (VND)</label>
-                  <Input type="number" value={probationAgreedSalary} onChange={e => setProbationAgreedSalary(e.target.value)} disabled={submitting} />
+                <p className="text-xs text-muted-foreground">Tự tính = lương cơ bản − tổng phụ cấp có tích tính BH.</p>
+              </div>
+            </div>
+
+            {/* QC 4.12 — checklist đã có trạng thái Thử việc/Chính thức, nên form
+                sửa chỉ hiển thị lại mức lương thử việc đã lưu (không tick được). */}
+            {(probationJobSalary || probationAgreedSalary) && (
+              <div className="rounded-lg border border-border p-4 space-y-2 bg-muted/20">
+                <div className="text-sm font-medium text-foreground">Lương thử việc đã cấu hình</div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Lương công việc (VND)</label>
+                    <Input type="number" value={probationJobSalary} onChange={e => setProbationJobSalary(e.target.value)} disabled={submitting} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Lương thỏa thuận (VND)</label>
+                    <Input type="number" value={probationAgreedSalary} onChange={e => setProbationAgreedSalary(e.target.value)} disabled={submitting} />
+                  </div>
                 </div>
               </div>
             )}
-          </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Phụ cấp áp dụng cho nhân viên</label>
-              <span className="text-[11px] text-muted-foreground">Tùy chỉnh số tiền phụ cấp theo nhân viên</span>
-            </div>
-            {allowances.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có phụ cấp nào trong tổ chức.</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/10">
-                {allowances.map(item => {
-                  const assignment = assignedAllowances[item._id] || { enabled: false, amount: '' };
-                  return (
-                    <div
-                      key={item._id}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-md border transition-colors ${
-                        assignment.enabled ? 'border-primary/40 bg-background shadow-xs' : 'border-border/60 hover:bg-muted/40'
-                      }`}
-                    >
-                      <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1">
-                        <input
-                          type="checkbox"
-                          checked={assignment.enabled}
-                          onChange={e => handleToggleAllowance(item._id, e.target.checked, item.amount)}
-                          className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20"
-                          disabled={submitting}
-                        />
-                        <div>
-                          <div className="font-medium text-foreground">{item.name}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            Mã: <code className="font-mono">{item.code}</code>
-                            {item.description ? ` • ${item.description}` : ''}
-                            {item.taxable ? ' • Thuế PIT' : ''}
-                            {item.insuranceBased ? ' • Đóng BHXH' : ''}
-                            {item.prorated ? ' • Tính theo ngày công' : ''}
-                          </div>
-                        </div>
-                      </label>
-                      {assignment.enabled && (
-                        <div className="flex items-center gap-1.5 pl-6 sm:pl-0 sm:w-48 shrink-0">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="50000"
-                            placeholder="Số tiền phụ cấp..."
-                            value={assignment.amount}
-                            onChange={e => handleAllowanceAmountChange(item._id, e.target.value)}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Phụ cấp áp dụng cho nhân viên</label>
+                <span className="text-[11px] text-muted-foreground">Tùy chỉnh số tiền phụ cấp theo nhân viên</span>
+              </div>
+              {allowances.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Chưa có phụ cấp nào trong tổ chức.</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/10">
+                  {allowances.map(item => {
+                    const assignment = assignedAllowances[item._id] || { enabled: false, amount: '' };
+                    return (
+                      <div
+                        key={item._id}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-md border transition-colors ${assignment.enabled ? 'border-primary/40 bg-background shadow-xs' : 'border-border/60 hover:bg-muted/40'
+                          }`}
+                      >
+                        <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none flex-1">
+                          <input
+                            type="checkbox"
+                            checked={assignment.enabled}
+                            onChange={e => handleToggleAllowance(item._id, e.target.checked, item.amount)}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary/20"
                             disabled={submitting}
-                            className="h-8 text-xs font-semibold"
                           />
-                          <span className="text-xs text-muted-foreground font-medium">đ</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                          <div>
+                            <div className="font-medium text-foreground">{item.name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Mã: <code className="font-mono">{item.code}</code>
+                              {item.description ? ` • ${item.description}` : ''}
+                              {item.taxable ? ' • Thuế PIT' : ''}
+                              {item.insuranceBased ? ' • Đóng BH' : ''}
+                              {item.prorated ? ' • Tính theo ngày công' : ''}
+                            </div>
+                          </div>
+                        </label>
+                        {assignment.enabled && (
+                          <div className="flex items-center gap-1.5 pl-6 sm:pl-0 sm:w-48 shrink-0">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="50000"
+                              placeholder="Số tiền phụ cấp..."
+                              value={assignment.amount}
+                              onChange={e => handleAllowanceAmountChange(item._id, e.target.value)}
+                              disabled={submitting}
+                              className="h-8 text-xs font-semibold"
+                            />
+                            <span className="text-xs text-muted-foreground font-medium">đ</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Chính sách thưởng chuyên cần</label>
+              <select
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={bonusPolicyId}
+                onChange={e => setBonusPolicyId(e.target.value)}
+                disabled={loadingOpts || submitting}
+              >
+                <option value="">Không áp dụng thưởng chuyên cần</option>
+                {bonusPolicies.map(pol => (
+                  <option key={pol._id} value={pol._id}>
+                    {pol.name} — Thưởng tối đa {formatVnd(pol.bonusAmount)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Chính sách thưởng chuyên cần</label>
-            <select
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              value={bonusPolicyId}
-              onChange={e => setBonusPolicyId(e.target.value)}
-              disabled={loadingOpts || submitting}
-            >
-              <option value="">Không áp dụng thưởng chuyên cần</option>
-              {bonusPolicies.map(pol => (
-                <option key={pol._id} value={pol._id}>
-                  {pol.name} — Thưởng tối đa {formatVnd(pol.bonusAmount)}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Cập nhật'}</Button>
           </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3.5 bg-muted/15">
-          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Hủy</Button>
-          <Button type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Cập nhật'}</Button>
-        </div>
-      </form>
-    </DialogContent>
-  </Dialog>
-);
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ───────── Detail Salary Profile Dialog ─────────
@@ -635,7 +640,7 @@ export function SalaryProfileDetailDialog({
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatVnd(profile.baseSalary)}</span>
           </div>
           <div className="flex justify-between border-b pb-2">
-            <span className="text-muted-foreground">Lương đóng BHXH (tự tính):</span>
+            <span className="text-muted-foreground">Lương đóng BH (tự tính):</span>
             <span className="font-medium">{formatVnd(deriveInsuranceSalary(profile.baseSalary, profile.allowances))}</span>
           </div>
           {profile.probationJobSalary ? (
@@ -672,9 +677,9 @@ export function SalaryProfileDetailDialog({
           <div className="flex justify-between border-b pb-2">
             <span className="text-muted-foreground">Khoảng hiệu lực:</span>
             <span className="font-medium">
-              {profile.effectiveFrom ? new Date(profile.effectiveFrom).toLocaleDateString('vi-VN') : '—'} 
-              {' → '} 
-              {profile.effectiveTo ? new Date(profile.effectiveTo).toLocaleDateString('vi-VN') : 'Vô hạn'}
+              {profile.effectiveFrom ? formatVN(profile.effectiveFrom) : '—'}
+              {' → '}
+              {profile.effectiveTo ? formatVN(profile.effectiveTo) : 'Vô hạn'}
             </span>
           </div>
           <div className="flex justify-between border-b pb-2">

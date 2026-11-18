@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { HrAuditService } from '../audit/hr-audit.service';
 import { TimesheetPeriodDocument, TimesheetPeriodStatus, VALID_TRANSITIONS } from '../../database/schemas/timesheet-period.schema';
 import { CreateTimesheetPeriodDto } from './dto/create-timesheet-period.dto';
 import { ReopenTimesheetPeriodDto } from './dto/reopen-timesheet-period.dto';
@@ -21,6 +22,8 @@ import { EmployeeTimesheetReviewService } from './employee-timesheet-review.serv
 import { UserDocument } from '../../database/schemas/user.schema';
 import { PoliciesService } from '../policies/policies.service';
 import { PeriodObligationService } from './period-obligation.service';
+import { acquireSerializationLock } from '../../common/serialization-lock';
+import { closeSiblingRequests } from '../manager/close-sibling-requests';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const MIN_PERIOD_DAYS = 28;
@@ -85,14 +88,15 @@ export class TimesheetPeriodService {
 		@Optional() private readonly overtimeService?: OvertimeService,
 		@Optional() private readonly policies?: PoliciesService,
 		@Optional() private readonly obligations?: PeriodObligationService,
+		@Optional() private readonly audit?: HrAuditService,
 	) {}
 
 	/**
 	 * Create a new timesheet period for an organization.
 	 * Only one period per (organization, month) is allowed.
 	 * Validates that the period has between 28-31 days (inclusive).
-	 * Blocks creation if there's already an active (OPEN/REVIEWING/READY_TO_CLOSE) period.
-	 * Blocks creation if the period is in the past or overlaps with existing periods.
+	 * Blocks creation if the period is in the past or overlaps a closed period.
+	 * Any number of unclosed periods may coexist — HR opens as many as it needs.
 	 */
 	async create(organizationId: string, dto: CreateTimesheetPeriodDto): Promise<any> {
 		// Validate day range (28-31 days)
@@ -101,63 +105,74 @@ export class TimesheetPeriodService {
 			throw new BadRequestException(`INVALID_DAY_RANGE: Period must have between ${MIN_PERIOD_DAYS} and ${MAX_PERIOD_DAYS} days (actual: ${diffDays} days)`);
 		}
 
-		// Validate not in past
-		this.validateNotInPast(dto.startDate);
+		// Reject only a period that has already fully ended; the current month
+		// is allowed so HR can create it mid-month.
+		this.validateNotInPast(dto.endDate);
 
 		const newStartDate = new Date(dto.startDate);
 		const newEndDate = new Date(dto.endDate);
 
-		// Check if there's already an active period (OPEN, REVIEWING, or READY_TO_CLOSE)
-		const existingActivePeriod = await this.periodModel.findOne({
-			organizationId,
-			status: { $in: [
-				TimesheetPeriodStatus.OPEN,
-				TimesheetPeriodStatus.REVIEWING,
-				TimesheetPeriodStatus.READY_TO_CLOSE,
-			]},
-			active: true,
-		});
-
-		if (existingActivePeriod) {
-			throw new BadRequestException(
-				`PERIOD_ALREADY_ACTIVE: Cannot create a new period when there is already an active period (${existingActivePeriod.period} - ${existingActivePeriod.status}). Please close or reopen the existing period first.`
-			);
-		}
-
-		// Check for overlap with any closed periods
-		const allClosedPeriods = await this.periodModel.find({
-			organizationId,
-			status: TimesheetPeriodStatus.CLOSED,
-			active: true,
-		});
-
-		if (allClosedPeriods.length > 0) {
-			dto.validateNoOverlap(
-				newStartDate,
-				newEndDate,
-				allClosedPeriods.map(p => ({
-					startDate: new Date(p.startDate),
-					endDate: new Date(p.endDate),
-					status: p.status,
-				}))
-			);
-		}
-
+		// AUD-H11: the overlap check and the insert share one transaction
+		// serialized per tenant, so two concurrent creates cannot both pass the
+		// date-overlap test.
+		const session = await this.periodModel.db.startSession();
 		try {
-			const doc = await this.periodModel.create({
-				...dto,
-				organizationId,
-				status: TimesheetPeriodStatus.OPEN,
-				startDate: newStartDate,
-				endDate: newEndDate,
+			let created: any;
+			await session.withTransaction(async () => {
+				await acquireSerializationLock(this.periodModel.db, `timesheet-period:${organizationId}`, session);
+
+				// Date ranges must not overlap — against ANY period, not just a
+				// closed one. Periods are resolved by work date (`resolvePeriodId`,
+				// snapshot population), so two periods covering the same day would
+				// make those lookups pick one arbitrarily.
+				const existingPeriods = await this.periodModel.find({
+					organizationId,
+					active: true,
+				}).session(session);
+
+				if (existingPeriods.length > 0) {
+					dto.validateNoOverlap(
+						newStartDate,
+						newEndDate,
+						existingPeriods.map(p => ({
+							startDate: new Date(p.startDate),
+							endDate: new Date(p.endDate),
+							status: p.status,
+						}))
+					);
+				}
+
+				[created] = await this.periodModel.create([{
+					...dto,
+					organizationId,
+					status: TimesheetPeriodStatus.OPEN,
+					startDate: newStartDate,
+					endDate: newEndDate,
+				}], { session });
+
+				// Punches made before HR created this period were stored without a
+				// periodId; link them so period views and payroll include them.
+				await this.attendanceDayModel.updateMany(
+					{
+						organizationId,
+						workDate: {
+							$gte: newStartDate.toISOString().slice(0, 10),
+							$lte: newEndDate.toISOString().slice(0, 10),
+						},
+						$or: [{ periodId: { $exists: false } }, { periodId: null }],
+					},
+					{ $set: { periodId: created._id } },
+					{ session },
+				);
 			});
-			return this.toResponse(doc.toObject());
+			return this.toResponse(created.toObject());
 		} catch (err: any) {
 			if (err.code === DUPLICATE_KEY_ERROR || (err.message && err.message.includes('duplicate key'))) {
 				throw new ConflictException('PERIOD_ALREADY_EXISTS');
 			}
-			if (err instanceof BadRequestException) throw err;
 			throw err;
+		} finally {
+			await session.endSession();
 		}
 	}
 
@@ -507,7 +522,7 @@ export class TimesheetPeriodService {
 				.sort({ recordedAt: 1 })
 				.lean(),
 			this.managerRequestModel
-				.findOne({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId) })
+				.findOne({ organizationId: new Types.ObjectId(organizationId), attendanceDayId: new Types.ObjectId(dayId), status: { $ne: 'CANCELLED' } })
 				.sort({ createdAt: -1 })
 				.lean(),
 		]);
@@ -575,6 +590,23 @@ export class TimesheetPeriodService {
 					{ new: true, session },
 				).lean();
 				await this.periodVersionService.bump(organizationId, id, session);
+				// QC 2.4 — the day is now a forfeited absence; any pending
+				// adjustment/explanation for it can never apply.
+				await closeSiblingRequests(this.managerRequestModel, {
+					organizationId,
+					attendanceDayId: day._id,
+					reason: 'FORFEITED_MISSING_PUNCH',
+					session,
+				});
+				await this.audit?.recordForActor(actor.userId, {
+					organizationId,
+					action: 'ATTENDANCE_RESOLUTION',
+					targetType: 'ATTENDANCE_DAY',
+					targetId: String(day._id),
+					targetSummary: `Xử lý vắng không phép ngày ${String(day.workDate).slice(0, 10)}`,
+					reason: normalizedReason,
+					details: { employeeId: String(day.employeeId), periodId: String(id) },
+				}, session);
 			});
 			return updated;
 		} finally {
@@ -608,6 +640,16 @@ export class TimesheetPeriodService {
 		}
 		if (day.resolution?.type === 'FORFEITED_MISSING_PUNCH') throw new ConflictException('DAY_ALREADY_FORFEITED');
 		if (day.checkInAt && day.checkOutAt) throw new ConflictException('ATTENDANCE_DAY_ALREADY_COMPLETE');
+
+		// QC 2.1 — one open explanation per day. Without this guard the same
+		// blocker could spawn identical requests on every click.
+		const openExplanation = await this.managerRequestModel.findOne({
+			organizationId: new Types.ObjectId(organizationId),
+			attendanceDayId: day._id,
+			source: 'HR_MISSING_PUNCH_EXPLANATION',
+			status: { $in: ['CLARIFICATION_REQUESTED', 'PENDING'] },
+		}).select('_id').lean();
+		if (openExplanation) throw new ConflictException('EXPLANATION_ALREADY_REQUESTED');
 
 		const rawNote = note?.trim();
 		const cleanNote = rawNote && rawNote.length >= 10
@@ -650,36 +692,35 @@ export class TimesheetPeriodService {
 					{ new: true, session },
 				).lean();
 
-				const existingRequest = await this.managerRequestModel.findOne({
+				// QC 2.1 — append-only: a day has at most one open HR explanation
+				// (guarded above), and this must never rewrite another kind of
+				// request that happens to share the same attendanceDayId.
+				await this.managerRequestModel.create([{
 					organizationId: new Types.ObjectId(organizationId),
+					employeeId: employeeProfileId,
+					employeeUserId: employeeUserId,
+					departmentId: departmentId,
+					workDate: new Date(`${day.workDate}T00:00:00.000Z`),
+					type: 'ATTENDANCE',
+					source: 'HR_MISSING_PUNCH_EXPLANATION',
+					status: 'CLARIFICATION_REQUESTED',
 					attendanceDayId: day._id,
-				}).session(session);
-
-				if (existingRequest) {
-					existingRequest.status = 'CLARIFICATION_REQUESTED';
-					existingRequest.reviewComment = cleanNote;
-					existingRequest.reviewedBy = actor.userId;
-					existingRequest.reviewedAt = new Date();
-					await existingRequest.save({ session });
-				} else {
-					await this.managerRequestModel.create([{
-						organizationId: new Types.ObjectId(organizationId),
-						employeeId: employeeProfileId,
-						employeeUserId: employeeUserId,
-						departmentId: departmentId,
-						workDate: new Date(`${day.workDate}T00:00:00.000Z`),
-						type: 'ATTENDANCE',
-						source: 'HR_MISSING_PUNCH_EXPLANATION',
-						status: 'CLARIFICATION_REQUESTED',
-						attendanceDayId: day._id,
-						reason: cleanNote,
-						reviewedBy: actor.userId,
-						reviewedAt: new Date(),
-						version: 1,
-					}], { session });
-				}
+					reason: cleanNote,
+					reviewedBy: actor.userId,
+					reviewedAt: new Date(),
+					version: 1,
+				}], { session });
 
 				await this.periodVersionService.bump(organizationId, id, session);
+				await this.audit?.recordForActor(actor.userId, {
+					organizationId,
+					action: 'REQUEST_EXPLANATION',
+					targetType: 'ATTENDANCE_DAY',
+					targetId: String(day._id),
+					targetSummary: `Yêu cầu giải trình ngày ${String(day.workDate).slice(0, 10)}`,
+					reason: cleanNote,
+					details: { employeeId: String(employeeProfileId), periodId: String(id) },
+				}, session);
 			});
 			return updatedDay;
 		} finally {
@@ -710,7 +751,35 @@ export class TimesheetPeriodService {
 		}
 
 		await this.fillMissingIdentity(organizationId, days, rows);
+		await this.fillOpenExplanations(organizationId, rows);
 		return rows;
+	}
+
+	/**
+	 * QC 2.1 — tell the review UI which blocked days already have an open HR
+	 * explanation, so the "request explanation" button is not offered twice.
+	 */
+	private async fillOpenExplanations(organizationId: string, rows: PeriodBlockerRow[]): Promise<void> {
+		if (!rows.length) return;
+		const dayIds = [...new Set(rows.map((row) => row.attendanceDayId))]
+			.filter((id) => Types.ObjectId.isValid(id))
+			.map((id) => new Types.ObjectId(id));
+		if (!dayIds.length) return;
+		const open = await this.managerRequestModel.find({
+			organizationId: new Types.ObjectId(organizationId),
+			attendanceDayId: { $in: dayIds },
+			source: 'HR_MISSING_PUNCH_EXPLANATION',
+			status: { $in: ['CLARIFICATION_REQUESTED', 'PENDING'] },
+		}).select('_id attendanceDayId status').lean();
+		if (!open.length) return;
+		const byDay = new Map(open.map((row: any) => [String(row.attendanceDayId), row]));
+		for (const row of rows) {
+			const request = byDay.get(row.attendanceDayId);
+			if (!request) continue;
+			row.hasOpenExplanation = true;
+			row.openRequestStatus = String(request.status);
+			row.requestId = String(request._id);
+		}
 	}
 
 	/**
@@ -811,6 +880,18 @@ export class TimesheetPeriodService {
 	): Promise<any> {
 		const period = await this.findById(organizationId, id);
 
+		// Entering or leaving CLOSED carries financial side effects (summaries,
+		// payroll snapshots, version bump, reason). Only /close and /reopen may
+		// do that; this generic endpoint must never short-circuit them.
+		if (
+			newStatus === TimesheetPeriodStatus.CLOSED ||
+			period.status === TimesheetPeriodStatus.CLOSED
+		) {
+			throw new BadRequestException(
+				'USE_CLOSE_OR_REOPEN_WORKFLOW: CLOSED transitions are only allowed via /close and /reopen',
+			);
+		}
+
 		// Validate transition
 		const statusKey = period.status as TimesheetPeriodStatus;
 		const allowed = VALID_TRANSITIONS[statusKey];
@@ -830,21 +911,21 @@ export class TimesheetPeriodService {
 			);
 		}
 
-		const patch: Record<string, unknown> = { status: newStatus };
-
-		// Track close metadata
-		if (newStatus === TimesheetPeriodStatus.CLOSED) {
-			patch.closedBy = userId;
-			patch.closedAt = new Date();
-		}
-
-		const doc = await this.periodModel.findByIdAndUpdate(
-			id,
-			{ $set: patch },
+		// Tenant-scoped compare-and-set on status+version so a concurrent
+		// close/reopen/bump cannot be overwritten by a stale read.
+		const doc = await this.periodModel.findOneAndUpdate(
+			{
+				_id: id,
+				organizationId,
+				active: true,
+				status: period.status,
+				version: period.version,
+			},
+			{ $set: { status: newStatus } },
 			{ new: true, runValidators: true },
 		).lean();
 
-		if (!doc) throw new NotFoundException('PERIOD_NOT_FOUND');
+		if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
 		return this.toResponse(doc);
 	}
 
@@ -977,6 +1058,15 @@ export class TimesheetPeriodService {
 				).lean();
 
 				if (!doc) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+
+				await this.audit?.recordForActor(userId, {
+					organizationId,
+					action: 'CLOSE_PERIOD',
+					targetType: 'TIMESHEET_PERIOD',
+					targetId: String(id),
+					targetSummary: `Kỳ công ${current.period}`,
+					details: { periodVersion: current.version, summariesCreated, snapshotsCreated },
+				}, session);
 			});
 		} finally {
 			await session.endSession();
@@ -1035,6 +1125,16 @@ export class TimesheetPeriodService {
 
 				if (!doc) throw new ConflictException('TIMESHEET_REOPEN_BLOCKED_BY_PAYROLL');
 				updated = doc;
+
+				await this.audit?.recordForActor(userId, {
+					organizationId,
+					action: 'REOPEN_PERIOD',
+					targetType: 'TIMESHEET_PERIOD',
+					targetId: String(id),
+					targetSummary: `Kỳ công ${period.period}`,
+					reason: dto.reason,
+					details: { fromVersion: period.version, toVersion: doc.version },
+				}, session);
 			});
 		} finally {
 			await session.endSession();
@@ -1269,12 +1369,12 @@ export class TimesheetPeriodService {
 		return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 	}
 
-	private validateNotInPast(startDate: string): void {
-		const start = new Date(startDate);
+	private validateNotInPast(endDate: string): void {
+		const end = new Date(endDate);
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-		if (start < today) {
-			throw new BadRequestException('PERIOD_IN_PAST: Period start date cannot be in the past');
+		if (end < today) {
+			throw new BadRequestException('PERIOD_IN_PAST: Period has already ended and cannot be created');
 		}
 	}
 }

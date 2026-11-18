@@ -8,10 +8,13 @@ import { UserSessionSchema } from '../database/schemas/user-session.schema';
 import { EmployeeProfileSchema } from '../database/schemas/employee-profile.schema';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
+import { PlatformAuditController } from './platform-audit.controller';
+import { PlatformAuditModule } from './platform-audit.module';
 
 @Module({
 	imports: [
 		AuthModule, // AuthGuard's dependencies
+		PlatformAuditModule,
 		MongooseModule.forFeature([
 			{ name: 'Organization', schema: OrganizationSchema },
 			{ name: 'User', schema: UserSchema },
@@ -19,7 +22,7 @@ import { PlatformService } from './platform.service';
 			{ name: 'EmployeeProfile', schema: EmployeeProfileSchema },
 		]),
 	],
-	controllers: [PlatformController],
+	controllers: [PlatformController, PlatformAuditController],
 	providers: [PlatformService, RolesGuard],
 	exports: [PlatformService],
 })

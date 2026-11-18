@@ -1,4 +1,5 @@
 import { apiUrl } from './config';
+import { isoDatesToVN } from './date';
 
 export type Role = 'SYSTEM_ADMIN' | 'HR' | 'DEPARTMENT_MANAGER' | 'EMPLOYEE';
 
@@ -67,7 +68,7 @@ export async function apiRequest<T>(base: string, path: string, init?: RequestIn
   if (!response.ok || body?.success === false) {
     const code = body?.success === false ? body.error?.code : undefined;
     const message = body?.success === false ? body.error?.message : undefined;
-    throw new AuthApiError(message || `HTTP ${response.status}`, response.status, code);
+    throw new AuthApiError(isoDatesToVN(message || `HTTP ${response.status}`), response.status, code);
   }
   if (!body || body.success !== true) throw new AuthApiError('Phản hồi từ máy chủ không hợp lệ.', response.status);
   return body.data as T;
@@ -116,5 +117,5 @@ export function friendlyAuthError(error: unknown): string {
     if (error.code === 'AUTH_PASSWORD_POLICY_FAILED') return 'Mật khẩu mới cần ít nhất 8 ký tự, gồm chữ và số, và không trùng mật khẩu hiện tại.';
     if (error.code === 'AUTH_RESET_TOKEN_INVALID') return 'Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.';
   }
-  return error instanceof Error ? error.message : 'Không thể xử lý yêu cầu. Vui lòng thử lại.';
+  return error instanceof Error ? isoDatesToVN(error.message) : 'Không thể xử lý yêu cầu. Vui lòng thử lại.';
 }

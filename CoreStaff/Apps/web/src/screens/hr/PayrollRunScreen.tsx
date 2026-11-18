@@ -15,6 +15,7 @@ import { toast } from '@/components/toast';
 import { AppLink } from '@/components/AppLink';
 import { hrErrorMessage, hrRequest } from '@/services/hrService';
 import { Calculator, Download, Eye, LockKeyhole, Plus, Send } from 'lucide-react';
+import { formatVN } from '@/lib/datetime';
 
 /** Format currency to VND */
 const formatCurrency = (value: number) => {
@@ -227,7 +228,12 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleLock = async (runId: string) => {
+  const handleLock = async (run: PayrollRun) => {
+    const confirmed = window.confirm(
+      `Khóa bảng lương kỳ ${run.periodLabel}? Sau khi khóa sẽ không thể tính lại hay chỉnh sửa số liệu.`,
+    );
+    if (!confirmed) return;
+    const runId = run._id;
     setLoading(true);
     try {
       await payrollPut(apiBase, `/api/payroll-runs/${runId}/lock`);
@@ -246,7 +252,12 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleRelease = async (runId: string) => {
+  const handleRelease = async (run: PayrollRun) => {
+    const confirmed = window.confirm(
+      `Phát hành phiếu lương kỳ ${run.periodLabel} cho ${run.processedEmployeeCount} nhân viên? Nhân viên sẽ nhận thông báo và xem được phiếu lương; thao tác này không thể hoàn tác.`,
+    );
+    if (!confirmed) return;
+    const runId = run._id;
     setLoading(true);
     try {
       await payrollPost(apiBase, `/api/payslips/release/${runId}`);
@@ -344,7 +355,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                 <option value="">Chọn kỳ công</option>
                 {availablePeriods.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.period} ({new Date(p.startDate).toLocaleDateString('vi-VN')} → {new Date(p.endDate).toLocaleDateString('vi-VN')}) - Đã chốt
+                    {p.period} ({formatVN(p.startDate)} → {formatVN(p.endDate)}) - Đã chốt
                   </option>
                 ))}
               </select>
@@ -403,7 +414,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                     <TableCell className="text-right font-mono">{formatCurrency(run.totalGross || 0)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatCurrency(run.totalNet || 0)}</TableCell>
                     <TableCell className="text-center">{run.processedEmployeeCount}/{run.totalEmployeeCount}</TableCell>
-                    <TableCell>{new Date(run.runDate).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>{formatVN(run.runDate)}</TableCell>
                     <TableCell className="sticky right-0 z-10 bg-card pr-6 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)]">
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button size="sm" variant="ghost" onClick={() => handleViewPayslips(run._id)} disabled={loading}>
@@ -419,13 +430,13 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                             <Button size="sm" variant="outline" onClick={() => handleRecalculate(run)} disabled={loading}>
                               {loading ? 'Đang xử lý...' : 'Tính lại'}
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleLock(run._id)} disabled={loading}>
+                            <Button size="sm" variant="outline" onClick={() => handleLock(run)} disabled={loading}>
                               <LockKeyhole aria-hidden="true" />Khóa
                             </Button>
                           </>
                         )}
                         {run.status === 'LOCKED' && (
-                          <Button size="sm" variant="default" onClick={() => handleRelease(run._id)} disabled={loading}>
+                          <Button size="sm" variant="default" onClick={() => handleRelease(run)} disabled={loading}>
                             <Send aria-hidden="true" />Phát hành
                           </Button>
                         )}

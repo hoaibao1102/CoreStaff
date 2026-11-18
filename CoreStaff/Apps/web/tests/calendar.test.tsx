@@ -28,3 +28,46 @@ test('delete uses encoded id and no request body',async()=>{
   expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({method:'DELETE',credentials:'include'}));
   expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
 });
+
+import { calendarRangeDays, createCalendarRange, deleteCalendarRange, groupCalendarRuns, updateCalendarRange } from '../src/services/scheduling.service';
+
+test('create range sends one request for all adjacent days',async()=>{
+  const payload={startDate:'2027-02-05',endDate:'2027-02-09',type:'PUBLIC_HOLIDAY' as const,name:'Tết Nguyên đán'};
+  await createCalendarRange(base,payload);
+  expect(fetchMock).toHaveBeenCalledWith(`${base}/api/hr/calendar-exceptions/range`,expect.objectContaining({method:'POST',body:JSON.stringify(payload)}));
+});
+
+test('update range sends the original range with the new one',async()=>{
+  const payload={startDate:'2027-02-05',endDate:'2027-02-11',type:'PUBLIC_HOLIDAY' as const,name:'Tết',originalFrom:'2027-02-05',originalTo:'2027-02-09'};
+  await updateCalendarRange(base,payload);
+  expect(fetchMock).toHaveBeenCalledWith(`${base}/api/hr/calendar-exceptions/range`,expect.objectContaining({method:'PUT',body:JSON.stringify(payload)}));
+});
+
+test('delete range passes from and to',async()=>{
+  await deleteCalendarRange(base,'2027-02-05','2027-02-09');
+  expect(fetchMock.mock.calls[0][0]).toBe(`${base}/api/hr/calendar-exceptions/range?from=2027-02-05&to=2027-02-09`);
+  expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({method:'DELETE'}));
+});
+
+test('calendarRangeDays lists every day inclusively and rejects reversed ranges',()=>{
+  expect(calendarRangeDays('2027-02-27','2027-03-02')).toEqual(['2027-02-27','2027-02-28','2027-03-01','2027-03-02']);
+  expect(calendarRangeDays('2027-02-05','2027-02-05')).toEqual(['2027-02-05']);
+  expect(calendarRangeDays('2027-02-06','2027-02-05')).toEqual([]);
+});
+
+test('groupCalendarRuns folds adjacent days with the same type and name',()=>{
+  const row=(id:string,date:string,name='Tết',type:'PUBLIC_HOLIDAY'|'SPECIAL_WORKING_DAY'='PUBLIC_HOLIDAY')=>({_id:id,date,type,name});
+  const runs=groupCalendarRuns([
+    row('3','2027-02-07'),row('1','2027-02-05'),row('2','2027-02-06'),   // unsorted on purpose
+    row('4','2027-02-09'),                                               // gap -> separate run
+    row('5','2027-02-10','Làm bù','SPECIAL_WORKING_DAY'),               // adjacent but different type/name
+    row('6','2027-03-01','Tết'),
+  ]);
+  expect(runs.map(r=>[r.date,r.endDate,r.days,r.name])).toEqual([
+    ['2027-02-05','2027-02-07',3,'Tết'],
+    ['2027-02-09','2027-02-09',1,'Tết'],
+    ['2027-02-10','2027-02-10',1,'Làm bù'],
+    ['2027-03-01','2027-03-01',1,'Tết'],
+  ]);
+  expect(runs[0]._id).toBe('1');
+});

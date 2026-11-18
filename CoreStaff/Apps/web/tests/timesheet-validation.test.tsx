@@ -63,9 +63,6 @@ function validateNoOverlap(
   const newEndDt = new Date(newEnd);
 
   for (const period of existingPeriods) {
-    if (period.status === 'OPEN' || period.status === 'REVIEWING' || period.status === 'READY_TO_CLOSE') {
-      continue; // Skip active periods — handled by PERIOD_ALREADY_ACTIVE rule
-    }
     const existingStart = new Date(period.startDate);
     const existingEnd = new Date(period.endDate);
 
@@ -192,7 +189,19 @@ describe('validateNoOverlap', () => {
     expect(result.error).toContain('trùng/lấp chồng');
   });
 
-  it('should skip active periods (handled separately)', () => {
+  it('should reject an overlapping OPEN period too', () => {
+    // Unclosed periods no longer block creation, so the date overlap is the only
+    // guard left — it must cover open periods, not just closed ones.
+    const existing = [
+      { startDate: '2026-10-01', endDate: '2026-10-31', status: 'OPEN' },
+    ];
+
+    const result = validateNoOverlap('2026-10-15', '2026-11-14', existing);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('trùng/lấp chồng');
+  });
+
+  it('should allow a non-overlapping period while another is still open', () => {
     const existing = [
       { startDate: '2026-10-01', endDate: '2026-10-31', status: 'OPEN' },
     ];

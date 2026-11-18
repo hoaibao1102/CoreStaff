@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles, RolesGuard } from '../../common/rbac.decorator';
+import { CurrentUser } from '../../common/tenant-context';
 import { PayrollExportService } from './payroll-export.service';
 
 @ApiTags('Payroll')
@@ -14,8 +15,8 @@ export class PayrollExportController {
   @Get(':id/export/csv')
   @Roles('HR')
   @ApiOperation({ summary: 'Export payslips as CSV' })
-  async exportCSV(@Param('id') id: string) {
-    const csv = await this.exportService.exportCSV(id);
+  async exportCSV(@CurrentUser() user: any, @Param('id') id: string) {
+    const csv = await this.exportService.exportCSV(user.organizationId, id);
     return {
       success: true,
       data: csv,
@@ -29,8 +30,8 @@ export class PayrollExportController {
   @Get(':id/export/summary/csv')
   @Roles('HR')
   @ApiOperation({ summary: 'Export payroll summary as CSV' })
-  async exportSummaryCSV(@Param('id') id: string) {
-    const csv = await this.exportService.exportSummaryCSV(id);
+  async exportSummaryCSV(@CurrentUser() user: any, @Param('id') id: string) {
+    const csv = await this.exportService.exportSummaryCSV(user.organizationId, id);
     return {
       success: true,
       data: csv,
@@ -44,8 +45,8 @@ export class PayrollExportController {
   @Get(':id/export/excel')
   @Roles('HR')
   @ApiOperation({ summary: 'Export payslips as Excel' })
-  async exportExcel(@Param('id') id: string, @Res() res: Response) {
-    const { buffer, periodLabel } = await this.exportService.exportExcel(id);
+  async exportExcel(@CurrentUser() user: any, @Param('id') id: string, @Res() res: Response) {
+    const { buffer, periodLabel } = await this.exportService.exportExcel(user.organizationId, id);
     const safePeriodLabel = periodLabel.replace(/[^a-zA-Z0-9\-_]/g, '_');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=payroll-${safePeriodLabel}.xlsx`);

@@ -11,6 +11,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { AttendanceEvent } from '../types';
+import { useAuthedImage } from '../../../components/AuthedImage';
+import { formatInstantDateTimeVN } from '@/lib/datetime';
 
 export interface EvidenceCardProps {
   event: AttendanceEvent;
@@ -26,50 +28,12 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
   const locAddress = event.address || ('location' in event ? event.location?.address : undefined) || 'Vị trí GPS thực tế';
   const accuracy = event.accuracyMeters || ('location' in event ? event.location?.accuracyMeters : undefined);
 
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [loadError, setLoadError] = useState<boolean>(false);
+  const { src: blobUrl, loading: isLoading, failed: fetchFailed } = useAuthedImage(photoUrl);
+  const [imgError, setImgError] = useState<boolean>(false);
+  const loadError = fetchFailed || imgError;
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!photoUrl) {
-      setBlobUrl(null);
-      return;
-    }
-
-    if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:')) {
-      setBlobUrl(photoUrl);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoading(true);
-    setLoadError(false);
-
-    fetch(photoUrl, { credentials: 'include' })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        if (isMounted) {
-          const objectUrl = URL.createObjectURL(blob);
-          setBlobUrl(objectUrl);
-        }
-      })
-      .catch((err) => {
-        console.warn('[EvidenceCard] Could not load evidence image directly via fetch:', err);
-        if (isMounted) {
-          // Fallback to direct URL in img tag
-          setBlobUrl(photoUrl);
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [photoUrl]);
+  useEffect(() => setImgError(false), [photoUrl]);
 
   if (isSelfie) {
     const title = slot === 'checkIn' ? 'Bằng chứng Selfie (Vào ca)' : 'Bằng chứng Selfie (Tan ca)';
@@ -86,7 +50,7 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
                 <img
                   src={blobUrl}
                   alt={title}
-                  onError={() => setLoadError(true)}
+                  onError={() => setImgError(true)}
                   className="size-full object-cover"
                 />
                 <button
@@ -193,7 +157,7 @@ export function EvidenceCard({ event, slot }: EvidenceCardProps) {
                 {event.recordedAt && (
                   <div className="text-[11px] text-muted-foreground pt-0.5">
                     Thời điểm ghi nhận:{' '}
-                    {new Date(event.recordedAt).toLocaleString('vi-VN')}
+                    {formatInstantDateTimeVN(event.recordedAt)}
                   </div>
                 )}
               </div>

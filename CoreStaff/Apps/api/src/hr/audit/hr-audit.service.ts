@@ -24,7 +24,34 @@ export interface RecordAuditEventDto {
 export class HrAuditService {
   constructor(
     @InjectModel('AuditLog') private readonly auditLogs: Model<AuditLogDocument>,
+    @InjectModel('User') private readonly users: Model<any>,
   ) {}
+
+  /**
+   * Record an event on behalf of a user. Actor name/role are snapshotted so the
+   * trail stays readable after the account is renamed or removed. Pass the
+   * transaction session so the audit row commits or rolls back with the change.
+   */
+  async recordForActor(
+    actorId: string | Types.ObjectId | undefined,
+    dto: RecordAuditEventDto,
+    session?: ClientSession,
+  ): Promise<any> {
+    let snapshot: Partial<RecordAuditEventDto> = {};
+    if (actorId && Types.ObjectId.isValid(String(actorId))) {
+      const user: any = await this.users
+        .findById(String(actorId))
+        .select({ fullName: 1, email: 1, role: 1 })
+        .session(session ?? null)
+        .lean();
+      snapshot = {
+        actorId: String(actorId),
+        actorNameSnapshot: user?.fullName ?? user?.email,
+        actorRoleSnapshot: user?.role,
+      };
+    }
+    return this.record({ ...snapshot, ...dto }, session);
+  }
 
   async record(dto: RecordAuditEventDto, session?: ClientSession): Promise<any> {
     const eventId = dto.eventId || new Types.ObjectId().toString();

@@ -17,6 +17,7 @@
  * mốc thời gian giống hệt hệ thống vận hành thật. Không có con số nào được
  * ghi tay vào summary/snapshot/payslip.
  */
+import { seedPlatformAuditDemo } from '../src/database/seed/platform-audit-demo';
 import { installVirtualClock, resetVirtualClock, setVirtualNow, vnInstant } from './lib/virtual-clock';
 
 import * as fs from 'node:fs';
@@ -127,7 +128,7 @@ const DEVICES: Record<EmployeeCode, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 function printPlan() {
   console.log(`\n─── KẾ HOẠCH DỮ LIỆU DEMO [${ORG_CODE}] — ngày tham chiếu ${REFERENCE_DATE} ───`);
-  console.log(`Kỳ ${HISTORY_PERIOD}: CLOSED + phát hành lương | Kỳ ${ACTIVE_PERIOD}: ${ACTIVE_STATUS}, còn blocker | Kỳ ${CURRENT_PERIOD}: OPEN, dữ liệu tới ${REFERENCE_DATE}`);
+  console.log(`Kỳ ${HISTORY_PERIOD}: CLOSED + phát hành lương | Kỳ ${ACTIVE_PERIOD}: ${ACTIVE_STATUS}, còn blocker | Kỳ ${CURRENT_PERIOD}: HR tạo tay khi demo, dữ liệu tới ${REFERENCE_DATE}`);
   for (const period of [HISTORY_PERIOD, ACTIVE_PERIOD]) {
     console.log(`\n■ ${period}`);
     for (const [key, override] of Object.entries(DAY_OVERRIDES).filter(([k]) => k.startsWith(period)).sort()) {
@@ -189,6 +190,7 @@ async function resetOrg(demo: DemoApp, orgId: Types.ObjectId) {
     if (name === 'Organization' || !model.schema.path('organizationId')) continue;
     removed += (await model.deleteMany({ organizationId: { $in: ids } })).deletedCount ?? 0;
   }
+  removed += (await demo.model('PlatformAuditLog').deleteMany({ targetOrganizationId: { $in: ids } })).deletedCount ?? 0;
   await demo.model('Organization').deleteOne({ _id: orgId });
   console.log(`[seed:demo] Đã xóa ${removed} bản ghi của tenant ${ORG_CODE}.`);
 }
@@ -666,10 +668,10 @@ function buildTimeline(ctx: Ctx): Action[] {
   push(vn('2026-10-05', '10:00'), `HR tạo & tính bảng lương ${HISTORY_PERIOD}`, async () => {
     const run: any = await ctx.demo.payrollRuns.create({ organizationId: ctx.org, timesheetPeriodId: historyId(), notes: 'Bảng lương tháng 09/2026', userId: hr() });
     ctx.ids.set('run|history', String(run._id));
-    await ctx.demo.payrollRuns.calculate(String(run._id), hr());
+    await ctx.demo.payrollRuns.calculate(ctx.org, String(run._id), hr());
   });
-  push(vn('2026-10-06', '14:30'), `HR khóa bảng lương ${HISTORY_PERIOD}`, () => ctx.demo.payrollRuns.lock(ctx.ids.get('run|history')!, hr()));
-  push(vn('2026-10-09', '16:00'), `HR phát hành phiếu lương ${HISTORY_PERIOD}`, () => ctx.demo.payslips.releaseForPayrollRun(ctx.ids.get('run|history')!, hr()));
+  push(vn('2026-10-06', '14:30'), `HR khóa bảng lương ${HISTORY_PERIOD}`, () => ctx.demo.payrollRuns.lock(ctx.org, ctx.ids.get('run|history')!, hr()));
+  push(vn('2026-10-09', '16:00'), `HR phát hành phiếu lương ${HISTORY_PERIOD}`, () => ctx.demo.payslips.releaseForPayrollRun(ctx.org, ctx.ids.get('run|history')!, hr()));
 
   return actions.sort((a, b) => a.when.getTime() - b.when.getTime());
 }
@@ -678,8 +680,41 @@ async function finalizeStatuses(ctx: Ctx) {
   const periods = ctx.demo.model('TimesheetPeriod');
   const active = ACTIVE_STATUS === 'OPEN' ? TimesheetPeriodStatus.OPEN : TimesheetPeriodStatus.REVIEWING;
   await periods.updateOne({ _id: ctx.periods.get(ACTIVE_PERIOD), status: { $in: ['OPEN', 'REVIEWING'] } }, { $set: { status: active } });
-  // Kỳ hiện tại chỉ dùng để nhận chấm công; chưa đưa vào rà soát.
-  await periods.updateOne({ _id: ctx.periods.get(CURRENT_PERIOD), status: { $in: ['OPEN', 'REVIEWING'] } }, { $set: { status: TimesheetPeriodStatus.OPEN } });
+
+  // Kỳ hiện tại phải tồn tại trong lúc replay (chấm công tháng 11 và OT 01/11
+  // claim kỳ qua claimForWorkDate), nhưng tenant KHÔNG được giao sẵn nó: HR tạo
+  // kỳ 11 ngay trên sân khấu. create() chỉ cho một kỳ active mỗi tổ chức, nên
+  // bước tạo đó phải diễn ra sau khi chốt kỳ 10 — đúng thứ tự kịch bản demo.
+  // Xoá hẳn row (không set active:false) vì unique index (organizationId, period)
+  // vẫn chặn kỳ mới; bỏ periodId để create() tự link lại ngày công có sẵn.
+  const current = ctx.periods.get(CURRENT_PERIOD);
+  await ctx.demo.model('AttendanceDay').updateMany(
+    { organizationId: ctx.orgId, periodId: current },
+    { $unset: { periodId: 1 } },
+  );
+  await periods.deleteOne({ _id: current });
+}
+
+/**
+ * Platform side of the demo tenant: the admin created the organization and its
+ * first HR, so the platform audit shows those two events. The other platform
+ * activity (sign-ins, lockout, suspend) is seeded by `npm run seed`.
+ */
+async function seedPlatformAuditForDemoOrg(ctx: Ctx) {
+  const m = ctx.demo.model;
+  const admin: any = await m('User').findOne({ role: 'SYSTEM_ADMIN' }).lean();
+  if (!admin) {
+    console.log('[seed:demo] Bỏ qua platform audit (chưa có tài khoản System Admin — chạy "npm run seed" trước).');
+    return;
+  }
+  const hr: any = await m('User').findOne({ organizationId: ctx.orgId, role: 'HR' }).lean();
+  const org: any = await m('Organization').findById(ctx.orgId).lean();
+  const { created } = await seedPlatformAuditDemo(m('PlatformAuditLog') as never, {
+    orgs: [{ id: String(ctx.orgId), code: ORG_CODE, name: ORG_NAME, hrEmail: hr?.email, createdAt: org?.createdAt }],
+    admin: { id: String(admin._id), fullName: admin.fullName, email: admin.email },
+    includeAdminActivity: false,
+  });
+  console.log(`[seed:demo] Platform audit: ${created} sự kiện cho ${ORG_CODE}.`);
 }
 
 async function seed() {
@@ -718,6 +753,7 @@ async function seed() {
       await connection.db?.admin().ping().catch(() => undefined);
     }
     await finalizeStatuses(ctx);
+    await seedPlatformAuditForDemoOrg(ctx);
 
     const importDir = path.resolve(__dirname, '..', 'demo-import');
     await generateDemoImportFiles(importDir);
@@ -762,6 +798,21 @@ async function verify() {
     const problems: string[] = [];
     if (org.attendanceOvertimeV2Enabled !== true) problems.push('Organization chưa bật attendanceOvertimeV2Enabled');
 
+    // Seed chỉ giao kỳ 09 (đã chốt) và kỳ 10 (đang rà soát); kỳ 11 do HR tạo
+    // trên sân khấu nên có mặt sau demo cũng hợp lệ — nhưng không kỳ nào khác.
+    const periodKeys: string[] = (await demo.model('TimesheetPeriod')
+      .find({ organizationId: orgId }).select('period').lean() as any[]).map(p => p.period).sort();
+    const allowedPeriods = [HISTORY_PERIOD, ACTIVE_PERIOD, CURRENT_PERIOD].sort();
+    const missing = [HISTORY_PERIOD, ACTIVE_PERIOD].filter(key => !periodKeys.includes(key));
+    const unexpected = periodKeys.filter(key => !allowedPeriods.includes(key));
+    if (missing.length) problems.push(`Thiếu kỳ ${missing.join(', ')}`);
+    if (unexpected.length) problems.push(`Có kỳ ngoài kịch bản: ${unexpected.join(', ')}`);
+    // Ngày công phải thuộc một kỳ; ngày tháng 11 chỉ mồ côi khi kỳ 11 chưa được
+    // tạo (đúng trạng thái sau seed) — ngày còn lại mồ côi là dấu hiệu seed hỏng.
+    const orphanDays = await demo.model('AttendanceDay').countDocuments({
+      organizationId: orgId, periodId: { $exists: false }, workDate: { $lt: `${CURRENT_PERIOD}-01` },
+    });
+    if (orphanDays) problems.push(`${orphanDays} ngày công trước ${CURRENT_PERIOD} không thuộc kỳ nào`);
 
     const enterprisePolicies: any[] = await demo.model('EnterpriseInsurancePolicy').find({ organizationId: orgId }).lean();
     if (!enterprisePolicies.length) problems.push('Thiếu EnterpriseInsurancePolicy');

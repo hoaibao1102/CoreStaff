@@ -16,25 +16,46 @@ export type EmploymentStatus = (typeof EMPLOYMENT_STATUS)[keyof typeof EMPLOYMEN
 export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, string> = {
     PROBATION: 'Thử việc',
     ACTIVE: 'Đang làm việc',
-    ON_LEAVE: 'Đang nghỉ phép',
+    ON_LEAVE: 'Đang làm việc',
     RESIGNED: 'Đã nghỉ việc',
-    TERMINATED: 'Đã chấm dứt',
+    TERMINATED: 'Đã nghỉ việc', // Gộp 'Đã chấm dứt' và 'Đã nghỉ việc' là 1
 };
+
+/** 3 canonical employment statuses used in UI dropdowns and filters. */
+export const CORE_EMPLOYMENT_STATUSES: Array<{ value: EmploymentStatus; label: string }> = [
+    { value: 'PROBATION', label: 'Thử việc' },
+    { value: 'ACTIVE', label: 'Đang làm việc' },
+    { value: 'RESIGNED', label: 'Đã nghỉ việc' },
+];
 
 /** Status badge CSS classes — single source of truth. */
 export const EMPLOYMENT_STATUS_BADGE: Record<EmploymentStatus, string> = {
     PROBATION: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     ACTIVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-    ON_LEAVE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    ON_LEAVE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     RESIGNED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-    TERMINATED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    TERMINATED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 };
+
+/** Resolves the effective status taking into account future vs past endDate. */
+export function getEffectiveStatus(status: EmploymentStatus, endDate?: string | Date | null): EmploymentStatus {
+    if (endDate) {
+        const endStr = typeof endDate === 'string' ? endDate.slice(0, 10) : new Date(endDate).toISOString().slice(0, 10);
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+        if (endStr > today) {
+            // Future end date: employee is still working until endDate
+            return status === 'PROBATION' ? 'PROBATION' : 'ACTIVE';
+        }
+        return 'RESIGNED';
+    }
+    return status;
+}
 
 /** Valid status transitions per backend state machine. */
 export const EMPLOYMENT_STATUS_TRANSITIONS: Record<EmploymentStatus, EmploymentStatus[]> = {
-    PROBATION: ['ACTIVE', 'RESIGNED', 'TERMINATED'],
-    ACTIVE: ['ON_LEAVE', 'RESIGNED', 'TERMINATED'],
-    ON_LEAVE: ['ACTIVE', 'RESIGNED', 'TERMINATED'],
+    PROBATION: ['ACTIVE', 'RESIGNED'],
+    ACTIVE: ['PROBATION', 'RESIGNED'],
+    ON_LEAVE: ['ACTIVE', 'RESIGNED'],
     RESIGNED: [],
     TERMINATED: [],
 };
@@ -54,21 +75,15 @@ export const GENDER_LABELS: Record<Gender, string> = {
     OTHER: 'Khác',
 };
 
-/** Employment type enum from backend. */
+/** Employment type enum from backend (FULL_TIME is the only value the schema accepts). */
 export const EMPLOYMENT_TYPE = {
     FULL_TIME: 'FULL_TIME',
-    PART_TIME: 'PART_TIME',
-    CONTRACT: 'CONTRACT',
-    INTERNSHIP: 'INTERNSHIP',
 } as const;
 
 export type EmploymentType = (typeof EMPLOYMENT_TYPE)[keyof typeof EMPLOYMENT_TYPE];
 
 export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
     FULL_TIME: 'Toàn thời gian',
-    PART_TIME: 'Bán thời gian',
-    CONTRACT: 'Hợp đồng',
-    INTERNSHIP: 'Thực tập',
 };
 
 /** Contract type enum from backend (employment-contract.schema.ts, TASK-028). */

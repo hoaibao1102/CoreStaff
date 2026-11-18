@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -45,31 +46,35 @@ export class CreateTimesheetPeriodDto {
   }
 
   /**
-   * Validate that the period does not start in the past.
-   * startDate must be >= today (allow creating periods starting from today).
+   * Validate that the period has not already fully ended.
+   * endDate must be >= today (the current month may be created mid-month).
    */
   validateNotInPast(): void {
-    const start = new Date(this.startDate);
+    const end = new Date(this.endDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Normalize to start of day
     
-    if (start < today) {
-      throw new Error(`PERIOD_IN_PAST: Period start date (${this.startDate}) cannot be in the past.`);
+    if (end < today) {
+      throw new Error(`PERIOD_IN_PAST: Period end date (${this.endDate}) is already in the past.`);
     }
   }
 
   /**
-   * Validate that the period does not overlap with an existing closed period.
-   * New period [newStart, newEnd] must not overlap with any closed period [oldStart, oldEnd].
+   * Validate that the period does not overlap any existing period.
+   * New period [newStart, newEnd] must not overlap [oldStart, oldEnd].
    * Overlap condition: newStart <= oldEnd && newEnd >= oldStart
+   *
+   * Every status counts, not just CLOSED: a period is resolved from a work date
+   * (`resolvePeriodId`, snapshot population), so two periods sharing a day would
+   * make that lookup ambiguous.
    */
   validateNoOverlap(newStartDate: Date, newEndDate: Date, existingPeriods: ExistingPeriodRange[]): void {
     for (const existing of existingPeriods) {
       // Check overlap: newStart <= oldEnd && newEnd >= oldStart
       if (newStartDate <= existing.endDate && newEndDate >= existing.startDate) {
         const existingPeriodStr = existing.startDate.toISOString().substring(0, 10);
-        throw new Error(
-          `PERIOD_OVERLAP: New period overlaps with existing closed period (${existingPeriodStr}). ` +
+        throw new BadRequestException(
+          `PERIOD_OVERLAP: New period overlaps an existing period (${existingPeriodStr}, ${existing.status}). ` +
           `Please ensure the new period does not overlap with any existing period.`
         );
       }

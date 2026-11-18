@@ -15,7 +15,7 @@ function build(row?: any) {
     findOneAndUpdate: jest.fn(() => query(current)), findByIdAndUpdate: jest.fn(() => query({ ...current })),
     insertMany: jest.fn(async (docs: any[], options: any) => docs.map(doc => ({ toObject: () => ({ ...doc, active: true }), options }))),
   };
-  const refs = { findOne: jest.fn(() => query({ _id: 'ok' })) };
+  const refs = { findOne: jest.fn(() => query({ _id: 'ok', employmentStatus: 'ACTIVE' })) };
   const periodVersion = { bumpForEffectiveWindow: jest.fn(async () => 1) };
   const service = new AssignmentService(assignment, refs as any, refs as any, refs as any, {} as any, periodVersion as any);
   return { service, assignment, session, periodVersion, current };
@@ -61,7 +61,7 @@ describe('AssignmentService projection invalidation', () => {
 
   it('does not invalidate a rejected update and propagates invalidation failures', async () => {
     const rejected = build();
-    rejected.assignment.findById.mockReturnValueOnce(query(null));
+    rejected.assignment.findOne.mockReturnValueOnce(query(null));
     await expect(rejected.service.update('org', 'missing', { effectiveFrom: '2027-11-01' })).rejects.toThrow('ASSIGNMENT_NOT_FOUND');
     expect(rejected.periodVersion.bumpForEffectiveWindow).not.toHaveBeenCalled();
 

@@ -137,6 +137,60 @@ export class PeriodVersionService {
     return bumped;
   }
 
+  /**
+   * Strict, transactional variant of `bumpForWorkDates` for source-fact writes
+   * (AUD-C05). A CLOSED or payroll-claimed period covering any date is a hard
+   * rejection instead of being silently skipped, and each open period is bumped
+   * with a status+version compare-and-set so a concurrent close cannot slip
+   * between the check and the write. Dates with no covering period are allowed.
+   */
+  async claimForWorkDates(
+    organizationId: string,
+    workDates: string[],
+    session: ClientSession,
+  ): Promise<number> {
+    if (!session?.inTransaction()) throw new ConflictException('TRANSACTION_REQUIRED');
+    const dates = [...new Set(workDates.map((d) => String(d).slice(0, 10)))];
+    if (!dates.length) return 0;
+
+    const organization = new Types.ObjectId(organizationId);
+    const toClaim = new Map<string, any>();
+    for (const day of dates) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new BadRequestException('INVALID_WORK_DATE');
+      const date = new Date(`${day}T00:00:00.000Z`);
+      const periods: any[] = await this.periods.find({
+        organizationId: organization,
+        active: true,
+        startDate: { $lte: date },
+        endDate: { $gte: date },
+      }).session(session).lean();
+      if (periods.length > 1) throw new ConflictException('CONTEXT_REQUIRES_REVIEW');
+      const period = periods[0];
+      if (!period) continue;
+      if (period.status === TimesheetPeriodStatus.CLOSED || period.payrollRunId != null) {
+        throw new ConflictException('PERIOD_CLOSED_OR_PAYROLL_CLAIMED');
+      }
+      toClaim.set(String(period._id), period);
+    }
+
+    for (const period of toClaim.values()) {
+      const result = await this.periods.updateOne({
+        _id: period._id,
+        organizationId: organization,
+        active: true,
+        status: period.status,
+        version: period.version,
+        payrollRunId: { $exists: false },
+      }, {
+        $inc: { version: 1 },
+        $set: { status: TimesheetPeriodStatus.REVIEWING, managerSnapshotClosed: false, departmentSnapshots: [] },
+        $unset: { managerSnapshotClosedBy: 1, managerSnapshotClosedAt: 1 },
+      }, { session });
+      if (result.modifiedCount !== 1) throw new ConflictException('PERIOD_VERSION_CONFLICT');
+    }
+    return toClaim.size;
+  }
+
   /** Invalidate open periods whose inclusive date range intersects a half-open policy window. */
   async bumpForEffectiveWindow(
     organizationId: string,

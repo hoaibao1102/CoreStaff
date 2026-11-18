@@ -7,6 +7,7 @@ import { toast } from '../../../components/toast';
 import { hrErrorMessage } from '../../../services/hrService';
 import { respondRequestClarification, type ManagerRequest } from '../../../services/manager.service';
 import { AlertCircle, Clock, Info } from 'lucide-react';
+import { formatVN } from '@/lib/datetime';
 
 interface Props {
   apiBase: string;
@@ -16,15 +17,25 @@ interface Props {
   onSuccess: () => void;
 }
 
+/** `HH:mm` in Vietnam time, or '' when the value is missing/invalid. */
+function vnClock(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
+}
+
 export function ClarificationResponseModal({ apiBase, request, open, onClose, onSuccess }: Props) {
   const [reason, setReason] = useState('');
-  const [customOutTime, setCustomOutTime] = useState('17:00');
-  const [includeCustomOut, setIncludeCustomOut] = useState(true);
+  // QC 1.2 — seed from the request's proposed times; never a hard-coded 17:00.
+  const [customInTime, setCustomInTime] = useState(() => vnClock(request.requestedStart));
+  const [customOutTime, setCustomOutTime] = useState(() => vnClock(request.requestedEnd));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const workDateFormatted = request.workDate
-    ? new Date(request.workDate).toLocaleDateString('vi-VN')
+    ? formatVN(request.workDate)
     : '';
 
   const hrMessage = request.reviewComment || request.reason || 'HR yêu cầu nhân viên giải trình mốc chấm công còn thiếu.';
@@ -44,12 +55,16 @@ export function ClarificationResponseModal({ apiBase, request, open, onClose, on
         ? new Date(request.workDate).toISOString().slice(0, 10)
         : '';
 
-      const customCheckOutTime = includeCustomOut && customOutTime && dateStr
+      const customCheckOutTime = customOutTime && dateStr
         ? `${dateStr}T${customOutTime}:00+07:00`
+        : undefined;
+      const customCheckInTime = customInTime && dateStr
+        ? `${dateStr}T${customInTime}:00+07:00`
         : undefined;
 
       await respondRequestClarification(apiBase, request._id, {
         reason: reason.trim(),
+        customCheckInTime,
         customCheckOutTime,
         expectedVersion: request.version,
       });
@@ -84,7 +99,7 @@ export function ClarificationResponseModal({ apiBase, request, open, onClose, on
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-3">
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 pb-6 pt-3">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -102,42 +117,25 @@ export function ClarificationResponseModal({ apiBase, request, open, onClose, on
             </p>
           </div>
 
-          {/* Giờ ra thực tế */}
+          {/* Mốc giờ thực tế — cả vào và ra đều sửa được (QC 1.2) */}
           <div className="rounded-xl border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold flex items-center gap-2 text-foreground">
-                <Clock className="size-4 text-primary" />
-                Mốc giờ ra thực tế (Check-out)
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Clock className="size-4 text-primary" />
+              Mốc giờ làm việc thực tế
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                Giờ vào thực tế
+                <Input type="time" aria-label="Giờ vào thực tế" value={customInTime} onChange={(e) => setCustomInTime(e.target.value)} className="font-medium" />
               </label>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeCustomOut}
-                  onChange={(e) => setIncludeCustomOut(e.target.checked)}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                Xác nhận mốc giờ ra
+              <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                Giờ ra thực tế
+                <Input type="time" aria-label="Giờ ra thực tế" value={customOutTime} onChange={(e) => setCustomOutTime(e.target.value)} className="font-medium" />
               </label>
             </div>
-
-            {includeCustomOut ? (
-              <div className="space-y-2">
-                <Input
-                  type="time"
-                  value={customOutTime}
-                  onChange={(e) => setCustomOutTime(e.target.value)}
-                  className="font-medium"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  💡 <strong>Nếu hôm nay có làm thêm giờ (OT)</strong>, bạn hãy nhập đúng giờ ra thực tế (ví dụ: 19:30). Quản lý duyệt sẽ làm căn cứ ghi nhận đủ công và thời gian OT.
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">
-                Chỉ gửi giải trình lý do vắng / không ghi nhận mốc ra.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Để trống mốc nào bạn không muốn xác nhận. <strong>Nếu hôm nay có làm thêm giờ (OT)</strong>, nhập đúng giờ ra thực tế (ví dụ 19:30) — Quản lý duyệt sẽ là căn cứ ghi nhận đủ công và thời gian OT.
+            </p>
           </div>
 
           {/* Lý do giải trình */}

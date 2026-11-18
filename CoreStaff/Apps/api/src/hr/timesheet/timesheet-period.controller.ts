@@ -61,6 +61,8 @@ export class TimesheetPeriodController {
 		return { success: true, data };
 	}
 
+	// Period lists/detail carry department-wide aggregates and manager ids; employees use `:id/my-review`.
+	@Roles('HR', 'DEPARTMENT_MANAGER')
 	@Get()
 	@ApiOperation({ summary: 'List timesheet periods for the current tenant.' })
 	@ApiSuccess('List of timesheet periods.', [
@@ -83,6 +85,7 @@ export class TimesheetPeriodController {
 		return { success: true, data };
 	}
 
+	@Roles('HR', 'DEPARTMENT_MANAGER')
 	@Get(':id')
 	@ApiOperation({ summary: 'Get a timesheet period by id.' })
 	@ApiSuccess('Timesheet period detail.', {

@@ -5,7 +5,7 @@ import { CoreStaffLogo } from './components/CoreStaffLogo';
 import { navigationEvent } from './components/AppLink';
 import { resolveApiBase, type ApiSource, type HealthResponse } from './config/api';
 import { type AuthUser, me, signedOutEvent } from './services/auth';
-import { forgetSession, hasRememberedSession } from './lib/session';
+import { forgetSession, hasRememberedSession, subscribeToSessionChanges } from './lib/session';
 import { ToastViewport } from './components/toast';
 
 function BootScreen() {
@@ -93,9 +93,22 @@ export default function App() {
       forgetSession();
       setUser(null);
       setMustChangePassword(false);
+      if (window.location.pathname !== '/login') {
+        window.history.pushState(null, '', '/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     };
     window.addEventListener(signedOutEvent, onSignedOut);
-    return () => window.removeEventListener(signedOutEvent, onSignedOut);
+    // AUD-M08: a sign-out in another tab must clear this tab's data at once, and
+    // a sign-in there must not leave this tab showing the previous account.
+    const unsubscribe = subscribeToSessionChanges({
+      onSignedOut,
+      onSignedIn: () => window.location.reload(),
+    });
+    return () => {
+      window.removeEventListener(signedOutEvent, onSignedOut);
+      unsubscribe();
+    };
   }, []);
 
   const signOut = () => {

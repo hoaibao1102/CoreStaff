@@ -55,6 +55,9 @@ describe('Clarification Flow & Labels', () => {
         workDate: '2026-10-21T00:00:00Z',
         reason: 'HR yêu cầu giải trình quên bấm ra',
         reviewComment: 'Trình bày rõ lý do và giờ rời văn phòng thực tế',
+        // QC 1.2 — both endpoints come from the request, not a hard-coded 17:00.
+        requestedStart: '2026-10-21T08:05:00+07:00',
+        requestedEnd: '2026-10-21T17:00:00+07:00',
         version: 1,
         status: 'CLARIFICATION_REQUESTED',
       };
@@ -82,8 +85,11 @@ describe('Clarification Flow & Labels', () => {
       const textarea = dialog.querySelector('textarea')!;
       expect(textarea).not.toBeNull();
 
-      const timeInput = dialog.querySelector<HTMLInputElement>('input[type="time"]')!;
+      const inInput = dialog.querySelector<HTMLInputElement>('input[type="time"][aria-label="Giờ vào thực tế"]')!;
+      const timeInput = dialog.querySelector<HTMLInputElement>('input[type="time"][aria-label="Giờ ra thực tế"]')!;
+      expect(inInput).not.toBeNull();
       expect(timeInput).not.toBeNull();
+      expect(inInput.value).toBe('08:05');
       expect(timeInput.value).toBe('17:00');
 
       // Change time to 19:30 using prototype setter
@@ -113,6 +119,7 @@ describe('Clarification Flow & Labels', () => {
         'req-123',
         expect.objectContaining({
           reason: 'Quên bấm ra do ở lại văn phòng OT cùng team',
+          customCheckInTime: '2026-10-21T08:05:00+07:00',
           customCheckOutTime: '2026-10-21T19:30:00+07:00',
           expectedVersion: 1,
         })

@@ -6,7 +6,7 @@ import { EmployeeProfileScreen } from '../src/screens/EmployeeProfile/EmployeePr
 import { EmployeeDetailDialog } from '../src/screens/EmployeeDetail/EmployeeDetailDialog';
 import { ToastViewport } from '../src/components/toast';
 import { mapEmployeeValidationErrors } from '../src/screens/EmployeeDirectory/apiErrors';
-import { validateBankAccount, validateCitizenId, validateEmail, validatePhone, validateSocialInsuranceCode } from '../src/screens/EmployeeDirectory/validation';
+import { validateCitizenId, validateEmail, validatePhone, validateSocialInsuranceCode } from '../src/screens/EmployeeDirectory/validation';
 import type { AuthUser } from '../src/services/auth';
 import type { EmployeeProfile } from '../src/services/hrService';
 jest.mock('../src/config/api', () => ({ apiUrl: (base: string, path: string) => base + path }));
@@ -68,10 +68,9 @@ async function submitCreate() {
   await act(async () => (document.body.querySelector('form button[type="submit"]') as HTMLButtonElement).click());
 }
 
-test('optional blank values are omitted, including employment type and whitespace email', async () => {
+test('optional blank values are omitted, including whitespace email', async () => {
   await readyCreate();
   await setCreateField('email', '   ');
-  await setCreateField('employmentType', '');
   await submitCreate();
   const request = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
   expect(JSON.parse(request![1].body)).toEqual({ userId: 'u2', employeeCode: 'NV-123', joinDate: '2020-01-01' });
@@ -208,8 +207,13 @@ test('directory creates employee profile with the HR business payload', async ()
   const request = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/api/hr/employees') && init?.method === 'POST');
   expect(request).toBeDefined();
   const body = JSON.parse(String(request![1].body));
-  expect(body).toMatchObject({ userId: 'u2', employeeCode: 'TVS-0248', employmentType: 'FULL_TIME', joinDate: '2026-09-16', email: 'employee@corp.com', departmentId: 'd1', positionId: 'pos1' });
+  expect(body).toMatchObject({ userId: 'u2', employeeCode: 'TVS-0248', joinDate: '2026-09-16', email: 'employee@corp.com', departmentId: 'd1', positionId: 'pos1' });
+  // QC 4.4/4.8/4.3/3.2 — the fields QC asked to drop are no longer sent.
+  expect(body).not.toHaveProperty('employmentType');
   expect(body).not.toHaveProperty('employmentStatus');
+  expect(body).not.toHaveProperty('directManagerId');
+  expect(body).not.toHaveProperty('workplaceId');
+  expect(body).not.toHaveProperty('bankAccount');
   expect(body).not.toHaveProperty('endDate');
   expect([...document.body.querySelectorAll('[role="status"]')].some(node => node.textContent?.includes('Tạo hồ sơ thành công'))).toBe(true);
 });
@@ -220,7 +224,7 @@ test('create employee keeps field validation inline and shows a warning toast', 
   for (const id of ['create-userId', 'create-employeeCode', 'create-joinDate']) {
     expect(document.querySelector(`label[for="${id}"]`)?.className).toContain('after:content');
   }
-  for (const id of ['create-phone', 'create-email', 'create-citizenId', 'create-socialInsuranceCode', 'create-directManagerId']) {
+  for (const id of ['create-phone', 'create-email', 'create-citizenId', 'create-socialInsuranceCode']) {
     expect(document.querySelector(`label[for="${id}"]`)?.className).not.toContain('after:content');
   }
   await act(async () => (document.body.querySelector('form button[type="submit"]') as HTMLButtonElement).click());
@@ -241,7 +245,6 @@ test('employee field validators enforce the documented optional formats', () => 
   expect(validateCitizenId('0123456789')).toBeNull();
   expect(validateCitizenId('123456789012')).toBeNull();
   expect(validateSocialInsuranceCode('')).toBeNull();
-  expect(validateBankAccount('')).toBeNull();
 });
 test('create employee displays a specific actionable API error', async () => {
   createStatus = 404;
@@ -276,7 +279,9 @@ test.each(['EMPLOYEE', 'DEPARTMENT_MANAGER', 'SYSTEM_ADMIN'] as const)('self use
   expect(fetchMock).toHaveBeenCalledWith('https://api.test/api/hr/employees/me', expect.objectContaining({ method: 'GET', credentials: 'include' }));
   expect(container.textContent).toContain('Session Name'); expect(container.textContent).toContain('E001');
   expect(container.textContent).toContain('Engineering'); expect(container.textContent).toContain('Developer');
-  expect(container.textContent).toContain('Manager'); expect(container.textContent).toContain('Ca làm việc');
+  expect(container.textContent).toContain('Ca làm việc');
+  // QC 4.5 — Quản lý trực tiếp is no longer part of the employee profile.
+  expect(container.textContent).not.toContain('Quản lý trực tiếp');
   expect(container.querySelector('input')).toBeNull();
 });
 test.each([{ userId: 'other' }, { organizationId: 'other' }])('self rejects foreign response %j', async change => {

@@ -91,7 +91,7 @@ async function openTimesheetReview(page: Page) {
     const path = url.pathname;
 
     if (path.endsWith('/healthz')) {
-      return route.fulfill({ json: { status: 'ok', service: 'corestaff-api' } });
+      return route.fulfill({ json: { status: 'ok', service: 'corestaff-api', mongo: 'configured', timezone: 'Asia/Ho_Chi_Minh' } });
     }
 
     if (path.endsWith('/auth/me')) {
@@ -177,7 +177,7 @@ async function openTimesheetReview(page: Page) {
     });
   });
 
-  await page.goto('/timesheet/review');
+  await page.goto('/hr/timesheet-periods');
   return state;
 }
 
@@ -370,7 +370,7 @@ test('HR cannot see other tenant periods', async ({ page }) => {
     await route.fulfill({ json: { success: false, error: { code: 'NOT_FOUND' } }, status: 404 });
   });
 
-  await page.goto('/timesheet/review');
+  await page.goto('/hr/timesheet-periods');
 
   // Should show empty state
   await expect(page.getByText(/Không có kỳ|iền trống|chưa có kỳ/i)).toBeVisible();
@@ -405,7 +405,7 @@ test('Shows error when close fails', async ({ page }) => {
     await route.fulfill({ json: { success: true, data: {} } });
   });
 
-  await page.goto('/timesheet/review');
+  await page.goto('/hr/timesheet-periods');
   await page.getByText('2026-10').click();
   await page.getByRole('button', { name: /Đóng kỳ này/i }).click();
   await page.getByRole('button', { name: /Xác nhận/i }).click();

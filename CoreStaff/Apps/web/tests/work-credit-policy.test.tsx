@@ -50,8 +50,9 @@ it('lists effective policy values and the regeneration impact warning', async ()
   expect(container.textContent).toContain('Quy chế công 2026');
   expect(container.textContent).toContain('50%');
   expect(container.textContent).toContain('90%');
-  expect(container.textContent).toContain('Có tính phép hưởng lương');
-  expect(container.textContent).toContain('Chặn khi chưa hoàn tất');
+  expect(container.textContent).toContain('Nửa ngày');
+  expect(container.textContent).toContain('Đủ ngày');
+  expect(container.textContent).toContain('Chặn');
   expect(container.textContent).toContain('v3');
   expect(container.textContent).toContain('Đang hiệu lực');
   expect(container.textContent).toContain('Thay đổi có thể làm mất hiệu lực xác nhận ở các kỳ mở giao với khoảng hiệu lực; cần kiểm tra lại trước chốt. Dữ liệu đã chốt dùng snapshot đã lưu và không tự đổi. Chỉ lưu chính sách đã được doanh nghiệp phê duyệt.');

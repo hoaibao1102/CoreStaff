@@ -16,7 +16,6 @@ export const DEFAULT_EMPLOYEE_FORM_VALUES = {
     userId: '',
     fullName: '',
     employeeCode: '',
-    employmentType: 'FULL_TIME' as const,
     joinDate: new Date().toISOString().slice(0, 10),
     dateOfBirth: '',
     gender: '',
@@ -26,11 +25,8 @@ export const DEFAULT_EMPLOYEE_FORM_VALUES = {
     citizenId: '',
     taxCode: '',
     socialInsuranceCode: '',
-    bankAccount: '',
     departmentId: '',
     positionId: '',
-    directManagerId: '',
-    workplaceId: '',
 } as const;
 
 export const EMPLOYEE_FORM_FIELDS = [
@@ -46,9 +42,6 @@ export const EMPLOYEE_FORM_FIELDS = [
     { key: 'citizenId', label: 'CCCD/CMND', required: false },
     { key: 'taxCode', label: 'Mã số thuế', required: false },
     { key: 'socialInsuranceCode', label: 'Số BHXH', required: false },
-    { key: 'bankAccount', label: 'Tài khoản ngân hàng', required: false },
     { key: 'departmentId', label: 'Phòng ban', required: false },
     { key: 'positionId', label: 'Chức danh', required: false },
-    { key: 'directManagerId', label: 'Quản lý trực tiếp', required: false },
-    { key: 'workplaceId', label: 'Nơi làm việc', required: false },
 ] as const;

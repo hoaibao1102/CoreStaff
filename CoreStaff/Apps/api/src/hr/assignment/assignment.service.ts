@@ -6,10 +6,12 @@ import { DepartmentDocument } from '../../database/schemas/department.schema';
 import { EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { WorkplaceDocument } from '../../database/schemas/workplace.schema';
 import { ShiftTemplateDocument } from '../../database/schemas/shift-template.schema';
+import { WORKING_EMPLOYMENT_STATUSES } from '../../database/schemas/enums';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { BatchValidator } from '../../common/batch-validator';
 import { PeriodVersionService } from '../timesheet/period-version.service';
+import { dateVN } from '../../common/date-only';
 
 const DUPLICATE_KEY_ERROR = 11000;
 const LEGACY_UNIQUE_INDEXES = [
@@ -17,9 +19,42 @@ const LEGACY_UNIQUE_INDEXES = [
     'organizationId_1_employeeId_1_departmentId_1',
 ];
 
+/**
+ * Error messages follow `CODE: chi tiết tiếng Việt`. The exception filter turns
+ * the prefix into `error.code` and keeps the whole string as `error.message`,
+ * so the UI can show the specific reason instead of a generic failure.
+ */
+const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
+    PROBATION: 'Thử việc',
+    ACTIVE: 'Đang làm việc',
+    ON_LEAVE: 'Đang nghỉ phép dài hạn',
+    RESIGNED: 'Đã nghỉ việc',
+    TERMINATED: 'Đã nghỉ việc',
+};
+
+function todayVietnam(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+function dateOnly(value: string): string {
+    return value.slice(0, 10);
+}
+
 function isDateBeforeToday(dateStr: string): boolean {
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-    return dateStr.slice(0, 10) < todayStr;
+    return dateOnly(dateStr) < todayVietnam();
+}
+
+function describeRange(from?: string, to?: string): string {
+    if (from && to) return `từ ${dateVN(from)} đến ${dateVN(to)}`;
+    if (from) return `từ ${dateVN(from)}, không thời hạn`;
+    if (to) return `đến ${dateVN(to)}`;
+    return 'không giới hạn thời gian';
+}
+
+function describeEmployee(profile: any, fallbackId: string): string {
+    if (!profile) return `người dùng ${fallbackId}`;
+    const name = profile.fullName || 'Nhân viên';
+    return profile.employeeCode ? `${name} (${profile.employeeCode})` : name;
 }
 
 @Injectable()
@@ -46,6 +81,29 @@ export class AssignmentService {
       }
     }
 
+    /**
+     * Only an employee who is currently working (PROBATION / ACTIVE / ON_LEAVE,
+     * SRS §176) can be assigned. Returns the profile so callers can name the
+     * employee in later messages.
+     */
+    private async checkAssignableEmployee(
+        organizationId: string,
+        userId: string,
+        batch: BatchValidator,
+    ): Promise<any | null> {
+        const profile: any = await this.profileModel.findOne({ userId, organizationId }).lean();
+        if (!profile) {
+            batch.add('userId', `EMPLOYEE_PROFILE_NOT_FOUND: Không tìm thấy hồ sơ nhân viên của người dùng ${userId} trong tổ chức này nên không thể phân công.`);
+            return null;
+        }
+        if (!WORKING_EMPLOYMENT_STATUSES.includes(profile.employmentStatus)) {
+            const statusLabel = EMPLOYMENT_STATUS_LABEL[profile.employmentStatus] ?? String(profile.employmentStatus);
+            batch.add('userId', `EMPLOYEE_NOT_WORKING: Nhân viên ${describeEmployee(profile, userId)} đang ở trạng thái "${statusLabel}" nên không thể phân công. Chỉ phân công được nhân viên đang làm việc.`);
+            return null;
+        }
+        return profile;
+    }
+
     async create(organizationId: string, user: any, dto: CreateAssignmentDto) {
         // Older databases may still have the pre-time-range unique index,
         // which incorrectly returns 409 for a valid historical assignment.
@@ -54,32 +112,41 @@ export class AssignmentService {
 
         // Validate effectiveFrom / effectiveTo
         if (dto.effectiveFrom && dto.effectiveTo) {
-            batch.check(new Date(dto.effectiveFrom) <= new Date(dto.effectiveTo), 'effectiveTo', 'EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM');
+            batch.check(
+                dateOnly(dto.effectiveFrom) <= dateOnly(dto.effectiveTo),
+                'effectiveTo',
+                `EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM: Ngày kết thúc (${dateVN(dto.effectiveTo)}) không được trước ngày bắt đầu (${dateVN(dto.effectiveFrom)}).`,
+            );
         }
         if (dto.effectiveFrom) {
-            batch.check(!isDateBeforeToday(dto.effectiveFrom), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+            batch.check(
+                !isDateBeforeToday(dto.effectiveFrom),
+                'effectiveFrom',
+                `EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST: Ngày bắt đầu (${dateVN(dto.effectiveFrom)}) đã qua. Ngày bắt đầu phải từ hôm nay (${dateVN(todayVietnam())}) trở đi.`,
+            );
         }
 
         // Validate department exists and belongs to tenant
         const dept = await this.departmentModel.findOne({ _id: dto.departmentId, organizationId }).lean();
-        batch.checkExists(dept, 'departmentId', 'DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT');
+        batch.checkExists(dept, 'departmentId', 'DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT: Phòng ban đã chọn không tồn tại trong tổ chức này.');
 
         // Validate workplace exists and belongs to tenant
         let workplace: any;
         if (dto.workplaceId) {
             workplace = await this.workplaceModel.findOne({ _id: dto.workplaceId, organizationId }).lean();
-            batch.checkExists(workplace, 'workplaceId', 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT');
+            batch.checkExists(workplace, 'workplaceId', 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT: Nơi làm việc đã chọn không tồn tại trong tổ chức này.');
         }
 
         const userIds = dto.userIds?.length ? dto.userIds : dto.userId ? [dto.userId] : [];
         if (!userIds.length) {
-            throw new BadRequestException('AT_LEAST_ONE_USER_REQUIRED');
+            throw new BadRequestException('AT_LEAST_ONE_USER_REQUIRED: Vui lòng chọn ít nhất một nhân viên để phân công.');
         }
 
-        // Validate each user exists
+        // Each user must have a profile in this tenant and be currently working.
+        const profiles = new Map<string, any>();
         for (const userId of userIds) {
-            const userDoc = await this.profileModel.findOne({ userId, organizationId }).lean();
-            batch.checkExists(userDoc, 'userId', `USER_${userId}_NOT_FOUND_IN_TENANT`);
+            const profile = await this.checkAssignableEmployee(organizationId, userId, batch);
+            if (profile) profiles.set(userId, profile);
         }
         batch.throwIfAny();
 
@@ -103,9 +170,12 @@ export class AssignmentService {
                 }
             }
 
-            const overlap = await this.checkOverlap(organizationId, userId, dto.departmentId, undefined, dto.effectiveFrom, dto.effectiveTo);
-            if (overlap) {
-                batch.add(`user ${userId}`, 'OVERLAPPING_ASSIGNMENT_EXISTS');
+            const conflict = await this.checkOverlap(organizationId, userId, dto.departmentId, undefined, dto.effectiveFrom, dto.effectiveTo);
+            if (conflict) {
+                batch.add(
+                    'assignment',
+                    `OVERLAPPING_ASSIGNMENT_EXISTS: Nhân viên ${describeEmployee(profiles.get(userId), userId)} đã có phân công tại phòng ban ${(dept as any)?.name ?? 'này'} ${describeRange(conflict.effectiveFrom, conflict.effectiveTo)}, trùng với khoảng thời gian bạn chọn (${describeRange(dto.effectiveFrom, dto.effectiveTo)}). Hãy chọn ngày khác hoặc ngưng phân công cũ trước.`,
+                );
             } else {
                 toCreate.push(userId);
             }
@@ -120,7 +190,7 @@ export class AssignmentService {
                     const updated = await this.assignmentModel.findByIdAndUpdate(
                         assignmentId, { workplaceId: dto.workplaceId }, { new: true, session },
                     ).lean();
-                    if (!updated) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+                    if (!updated) throw new NotFoundException('ASSIGNMENT_NOT_FOUND: Không tìm thấy phân công cần bổ sung nơi làm việc (có thể đã bị xóa).');
                     enriched.push(updated);
                 }
                 const docs = toCreate.length ? await this.assignmentModel.insertMany(
@@ -164,7 +234,7 @@ export class AssignmentService {
 
     async findOne(organizationId: string, id: string) {
         const doc = await this.assignmentModel.findOne({ _id: id, organizationId }).lean();
-        if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+        if (!doc) throw new NotFoundException(ASSIGNMENT_NOT_FOUND);
         return doc;
     }
 
@@ -174,8 +244,8 @@ export class AssignmentService {
 
         // Validate references if being updated
         if (patch.userId || patch.departmentId || patch.workplaceId || patch.effectiveFrom || patch.effectiveTo) {
-            const current = await this.assignmentModel.findById(id).lean();
-            if (!current) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+            const current = await this.assignmentModel.findOne({ _id: id, organizationId }).lean();
+            if (!current) throw new NotFoundException(ASSIGNMENT_NOT_FOUND);
 
             const refs: Record<string, unknown> = {
                 userId: (patch.userId as string) || current.userId,
@@ -185,40 +255,53 @@ export class AssignmentService {
                 effectiveTo: (patch.effectiveTo as string) || current.effectiveTo,
             };
 
+            // Only what the caller actually changes is re-validated. Rows that
+            // were seeded or imported earlier (past start date, user without a
+            // profile, an old overlapping window) must stay editable for the
+            // untouched fields.
+            const same = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '');
+            const userChanged = !same(refs.userId, current.userId);
+            const departmentChanged = !same(refs.departmentId, current.departmentId);
+            const workplaceChanged = !same(refs.workplaceId, current.workplaceId);
+            const fromChanged = !same(dateOnly(String(refs.effectiveFrom ?? '')), dateOnly(String(current.effectiveFrom ?? '')));
+            const toChanged = !same(dateOnly(String(refs.effectiveTo ?? '')), dateOnly(String(current.effectiveTo ?? '')));
+
             // Validate effectiveFrom / effectiveTo
             if (refs.effectiveFrom && refs.effectiveTo) {
-                batch.check(new Date(refs.effectiveFrom as string) <= new Date(refs.effectiveTo as string), 'effectiveTo', 'EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM');
+                batch.check(
+                    dateOnly(String(refs.effectiveFrom)) <= dateOnly(String(refs.effectiveTo)),
+                    'effectiveTo',
+                    `EFFECTIVE_TO_MUST_BE_AFTER_EFFECTIVE_FROM: Ngày kết thúc (${dateVN(String(refs.effectiveTo))}) không được trước ngày bắt đầu (${dateVN(String(refs.effectiveFrom))}).`,
+                );
             }
-            if (patch.effectiveFrom && patch.effectiveFrom !== current.effectiveFrom) {
-                batch.check(!isDateBeforeToday(patch.effectiveFrom as string), 'effectiveFrom', 'EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST');
+            if (fromChanged && patch.effectiveFrom) {
+                batch.check(
+                    !isDateBeforeToday(patch.effectiveFrom as string),
+                    'effectiveFrom',
+                    `EFFECTIVE_FROM_CANNOT_BE_IN_THE_PAST: Ngày bắt đầu mới (${dateVN(patch.effectiveFrom as string)}) đã qua. Ngày bắt đầu phải từ hôm nay (${dateVN(todayVietnam())}) trở đi.`,
+                );
             }
 
-            // Validate user exists in tenant
+            // Re-assigning to a different employee: they must be a working employee.
+            let profile: any = null;
             if (refs.userId) {
-                const userDoc = await this.profileModel.findOne({ userId: refs.userId, organizationId }).lean();
-                batch.checkExists(userDoc, 'userId', 'USER_NOT_FOUND_IN_TENANT');
+                if (userChanged) profile = await this.checkAssignableEmployee(organizationId, refs.userId as string, batch);
+                else profile = await this.profileModel.findOne({ userId: refs.userId, organizationId }).lean();
             }
 
-            // Validate department exists
+            let dept: any = null;
             if (refs.departmentId) {
-                const dept = await this.departmentModel.findOne({ _id: refs.departmentId, organizationId }).lean();
-                batch.checkExists(dept, 'departmentId', 'DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT');
+                dept = await this.departmentModel.findOne({ _id: refs.departmentId, organizationId }).lean();
+                if (departmentChanged) batch.checkExists(dept, 'departmentId', 'DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT: Phòng ban đã chọn không tồn tại trong tổ chức này.');
             }
 
-            // Validate workplace exists
-            if (refs.workplaceId) {
+            if (refs.workplaceId && workplaceChanged) {
                 const workplace = await this.workplaceModel.findOne({ _id: refs.workplaceId, organizationId }).lean();
-                batch.checkExists(workplace, 'workplaceId', 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT');
+                batch.checkExists(workplace, 'workplaceId', 'WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT: Nơi làm việc đã chọn không tồn tại trong tổ chức này.');
             }
 
-            await this.validateReferences(organizationId, {
-                userId: refs.userId as string | undefined,
-                departmentId: refs.departmentId as string | undefined,
-                workplaceId: refs.workplaceId as string | undefined,
-            });
-
-            if (refs.userId && refs.departmentId) {
-                const overlap = await this.checkOverlap(
+            if (refs.userId && refs.departmentId && (userChanged || departmentChanged || fromChanged || toChanged)) {
+                const conflict = await this.checkOverlap(
                     organizationId,
                     refs.userId as string,
                     refs.departmentId as string,
@@ -226,8 +309,11 @@ export class AssignmentService {
                     refs.effectiveFrom as string | undefined,
                     refs.effectiveTo as string | undefined
                 );
-                if (overlap) {
-                    batch.add('user + department', 'OVERLAPPING_ASSIGNMENT_EXISTS');
+                if (conflict) {
+                    batch.add(
+                        'assignment',
+                        `OVERLAPPING_ASSIGNMENT_EXISTS: Nhân viên ${describeEmployee(profile, String(refs.userId))} đã có phân công khác tại phòng ban ${dept?.name ?? 'này'} ${describeRange(conflict.effectiveFrom, conflict.effectiveTo)}, trùng với khoảng thời gian bạn chọn (${describeRange(refs.effectiveFrom as string | undefined, refs.effectiveTo as string | undefined)}). Hãy chọn ngày khác hoặc ngưng phân công kia trước.`,
+                    );
                 }
             }
         }
@@ -240,7 +326,7 @@ export class AssignmentService {
                 const doc = await this.assignmentModel
                     .findOneAndUpdate({ _id: id, organizationId }, { $set: patch }, { new: true, runValidators: true, session })
                     .lean();
-                if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+                if (!doc) throw new NotFoundException(ASSIGNMENT_NOT_FOUND);
                 const window = unionAssignmentWindows([old, { ...old, ...patch }]);
                 await this.invalidate(organizationId, window.from, window.to, session);
                 return doc;
@@ -253,7 +339,7 @@ export class AssignmentService {
 
     async setActive(organizationId: string, id: string, active: boolean) {
         const doc = await this.assignmentModel.findOne({ _id: id, organizationId }).lean();
-        if (!doc) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+        if (!doc) throw new NotFoundException(ASSIGNMENT_NOT_FOUND);
         if (doc.active === active) return doc;
 
         // HR có thể deactivate bất kỳ assignment nào mà không cần điều kiện
@@ -261,7 +347,7 @@ export class AssignmentService {
 
         return this.transaction(async session => {
             const updated = await this.assignmentModel.findByIdAndUpdate(id, { active }, { new: true, session }).lean();
-            if (!updated) throw new NotFoundException('ASSIGNMENT_NOT_FOUND');
+            if (!updated) throw new NotFoundException(ASSIGNMENT_NOT_FOUND);
             await this.invalidate(organizationId, doc.effectiveFrom, doc.effectiveTo, session);
             return updated;
         });
@@ -284,24 +370,7 @@ export class AssignmentService {
         );
     }
 
-    private async validateReferences(organizationId: string, refs: {
-        userId?: string;
-        departmentId?: string;
-        workplaceId?: string;
-    }) {
-        // Validate Department exists and belongs to tenant
-        if (refs.departmentId) {
-            const dept = await this.departmentModel.findOne({ _id: refs.departmentId, organizationId }).lean();
-            if (!dept) throw new NotFoundException('DEPARTMENT_NOT_FOUND_OR_NOT_IN_TENANT');
-        }
-
-        // Validate Workplace exists and belongs to tenant
-        if (refs.workplaceId) {
-            const workplace = await this.workplaceModel.findOne({ _id: refs.workplaceId, organizationId }).lean();
-            if (!workplace) throw new NotFoundException('WORKPLACE_NOT_FOUND_OR_NOT_IN_TENANT');
-        }
-    }
-
+    /** Returns the existing active assignment the new window collides with, if any. */
     private async checkOverlap(
         organizationId: string,
         userId: string,
@@ -309,7 +378,7 @@ export class AssignmentService {
         excludeId?: string,
         effectiveFrom?: string,
         effectiveTo?: string,
-    ): Promise<boolean> {
+    ): Promise<{ effectiveFrom?: string; effectiveTo?: string } | null> {
         // FR-HRCFG-04: No two active assignments can overlap for same user + department
         const query: Record<string, unknown> = {
             organizationId,
@@ -323,7 +392,7 @@ export class AssignmentService {
         const nextFrom = effectiveFrom ? new Date(effectiveFrom).getTime() : Number.NEGATIVE_INFINITY;
         const nextTo = effectiveTo ? new Date(effectiveTo).getTime() : Number.POSITIVE_INFINITY;
 
-        return existing.some((assignment) => {
+        return existing.find((assignment) => {
             const currentFrom = assignment.effectiveFrom
                 ? new Date(assignment.effectiveFrom).getTime()
                 : Number.NEGATIVE_INFINITY;
@@ -331,13 +400,15 @@ export class AssignmentService {
                 ? new Date(assignment.effectiveTo).getTime()
                 : Number.POSITIVE_INFINITY;
             return currentFrom <= nextTo && nextFrom <= currentTo;
-        });
+        }) ?? null;
     }
 }
 
+const ASSIGNMENT_NOT_FOUND = 'ASSIGNMENT_NOT_FOUND: Không tìm thấy phân công này (có thể đã bị xóa hoặc thuộc tổ chức khác).';
+
 function mapDuplicateKey(err: unknown): unknown {
     if (err && typeof err === 'object' && (err as { code?: number }).code === DUPLICATE_KEY_ERROR) {
-        return new ConflictException('ASSIGNMENT_ALREADY_EXISTS');
+        return new ConflictException('ASSIGNMENT_ALREADY_EXISTS: Phân công này đã tồn tại (trùng nhân viên, phòng ban và thời gian).');
     }
     return err;
 }

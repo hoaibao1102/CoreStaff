@@ -9,6 +9,7 @@ import { AuthModule } from '../src/auth/auth.module';
 import { AttendanceModule } from '../src/attendance/attendance.module';
 import { EventsModule } from '../src/events/events.module';
 import { HrModule } from '../src/hr/hr.module';
+import { PlatformModule } from '../src/platform/platform.module';
 import { SCHEMA_REGISTRY } from '../src/database/schemas/registry';
 
 /**
@@ -60,6 +61,7 @@ export async function createTestApp(): Promise<TestApp> {
       AuthModule,
       HrModule,
       AttendanceModule,
+      PlatformModule,
     ],
   }).compile();
 

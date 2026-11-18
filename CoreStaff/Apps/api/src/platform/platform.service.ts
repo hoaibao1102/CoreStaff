@@ -10,6 +10,9 @@ import { hashPassword } from '../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../auth/strategies/password-policy';
 import { userFields } from '../database/seed/provision';
 import { CreateOrganizationDto, CreateInitialHrDto } from './dto/platform.dto';
+import { EventsGateway } from '../events/events.gateway';
+import { PlatformAuditService } from './platform-audit.service';
+import { PlatformAuditAction, PlatformAuditTarget } from './platform-audit.constants';
 
 const DUPLICATE_KEY_ERROR = 11000;
 
@@ -26,6 +29,8 @@ export class PlatformService {
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectModel('UserSession') private readonly sessionModel: Model<UserSessionDocument>,
 		@Optional() @InjectModel('EmployeeProfile') private readonly profileModel?: Model<EmployeeProfileDocument>,
+		@Optional() private readonly eventsGateway?: EventsGateway,
+		@Optional() private readonly audit?: PlatformAuditService,
 	) {}
 
 	/**
@@ -124,46 +129,17 @@ export class PlatformService {
 					},
 					{ upsert: true }
 				);
-
-				await db.collection('timesheet_periods').updateOne(
-					{ organizationId: orgId, period: '2026-10' },
-					{
-						$setOnInsert: {
-							organizationId: orgId,
-							period: '2026-10',
-							name: 'Kỳ công tháng 10/2026',
-							startDate: new Date('2026-10-01T00:00:00.000Z'),
-							endDate: new Date('2026-10-31T23:59:59.999Z'),
-							status: 'REVIEWING',
-							active: true,
-							version: 1,
-							createdAt: now,
-							updatedAt: now,
-						},
-					},
-					{ upsert: true }
-				);
-				await db.collection('timesheet_periods').updateOne(
-					{ organizationId: orgId, period: '2026-11' },
-					{
-						$setOnInsert: {
-							organizationId: orgId,
-							period: '2026-11',
-							name: 'Kỳ công tháng 11/2026',
-							startDate: new Date('2026-11-01T00:00:00.000Z'),
-							endDate: new Date('2026-11-30T23:59:59.999Z'),
-							status: 'REVIEWING',
-							active: true,
-							version: 1,
-							createdAt: now,
-							updatedAt: now,
-						},
-					},
-					{ upsert: true }
-				);
 			}
 
-			return doc.toObject();
+			const created = doc.toObject();
+			await this.audit?.recordForActor(createdBy, {
+				action: PlatformAuditAction.ORGANIZATION_CREATED,
+				targetType: PlatformAuditTarget.ORGANIZATION,
+				targetId: String(orgId),
+				targetOrganizationId: String(orgId),
+				targetSummary: `${created.code} — ${created.name}`,
+			});
+			return created;
 		} catch (err) {
 			if (isDuplicate(err)) throw new ConflictException('ORGANIZATION_CODE_TAKEN');
 			throw err;
@@ -176,7 +152,7 @@ export class PlatformService {
 	 * No EmployeeProfile is created here: that record is HR's own to make, and
 	 * auto-creating it would silently grant attendance eligibility (SRS §162).
 	 */
-	async createInitialHr(organizationId: string, dto: CreateInitialHrDto) {
+	async createInitialHr(organizationId: string, dto: CreateInitialHrDto, actorId?: string) {
 		await this.assertOrganization(organizationId);
 		const email = dto.email.trim();
 		if (await this.userModel.exists({ organizationId, emailN: normalizeEmail(email) })) {
@@ -200,6 +176,15 @@ export class PlatformService {
 			if (isDuplicate(err)) throw new ConflictException('EMAIL_TAKEN');
 			throw err;
 		}
+		// The temporary password is returned to the caller once and never logged.
+		await this.audit?.recordForActor(actorId, {
+			action: PlatformAuditAction.INITIAL_HR_CREATED,
+			targetType: PlatformAuditTarget.USER,
+			targetId: String(user._id),
+			targetOrganizationId: organizationId,
+			targetSummary: `${email} (HR)`,
+			details: { role: Role.HR, mustChangeOnFirstLogin: true },
+		});
 		return { ...user, tempPassword };
 	}
 
@@ -214,16 +199,29 @@ export class PlatformService {
 	 * needs the tenant check in AuthGuard, i.e. one org lookup per request — the
 	 * cost this plan deliberately trims.
 	 */
-	async setOrganizationStatus(organizationId: string, status: OrganizationStatus) {
+	async setOrganizationStatus(organizationId: string, status: OrganizationStatus, actorId?: string) {
+		const before: any = this.audit ? await this.orgModel.findById(organizationId).select({ status: 1 }).lean() : null;
 		const org = await this.orgModel.findOneAndUpdate(
 			{ _id: organizationId },
 			{ status },
 			{ new: true },
 		).lean();
 		if (!org) throw new NotFoundException('ORGANIZATION_NOT_FOUND');
+		let revokedSessions: number | undefined;
 		if (status !== OrganizationStatus.ACTIVE) {
-			await this.sessionModel.updateMany({ organizationId, revokedAt: null }, { revokedAt: new Date() }).exec();
+			const revoked: any = await this.sessionModel.updateMany({ organizationId, revokedAt: null }, { revokedAt: new Date() }).exec();
+			revokedSessions = revoked?.modifiedCount;
+			// AUD-H07: cut live sockets of a suspended tenant too.
+			this.eventsGateway?.disconnectOrganization(String(organizationId));
 		}
+		await this.audit?.recordForActor(actorId, {
+			action: status === OrganizationStatus.ACTIVE ? PlatformAuditAction.ORGANIZATION_ACTIVATED : PlatformAuditAction.ORGANIZATION_SUSPENDED,
+			targetType: PlatformAuditTarget.ORGANIZATION,
+			targetId: String(organizationId),
+			targetOrganizationId: String(organizationId),
+			targetSummary: `${(org as any).code} — ${(org as any).name}`,
+			details: { previousStatus: before?.status, newStatus: status, ...(revokedSessions !== undefined ? { revokedSessions } : {}) },
+		});
 		return org;
 	}
 

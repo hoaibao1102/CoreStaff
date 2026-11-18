@@ -4,7 +4,7 @@
  *  1. attendanceOvertimeV2Enabled: true
  *  2. LaborCompliancePolicy with maxMonthlyAttendanceConfirmations: 3, minOT: 60, rounding: 30
  *  3. WorkCreditPolicy active (halfDay: 0.5, fullDay: 1.0)
- *  4. Open active TimesheetPeriods for October and November 2026 (status: REVIEWING)
+ *  (Timesheet periods are NOT created here. HR creates each period manually.)
  *
  * Usage:
  *   npx ts-node-script scripts/ensure-organizations-ready.ts [--dry-run]
@@ -113,59 +113,10 @@ async function main() {
         );
       }
 
-      // 4. Check & fix TimesheetPeriods (2026-10 and 2026-11)
-      const periods = await db.collection('timesheet_periods').find({
-        $or: [{ organizationId: orgId }, { organizationId: orgIdStr }],
-        active: true,
-      }).toArray();
-
-      const hasOct = periods.some(p => p.period === '2026-10' || (new Date(p.startDate) <= new Date('2026-10-15') && new Date(p.endDate) >= new Date('2026-10-15')));
-      const hasNov = periods.some(p => p.period === '2026-11' || (new Date(p.startDate) <= new Date('2026-11-15') && new Date(p.endDate) >= new Date('2026-11-15')));
-
-      if ((!hasOct || !hasNov) && !isDryRun) {
-        if (!hasOct) {
-          await db.collection('timesheet_periods').updateOne(
-            { organizationId: orgId, period: '2026-10' },
-            {
-              $set: { status: 'REVIEWING', active: true, updatedAt: now },
-              $setOnInsert: {
-                organizationId: orgId,
-                period: '2026-10',
-                name: 'Kỳ công tháng 10/2026',
-                startDate: new Date('2026-10-01T00:00:00.000Z'),
-                endDate: new Date('2026-10-31T23:59:59.999Z'),
-                version: 1,
-                createdAt: now,
-              },
-            },
-            { upsert: true }
-          );
-        }
-        if (!hasNov) {
-          await db.collection('timesheet_periods').updateOne(
-            { organizationId: orgId, period: '2026-11' },
-            {
-              $set: { status: 'REVIEWING', active: true, updatedAt: now },
-              $setOnInsert: {
-                organizationId: orgId,
-                period: '2026-11',
-                name: 'Kỳ công tháng 11/2026',
-                startDate: new Date('2026-11-01T00:00:00.000Z'),
-                endDate: new Date('2026-11-30T23:59:59.999Z'),
-                version: 1,
-                createdAt: now,
-              },
-            },
-            { upsert: true }
-          );
-        }
-      }
-
       console.log(`[${org.code}] ${org.name}:`);
       console.log(`  - Flag (attendanceOvertimeV2Enabled) : ${v2NeedsFix ? (isDryRun ? '❌ Missing' : '✅ Fixed -> true') : '✅ true'}`);
       console.log(`  - Labor Compliance Policy (LCP)     : ${lcpNeedsFix ? (isDryRun ? '❌ Incomplete' : '✅ Fixed -> 3/month') : '✅ Configured (3/month)'}`);
       console.log(`  - Work Credit Policy (WCP)          : ${wcpNeedsFix ? (isDryRun ? '❌ Missing' : '✅ Fixed -> Active') : '✅ Active'}`);
-      console.log(`  - Active Periods (10/2026, 11/2026) : ${(!hasOct || !hasNov) ? (isDryRun ? '❌ Missing' : '✅ Fixed -> Open') : '✅ Open & Active'}`);
     }
 
     console.log(`\n======================================================================`);

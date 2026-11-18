@@ -28,6 +28,7 @@ import { toast } from '../../components/toast';
 import {
   EMPLOYMENT_STATUS_BADGE,
   EMPLOYMENT_STATUS_LABELS,
+  getEffectiveStatus,
   EMPLOYMENT_TYPE_LABELS,
   GENDER_LABELS,
 } from '../../lib/types';
@@ -42,6 +43,7 @@ import {
   type EmployeeDocument,
 } from '../../services/hrService';
 import { SelfProvisionDialog } from '../EmployeeDirectory/components/SelfProvisionDialog';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Helpers ───────── */
 
@@ -52,8 +54,7 @@ function display(value: string | null | undefined): string {
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
-  const time = new Date(value);
-  return Number.isNaN(time.getTime()) ? '—' : time.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 function initials(name: string): string {
@@ -162,14 +163,15 @@ function ProfileHeader({ user, profile }: { user: AuthUser; profile?: EmployeePr
   const phone = display(profile?.phone);
   const employeeCode = display(profile?.employeeCode ?? user.employeeCode);
 
-  const statusLabel = profile
-    ? EMPLOYMENT_STATUS_LABELS[profile.employmentStatus]
+  const eff = profile ? getEffectiveStatus(profile.employmentStatus, profile.endDate) : null;
+  const statusLabel = eff
+    ? EMPLOYMENT_STATUS_LABELS[eff]
     : 'Chưa có hồ sơ nhân sự';
 
   /* Map employment status to a readable tone class. */
-  const statusTone = profile
+  const statusTone = eff
     ? (() => {
-      const s = profile.employmentStatus;
+      const s = eff;
       if (s === 'ACTIVE') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
       if (s === 'PROBATION') return 'border-amber-200 bg-amber-50 text-amber-700';
       if (s === 'ON_LEAVE') return 'border-blue-200 bg-blue-50 text-blue-700';
@@ -464,10 +466,8 @@ export function EmployeeProfileScreen({
     { label: 'Mã nhân viên', value: display(profile?.employeeCode ?? user.employeeCode), icon: Hash },
     { label: 'Phòng ban', value: display(profile?.departmentName), icon: UsersRound },
     { label: 'Chức danh', value: display(profile?.positionName), icon: BriefcaseBusiness },
-    { label: 'Quản lý trực tiếp', value: display(profile?.managerName), icon: UserRound },
     { label: 'Loại lao động', value: profile ? EMPLOYMENT_TYPE_LABELS[profile.employmentType] : '—', icon: BriefcaseBusiness },
     { label: 'Ngày vào làm', value: formatDate(profile?.joinDate), icon: CalendarDays },
-    { label: 'Nơi làm việc', value: display(profile?.workplaceName), icon: MapPin },
     { label: 'Ca làm việc', value: '—', icon: CalendarDays },
   ];
 
@@ -482,7 +482,6 @@ export function EmployeeProfileScreen({
   const legalFields: ProfileField[] = [
     { label: 'Mã số thuế', value: display(profile?.taxCode), icon: CreditCard },
     { label: 'Số BHXH', value: display(profile?.socialInsuranceCode), icon: CreditCard },
-    { label: 'Tài khoản ngân hàng', value: display(profile?.bankAccount), icon: CreditCard, wide: true },
   ];
 
   /* ── Render ── */

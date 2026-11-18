@@ -96,25 +96,25 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     return null;
   };
 
-  // Validate not in past (only for startDate)
+  // Reject only a period that has already fully ended (current month is allowed)
   const validateNotInPast = (dateStr: string): string | null => {
     if (!dateStr) return null;
     if (isDateInPast(dateStr)) {
-      return 'Ngày bắt đầu không được nằm trong quá khứ.';
+      return 'Kỳ công đã kết thúc hoàn toàn trong quá khứ, không thể tạo.';
     }
     return null;
   };
 
-  // Validate no overlap with closed periods
+  // Reject a date range that overlaps ANY existing period — not just a closed
+  // one. The server resolves a period by work date, so two periods covering the
+  // same day would be ambiguous there; unclosed periods themselves are unlimited.
   const validateNoOverlap = (start: string, end: string): string | null => {
     if (!start || !end) return null;
     for (const existing of existingPeriods) {
-      if (existing.status === 'CLOSED') {
-        const existingStart = new Date(existing.startDate).toISOString().substring(0, 10);
-        const existingEnd = new Date(existing.endDate).toISOString().substring(0, 10);
-        if (doRangesOverlap(start, end, existingStart, existingEnd)) {
-          return `Kỳ công mới trùng/lấn khoảng thời gian với kỳ đã chốt ${existing.period}. Vui lòng chọn khoảng thời gian khác.`;
-        }
+      const existingStart = new Date(existing.startDate).toISOString().substring(0, 10);
+      const existingEnd = new Date(existing.endDate).toISOString().substring(0, 10);
+      if (doRangesOverlap(start, end, existingStart, existingEnd)) {
+        return `Kỳ công mới trùng/lấn khoảng thời gian với kỳ ${existing.period}. Vui lòng chọn khoảng thời gian khác.`;
       }
     }
     return null;
@@ -128,10 +128,8 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     // Clear server error when user changes inputs
     setServerError(null);
 
-    // Validate startDate for past date immediately
-    if (field === 'startDate') {
-      setPastError(validateNotInPast(value));
-    }
+    // Re-check whether the period has already fully ended
+    setPastError(validateNotInPast(field === 'endDate' ? value : endDate));
 
     // Validate day range and overlap when both dates are available
     if (value && (field === 'endDate' || startDate)) {
@@ -157,10 +155,8 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
 
   if (!open) return null;
 
-  // Check if there's an active period (for UI warning)
-  const hasActivePeriod = existingPeriods.some(p => 
-    ['OPEN', 'REVIEWING', 'READY_TO_CLOSE'].includes(p.status)
-  );
+  // Informational only: unclosed periods no longer block creating another one.
+  const unclosedPeriods = existingPeriods.filter(p => ['OPEN', 'REVIEWING', 'READY_TO_CLOSE'].includes(p.status));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +173,7 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
     // Run all validations using the dedicated functions
     const periodFormatErr = validatePeriodFormat(period);
     const dayRangeErr = validateDayRange(startDate, endDate);
-    const pastErr = validateNotInPast(startDate);
+    const pastErr = validateNotInPast(endDate);
     const overlapErr = validateNoOverlap(startDate, endDate);
 
     // Set each error to its own state — never overlap
@@ -310,9 +306,9 @@ export function CreatePeriodDialog({ open, onClose, onCreated, apiBase, organiza
               Đang tải dữ liệu kỳ công...
             </div>
           )}
-          {!fetchingPeriods && hasActivePeriod && (
-            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300">
-              ⚠️ Tổ chức đang có kỳ công đang mở. Vui lòng chốt kỳ hiện tại trước khi tạo kỳ mới.
+          {!fetchingPeriods && unclosedPeriods.length > 0 && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
+              Đang có {unclosedPeriods.length} kỳ công chưa đóng. Vẫn tạo thêm được, miễn khoảng ngày không trùng kỳ nào.
             </div>
           )}
 

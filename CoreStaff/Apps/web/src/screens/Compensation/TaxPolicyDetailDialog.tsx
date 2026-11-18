@@ -5,12 +5,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Separator } from '@/components/separator';
 import type { TaxPolicy } from '@/services/hrService';
 import { formatVnd } from './format';
+import { formatInstantDateTimeVN, formatVN } from '@/lib/datetime';
 
 function formatDate(iso?: string | null): string {
   if (!iso) return 'Hiện tại';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('vi-VN');
+  return formatVN(iso);
 }
 
 export function TaxPolicyDetailDialog({
@@ -106,10 +105,10 @@ export function TaxPolicyDetailDialog({
           {/* Metadata */}
           <div className="space-y-2 text-xs text-muted-foreground">
             {policy.createdAt && (
-              <div>Tạo lúc: {new Date(policy.createdAt).toLocaleString('vi-VN')}</div>
+              <div>Tạo lúc: {formatInstantDateTimeVN(policy.createdAt)}</div>
             )}
             {policy.updatedAt && (
-              <div>Cập nhật lúc: {new Date(policy.updatedAt).toLocaleString('vi-VN')}</div>
+              <div>Cập nhật lúc: {formatInstantDateTimeVN(policy.updatedAt)}</div>
             )}
           </div>
         </div>

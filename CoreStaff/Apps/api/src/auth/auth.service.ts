@@ -1,6 +1,7 @@
 import {
 	Injectable,
 	Inject,
+	Optional,
 	BadRequestException,
 	UnauthorizedException,
 	ForbiddenException,
@@ -22,6 +23,9 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { PasswordResetTokenDocument } from '../database/schemas/password-reset-token.schema';
 import { ResetMailer, RESET_MAILER } from './strategies/reset-mailer';
+import { EventsGateway } from '../events/events.gateway';
+import { PlatformAuditService } from '../platform/platform-audit.service';
+import { PlatformAuditAction, PlatformAuditTarget } from '../platform/platform-audit.constants';
 
 const FAILED_LOGIN_THRESHOLD = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -48,9 +52,30 @@ export class AuthService {
 		@InjectModel('EmployeeProfile') private readonly profileModel: Model<EmployeeProfileDocument>,
 		@InjectModel('Organization') private readonly orgModel: Model<OrganizationDocument>,
 		@Inject(RESET_MAILER) private readonly resetMailer: ResetMailer,
+		@Optional() private readonly eventsGateway?: EventsGateway,
+		@Optional() private readonly platformAudit?: PlatformAuditService,
 	) {}
 
-	async login(dto: LoginDto): Promise<{
+	/** Platform admin accounts only: their sign-in and password events go to the platform audit. */
+	private async auditAdmin(user: any, action: string, context: { ip?: string; userAgent?: string } = {}, outcome: 'SUCCEEDED' | 'FAILED' = 'SUCCEEDED', details?: Record<string, unknown>): Promise<void> {
+		if (!this.platformAudit || user?.role !== 'SYSTEM_ADMIN') return;
+		await this.platformAudit.record({
+			actorId: String(user._id),
+			actorNameSnapshot: user.fullName,
+			actorEmailSnapshot: user.email,
+			actorRoleSnapshot: user.role,
+			action,
+			targetType: PlatformAuditTarget.ADMIN_ACCOUNT,
+			targetId: String(user._id),
+			targetSummary: user.email,
+			outcome,
+			ip: context.ip,
+			userAgent: context.userAgent?.slice(0, 200),
+			details,
+		});
+	}
+
+	async login(dto: LoginDto, context: { ip?: string; userAgent?: string } = {}): Promise<{
 		user: Record<string, unknown>;
 		mustChangePassword: boolean;
 		sessionId: string;
@@ -64,7 +89,9 @@ export class AuthService {
 			throw new ForbiddenException('AUTH_ACCOUNT_DISABLED'); // SRS §17 → 403
 		}
 
-		if (candidate.status === UserStatus.LOCKED && candidate.lockedUntil && candidate.lockedUntil > new Date()) {
+		// AUD-H06: failed-login lockout only sets `lockedUntil` (status stays ACTIVE),
+		// so enforce the timestamp itself, whatever the status.
+		if (candidate.lockedUntil && candidate.lockedUntil > new Date()) {
 			throw new HttpException('AUTH_ACCOUNT_LOCKED', HttpStatus.LOCKED); // SRS §17 → 423
 		}
 
@@ -79,7 +106,15 @@ export class AuthService {
 		const valid = await comparePassword(dto.password, candidate.passwordHash);
 
 		if (!valid) {
+			const wasLocked = Boolean(candidate.lockedUntil && candidate.lockedUntil > new Date());
 			await this._handleLoginFailure(candidate);
+			if (candidate.role === 'SYSTEM_ADMIN' && this.platformAudit) {
+				const fresh: any = await this.userModel.findById(candidate._id).select({ failedLoginCount: 1, lockedUntil: 1 }).lean();
+				await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_LOGIN_FAILED, context, 'FAILED', { failedLoginCount: fresh?.failedLoginCount, reason: 'WRONG_PASSWORD' });
+				if (!wasLocked && fresh?.lockedUntil && fresh.lockedUntil > new Date()) {
+					await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_ACCOUNT_LOCKED, context, 'SUCCEEDED', { lockedUntil: fresh.lockedUntil, failedLoginCount: fresh.failedLoginCount });
+				}
+			}
 			throw new UnauthorizedException('AUTH_INVALID_CREDENTIALS');
 		}
 
@@ -100,6 +135,8 @@ export class AuthService {
 			expiresAt: new Date(Date.now() + SESSION_TTL_MS),
 			refreshExpiresAt: new Date(Date.now() + REFRESH_TTL_MS),
 		});
+
+		await this.auditAdmin(candidate, PlatformAuditAction.ADMIN_LOGIN_SUCCEEDED, context, 'SUCCEEDED', { firstLoginSetup: Boolean(candidate.mustChangePassword) });
 
 		return {
 			user: toSafeUser(candidate, resolved.employeeCode),
@@ -204,10 +241,13 @@ export class AuthService {
 	}
 
 	async logout(sessionId: string): Promise<void> {
+		const tokenHash = hashToken(sessionId);
 		await this.sessionModel.updateOne(
-			{ tokenHash: hashToken(sessionId) },
+			{ tokenHash },
 			{ revokedAt: new Date() },
 		);
+		// AUD-H07: a logged-out session must not keep a live realtime channel.
+		this.eventsGateway?.disconnectSession(tokenHash);
 	}
 
 	async getMe(userId: string): Promise<Record<string, unknown>> {
@@ -249,6 +289,8 @@ export class AuthService {
 		const filter: Record<string, unknown> = { userId, revokedAt: null };
 		if (keepToken) filter.tokenHash = { $ne: hashToken(keepToken) };
 		await this.sessionModel.updateMany(filter, { revokedAt: new Date() }).exec();
+
+		await this.auditAdmin(user, PlatformAuditAction.ADMIN_PASSWORD_CHANGED, {}, 'SUCCEEDED', { otherSessionsRevoked: true });
 
 		return { success: true };
 	}
@@ -322,6 +364,9 @@ export class AuthService {
 
 		await this.sessionModel.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: now }).exec();
 		await this.resetTokenModel.updateMany({ userId: user._id, usedAt: null }, { usedAt: now }).exec();
+		this.eventsGateway?.disconnectUser(String(user._id));
+
+		await this.auditAdmin(user, PlatformAuditAction.ADMIN_PASSWORD_RESET, {}, 'SUCCEEDED', { allSessionsRevoked: true });
 
 		return { success: true };
 	}
@@ -339,15 +384,24 @@ export class AuthService {
 			{ userId, revokedAt: null },
 			{ revokedAt: new Date() },
 		).exec();
+		this.eventsGateway?.disconnectUser(String(userId));
 
 		return { success: true };
 	}
 
 	private async _handleLoginFailure(user: UserDocument): Promise<void> {
-		user.failedLoginCount += 1;
-		if (user.failedLoginCount >= FAILED_LOGIN_THRESHOLD) {
-			user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
-		}
-		await user.save();
+		// AUD-H06: atomic counter. Parallel wrong-password attempts must each be
+		// counted; a read-modify-save would let them overwrite one another.
+		const now = new Date();
+		// A lock that already expired starts a fresh attempt window.
+		await this.userModel.updateOne(
+			{ _id: user._id, lockedUntil: { $lte: now } },
+			{ $set: { failedLoginCount: 0 }, $unset: { lockedUntil: 1 } },
+		).exec();
+		await this.userModel.updateOne({ _id: user._id }, { $inc: { failedLoginCount: 1 } }).exec();
+		await this.userModel.updateOne(
+			{ _id: user._id, failedLoginCount: { $gte: FAILED_LOGIN_THRESHOLD }, lockedUntil: { $exists: false } },
+			{ $set: { lockedUntil: new Date(now.getTime() + LOCK_DURATION_MS) } },
+		).exec();
 	}
 }

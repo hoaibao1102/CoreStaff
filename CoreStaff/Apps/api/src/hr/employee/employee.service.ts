@@ -1,4 +1,6 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { runOffboarding, type OffboardingImpact } from './offboarding';
+import { PeriodVersionService } from '../timesheet/period-version.service';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types, isValidObjectId } from 'mongoose';
 import { DepartmentDocument } from '../../database/schemas/department.schema';
@@ -6,11 +8,12 @@ import { PositionDocument } from '../../database/schemas/position.schema';
 import { UserDocument } from '../../database/schemas/user.schema';
 import { DependentItem, EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { EmploymentHistoryDocument } from '../../database/schemas/employment-history.schema';
-import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
+import { EMPLOYMENT_STATUS_TRANSITIONS, EmploymentStatus, Role, UserStatus, normalizeEmail, normalizeEmployeeCode } from '../../database/schemas/enums';
 import { CreateEmployeeProfileDto } from './dto/create-employee-profile.dto';
 import { UpdateEmployeeProfileDto } from './dto/update-employee-profile.dto';
 import { UpdateEmploymentStatusDto } from './dto/update-employment-status.dto';
 import { CreateDependentDto } from './dto/create-dependent.dto';
+import { assertWorkingAge } from './minimum-age';
 import { UpdateDependentDto } from './dto/update-dependent.dto';
 import { hashPassword } from '../../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../../auth/strategies/password-policy';
@@ -40,6 +43,7 @@ export class EmployeeService {
 		@InjectModel('Position') private readonly positionModel: Model<PositionDocument>,
 		@InjectModel('User') private readonly userModel: Model<UserDocument>,
 		@InjectConnection() private readonly connection: Connection,
+		@Optional() private readonly periodVersion?: PeriodVersionService,
 	) {}
 
 	/**
@@ -48,6 +52,7 @@ export class EmployeeService {
 	 */
 	async create(organizationId: string, dto: CreateEmployeeProfileDto): Promise<Record<string, unknown>> {
 		await this.assertRefsInTenant(organizationId, dto);
+		assertWorkingAge(dto.dateOfBirth);
 		if (dto.userId) return this.linkProfile(organizationId, dto);
 		return this.provisionProfile(organizationId, dto);
 	}
@@ -156,6 +161,7 @@ export class EmployeeService {
 			throw new ConflictException('EMPLOYEE_PROFILE_ALREADY_EXISTS');
 		}
 		await this.assertRefsInTenant(organizationId, dto);
+		assertWorkingAge(dto.dateOfBirth);
 		if (await this.profileModel.exists({ organizationId, employeeCode: normalizeEmployeeCode(dto.employeeCode) })) {
 			throw new ConflictException('EMPLOYEE_CODE_TAKEN');
 		}
@@ -265,11 +271,30 @@ export class EmployeeService {
 					throw new ConflictException('EMPLOYMENT_STATUS_TRANSITION_INVALID');
 				}
 
-				profile.employmentStatus = dto.newStatus;
+				const today = todayVN();
+				const isNow = dto.effectiveDate.slice(0, 10) <= today;
 				if (dto.newStatus === EmploymentStatus.RESIGNED || dto.newStatus === EmploymentStatus.TERMINATED) {
 					profile.endDate = new Date(dto.effectiveDate);
+					// Resignation in the future: employee remains working until effectiveDate
+					profile.employmentStatus = isNow ? dto.newStatus : previousStatus;
+				} else {
+					profile.employmentStatus = dto.newStatus;
 				}
 				await profile.save({ session });
+
+				let offboarding: OffboardingImpact | undefined;
+				if (dto.newStatus === EmploymentStatus.RESIGNED || dto.newStatus === EmploymentStatus.TERMINATED) {
+					offboarding = await runOffboarding(this.connection, session, {
+						organizationId,
+						employeeProfileId: id,
+						userId: String(profile.userId),
+						endDate: dto.effectiveDate,
+						reason: dto.reason,
+					});
+					if (this.periodVersion && offboarding.invalidateFrom) {
+						await this.periodVersion.bumpForEffectiveWindow(organizationId, offboarding.invalidateFrom, undefined, session);
+					}
+				}
 
 				await this.historyModel.create(
 					[
@@ -286,7 +311,7 @@ export class EmployeeService {
 					{ session },
 				);
 
-				result = profile.toObject() as EmployeeProfile & { _id: unknown };
+				result = { ...(profile.toObject() as object), ...(offboarding && { offboarding }) } as EmployeeProfile & { _id: unknown };
 			});
 
 			return result!;
@@ -483,12 +508,26 @@ export class EmployeeService {
 		const userNames = new Map(users.map(r => [String(r._id), r.fullName]));
 		const departmentNames = new Map(departments.map(r => [String(r._id), r.name]));
 		const positionNames = new Map(positions.map(r => [String(r._id), r.name]));
-		return rows.map(row => ({ ...row,
-			fullName: userNames.get(String(row.userId)) ?? null,
-			departmentName: departmentNames.get(String(row.departmentId)) ?? null,
-			positionName: positionNames.get(String(row.positionId)) ?? null,
-			managerName: userNames.get(String(row.directManagerId)) ?? null,
-		}));
+		const today = todayVN();
+		return rows.map(row => {
+			let status = (row as any).employmentStatus;
+			if ((row as any).endDate) {
+				const endStr = new Date((row as any).endDate).toISOString().slice(0, 10);
+				if (endStr > today && (status === 'RESIGNED' || status === 'TERMINATED')) {
+					status = 'ACTIVE';
+				} else if (endStr <= today && status !== 'RESIGNED' && status !== 'TERMINATED') {
+					status = 'RESIGNED';
+				}
+			}
+			return {
+				...row,
+				employmentStatus: status,
+				fullName: userNames.get(String(row.userId)) ?? null,
+				departmentName: departmentNames.get(String(row.departmentId)) ?? null,
+				positionName: positionNames.get(String(row.positionId)) ?? null,
+				managerName: userNames.get(String(row.directManagerId)) ?? null,
+			};
+		});
 	}
 
 	private async assertUserAvailable(organizationId: string, userId: string): Promise<void> {

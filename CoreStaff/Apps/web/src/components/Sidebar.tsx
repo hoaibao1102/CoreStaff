@@ -111,7 +111,7 @@ function getNavGroups(user: AuthUser, pendingCount?: number): NavGroup[] {
                 items: [
                     ...common,
                     { href: '/platform/organizations', label: 'Organizations', icon: Building2 },
-                    { href: '/platform/audit-logs', label: 'Platform audit', icon: ShieldCheck },
+                    { href: '/platform/audit-logs', label: 'Nhật ký hệ thống', icon: ShieldCheck },
                 ],
             },
         ];

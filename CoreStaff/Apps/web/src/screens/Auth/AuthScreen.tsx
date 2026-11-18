@@ -89,6 +89,7 @@ export function AuthScreen({
     setAuthView('login');
     if (window.location.pathname !== '/login') {
       window.history.pushState(null, '', '/login');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 
@@ -97,6 +98,7 @@ export function AuthScreen({
     setAuthView('landing');
     if (window.location.pathname !== '/' && window.location.pathname !== '/landing') {
       window.history.pushState(null, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 
@@ -138,7 +140,7 @@ export function AuthScreen({
   const handleLogout = async () => {
     if (apiBase) await logout(apiBase);
     forgetSession();
-    goToLanding();
+    goToLogin();
     onSignOut();
   };
 
@@ -257,7 +259,6 @@ export function AuthScreen({
           setAuthView('forgot');
         }}
         onLogin={handleLogin}
-        onBackToLanding={goToLanding}
       />
     );
   }

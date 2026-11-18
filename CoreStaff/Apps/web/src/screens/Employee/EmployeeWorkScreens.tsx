@@ -5,6 +5,7 @@ import { confirmationSource, getOvertimePreview, type OvertimePreview, managerRe
 import { overtimeErrorMessage } from '../../services/overtime.service';
 import { CalendarDays, CheckCircle2, Clock3, Plus, XCircle, AlertCircle } from 'lucide-react';
 import { ClarificationResponseModal } from './components/ClarificationResponseModal';
+import { AdjustmentRequestForm } from './components/AdjustmentRequestForm';
 import { Alert, AlertDescription } from '../../components/alert';
 import { Input } from '../../components/input';
 import { createMyRequest, createOvertimeRequest, getMyRequests, getMyScheduleForDate, type EmployeeSchedule, type LaborEvaluation, type ManagerRequest, type RequestType } from '../../services/manager.service';
@@ -26,6 +27,7 @@ const attendanceRows = [
 import { AttendanceHistoryView } from '../Attendance/components/AttendanceHistoryView';
 import { toast } from '../../components/toast';
 import { getSocket } from '../../services/socket';
+import { formatVN } from '@/lib/datetime';
 
 export function AttendanceHistoryScreen({ apiBase }: { apiBase?: string | null }) {
   return <AttendanceHistoryView apiBase={apiBase} />;
@@ -335,43 +337,20 @@ export function LeaveOvertimeScreen() {
                   onCreated={() => { setShowForm(false); setRev(r => r + 1); }}
                   onCancel={() => setShowForm(false)}
                   legacy={
-                    <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-                      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
-                        {error && (
-                          <div className="sm:col-span-2">
-                            <Alert variant="destructive">
-                              <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                          </div>
-                        )}
-                        <label className="grid gap-2 text-sm font-medium">
-                          Ngày
-                          <Input type="date" max={shiftDay(vnToday(), -1)} value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-                        </label>
-                        <label className="grid gap-2 text-sm font-medium">
-                          Mốc công cần bổ sung
-                          <select className="min-h-11 rounded-lg border bg-background px-3" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as 'CHECK_IN' | 'CHECK_OUT')}>
-                            <option value="CHECK_IN">Thiếu check-in</option>
-                            <option value="CHECK_OUT">Thiếu check-out</option>
-                          </select>
-                        </label>
-                        <label className="grid gap-2 text-sm font-medium">
-                          Giờ đề nghị
-                          <Input type="time" value={adjustmentTime} onChange={(e) => setAdjustmentTime(e.target.value)} required />
-                        </label>
-                        <p className="text-xs text-muted-foreground sm:col-span-2">
-                          Quản lý sẽ kiểm tra và mốc giờ này chỉ được ghi vào bảng công sau khi duyệt.
-                        </p>
-                        <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                          Lý do
-                          <textarea className="min-h-24 rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập chi tiết lý do (ít nhất 10 ký tự)..." required />
-                        </label>
-                      </div>
-                      <div className="flex shrink-0 gap-3 justify-end border-t px-6 py-4">
-                        <Button type="button" variant="outline" disabled={busy} onClick={() => setShowForm(false)}>Hủy</Button>
-                        <Button disabled={busy} type="submit">{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button>
-                      </div>
-                    </form>
+                    <AdjustmentRequestForm
+                      apiBase={apiBase}
+                      rows={[{ workDate, adjustmentType, time: adjustmentTime }]}
+                      onRowsChange={(next) => {
+                        const row = next[0];
+                        setWorkDate(row.workDate);
+                        setAdjustmentType(row.adjustmentType);
+                        setAdjustmentTime(row.time);
+                      }}
+                      reason={reason}
+                      onReasonChange={setReason}
+                      onDone={() => { setShowForm(false); setRev(r => r + 1); }}
+                      onCancel={() => setShowForm(false)}
+                    />
                   }
                 />
               )
@@ -598,7 +577,7 @@ export function LeaveOvertimeScreen() {
                     </div>
 
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Ngày {new Date(row.workDate).toLocaleDateString('vi-VN')} · {row.reason}
+                      Ngày {formatVN(row.workDate)} · {row.reason}
                     </p>
 
                     {(row.reviewComment || (isClarification && row.reason)) && (

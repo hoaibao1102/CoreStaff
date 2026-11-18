@@ -6,6 +6,8 @@
 
 **Current audited revision:** `fix_all` — `6a77eb4e0cc298f117cf35a6456611191f928039`
 
+**Mobile QC pass:** 2026-11-14 — Expo mobile claims re-checked against the working tree on branch `fix_all` (HEAD `412bf33`, which adds only landing-page changes after `6a77eb4`); Expo working tree contains uncommitted edits, so mobile line numbers are indicative only. Flutter was out of scope for this pass.
+
 **Previous baseline:** `feat/policy` — `ab08ce339fe9953f86146d7514a9c3b69b67517e`
 
 **Audit mode:** finding-by-finding static source revalidation + safe local verification; production source and data were not modified
@@ -15,6 +17,45 @@
 > **Meaning of “Confirmed Bug”:** the faulty path or violated invariant is confirmed from the audited source/configuration or from a repeatable local command. It does **not** mean the defect has been observed in production data. Runtime incidence remains unknown unless explicitly stated.
 
 > **Refresh status:** `STILL PRESENT` means the defect remains reachable in the current revision; `PARTIAL` means some safeguards exist but the invariant is not fully enforced; `UNVERIFIED` means the refresh did not produce enough current evidence to change the prior classification. Old line numbers and old test totals are historical evidence only unless repeated in the refresh evidence section.
+
+## 0. Release Blockers at a Glance
+
+| # | Blocker | Findings | Why it blocks | Spot-checked in source (2026-11-14) |
+|---|---|---|---|---|
+| 1 | Cross-tenant payroll/payslip/export access | `AUD-C02`, `AUD-C03` | One tenant's HR can read or mutate another tenant's payroll | Yes: controller passes only `id`; service uses global `findById`; export and `releaseForPayrollRun` have no tenant filter |
+| 2 | Period close/reopen bypass | `AUD-C01`, `AUD-C05` | Closed financial data can be changed without summaries, snapshots or version bump | Yes: `updateStatus` allows `READY_TO_CLOSE→CLOSED`, `CLOSED→REVIEWING`; `bump()` silently skips CLOSED |
+| 3 | Non-atomic payroll lifecycle | `AUD-C07`, `AUD-C08` | Period, run and payslips can disagree after a failure | Source-traced, not fault-injected |
+| 4 | Cross-site request exposure | `AUD-C09` | `origin: true` + `credentials: true` + `SameSite=None` | Yes |
+| 5 | Unreleased payslip visibility | `AUD-C04` | Employee sees calculated net salary before release | Yes, but may be intended behavior: **needs a product decision** |
+
+Everything else is High/Medium hardening and test-gate work. Items marked "source-traced" have not been reproduced dynamically.
+
+### Remediation status (2026-11-14, branch `fix_all`, uncommitted)
+
+| Finding | Status | What changed | Evidence |
+|---|---|---|---|
+| `AUD-C01` | **FIXED** | `updateStatus()` rejects any transition into or out of `CLOSED` (`USE_CLOSE_OR_REOPEN_WORKFLOW`); write is a tenant+status+version compare-and-set (`PERIOD_VERSION_CONFLICT`) | `timesheet-period.update-status.spec.ts` (4 tests) |
+| `AUD-C02` | **FIXED** | `calculate/recalculate/lock/release` take `organizationId`; run lookup is tenant-scoped, foreign id behaves as unknown (404) | `payroll-tenant-isolation.spec.ts` (unit) and `test/payroll-tenant-isolation.integration.spec.ts` (HTTP, two tenants, real Mongo, real AuthGuard). **Reproduced:** against the original code 11 of 12 integration cases fail, including tenant A's run/payslips being modified; with the fix all 12 pass |
+| `AUD-C03` | **FIXED** | Payslip list/summary/release and CSV/summary-CSV/Excel export are tenant-scoped (run lookup + payslip filters + scoped writes) | same as `AUD-C02` |
+| `AUD-C05` | **FIXED** (approve + apply) | New `PeriodVersionService.claimForWorkDates()` rejects CLOSED/payroll-claimed periods and bumps open ones with a CAS, inside the leave transaction. Leave *creation* is not blocked (a pending request is not a fact) | `period-version.service.spec.ts`, `leave.service.spec.ts` |
+| `AUD-C09` | **FIXED, needs deployment config** | Exact allowlist (`CORS_ORIGINS`) for HTTP CORS and Socket.IO plus an origin gate for unsafe methods. **Production fails closed: set `CORS_ORIGINS` to the web origin(s) or browsers get 403/CORS errors.** Native mobile (no Origin) is unaffected. A CSRF token is not added; the Origin gate plus allowlist is the control | `origin-policy.spec.ts` (8 tests) |
+| `AUD-H01` | **FIXED** | Self-approval returns 403 `SELF_APPROVAL_FORBIDDEN` for generic/OT requests and attendance confirmations, per SRS `BR-SELF-APPROVAL-01`. Two existing tests that asserted the opposite were rewritten. Leave already blocked it | `manager-request.service.spec.ts`, `attendance-confirmation.service.spec.ts` |
+| `AUD-H06` | **FIXED** | `lockedUntil` is enforced regardless of status; failure counting is atomic (`$inc`); an expired lock opens a fresh window | `auth.service.spec.ts` (+4 tests) |
+| `AUD-H17` | **FIXED in code, not device-tested** | `planAttendanceEvidence()` honors `allowWifiAttendance/allowGpsAttendance/allowSelfieFallback`; disabled steps are never attempted and no permission is requested for them | Compiles; needs the planned adb/Wi-Fi device test |
+| `AUD-M09` | **FIXED** | Regex corrected; Playwright now collects 67 tests. The suite itself is largely stale against the current UI (see Verification Evidence) | `playwright test --list` |
+| `AUD-C07` | **FIXED** | Period claim, run sequence and `PayrollRun` insert commit in one Mongo transaction; no dangling `payrollRunId` | `payroll-lineage-integration.spec.ts` (session sharing, insert-failure propagation, lost-claim race) |
+| `AUD-C08` | **FIXED for lock and release; calculate remains PARTIAL** | `lock` moves run + period in one transaction. There is now a single release orchestration (`PayslipService.releaseForPayrollRun`: payslips + run CAS + period CAS in one transaction, notification only after commit); `PayrollRunService.release` delegates to it (it previously left payslips `GENERATED`). `calculate` still writes payslips outside one transaction and relies on compensation (`deleteGeneratedForRecalculation`) | `payroll-lifecycle-atomicity.spec.ts` |
+| `AUD-H02` | **FIXED (scoped rule)** | The profile-department fallback now applies only to managers with **no assignment history at all** (legacy seeded managers). Once any assignment row exists, only effective assignments grant authority, so deactivating or ending the last one revokes access. The user's `DEPARTMENT_MANAGER` role is still not downgraded | `manager-scope.service.spec.ts` (+4 tests) |
+| `AUD-H07` | **PARTIAL** | Sockets join `sess:`/`user:`/`org:` rooms; logout disconnects that session, admin reset and password reset disconnect the user, tenant suspend disconnects the organization; connection errors now disconnect (fail closed). Not covered: password *change* (other sessions revoked, sockets not selected), HR disabling a single user, and re-authentication of long-lived sockets | `events.gateway.spec.ts`, `auth.service.spec.ts` |
+| `AUD-H08` | **FIXED** | `AuthGuard` and the socket gateway reject any non-`ACTIVE` user | `auth.guard.spec.ts`, `events.gateway.spec.ts` |
+| `AUD-H03` | **FIXED** | `pickEffectiveAssignment` resolves by work date (future/expired ignored, latest start wins, same-start overlap → 409 `ASSIGNMENT_OVERLAP`) | `assignment-effective.spec.ts` |
+| `AUD-H05` | **FIXED** | `create()` reconciles snapshot employee set against the period's timesheet summaries (incomplete/duplicate/foreign rejected before claim) | `payroll-snapshot-population.spec.ts` |
+| `AUD-H10`, `H11`, `H12` | **FIXED** | Check+insert(+action/role projection) run in one transaction serialized by a per-scope lock document (`common/serialization-lock.ts`); loser retries and sees the winner | `test/concurrency-invariants.integration.spec.ts` (3 cases, all fail on pre-fix code) |
+| `AUD-H14` | **FIXED** | `StorageService.isConfigured()` accepts bucket + client so the AWS provider chain (IAM role) works; only a half-specified key pair is rejected | `storage.service.spec.ts` |
+| `AUD-H04` | **FIXED (policy-gated)** | Run records `createdBy`/`calculatedBy`; with `Organization.payrollSeparationOfDuties=true` the preparer gets 403 `PAYROLL_SEPARATION_OF_DUTIES` on lock/release. Default stays off (single-HR tenants); enabling is a tenant decision | `payroll-lifecycle-atomicity.spec.ts` (4 cases) |
+| `AUD-C04`, `C06`, `H09`, `H13`, `H15`, `H16`, `H18`, `M01`–`M08`, `M10` | **OPEN** | Not changed in this pass | n/a |
+
+Behavior-change notes: payroll lifecycle method signatures changed (`organizationId` first); seed/demo scripts were updated to match. `AUD-C04` is deliberately untouched pending a product decision.
 
 ## 1. Executive Summary
 
@@ -33,8 +74,10 @@ The KPI feature has been retired from new payroll artifacts under the `NO_KPI_V2
 | Classification | Critical | High | Medium | Low | Total |
 |---|---:|---:|---:|---:|---:|
 | **Confirmed Bug** | 9 | 18 | 10 | 0 | **37** |
-| **Potential Risk** | 0 | 4 | 4 | 0 | **8** |
+| **Potential Risk** | 0 | 4 | 6 | 0 | **10** |
 | **Needs Verification** | 0 | 2 | 3 | 0 | **5** |
+
+> Counting note: `AUD-C08` and `AUD-M10` carry a `PARTIAL` status but are still counted as Confirmed Bugs because the unsafe path is confirmed in source; `PARTIAL` describes remediation state, not confidence. The Potential Risk row includes two Expo-specific risks (`RISK-MOB01`, `RISK-MOB02`) added in the mobile QC pass.
 
 The counts above do not double-count the same payroll tenant or transaction defect reported independently by backend, security and database audit streams.
 
@@ -61,7 +104,7 @@ The classification totals remain a root-cause inventory, not a claim that all 37
 | Authorization | AuthGuard/RolesGuard, tenant context, manager assignment/scope, employee ownership, evidence/document download and socket room assignment |
 | Database | All 40 `*.schema.ts` files and 48 registered models inventoried; unique indexes, transactions, CAS, idempotency and migration/index scripts reviewed |
 | Web | Routing/session/API transports plus major attendance, leave, manager, timesheet, payroll, payslip, compensation, tax, insurance, employee and scheduling screens |
-| Expo mobile | Auth/session, attendance, leave, overtime, overview, profile, payslip and realtime contracts |
+| Expo mobile | Auth/session (cookie + single-flight refresh), attendance (Wi-Fi→GPS→selfie flow), leave, overtime, overview, profile, payslip and realtime contracts. Employee-facing screens were traced; the HR (`Hr*Screen`) and Manager (`Manager*Screen`) screens were **not** traced and are listed under "Not fully reviewed" |
 | Flutter mobile | API config, auth/session implementation, role shell and all implemented/placeholder tabs |
 | Cross-module | Attendance/leave/OT → period version/review/close → summary/snapshot → payroll/payslip; session revocation → HTTP/socket; deployment → storage/realtime/health |
 | Documentation | `Docs/SRS_CORESTAFF.md`, decision log, current architecture/context, timesheet/period mutation docs and mobile/deployment READMEs |
@@ -73,6 +116,7 @@ The classification totals remain a root-cause inventory, not a claim that all 37
 - Browser E2E could not start because one Playwright spec still has a parse error. `playwright test --list` collected zero tests. Real-backend browser E2E was not available.
 - No Android/iOS device execution, process-death cookie test, camera/GPS/Wi-Fi test or Flutter release build was performed. The refreshed Flutter gate was blocked before analyze/test because Windows Developer Mode/symlink support is unavailable.
 - No backup/restore, disaster recovery, primary stepdown, ambiguous transaction commit or multi-instance Socket.IO test was performed.
+- Expo HR/Manager screens (`HrContracts`, `HrEmployees`, `HrLeaves`, `HrOverview`, `ManagerApprovals`, `ManagerTeam`) were not traced; `AUD-H01` (self-approval) is a server-side finding and its mobile surface (`ManagerApprovalsScreen`) is unverified. No Expo runtime/device test was performed.
 - The untracked file `Docs/PLAN_ATTENDANCE_CLARIFICATION_FLOW.md` appeared during the audit and was not created, read as authoritative, modified or deleted by this audit.
 
 Coverage is therefore broad and risk-directed, but **not a claim that every file and every deployed path has been fully tested**.
@@ -131,7 +175,7 @@ The audited code violates this intended boundary in three places: generic period
 - Payroll lifecycle and payslip/export routes are not consistently tenant-scoped (`AUD-C02`, `AUD-C03`).
 - Payroll create/calculate/lock/release use multiple non-transactional writes (`AUD-C07`, `AUD-C08`).
 - Login lockout, rate limiting and account/session enforcement are incomplete (`AUD-H06`, `AUD-H08`).
-- Generic approval and financial lifecycle audit trails are incomplete (`AUD-H07`, `AUD-H09`).
+- Generic approval and financial lifecycle audit trails are incomplete (`AUD-H01`, `AUD-H09`).
 - HTTP CORS/CSRF and Socket.IO origin handling are release blockers (`AUD-C09`).
 - Attendance uses a separate request transport without shared refresh/session-expiry behavior (`AUD-M05`).
 - Generic frontend-facing envelopes are not runtime-validated (`AUD-M06`).
@@ -143,8 +187,8 @@ The audited code violates this intended boundary in three places: generic period
 - Payroll initial-load failures can be presented as legitimate empty data (included under `AUD-M06` impact).
 - Attendance success time/location can be synthesized from client/workplace data instead of authoritative event evidence (included in `AUD-M07`/regression roadmap).
 - Playwright E2E is currently blocked by invalid regex syntax (`AUD-M09`).
-- Expo ignores attendance evidence-policy flags (`AUD-H18`).
-- Flutter release configuration/session storage are unsafe and the Flutter test scaffold does not compile (`AUD-H16`, `AUD-H17`, `AUD-M10`).
+- Expo ignores attendance evidence-policy flags (`AUD-H17`); Expo has no automated test suite (`AUD-H18`); Expo attendance Wi-Fi/GPS evidence is client-asserted (`RISK-MOB01`).
+- Flutter release configuration/session storage are unsafe and the Flutter test scaffold does not compile (`AUD-H15`, `AUD-H16`, `AUD-M10`).
 
 ## 7. Database Integrity Findings
 
@@ -184,7 +228,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 | **AUD-C01 — STILL PRESENT** | Timesheet; refreshed evidence `timesheet-period.controller.ts:228-248`, `timesheet-period.service.ts:806-848`, authoritative flows `887-1043` | Generic `updateStatus()` permits close/reopen transitions and uses ID-only last-write update. It bypasses blockers, confirmations, summaries, snapshots, version bump, payroll claim and reason. | HR PATCHes status from `READY_TO_CLOSE` to `CLOSED`, or `CLOSED` to `REVIEWING`. | Expected only `/close`/`/reopen`; actual direct state update. | Invalid period state and missing financial artifacts. | Forbid transitions into/out of CLOSED in generic endpoint; use tenant-scoped version CAS and specialized workflows only. | HTTP tests for forbidden generic transitions; concurrent close/reopen with artifact reconciliation. |
 | **AUD-C02 — STILL PRESENT** | Payroll; refreshed evidence `payroll-run.controller.ts:44-73`, `payroll-run.service.ts:184-190,291-297,333-334,362-363,454-455` | Calculate/recalculate/lock/release load run with global `findById`; caller tenant is never passed. Later CAS trusts the foreign row's tenant. | HR tenant A calls lifecycle endpoint with tenant B run ID. | Expected indistinguishable 404; actual foreign run can be mutated. | Cross-tenant payroll integrity breach. | Pass caller `organizationId` into every mutation and scope every dependent query/CAS. | Two-tenant integration tests for all four mutations and unchanged foreign artifacts. |
 | **AUD-C03 — STILL PRESENT** | Payslip/export; refreshed evidence `payslip.controller.ts:87-120`, `payslip.service.ts:349-383,477-528`, `payroll-export.controller.ts:14-52`, `payroll-export.service.ts:27-68,162-225` | List, summary, release and export treat payrollRunId as a global capability and omit tenant filters. HR payslip detail has a tenant filter, but the other paths remain unscoped. | HR A requests B's run list/summary/CSV/XLSX/release. | Expected 404; actual foreign salary data or release transition. | Cross-tenant disclosure of salary/tax/insurance and foreign release. | Tenant-scope run, payslip, employee, department and position queries; consolidate release path. | Same/foreign/unknown ID matrix for every format/action. |
-| **AUD-C04 — STILL PRESENT** | Payslip; `payslip.service.ts:389-456` | Employee self-service includes `GENERATED` and can mark it `VIEWED` before release. | Calculate payroll but do not release; employee calls `/payslips/me`. | Expected only `RELEASED|VIEWED`; actual generated draft is visible/mutable. | Premature salary disclosure; VIEWED may block recalculation. | Hide only unpublished `GENERATED` artifacts from employee list/detail; keep `RELEASED` visible and allow the owning employee to transition `RELEASED → VIEWED`. Verify the owning run is released. | Calculate→hidden; release→visible; opening released payslip→VIEWED; direct pre-release ID rejected. |
+| **AUD-C04 — STILL PRESENT** | Payslip; `payslip.service.ts:389-456` | Employee self-service includes `GENERATED` and can mark it `VIEWED` before release. | Calculate payroll but do not release; employee calls `/payslips/me`. | Expected only `RELEASED|VIEWED`; actual generated draft is visible/mutable. | Premature salary disclosure; VIEWED may block recalculation. **Mobile note:** the Expo payslip screen deliberately lists `GENERATED` items as "Đang xử lý" and shows the newest item's net salary with "Chưa phát hành", so this looks like an intentional product behavior (code comment: "see their payslips immediately"). The app only calls `/viewed` for `RELEASED` items, so the VIEWED-blocks-recalculation effect is reachable only via direct API calls. **Decision gate:** confirm with product/SRS whether employees may see calculated-but-unreleased payslips before treating this as a defect. | Hide only unpublished `GENERATED` artifacts from employee list/detail; keep `RELEASED` visible and allow the owning employee to transition `RELEASED → VIEWED`. Verify the owning run is released. | Calculate→hidden; release→visible; opening released payslip→VIEWED; direct pre-release ID rejected. |
 | **AUD-C05 — STILL PRESENT** | Leave/period; `leave.service.ts:158-193,215-281`, `period-version.service.ts:108-137` | Approval/application relies on a bump helper that excludes CLOSED periods instead of rejecting the write. | Close period, then approve/apply leave covering it. | Expected atomic rejection until reopen; actual leave/attendance mutation can commit. | Closed snapshot and source facts diverge. | Claim each affected period/date in the same transaction and fail on CLOSED/payroll-claimed state. | Replica-set tests for create/approve/apply against CLOSED and claimed periods. |
 | **AUD-C06 — STILL PRESENT** | Payroll/PIT; refreshed evidence includes live reads in `payroll-run.service.ts:220,425`; related paths remain in PIT/payslip services | Calculation resolves live insurance policy, dependents/profile and PIT policy after close despite frozen snapshot fields. | Close period, edit dependent or policy, then calculate/recalculate. | Expected identical result from bound snapshot; actual result can change with live master data. | Non-reproducible payroll and broken audit lineage. | Freeze all PIT/insurance inputs and use pure calculators over snapshot payload only. | Mutate live data after close; output/hash must remain byte-identical. |
 | **AUD-C07 — STILL PRESENT** | Payroll create; refreshed evidence starts at `payroll-run.service.ts:91` | Period is claimed before sequence calculation/PayrollRun insert, outside a transaction. | Inject insert failure or crash after claim. | Expected both rollback; actual dangling `payrollRunId` claim. | Period stuck; reopen/retry blocked. | Transactional claim+insert; atomic sequence/counter; recovery reconciler for existing dangling claims. | Fault injection after claim and concurrent create. |
@@ -195,7 +239,7 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 | Bug ID | Module / location | Description & root cause | Reproduction scenario | Expected / actual | Impact | Recommended fix | Verification |
 |---|---|---|---|---|---|---|---|
-| **AUD-H01** | Manager approval; `manager-request.service.ts:287-355` | Self-approval is tagged for audit but allowed. | Manager approves own attendance/OT/general request. | Expected 403/delegation; actual APPROVED. | User can legitimize own payable facts. | Block before precheck/write; route to HR/delegate. | Per-request-type no-write tests. |
+| **AUD-H01** | Manager approval; `manager-request.service.ts:410-470` (generic/OT), `621-630` (attendance); `isSelfApproved` is computed and tagged `SELF_APPROVED` but never blocks | Self-approval is tagged for audit but allowed. | Manager approves own attendance/OT/general request. | Expected 403/delegation; actual APPROVED. | User can legitimize own payable facts. | Block before precheck/write; route to HR/delegate. | Per-request-type no-write tests. |
 | **AUD-H02** | Manager scope; `manager-assignment.service.ts:38-78`, `manager-scope.service.ts:32-46,139-142` | Deactivation does not revoke role; profile department fallback continues granting authority. | Deactivate last assignment; reuse current/new session. | Expected no manager scope; actual profile department remains authorized. | Stale approval/KPI/data access. | Derive authority only from effective assignments; revoke role/session/socket; migrate legacy data. | Expired/inactive/no-assignment matrix. |
 | **AUD-H03** | Attendance; `attendance.service.ts:159-169,403-416,702-711` | `active:true` assignment is selected without effective date or deterministic overlap handling. | Keep future/expired assignment active and check in. | Expected effective assignment for work date; actual arbitrary active row. | Wrong workplace/shift/department and pay facts. | One effective-dated resolver that fails closed on overlap. | Future/expired/overlap/history tests. |
 | **AUD-H04** | Payroll lifecycle/schema; payroll-run schema/service | `lockedBy` and lifecycle actor fields exist, but create/calculate/lock/release do not enforce distinct actors or formal approval stage. | Same HR creates, calculates, locks and releases. | Expected approved separation policy; actual one actor can complete lifecycle. | Fraud/error control gap. | Approve SoD policy; add reviewer/approver states and actor constraints. | Same-actor denial and authorized exception audit tests. |
@@ -211,8 +255,8 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 | **AUD-H14** | S3 storage; `storage.service.ts:31-71`, API env template | AWS SDK client can use default credentials, but `isConfigured()` rejects configuration without explicit access keys, contradicting IAM-role deployment guidance. | Deploy on EC2 IAM role with bucket/region only. | Expected provider chain; actual `STORAGE_NOT_CONFIGURED`. | Selfie/document flows fail in recommended production setup. | Treat bucket+client as configured; let provider chain resolve credentials; readiness smoke. | Inject/default-provider tests and private bucket put/get/delete smoke. |
 | **AUD-H15** | Flutter release; `api_config.dart:29-87` | Release hard-codes `http://10.87.51.1:3000` and has no build-time override. | Build release outside private LAN. | Expected configured HTTPS API; actual health probe fails/insecure HTTP. | Flutter release cannot operate. | `String.fromEnvironment`, HTTPS-only release flavor and CI smoke. | Release build with explicit API base on Android/iOS. |
 | **AUD-H16** | Flutter session; `api_client.dart:25-88` | `sid`/`rt` are parsed and stored plaintext in SharedPreferences, defeating HttpOnly storage protection. | Inspect app preferences after login. | Expected OS secure store/cookie jar; actual reusable tokens in plaintext preferences. | 14-day credential theft on backup/root/debug compromise. | Secure cookie jar or Keychain/Keystore storage; remove legacy keys. | Assert no tokens in SharedPreferences and restart/logout behavior. |
-| **AUD-H17** | Expo attendance; `employee-api.ts:48-51`, `AttendanceScreen.tsx:57-89` | Client hard-codes Wi-Fi→GPS→selfie and ignores `allowWifiAttendance`, `allowGpsAttendance`, `allowSelfieFallback`. | Disable GPS/selfie in workplace policy and make Wi-Fi fail. | Expected no forbidden prompt; actual location/camera still requested. | Policy violation, privacy overcollection and late server failure. | Build evidence plan from server flags. | Full allow-flag matrix and permission-call assertions. |
-| **AUD-H18** | CI/release gate; `.github/workflows/ci.yml:18-24`, package scripts | CI omits API integration, Playwright, Expo tests and Flutter gates; E2E currently does not parse. | Merge code with failing integration/mobile/E2E while root unit gate is green. | Expected mandatory release lanes; actual unexecuted paths. | Production regressions escape green CI. | Separate required jobs with skip allowlist and artifacts. | Deliberately break each lane and prove CI blocks merge. |
+| **AUD-H17** | Expo attendance; `employee-api.ts:53-55` (flags typed, never read), `AttendanceScreen.tsx` `submit()` (line numbers drift: file has uncommitted edits) | Client hard-codes Wi-Fi→GPS→selfie and ignores `allowWifiAttendance`, `allowGpsAttendance`, `allowSelfieFallback`; the only conditions it reads are `workplaceType` and `hasWifiNetworks`. | Disable GPS/selfie in workplace policy and make Wi-Fi fail. | Expected no forbidden prompt; actual location/camera still requested. | Policy violation, privacy overcollection and late server failure. | Build evidence plan from server flags. | Full allow-flag matrix and permission-call assertions. |
+| **AUD-H18** | CI/release gate; `.github/workflows/ci.yml:18-24`, package scripts | CI omits API integration, Playwright and Flutter gates; E2E currently does not parse. Expo has **no test suite at all** (no `*.test`/`*.spec` files; the only script is `lint = tsc --noEmit`), so there is nothing for CI to run on mobile. | Merge code with failing integration/mobile/E2E while root unit gate is green. | Expected mandatory release lanes; actual unexecuted paths. | Production regressions escape green CI. | Separate required jobs with skip allowlist and artifacts. | Deliberately break each lane and prove CI blocks merge. |
 
 ### Confirmed Medium
 
@@ -235,13 +279,15 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 
 | ID | Severity | Evidence and risk | Required verification |
 |---|---|---|---|
-| **RISK-DEP01** | High | Refreshed `npm audit --omit=dev --json` exits 1 and reports **26 production-tree advisories**. The previous 31-advisory severity breakdown and named package versions are historical and must not be treated as the current dependency inventory. Registry severity alone does not prove reachability. | Parse the refreshed advisory graph and severity breakdown, resolve endpoint reachability, upgrade safely, then run abuse/regression tests for reachable cases. |
+| **RISK-DEP01** | High (provisional; downgrade if no advisory is reachable) | Refreshed `npm audit --omit=dev --json` exits 1 and reports **26 production-tree advisories**. The previous 31-advisory severity breakdown and named package versions are historical and must not be treated as the current dependency inventory. Registry severity alone does not prove reachability. | Parse the refreshed advisory graph and severity breakdown, resolve endpoint reachability, upgrade safely, then run abuse/regression tests for reachable cases. |
 | **RISK-DB01** | High | `syncIndexes()` across all models can drop/create indexes incrementally; production inventory/backfill state is unknown. | Read-only production/staging index diff, duplicate inventory, approved versioned migration and rollback. |
 | **RISK-ARCH01** | High | Vercel serverless adapter coexists with in-memory stateful Socket.IO rooms without shared adapter. | Deployed WebSocket/multi-instance smoke or choose persistent host/shared adapter. |
-| **RISK-FE01** | High | Web attendance generates a new idempotency key for a new click after ambiguous timeout; stale response suppression is absent in attendance/payslip loaders. | Deterministic delayed-response and timeout-after-commit tests. |
+| **RISK-FE01** | High | Web **and Expo** attendance generate a new idempotency key for each new submit after an ambiguous timeout (Expo: `newIdempotencyKey()` is called inside every `punchAttendance`); stale response suppression is absent in attendance/payslip loaders. | Deterministic delayed-response and timeout-after-commit tests. |
 | **RISK-DB02** | Medium | One-node replica integration tests do not exercise primary stepdown, `UnknownTransactionCommitResult` or callback replay. | Three-node/managed test lane with failover and ambiguous commit. |
 | **RISK-MIG01** | Medium | Several multi-collection migration scripts have no common ledger/checkpoint/reconciliation standard. | Interrupt/restart each migration on a disposable production-like snapshot. |
 | **RISK-EXT01** | Medium | Browser/backend send coordinates to Photon/BigDataCloud; privacy basis, quota, timeout and provider-failure behavior are not proven. | Legal/privacy review and provider outage/rate-limit tests. |
+| **RISK-MOB01** | Medium | Expo attendance evidence is client-asserted: Wi-Fi BSSID is read on the device (`wifi.ts`) and GPS comes from the device location API; the server can compare values but cannot prove they were not spoofed (rooted device, mock location, direct API call). Selfie + manager review is the only compensating control and applies only on the fallback path. | Threat-model decision: accept with documented compensating controls, or add server-side signals (device attestation, mock-location flag, anomaly review). Test with a mock-location device and a hand-crafted BSSID request. |
+| **RISK-MOB02** | Medium | Expo release configuration: Android package is the placeholder `com.anonymous.corestaff`; `src/config.ts` falls back to hard-coded `https://18-141-68-40.sslip.io` when `EXPO_PUBLIC_API_URL` is unset, so a release built without the variable silently targets that host. | Set final application ID and bundle ID, require `EXPO_PUBLIC_API_URL` at release-build time (fail the build if missing), and run a release-build smoke against the intended API. |
 | **RISK-WEB01** | Medium | Unknown-route dashboard fallback and multiple async loaders can hide broken links or display stale results. | Full role×route matrix and delayed-response browser tests. |
 
 ### Needs Verification
@@ -340,6 +386,9 @@ The audit explicitly considered duplicate submission, competing users, timeout-a
 - [ ] Vietnam midnight/month boundaries are correct under multiple host timezones.
 - [ ] Malformed API payload produces contract error, not empty/NaN/crash.
 - [ ] Expo never requests GPS/camera when policy disables it.
+- [ ] Expo has a test suite covering the attendance evidence plan, the auth refresh single-flight and the payslip status flow, and it runs in CI.
+- [ ] Expo release build fails when `EXPO_PUBLIC_API_URL` is unset and uses a non-placeholder application ID.
+- [ ] Expo attendance punch retried after a timeout reuses the same idempotency key.
 - [ ] Flutter release uses configured HTTPS and stores no tokens in SharedPreferences.
 - [ ] Flutter analyze/test/build are green.
 
@@ -377,7 +426,11 @@ A production decision should be reconsidered only after all Critical findings ar
 | Command | Result |
 |---|---|
 | Targeted API regression set | **PASS** — 4 suites / 50 tests |
-| `npx playwright test --list` | **FAIL before collection** — invalid regex at `Apps/web/e2e/dependents-tax.spec.ts:371`; 0 tests collected |
+| API unit suite after remediation (`npx jest --runInBand`, 2026-11-14) | **PASS** — 93 suites passed, 1 skipped; 1115 tests passed, 7 skipped. `tsc --noEmit` clean |
+| API integration lane (`jest -c test/jest-integration.config.js`, in-memory replica set, mongod 7.0.14, 2026-11-14) | **PASS** — 15 suites, 149 tests, including the new two-tenant payroll isolation suite (12) and the rewritten period state-machine suite (generic endpoint can no longer close/reopen) |
+| API `test/*.unit.spec.ts` lane (`jest -c test/jest-unit.config.js`) | **6 failures, pre-existing and unrelated to this pass**: `tax-policy-domain.unit.spec.ts` (e.g. PIT of 120,000,000 expects 22,500,000, gets 27,500,000) and `payslip-generation.unit.spec.ts`. The PIT bracket expectations disagree with `DEFAULT_BRACKETS`; needs a payroll/legal decision on which side is right before go-live |
+| Playwright after `AUD-M09` fix (Chrome, 2026-11-14) | 67 tests collected; first full run 22 passed, the rest failed because fixtures/selectors are stale against the current UI (health mock lacked `mongo`/`timezone`, routes `/timesheet/review`, `/hr/tax-policy`, `/employee/:id/dependents` renamed or removed, text/focus selectors changed). Not an app regression; not yet repaired |
+| `npx playwright test --list` (before the fix) | **FAIL before collection** — invalid regex at `Apps/web/e2e/dependents-tax.spec.ts:371`; 0 tests collected |
 | `npm audit --omit=dev --json` | Exit 1 — 26 production-tree advisories; reachability and refreshed severity breakdown not established in this report |
 | `npm run lint && npm run build && npm test` | **INCONCLUSIVE** — combined command timed out after 420 seconds; no individual stage may be claimed as pass or fail from this run |
 | Flutter analyze/test gate | **BLOCKED** — Windows Developer Mode/symlink support is disabled; analyze/test did not execute |

@@ -36,6 +36,7 @@ import { getManagerContext, ManagerContext } from '@/services/manager.service';
 import { toast } from '@/components/toast';
 import { getSocket } from '@/services/socket';
 import { BlockerDayDetailDialog } from './components/BlockerDayDetailDialog';
+import { formatInstantDateTimeVN, formatVN } from '@/lib/datetime';
 
 
 type Period = TimesheetPeriod;
@@ -449,8 +450,8 @@ export function TimesheetReviewScreen({
                         {getStatusLabel(period.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(period.startDate).toLocaleDateString('vi-VN')}</TableCell>
-                    <TableCell>{new Date(period.endDate).toLocaleDateString('vi-VN')}</TableCell>
+                    <TableCell>{formatVN(period.startDate)}</TableCell>
+                    <TableCell>{formatVN(period.endDate)}</TableCell>
                     <TableCell>v{period.version}</TableCell>
                     <TableCell>
                       {period.status === 'READY_TO_CLOSE' && (
@@ -511,8 +512,8 @@ export function TimesheetReviewScreen({
                   <CardTitle>Kỳ công {selectedPeriod.period}</CardTitle>
                   <p className="text-sm text-gray-600 mt-1">
                     Phiên bản {selectedPeriod.version} • 
-                    {new Date(selectedPeriod.startDate).toLocaleDateString('vi-VN')} →{' '}
-                    {new Date(selectedPeriod.endDate).toLocaleDateString('vi-VN')}
+                    {formatVN(selectedPeriod.startDate)} →{' '}
+                    {formatVN(selectedPeriod.endDate)}
                   </p>
                 </div>
                 <Badge className={getStatusColor(effectivePeriodStatus ?? selectedPeriod.status)}>
@@ -640,7 +641,7 @@ export function TimesheetReviewScreen({
                                               )}
                                             </TableCell>
                                             <TableCell>{row.employee.department ?? '—'}</TableCell>
-                                            <TableCell>{row.date}</TableCell>
+                                            <TableCell>{formatVN(row.date)}</TableCell>
                                             <TableCell>{row.note}</TableCell>
                                           </TableRow>
                                         ))}
@@ -686,7 +687,7 @@ export function TimesheetReviewScreen({
                             {confirmation ? (
                               <div className="text-sm sm:text-right">
                                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Đã xác nhận · v{confirmation.periodVersion}</Badge>
-                                <p className="mt-1 text-xs text-muted-foreground">{new Date(confirmation.confirmedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{formatInstantDateTimeVN(confirmation.confirmedAt)}</p>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
@@ -839,7 +840,7 @@ export function TimesheetReviewScreen({
                     <p className="text-sm text-gray-600 mt-1">
                       Chốt bởi {selectedPeriod.closedBy} vào{' '}
                       {selectedPeriod.closedAt
-                        ? new Date(selectedPeriod.closedAt).toLocaleString('vi-VN')
+                        ? formatInstantDateTimeVN(selectedPeriod.closedAt)
                         : '—'}
                     </p>
                   </div>

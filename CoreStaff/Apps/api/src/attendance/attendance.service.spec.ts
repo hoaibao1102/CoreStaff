@@ -97,7 +97,7 @@ function punchFixture(checkOut = false, existingIn = false) {
   const days = { find: jest.fn(() => chain([day])), findOne: jest.fn(() => chain(checkOut || existingIn ? day : null)), create: jest.fn(async (value: any) => Object.assign(day, value)) };
   const events = { findOne: jest.fn(() => chain(null)), create: jest.fn(async (value: any) => ({ _id: new Types.ObjectId(), ...value })), find: jest.fn(() => chain([])) };
   const requests = { find: jest.fn(() => chain([])), findOne: jest.fn(() => chain(null)), create: jest.fn(async (value: any) => ({ _id: new Types.ObjectId(), ...value })) };
-  const service = new AttendanceService(days as any, events as any, { create: async (value: any) => value } as any, { findOne: () => chain(assignment) } as any, {} as any, {} as any, {} as any, requests as any, { findOne: () => chain({ _id: new Types.ObjectId(), departmentId: assignment.departmentId }) } as any, { findOne: () => chain(null), create: jest.fn() } as any, { findOne: () => chain(null) } as any, new HaversineService(), new AttendanceCalculatorService(), { isConfigured: () => false } as any, { resolveForEmployeeDate: async () => null } as any, { bump: jest.fn(async () => false) } as any);
+  const service = new AttendanceService(days as any, events as any, { create: async (value: any) => value } as any, { find: () => chain([assignment]) } as any, {} as any, {} as any, {} as any, requests as any, { findOne: () => chain({ _id: new Types.ObjectId(), departmentId: assignment.departmentId }) } as any, { findOne: () => chain(null), create: jest.fn() } as any, { findOne: () => chain(null) } as any, new HaversineService(), new AttendanceCalculatorService(), { isConfigured: () => false } as any, { resolveForEmployeeDate: async () => null } as any, { bump: jest.fn(async () => false) } as any);
   jest.spyOn(service, 'getTodayWorkDate').mockReturnValue('2026-10-30');
   return { service, day, days, events, requests, assignment };
 }
@@ -210,6 +210,19 @@ describe('V2 period guard', () => {
     const action = checkout ? service.checkOut.bind(service) : service.checkIn.bind(service);
     await expect(action(ownerId, organizationId, verifiedPunch, undefined, undefined, undefined, 'v2')).rejects.toThrow('ACTIVE_TIMESHEET_PERIOD_REQUIRED');
     expect(day.save).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('still punches when HR has not created the period yet checkout=%s', async checkout => {
+    const { service } = punchFixture(checkout);
+    const session = { inTransaction: () => true, withTransaction: async (fn: any) => fn(), endSession: jest.fn() };
+    (service as any).attendanceDayModel.db = { model: () => ({ findById: () => ({ lean: async () => ({ attendanceOvertimeV2Enabled: true }) }) }), startSession: async () => session };
+    (service as any).periodVersion.claimForWorkDate = jest.fn(async () => { throw new Error('PERIOD_REQUIRED'); });
+    const action = checkout ? service.checkOut.bind(service) : service.checkIn.bind(service);
+    // The thin fixture cannot finish a whole punch; what matters is that a
+    // missing period no longer aborts it.
+    const outcome = await action(ownerId, organizationId, verifiedPunch, undefined, undefined, undefined, 'v2').then(() => null, (e: any) => e);
+    expect(outcome?.message).not.toBe('PERIOD_REQUIRED');
+    expect((service as any).periodVersion.claimForWorkDate).toHaveBeenCalled();
   });
 });
 

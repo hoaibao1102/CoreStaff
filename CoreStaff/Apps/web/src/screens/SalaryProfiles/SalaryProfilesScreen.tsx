@@ -25,7 +25,7 @@ import { Input } from '../../components/input';
 import { Separator } from '../../components/separator';
 import { Skeleton } from '../../components/skeleton';
 import { hrRequest, listEmployees, type Department, type EmployeeProfile } from '../../services/hrService';
-import { deriveInsuranceSalary, type EmployeeAssignedAllowance } from '../../services/compensation.service';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Types ───────── */
 
@@ -34,7 +34,7 @@ interface SalaryProfileRow {
     employeeId: string;
     employeeProfileId: string;
     baseSalary: number;
-    /** Lương đóng bảo hiểm — số DẪN XUẤT (lương cơ bản − tổng phụ cấp), không nhập tay. */
+    /** Lương đóng BH — lương cơ bản − phụ cấp có tích BH, do server tính. */
     insuranceSalary: number;
     effectiveFrom: string;
     effectiveTo?: string | null;
@@ -68,13 +68,8 @@ function formatCurrency(value: number): string {
 }
 
 function formatDate(value: string | null | undefined): string {
-    if (!value) return '—';
-    try {
-        const d = new Date(value);
-        return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
-    } catch {
-        return '—';
-    }
+  if (!value) return '—';
+  return formatVN(value);
 }
 
 function initials(name: string): string {
@@ -102,11 +97,9 @@ function enrichProfiles(
             employeeId: empId,
             employeeProfileId: empId,
             baseSalary: Number(p.baseSalary ?? 0),
-            // Số dẫn xuất — tính lại từ base − phụ cấp để khớp với payroll.
-            insuranceSalary: deriveInsuranceSalary(
-                Number(p.baseSalary ?? 0),
-                Array.isArray(p.allowances) ? (p.allowances as EmployeeAssignedAllowance[]) : undefined,
-            ),
+            // Backend writes this on create/update (QC 4.11: only allowances
+            // flagged "tính BH" reduce it), so trust the stored value.
+            insuranceSalary: Number(p.insuranceSalary ?? 0),
             effectiveFrom: String(p.effectiveFrom ?? ''),
             effectiveTo: p.effectiveTo ? String(p.effectiveTo) : null,
             version: Number(p.version ?? 1),
@@ -219,7 +212,7 @@ function SalaryDetailDialog({
                             <p className="mt-1 text-xl font-bold text-foreground">{formatCurrency(profile.baseSalary)}</p>
                         </div>
                         <div className="rounded-lg border border-border bg-card p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lương đóng bảo hiểm</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lương đóng BH</p>
                             <p className="mt-1 text-xl font-bold text-foreground">{formatCurrency(profile.insuranceSalary)}</p>
                         </div>
                     </div>

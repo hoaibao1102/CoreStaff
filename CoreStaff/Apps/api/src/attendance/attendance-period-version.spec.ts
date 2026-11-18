@@ -6,7 +6,7 @@ const USER = '64f1a2b3c4d5e6f7a8b9c0d1';
 const PERIOD = '64f1a2b3c4d5e6f7a8b9c0d2';
 
 function assignmentQuery(assignment: any) {
-  const query: any = { populate: () => query, then: (resolve: (value: any) => void) => resolve(assignment) };
+  const query: any = { populate: () => query, lean: () => query, then: (resolve: (value: any) => void) => resolve(assignment) };
   return query;
 }
 
@@ -34,7 +34,7 @@ function build(kind: 'check-in' | 'check-out', bump = jest.fn(async () => true))
   const periods = { findOne: jest.fn(() => ({ lean: async () => ({ _id: PERIOD }) })) };
   const service = new AttendanceService(
     attendanceDays as any, attendanceEvents as any, { create: jest.fn() } as any,
-    { findOne: jest.fn(() => assignmentQuery(assignment)) } as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    { find: jest.fn(() => assignmentQuery([assignment])) } as any, {} as any, {} as any, {} as any, {} as any, {} as any,
     idempotency as any, periods as any,
     { calculateDistance: jest.fn(() => 0), isInsideGeofence: jest.fn(() => ({ isInside: true, distanceMeters: 0 })) } as any,
     { calculate: jest.fn(() => ({ lateMinutes: 0, earlyMinutes: 0, workingMinutes: 480, approvedLeaveMinutes: 0, requiredWorkingMinutes: 480 })) } as any,

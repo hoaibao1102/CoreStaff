@@ -14,6 +14,7 @@ import {
   workplaceErrorMessage,
   type Workplace,
 } from "@/services/workplace.service";
+import { formatInstantDateTimeVN } from '@/lib/datetime';
 
 export function WorkplaceDetailDialog({
   apiBase,
@@ -92,7 +93,7 @@ export function WorkplaceDetailDialog({
                   ? [
                       [
                         "Ngày tạo",
-                        new Date(row.createdAt).toLocaleString("vi-VN"),
+                        formatInstantDateTimeVN(row.createdAt),
                       ],
                     ]
                   : []),
@@ -100,7 +101,7 @@ export function WorkplaceDetailDialog({
                   ? [
                       [
                         "Ngày cập nhật",
-                        new Date(row.updatedAt).toLocaleString("vi-VN"),
+                        formatInstantDateTimeVN(row.updatedAt),
                       ],
                     ]
                   : []),

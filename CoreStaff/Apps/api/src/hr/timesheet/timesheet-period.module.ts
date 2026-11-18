@@ -10,6 +10,7 @@ import { TimesheetPeriodService } from './timesheet-period.service';
 import { TimesheetSummaryModule } from './timesheet-summary.module';
 import { PayrollSnapshotModule } from './payroll-snapshot.module';
 import { ManagerModule } from '../manager/manager.module';
+import { HrAuditModule } from '../audit/hr-audit.module';
 import { PayrollInputSnapshotSchema } from '../../database/schemas/payroll-input-snapshot.schema';
 import { PayrollRunSchema } from '../../database/schemas/payroll-run.schema';
 import { AttendanceDay, AttendanceDaySchema } from '../../database/schemas/attendance-day.schema';
@@ -45,6 +46,7 @@ import { TimesheetReviewController } from './timesheet-review.controller';
 		PayrollSnapshotModule,
 		PeriodVersionModule,
 		ManagerModule,
+		HrAuditModule,
 		OvertimeModule,
 		PoliciesModule,
 	],

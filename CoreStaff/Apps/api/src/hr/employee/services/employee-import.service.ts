@@ -21,6 +21,7 @@ import {
 	normalizeEmployeeCode,
 } from '../../../database/schemas/enums';
 import { provisionAccount, type AccountInput } from '../../../database/seed/provision';
+import { isWorkingAge, MINIMUM_WORKING_AGE } from '../minimum-age';
 import { hashPassword } from '../../../auth/strategies/bcrypt.strategy';
 import { generateTempPassword } from '../../../auth/strategies/password-policy';
 
@@ -96,11 +97,9 @@ interface ParsedRow {
 	citizenId?: string;
 	taxCode?: string;
 	socialInsuranceCode?: string;
-	bankAccount?: string;
 	address?: string;
 	departmentCode?: string;
 	positionCode?: string;
-	directManagerCode?: string;
 	dependents: ParsedDependent[];
 	baseSalary?: number;
 	salaryEffectiveFrom?: string;
@@ -126,12 +125,19 @@ interface ParsedRow {
  * reason, one step stronger: BHXH/BHYT/BHTN are a legal obligation (D40), not an
  * HR choice, so a column offering "Không" would be a choice nobody may make.
  * `createOne` writes the schema's `true` default.
+ *
+ * `bankAccount` and `directManagerCode` were dropped from the template: neither
+ * has a consumer. Nothing reads `bankAccount` (payroll pays through the payslip,
+ * not a bank file), and direct-manager authority lives on `ManagerAssignment`
+ * (effective-dated, managed on the phân-công screen) — `directManagerId` on the
+ * profile only fed a display name. A file saved from the older template still
+ * parses; those two columns are simply not in `EMPLOYEE_HEADERS` any more.
  */
 const COLUMNS = [
 	'employeeCode', 'fullName', 'email', 'role', 'phone',
 	'joinDate', 'dateOfBirth', 'gender', 'citizenId', 'taxCode',
-	'socialInsuranceCode', 'bankAccount', 'address',
-	'departmentCode', 'positionCode', 'directManagerCode',
+	'socialInsuranceCode', 'address',
+	'departmentCode', 'positionCode',
 	'baseSalary', 'salaryEffectiveFrom',
 	'attendanceBonusPolicyCode', 'insuranceEffectiveFrom', 'insuranceEffectiveTo',
 	'contractType', 'contractEffectiveDate', 'contractExpiryDate',
@@ -162,7 +168,7 @@ const DEPENDENT_COLUMNS = ['employeeCode', 'fullName', 'dateOfBirth', 'relations
 const REQUIRED_DEPENDENT_COLUMNS = ['employeeCode', 'fullName', 'dateOfBirth', 'relationship'];
 
 /**
- * The header HR actually reads. Code names (`directManagerCode`, `employeeCode`)
+ * The header HR actually reads. Code names (`employeeCode`, `departmentCode`)
  * are meaningless to an HR user, so the template writes these instead — and the
  * parser still accepts the code names, because a file saved from an older
  * template must not break.
@@ -183,11 +189,9 @@ const HEADER_LABELS: Record<string, string> = {
 	citizenId: 'Số CCCD',
 	taxCode: 'Mã số thuế',
 	socialInsuranceCode: 'Số BHXH',
-	bankAccount: 'Số tài khoản ngân hàng',
 	address: 'Địa chỉ',
 	departmentCode: 'Phòng ban',
 	positionCode: 'Chức danh',
-	directManagerCode: 'Quản lý trực tiếp',
 	baseSalary: 'Lương cơ bản',
 	salaryEffectiveFrom: 'Lương hiệu lực từ ngày',
 	attendanceBonusPolicyCode: 'Chính sách thưởng chuyên cần',
@@ -603,6 +607,9 @@ export class EmployeeImportService {
 
 			parsed.dateOfBirth = readIso(row, 'dateOfBirth');
 			if (parsed.dateOfBirth && parsed.dateOfBirth > today) fail('DOB_FUTURE_DATE', 'Ngày sinh không được ở tương lai.');
+			else if (parsed.dateOfBirth && !isWorkingAge(parsed.dateOfBirth, new Date(`${today}T00:00:00Z`))) {
+				fail('DOB_MINIMUM_AGE', `Nhân viên phải đủ ${MINIMUM_WORKING_AGE} tuổi theo Luật Lao động 2019 (Điều 143).`);
+			}
 
 			const genderCell = readText(row, 'gender');
 			const gender = resolveAlias(genderCell, GENDER_ALIASES, Object.values(Gender))
@@ -615,7 +622,7 @@ export class EmployeeImportService {
 			// accepts, so `provisionAccount` lets the schema default stand.
 
 			const withPattern = (
-				field: 'citizenId' | 'taxCode' | 'socialInsuranceCode' | 'bankAccount',
+				field: 'citizenId' | 'taxCode' | 'socialInsuranceCode',
 				pattern: RegExp,
 				code: string,
 				message: string,
@@ -628,7 +635,6 @@ export class EmployeeImportService {
 			withPattern('citizenId', /^\d{9,12}$/, 'CITIZEN_ID_INVALID', 'CCCD/CMND phải gồm 9–12 chữ số.');
 			withPattern('taxCode', /^\d{10,12}$/, 'TAX_CODE_INVALID', 'Mã số thuế phải gồm 10–12 chữ số.');
 			withPattern('socialInsuranceCode', /^\d{1,12}$/, 'SOCIAL_INSURANCE_CODE_INVALID', 'Mã số BHXH phải gồm 1–12 chữ số.');
-			withPattern('bankAccount', /^\d{6,17}$/, 'BANK_ACCOUNT_INVALID', 'Số tài khoản phải gồm 6–17 chữ số.');
 			parsed.address = readText(row, 'address') || undefined;
 			if (parsed.address && parsed.address.length > 256) fail('ADDRESS_TOO_LONG', 'Địa chỉ tối đa 256 ký tự.');
 
@@ -636,7 +642,6 @@ export class EmployeeImportService {
 			if (!parsed.departmentCode) fail('DEPARTMENT_REQUIRED', 'Thiếu phòng ban.');
 			parsed.positionCode = codeFromCell(readText(row, 'positionCode'));
 			if (!parsed.positionCode) fail('POSITION_REQUIRED', 'Thiếu chức danh.');
-			parsed.directManagerCode = codeFromCell(readText(row, 'directManagerCode'));
 
 			// ── Group 3: salary ──
 			parsed.baseSalary = toAmount(read(row, 'baseSalary'));
@@ -848,11 +853,10 @@ export class EmployeeImportService {
 		const emails = [...seenEmails.keys()];
 		const departmentCodes = [...new Set(rows.map((r) => r.departmentCode).filter(Boolean))] as string[];
 		const positionCodes = [...new Set(rows.map((r) => r.positionCode).filter(Boolean))] as string[];
-		const managerCodes = [...new Set(rows.map((r) => r.directManagerCode).filter(Boolean))] as string[];
 		const allowanceCodes = [...new Set(rows.flatMap((r) => r.allowances.map((a) => a.code)))];
 		const bonusPolicyNames = [...new Set(rows.map((r) => r.bonusPolicyCode).filter(Boolean))] as string[];
 
-		const [existingProfiles, existingUsers, departments, positions, managers, allowances, bonusPolicies] = await Promise.all([
+		const [existingProfiles, existingUsers, departments, positions, allowances, bonusPolicies] = await Promise.all([
 			this.profileModel.find({ organizationId, employeeCode: { $in: codes } }).select('employeeCode').lean(),
 			this.userModel.find({ organizationId, emailN: { $in: emails } }).select('emailN').lean(),
 			this.departmentModel.find({ organizationId, code: { $in: departmentCodes } }).select('_id code').lean(),
@@ -861,7 +865,6 @@ export class EmployeeImportService {
 			// `code: {$in: [...]}` filter alone would happily match another
 			// department's `DEV` and put the employee in the wrong job.
 			this.positionModel.find({ organizationId, code: { $in: positionCodes } }).select('_id code departmentId').lean(),
-			this.profileModel.find({ organizationId, employeeCode: { $in: managerCodes } }).select('employeeCode userId').lean(),
 			this.allowanceModel.find({ organizationId, code: { $in: allowanceCodes } }).select('_id code').lean(),
 			this.bonusPolicyModel.find({ organizationId, name: { $in: bonusPolicyNames } }).select('_id name').lean(),
 		]);
@@ -873,9 +876,6 @@ export class EmployeeImportService {
 		// Every position code that exists in the tenant under *some* department —
 		// the difference between "wrong department" and "no such position".
 		const anyDepartmentCodes = new Set(positions.map((p) => p.code));
-		// A manager may be in the same file — that is the whole point of the
-		// two-pass order — so both sources count as "exists".
-		const knownManagerCodes = new Set([...managerCodes.filter((c) => seenCodes.has(c)), ...managers.map((m) => m.employeeCode)]);
 
 		for (const row of rows) {
 			if (row.employeeCode && takenCodes.has(row.employeeCode)) {
@@ -903,9 +903,6 @@ export class EmployeeImportService {
 					known
 						? `Chức danh "${row.positionCode}" không thuộc phòng ban "${row.departmentCode}".`
 						: `Không tìm thấy chức danh "${row.positionCode}" trong phòng ban "${row.departmentCode}".`);
-			}
-			if (row.directManagerCode && !knownManagerCodes.has(row.directManagerCode)) {
-				fail(row, 'MANAGER_NOT_FOUND', `Không tìm thấy quản lý có mã "${row.directManagerCode}".`);
 			}
 		}
 
@@ -974,9 +971,6 @@ export class EmployeeImportService {
 				for (const item of prepared) {
 					await this.createOne(organizationId, actorUserId, item.row, item.passwordHash, refs, session);
 				}
-				// Pass 3, inside the same transaction: a manager may be a later
-				// row in this very file, so it can only run once all exist.
-				await this.assignManagers(organizationId, prepared.map((p) => p.row), session);
 			});
 		} catch (err) {
 			throw mapDuplicateKey(err);
@@ -1018,14 +1012,14 @@ export class EmployeeImportService {
 			employmentStatus: EmploymentStatus.PROBATION,
 			dateOfBirth: row.dateOfBirth,
 			gender: row.gender,
-			// `directManagerId` is deliberately absent: the manager may be a later
-			// row in this same file. `assignManagers` sets it once everyone exists.
+			// No `directManagerId` and no `bankAccount`: neither column exists in the
+			// template. Direct-manager authority is `ManagerAssignment` (set on the
+			// phân-công screen), and nothing reads `bankAccount`.
 			profileExtras: {
 				...(row.address && { address: row.address }),
 				...(row.citizenId && { citizenId: row.citizenId }),
 				...(row.taxCode && { taxCode: row.taxCode }),
 				...(row.socialInsuranceCode && { socialInsuranceCode: row.socialInsuranceCode }),
-				...(row.bankAccount && { bankAccount: row.bankAccount }),
 				...(row.dependents.length && {
 					dependents: row.dependents.map((d) => ({
 						fullName: d.fullName,
@@ -1120,37 +1114,6 @@ export class EmployeeImportService {
 		}
 	}
 
-	/**
-	 * Pass 3. A `directManagerCode` may name a row in this same file, so this can
-	 * only run once every profile exists. `validateRefs` has already proved each
-	 * code resolves to a file row or an existing profile.
-	 */
-	private async assignManagers(
-		organizationId: string,
-		rows: ParsedRow[],
-		session: ClientSession,
-	): Promise<void> {
-		const wanted = rows.filter((r) => r.directManagerCode);
-		if (!wanted.length) return;
-
-		const profiles = await this.profileModel
-			.find({ organizationId, employeeCode: { $in: [...new Set(wanted.map((r) => r.directManagerCode!))] } })
-			.select('employeeCode userId')
-			.session(session)
-			.lean();
-		const userIdByCode = new Map(profiles.map((p) => [p.employeeCode, p.userId]));
-
-		for (const row of wanted) {
-			const managerUserId = userIdByCode.get(row.directManagerCode!);
-			if (!managerUserId) continue;
-			await this.profileModel.updateOne(
-				{ organizationId, employeeCode: row.employeeCode },
-				{ $set: { directManagerId: managerUserId } },
-				{ session },
-			);
-		}
-	}
-
 	/** ── Template ───────────────────────────────────────────────────────── */
 
 	/**
@@ -1163,21 +1126,12 @@ export class EmployeeImportService {
 	 * columns stay free-text — they are amounts, not choices.
 	 */
 	async buildTemplate(organizationId: string): Promise<{ buffer: Buffer; filename: string }> {
-		const [departments, positions, allowances, bonusPolicies, managerProfiles] = await Promise.all([
+		const [departments, positions, allowances, bonusPolicies] = await Promise.all([
 			this.departmentModel.find({ organizationId, active: true }).select('code name').sort({ code: 1 }).lean(),
 			this.positionModel.find({ organizationId, active: true }).select('code name departmentId').sort({ code: 1 }).lean(),
 			this.allowanceModel.find({ organizationId, active: true }).select('code name').sort({ code: 1 }).lean(),
 			this.bonusPolicyModel.find({ organizationId, active: true }).select('name').sort({ effectiveFrom: -1 }).lean(),
-			this.profileModel.find({ organizationId }).select('employeeCode userId').sort({ employeeCode: 1 }).lean(),
 		]);
-		// The manager dropdown shows names, and names live on `User`, not the profile.
-		const managerUsers = managerProfiles.length
-			? await this.userModel
-				.find({ _id: { $in: managerProfiles.map((p) => p.userId) } })
-				.select('fullName')
-				.lean()
-			: [];
-		const nameByUserId = new Map(managerUsers.map((u) => [String(u._id), u.fullName]));
 
 		const workbook = new ExcelJS.Workbook();
 		const sheet = workbook.addWorksheet(EMPLOYEE_SHEET);
@@ -1242,7 +1196,6 @@ export class EmployeeImportService {
 		// `validateRefs`), so a wrong pick costs one row error instead of a
 		// dropdown that lies about what the tenant has.
 		addList('ChucDanh', positions.map((p) => catalogLabel(p.code, p.name)));
-		addList('QuanLy', managerProfiles.map((p) => catalogLabel(p.employeeCode, nameByUserId.get(String(p.userId)))));
 		addList('QuanHe', RELATIONSHIP_OPTIONS.map(([code, label]) => catalogLabel(code, label)));
 		addList('ThuongCC', [NO_BONUS_POLICY, ...new Set(bonusPolicies.map((p) => p.name))]);
 		addList('LoaiHopDong', CONTRACT_TYPE_OPTIONS.map(([code, label]) => catalogLabel(code, label)));
@@ -1290,7 +1243,6 @@ export class EmployeeImportService {
 		// or stale the moment a department cell was edited by hand, hiding real
 		// positions from HR — a worse failure than a row error.
 		applyDropdown(sheet, HEADER_LABELS.positionCode, 'ChucDanh', MAX_IMPORT_ROWS);
-		applyDropdown(sheet, HEADER_LABELS.directManagerCode, 'QuanLy', MAX_IMPORT_ROWS);
 		applyDropdown(sheet, HEADER_LABELS.attendanceBonusPolicyCode, 'ThuongCC', MAX_IMPORT_ROWS);
 		applyDropdown(sheet, HEADER_LABELS.contractType, 'LoaiHopDong', MAX_IMPORT_ROWS);
 		// The dependent sheet has its own, larger ceiling.
@@ -1307,7 +1259,7 @@ export class EmployeeImportService {
 			['Chức danh', positions.length
 				? 'Cột "Chức danh" hiện TẤT CẢ chức danh của tổ chức. Chức danh chỉ hợp lệ khi thuộc đúng phòng ban ghi ở cột "Phòng ban" cùng dòng — xem bảng "Chức danh theo phòng ban" bên dưới. Chọn sai phòng ban thì dòng đó bị báo lỗi và không được lưu.'
 				: '(chưa có chức danh — tạo chức danh trong phòng ban trước khi import)'],
-			['Quản lý trực tiếp', 'Chọn mã nhân viên của quản lý. Có thể là một dòng khác trong cùng file. Để trống nếu chưa có.'],
+			['Quản lý trực tiếp', 'Không có cột trong file. Gán quản lý ở màn "Phân công quản lý" (ManagerAssignment) — đó mới là nguồn quyền duyệt.'],
 			['Lương cơ bản', 'Số nguyên VND, không dấu chấm. Để trống nếu chưa có. Lương đóng BHXH là số tự tính (lương cơ bản − tổng phụ cấp), không nhập ở file.'],
 			['Phụ cấp <MÃ>', allowances.length
 				? `Mỗi mã phụ cấp là MỘT cột riêng, tên cột ghi "Phụ cấp <MÃ> (<Tên>)". Điền số tiền vào cột của mã đó, để trống nếu không có. Danh sách mã hiện có: ${allowances.map((a) => `${a.code} (${a.name})`).join(' | ')}.`

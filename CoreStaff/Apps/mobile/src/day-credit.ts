@@ -38,10 +38,32 @@ export function dayHistoryStatus(d: AttendanceDay): HistoryStatus {
   return 'NONE';
 }
 
+/**
+ * Nghỉ nửa buổi / theo giờ: ngày vẫn có một phần phải làm. Server gắn
+ * `workdayType` = loại nghỉ cho cả những ngày này, nên không thể dựa vào
+ * `workdayType` để biết ngày được nghỉ trọn.
+ */
+export function isPartialLeaveDay(d: AttendanceDay): boolean {
+  if (!['PAID_LEAVE', 'UNPAID_LEAVE'].includes(d.workdayType ?? '')) return false;
+  const req = d.attendanceRequirements;
+  return (req?.requiredWorkingMinutes ?? 0) > 0 || (req?.durationTypes ?? []).some(t => t !== 'FULL_DAY');
+}
+
+/** Phút nghỉ được tính công: chỉ nghỉ có lương (nghỉ không lương không cộng vào công). */
+function paidLeaveMinutes(d: AttendanceDay): number {
+  const req = d.attendanceRequirements;
+  const minutes = Math.round(req?.approvedLeaveMinutes ?? 0);
+  const types = req?.leaveTypes ?? [];
+  return types.length && !types.includes('PAID_LEAVE') ? 0 : minutes;
+}
+
 /** Quy đổi công của một ngày — khớp calculateDayWorkCredit bên web. */
 export function calculateDayCredit(d: AttendanceDay, hs: HistoryStatus, policy?: WorkCreditPolicy | null): DayCredit {
-  const obligation = Math.round(d.attendanceRequirements?.requiredWorkingMinutes ?? 480);
-  const leave = Math.round(d.attendanceRequirements?.approvedLeaveMinutes ?? 0);
+  const partialLeave = isPartialLeaveDay(d);
+  // Nghĩa vụ cả ngày = phần còn phải làm + phần được nghỉ (nghỉ nửa buổi: 240 + 240 = 480).
+  const required = Math.round(d.attendanceRequirements?.requiredWorkingMinutes ?? 480);
+  const obligation = partialLeave ? required + Math.round(d.attendanceRequirements?.approvedLeaveMinutes ?? 0) : required;
+  const leave = paidLeaveMinutes(d);
   let worked = Math.round(d.totalWorkingMinutes ?? d.workingMinutes ?? 0);
   if (hs === 'FORFEITED') worked = 0;
   else if (worked === 0 && d.checkIn?.recordedAt && d.checkOut?.recordedAt) {
@@ -56,7 +78,7 @@ export function calculateDayCredit(d: AttendanceDay, hs: HistoryStatus, policy?:
     credit, label, explanation, provisional: false, obligation, worked, ratioPercent: ratioOf(worked, obligation), ...base, ...o,
   });
 
-  switch (d.workdayType) {
+  switch (partialLeave ? undefined : d.workdayType) {
     case 'WEEKLY_OFF': return make(0, '0 công', 'Ngày nghỉ hàng tuần theo quy định, không phát sinh nghĩa vụ làm việc.', { obligation: 0, worked: 0, ratioPercent: 0 });
     case 'PUBLIC_HOLIDAY': return make(1, '1.0 công', 'Nghỉ lễ theo quy định Nhà nước, được hưởng nguyên lương (1.0 ngày công).', { ratioPercent: 100 });
     case 'PAID_LEAVE': return make(1, '1.0 công', 'Nghỉ phép hưởng lương đã được duyệt, tính đủ 1.0 ngày công.', { ratioPercent: 100 });
@@ -66,9 +88,11 @@ export function calculateDayCredit(d: AttendanceDay, hs: HistoryStatus, policy?:
   if (hs === 'FORGOTTEN') return make(0, '0 công', 'Chưa đủ 2 mốc vào/ra. Theo chính sách công ty, ngày công tạm tính là 0 công cho đến khi gửi đơn Xác nhận công và được Quản lý duyệt.', { provisional: true });
   if (dayStatus(d) === 'CHECKED_IN') return make(0, 'Đang làm việc', 'Ca làm việc đang diễn ra. Ngày công sẽ được chốt sau khi bạn hoàn tất ra ca.', { provisional: true });
   const credited = Math.min(obligation, worked + leave);
+  const hm = (m: number) => `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}`;
+  const leaveNote = partialLeave && leave > 0 ? `Nghỉ có lương ${hm(leave)} + làm việc ${hm(worked)}. ` : '';
   const ratio = obligation > 0 ? credited / obligation : 0;
   const rp = Math.min(100, Math.round(ratio * 100));
-  if (ratio >= full - 0.0001) return make(1, '1.0 công', `Thời gian làm việc đạt ${rp}% ca quy định (yêu cầu tối thiểu ${fp}), được ghi nhận trọn vẹn 1.0 ngày công.`, { ratioPercent: rp });
-  if (ratio >= half - 0.0001) return make(0.5, '0.5 công', `Thời gian làm việc đạt ${rp}% ca quy định (từ ${hp} đến dưới ${fp}), được ghi nhận 0.5 ngày công.`, { ratioPercent: rp });
-  return make(0, '0 công', `Thời gian làm việc đạt ${rp}% ca (dưới ${hp}), không đủ điều kiện ghi nhận ngày công.`, { ratioPercent: rp });
+  if (ratio >= full - 0.0001) return make(1, '1.0 công', `${leaveNote}Đạt ${rp}% ca quy định (yêu cầu tối thiểu ${fp}), được ghi nhận trọn vẹn 1.0 ngày công.`, { ratioPercent: rp, provisional: d.workDate > todayKey() });
+  if (ratio >= half - 0.0001) return make(0.5, '0.5 công', `${leaveNote}Đạt ${rp}% ca quy định (từ ${hp} đến dưới ${fp}), được ghi nhận 0.5 ngày công.`, { ratioPercent: rp, provisional: d.workDate > todayKey() });
+  return make(0, '0 công', `${leaveNote}Đạt ${rp}% ca (dưới ${hp}), không đủ điều kiện ghi nhận ngày công.`, { ratioPercent: rp, provisional: d.workDate > todayKey() });
 }

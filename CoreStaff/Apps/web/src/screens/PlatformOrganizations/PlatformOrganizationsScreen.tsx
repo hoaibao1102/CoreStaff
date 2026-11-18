@@ -25,6 +25,7 @@ import {
     TableHeader,
     TableRow,
 } from '../../components/table';
+import { formatInstantDateVN } from '@/lib/datetime';
 
 const STATUS_LABEL: Record<Organization['status'], string> = {
     ACTIVE: 'Đang hoạt động',
@@ -32,8 +33,7 @@ const STATUS_LABEL: Record<Organization['status'], string> = {
 };
 
 function formatDate(value?: string): string {
-    if (!value || Number.isNaN(Date.parse(value))) return '—';
-    return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
+    return formatInstantDateVN(value);
 }
 
 export function PlatformOrganizationsScreen({ user, apiBase }: { user: AuthUser; apiBase: string | null }) {

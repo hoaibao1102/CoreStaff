@@ -1,4 +1,5 @@
 import { apiRequest } from './auth';
+import { isoDatesToVN } from './date';
 
 export type AttendanceStatus = 'NOT_CHECKED_IN' | 'CHECKED_IN' | 'COMPLETED' | 'DAY_OFF' | 'LOCKED';
 
@@ -77,8 +78,8 @@ export interface AttendanceDay {
   checkIn: AttendanceEvent | null;
   checkOut: AttendanceEvent | null;
   resolution?: { type?: string; reason?: string } | null;
-  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[] } | null;
-  overtime?: { otMinutes?: number; status?: string; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
+  attendanceRequirements?: { requiredWorkingMinutes?: number; approvedLeaveMinutes?: number; durationTypes?: string[]; leaveTypes?: string[] } | null;
+  overtime?: { otMinutes?: number; status?: string; overtimeType?: string | null; actualMinutes?: number; classificationStatus?: string | null; approvedStart?: string; approvedEnd?: string; requestedStart?: string; requestedEnd?: string; reason?: string; reviewComment?: string } | null;
 }
 
 export interface AttendanceHistory {
@@ -266,11 +267,85 @@ export const getMyLeaveRequest = (base: string, id: string) =>
 export const cancelMyLeaveRequest = (base: string, id: string) =>
   apiRequest<LeaveRequest>(base, `/api/leave-requests/mine/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
 
+export interface OvertimePreview {
+  workDate: string;
+  calculationContract?: 'OVERTIME_V2' | 'LEGACY_V1';
+  rawEligibleMinutes?: number;
+  payableMinutes?: number;
+  roundingDroppedMinutes?: number;
+  contextHash?: string;
+  canFile: boolean;
+  blockedReasons: string[];
+  policy?: { minimumOvertimeMinutes: number; overtimeRoundingMinutes: number };
+}
+
 export const getMyOvertimeRequests = (base: string) =>
   apiRequest<OvertimeRequest[]>(base, '/api/overtime/mine');
 
-export const createOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string; reason: string; workDescription?: string; retroactiveReason?: string }) =>
+export const previewOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string }) =>
+  apiRequest<OvertimePreview>(base, '/api/overtime/preview', { method: 'POST', body: JSON.stringify(payload) });
+
+export const createOvertimeRequest = (base: string, payload: { workDate: string; requestedStart: string; requestedEnd: string; reason: string; workDescription?: string; retroactiveReason?: string; previewHash?: string }) =>
   apiRequest<OvertimeRequest>(base, '/api/overtime', { method: 'POST', body: JSON.stringify(payload) });
+
+/* ───────── Xác nhận công (cùng API với web: /api/requests/attendance-confirmation-preview) ───────── */
+
+type Provenance = string | { source?: string } | null | undefined;
+const provenanceSource = (value: Provenance): string => (typeof value === 'string' ? value : typeof value?.source === 'string' ? value.source : 'LEGACY_UNKNOWN');
+
+export interface AttendanceConfirmationPreview {
+  enabled?: boolean;
+  workDate: string;
+  canSubmit: boolean;
+  blockedReasons: Array<string | { code: string; message?: string }>;
+  previewHash?: string;
+  existingPunches?: { checkInAt?: string | null; checkOutAt?: string | null; checkInProvenance?: string; checkOutProvenance?: string };
+  proposedChanges?: { checkInAt?: string | null; checkOutAt?: string | null };
+  workingMinutes?: number;
+  lateMinutes?: number;
+  earlyMinutes?: number;
+  obligation?: { shiftLabel?: string; requiredWorkingIntervals?: LeaveInterval[]; breakMinutes?: number };
+  quota?: { monthKey: string; usedSlots: number; limit: number; remaining: number };
+  period?: { status?: string; canMutate?: boolean };
+}
+
+export interface AttendanceConfirmationRequest {
+  _id: string;
+  type: 'ATTENDANCE' | 'OVERTIME';
+  requestKind?: 'ATTENDANCE_CONFIRMATION';
+  workDate: string;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CLARIFICATION_REQUESTED' | 'CANCELLED';
+  reviewComment?: string;
+  proposedChanges?: { checkInAt?: string | null; checkOutAt?: string | null };
+  createdAt?: string;
+}
+
+export async function getAttendanceConfirmationPreview(base: string, date: string): Promise<AttendanceConfirmationPreview> {
+  const raw = await apiRequest<any>(base, `/api/requests/attendance-confirmation-preview?date=${encodeURIComponent(date)}`);
+  return {
+    ...raw,
+    previewHash: raw.previewHash ?? raw.contextHash,
+    existingPunches: raw.existingPunches && { ...raw.existingPunches, checkInProvenance: provenanceSource(raw.existingPunches.checkInProvenance), checkOutProvenance: provenanceSource(raw.existingPunches.checkOutProvenance) },
+    obligation: { ...raw.obligation, requiredWorkingIntervals: raw.obligation?.requiredWorkingIntervals ?? raw.requiredWorkingIntervals, breakMinutes: raw.obligation?.breakMinutes ?? raw.snapshot?.shift?.breakMinutes },
+    workingMinutes: raw.workingMinutes ?? raw.proposedChanges?.calculation?.workingMinutes,
+    lateMinutes: raw.lateMinutes ?? raw.proposedChanges?.calculation?.lateMinutes,
+    earlyMinutes: raw.earlyMinutes ?? raw.proposedChanges?.calculation?.earlyMinutes,
+  };
+}
+
+export const createAttendanceConfirmation = (base: string, payload: { workDate: string; reason: string; previewHash: string; customCheckInTime?: string; customCheckOutTime?: string }, key: string) =>
+  apiRequest<AttendanceConfirmationRequest>(base, '/api/requests', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    body: JSON.stringify({ requestKind: 'ATTENDANCE_CONFIRMATION', type: 'ATTENDANCE', ...payload }),
+  });
+
+/** Đơn chấm công (xác nhận công / điều chỉnh) của tôi — cùng nguồn `/api/requests/mine` với web. */
+export const getMyAttendanceRequests = async (base: string) =>
+  ((await apiRequest<AttendanceConfirmationRequest[]>(base, '/api/requests/mine')) || []).filter(r => r.type === 'ATTENDANCE');
+
+export const newRequestKey = () => newIdempotencyKey();
 
 export const getMyProfile = (base: string) =>
   apiRequest<EmployeeProfile>(base, '/api/hr/employees/me');
@@ -280,6 +355,65 @@ export const getMyPayslips = (base: string) =>
 
 export const markPayslipViewed = (base: string, id: string) =>
   apiRequest<void>(base, `/api/payslips/me/${encodeURIComponent(id)}/viewed`, { method: 'POST' });
+
+/* ───────── Bảng công kỳ (cùng API với web: /api/hr/timesheet-periods/:id/my-review) ───────── */
+
+export type TimesheetReviewState = 'PENDING' | 'ACKNOWLEDGED' | 'DISPUTED';
+
+export interface TimesheetReviewCard {
+  periodId: string;
+  periodKey: string; // "YYYY-MM"
+  periodVersion: number;
+  periodStatus?: string; // CLOSED = HR đã chốt, chỉ xem
+  state: TimesheetReviewState;
+}
+
+export interface TimesheetReviewDay {
+  workDate: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  scheduledObligationMinutes: number;
+  workedScheduledMinutes: number;
+  payableLeaveMinutes: number;
+  unpaidLeaveMinutes: number;
+  lateMinutes?: number;
+  earlyMinutes?: number;
+  overtimeMinutes: number;
+  workCredit: number;
+  reasonCode?: string;
+}
+
+export interface TimesheetReview extends TimesheetReviewCard {
+  projectionHash: string;
+  standardWorkUnits: number;
+  payableWorkUnits: number;
+  hasUnresolvedDays: boolean;
+  canAcknowledge: boolean;
+  days: TimesheetReviewDay[];
+}
+
+export const listMyTimesheetReviews = (base: string) =>
+  apiRequest<TimesheetReviewCard[]>(base, '/api/hr/timesheet-reviews/my');
+
+export const getMyTimesheetReview = (base: string, periodId: string) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(periodId)}/my-review`);
+
+export const acknowledgeMyTimesheetReview = (base: string, review: TimesheetReview) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(review.periodId)}/my-review/acknowledge`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedPeriodVersion: review.periodVersion, projectionHash: review.projectionHash }),
+  });
+
+export const disputeMyTimesheetReview = (base: string, review: TimesheetReview, reason: string, disputedWorkDates?: string[]) =>
+  apiRequest<TimesheetReview>(base, `/api/hr/timesheet-periods/${encodeURIComponent(review.periodId)}/my-review/dispute`, {
+    method: 'POST',
+    body: JSON.stringify({
+      expectedPeriodVersion: review.periodVersion,
+      projectionHash: review.projectionHash,
+      reason,
+      ...(disputedWorkDates?.length ? { disputedWorkDates } : {}),
+    }),
+  });
 
 function newIdempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -317,6 +451,10 @@ export function friendlyEmployeeError(error: unknown): string {
     LEAVE_SELF_APPROVAL_FORBIDDEN: 'Bạn không thể tự duyệt đơn của chính mình.',
     DEPARTMENT_SCOPE_VIOLATION: 'Đơn này không thuộc phòng ban bạn phụ trách.',
     PERIOD_CLOSED_OR_PAYROLL_CLAIMED: 'Kỳ công đã khóa hoặc đã chốt lương, không thể thay đổi.',
+    PERIOD_CLOSED: 'HR đã chốt kỳ công này, chỉ còn để xem.',
+    PERIOD_VERSION_CONFLICT: 'Bảng công vừa thay đổi. Hãy tải lại rồi kiểm tra lại.',
+    TIMESHEET_REVIEW_CHANGED: 'Bảng công vừa thay đổi. Hãy tải lại rồi kiểm tra lại.',
+    TIMESHEET_HAS_UNRESOLVED_DAYS: 'Còn ngày chấm công chưa hoàn tất, chưa thể xác nhận.',
     REQUEST_NOT_FOUND: 'Không tìm thấy đơn này.',
     DEPARTMENT_MANAGER_NOT_FOUND: 'Bạn chưa được gán phụ trách phòng ban nào. Vui lòng liên hệ HR.',
     OVERTIME_ANNUAL_LIMIT_EXCEEDED: 'Bạn đã vượt giới hạn tăng ca trong năm.',
@@ -332,8 +470,22 @@ export function friendlyEmployeeError(error: unknown): string {
     OVERTIME_REQUEST_WINDOW_INVALID: 'Giờ bắt đầu phải sớm hơn giờ kết thúc.',
     OVERTIME_OVERLAP: 'Khung giờ này đang trùng với một đăng ký tăng ca khác.',
     OVERTIME_RETROACTIVE_REASON_REQUIRED: 'Đăng ký tăng ca muộn cần nêu rõ lý do khai báo muộn.',
+    ATTENDANCE_CONFIRMATION_STALE: 'Dữ liệu đã thay đổi. Hãy tải lại xem trước rồi gửi lại.',
+    ATTENDANCE_CONFIRMATION_DUPLICATE: 'Ngày này đã có yêu cầu xác nhận công đang giữ lượt.',
+    ATTENDANCE_CONFIRMATION_DISABLED: 'Tính năng xác nhận công hiện chưa được bật. Vui lòng liên hệ HR.',
+    ATTENDANCE_CONFIRMATION_FUTURE_DATE_FORBIDDEN: 'Không thể xác nhận công cho ngày tương lai.',
+    ATTENDANCE_CONFIRMATION_PAST_DATE_REQUIRED: 'Chỉ có thể gửi xác nhận công cho ngày đã qua.',
+    MONTHLY_CONFIRMATION_LIMIT_EXCEEDED: 'Đã hết lượt xác nhận công trong tháng.',
+    ALREADY_FULL_WORK_CREDIT: 'Ngày này bạn đã chấm đủ 1 công, không cần xác nhận công.',
+    ALREADY_COMPLETE: 'Ngày này đã đủ mốc công, không thể ghi đè.',
+    NO_WORK_OBLIGATION: 'Ngày này không có nghĩa vụ làm việc cần bổ sung.',
+    NEEDS_MANUAL_REVIEW: 'Dữ liệu chấm công của ngày này cần HR kiểm tra trước khi tạo yêu cầu.',
+    TIMESHEET_ALREADY_ACKNOWLEDGED: 'Bảng công tháng này bạn đã xác nhận, không thể gửi thêm yêu cầu xác nhận công.',
+    PERIOD_REQUIRED: 'Chưa có kỳ công phù hợp. Vui lòng liên hệ HR.',
+    TIME_WINDOW_INVALID: 'Giờ vào thực tế phải trước giờ ra thực tế.',
+    ATTENDANCE_CONFIRMATION_PAYLOAD_INVALID: 'Thông tin xác nhận công chưa hợp lệ (lý do từ 10 - 1000 ký tự). Hãy tải lại xem trước.',
     EMPLOYEE_PROFILE_NOT_FOUND: 'Chưa tìm thấy hồ sơ nhân viên. Vui lòng liên hệ HR.',
     PAYSLIP_NOT_FOUND_OR_NOT_ACCESSIBLE: 'Phiếu lương không tồn tại hoặc bạn không có quyền xem.',
   };
-  return messages[code] || messages[raw] || raw;
+  return messages[code] || messages[raw] || isoDatesToVN(raw);
 }

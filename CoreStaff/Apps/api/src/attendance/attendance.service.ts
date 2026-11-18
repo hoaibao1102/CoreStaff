@@ -20,6 +20,7 @@ import {
   AttendanceMethod,
   AttendanceStatus,
   WorkMode,
+  WorkdayType,
 } from '../database/schemas/enums';
 import { HaversineService } from './services/haversine.service';
 import { resolveVerification } from './services/attendance-verification';
@@ -33,6 +34,7 @@ import { TimesheetPeriodDocument, TimesheetPeriodStatus } from '../database/sche
 import { PeriodVersionService } from '../hr/timesheet/period-version.service';
 import { EmployeeDayOverrideDocument } from '../database/schemas/employee-day-override.schema';
 import { LeaveRequestDocument } from '../database/schemas/leave-request.schema';
+import { resolveClassification } from '../hr/leave/day-classification.service';
 
 /** File upload type matching Express/Multer used by NestJS controllers */
 interface UploadedFile {
@@ -92,7 +94,62 @@ export class AttendanceService {
     @Optional() @InjectModel('EmployeeDayOverride') private readonly dayOverrides?: Model<EmployeeDayOverrideDocument>,
     @Optional() @InjectModel('LeaveRequest') private readonly leaveRequests?: Model<LeaveRequestDocument>,
     @Optional() @InjectModel('WorkCreditPolicy') private readonly workCreditPolicies?: Model<any>,
+    @Optional() @InjectModel('CalendarException') private readonly calendarExceptions?: Model<any>,
   ) {}
+
+  /**
+   * SRS §9: the day is classified PUBLIC_HOLIDAY -> WEEKLY_OFF/no schedule ->
+   * WORKING_DAY, regardless of when the employee punches. A punch on a rest day
+   * still creates the record (it is the evidence for a weekend OT request) but
+   * must not be counted as an ordinary working day.
+   * Without the calendar model (legacy unit constructors) the old default holds.
+   */
+  private async resolveWorkdayType(
+    organizationId: string,
+    employeeId: string,
+    workDate: string,
+    assignmentShift: any,
+    session?: ClientSession,
+  ): Promise<WorkdayType> {
+    if (!this.calendarExceptions) return WorkdayType.WORKING_DAY;
+    const withSession = <T>(query: any): T => (session ? query.session(session) : query);
+    const [exception, resolvedShift] = await Promise.all([
+      withSession<any>(this.calendarExceptions.findOne({ organizationId, date: workDate })).lean(),
+      this.shiftResolver.resolveForEmployeeDate(organizationId, employeeId, workDate, session),
+    ]);
+    const isoWeekday = (() => { const d = new Date(`${workDate}T00:00:00Z`).getUTCDay(); return d === 0 ? 7 : d; })();
+    // A shift pinned on the assignment counts only on the weekdays it declares.
+    const assignmentCoversDay = Boolean(assignmentShift)
+      && (!Array.isArray(assignmentShift.weekdays) || assignmentShift.weekdays.includes(isoWeekday));
+    return resolveClassification({
+      calendarType: exception?.type,
+      hasWorkObligation: Boolean(resolvedShift) || assignmentCoversDay,
+    }).workdayType;
+  }
+
+  /**
+   * AUD-H03: resolve the assignment that is effective on `workDate`. An active
+   * flag alone is not enough: a future-dated or expired row must not decide the
+   * workplace, shift or department. Two different rows with the same start date
+   * are ambiguous and fail closed instead of picking an arbitrary one.
+   */
+  private async findEffectiveAssignment(
+    organizationId: Types.ObjectId,
+    ownerIds: Types.ObjectId[],
+    workDate: string,
+  ): Promise<any | null> {
+    const rows: any[] = await this.assignmentModel
+      .find({
+        organizationId,
+        $or: [{ userId: { $in: ownerIds } }, { employeeId: { $in: ownerIds } }],
+        active: true,
+      })
+      .populate('workplaceId')
+      .populate('shiftTemplateId')
+      .populate('departmentId')
+      .lean();
+    return pickEffectiveAssignment(rows, workDate);
+  }
 
   private async appliedLeave(organizationId: Types.ObjectId, employeeId: Types.ObjectId, workDate: string) {
     if (!this.dayOverrides) return null;
@@ -121,6 +178,21 @@ export class AttendanceService {
    * TASK-073 — Resolve active timesheet period for a workDate.
    * Returns periodId so attendance_days can reference which period it belongs to.
    */
+  /**
+   * Punches must not depend on HR having created the period yet (periods are
+   * created manually). A missing period is tolerated: the day is stored without
+   * a periodId and linked when the period is created. A covering period that is
+   * closed / payroll-claimed (or any other failure) still blocks the punch.
+   */
+  private async claimPeriodIfAny(organizationId: string, workDate: string, session: ClientSession) {
+    try {
+      return await this.periodVersion.claimForWorkDate(organizationId, workDate, session);
+    } catch (error: any) {
+      if (error?.message === 'PERIOD_REQUIRED') return null;
+      throw error;
+    }
+  }
+
   private async resolvePeriodId(organizationId: Types.ObjectId, workDate: string): Promise<string | null> {
     const period = await this.periodModel.findOne({
       organizationId,
@@ -157,16 +229,7 @@ export class AttendanceService {
     }
 
     // 1. Tìm Assignment hiệu lực
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: { $in: possibleEmpIds } }, { employeeId: { $in: possibleEmpIds } }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId')
-      .lean();
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, possibleEmpIds, workDate);
 
     const workplace = assignment?.workplaceId;
     // An explicit employee assignment is more specific than an organization or
@@ -212,11 +275,13 @@ export class AttendanceService {
     }
 
     // Tìm yêu cầu phê duyệt gần nhất trong ngày (nếu có)
+    // QC 2.4 — a cancelled request must never become the day's banner status.
     const latestRequest: any = await this.managerRequestModel
       .findOne({
         organizationId: orgObjectId,
         employeeUserId: empObjectId,
         workDate,
+        status: { $ne: 'CANCELLED' },
       })
       .sort({ createdAt: -1 })
       .lean();
@@ -386,7 +451,7 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
-    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+    const claim = session ? await this.claimPeriodIfAny(organizationId, workDate, session) : null;
 
     // 1. Kiểm tra đã check-in chưa
     const existingDayQuery = this.attendanceDayModel.findOne({
@@ -401,15 +466,7 @@ export class AttendanceService {
     }
 
     // 2. Lấy Assignment và Workplace, Shift
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: empObjectId }, { employeeId: empObjectId }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId');
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, [empObjectId], workDate);
 
     if (!assignment) {
       throw new ConflictException('ASSIGNMENT_NOT_CONFIGURED');
@@ -530,6 +587,8 @@ export class AttendanceService {
       eventId,
     };
 
+    const workdayType = await this.resolveWorkdayType(organizationId, employeeId, workDate, assignment.shiftTemplateId || assignment.shiftId, session);
+
     // 5. Lưu AttendanceDay
     let day: any = existingDay;
     if (!day) {
@@ -539,6 +598,7 @@ export class AttendanceService {
         workDate,
         periodId: periodId ? new Types.ObjectId(periodId) : undefined,
         workMode: dto.workMode,
+        workdayType,
         attendanceStatus: AttendanceStatus.CHECKED_IN,
         overallApprovalStatus: approvalStatus,
         checkInAt: recordedAt,
@@ -553,6 +613,7 @@ export class AttendanceService {
       }, session);
     } else {
       day.workMode = dto.workMode;
+      day.workdayType = workdayType;
       day.attendanceStatus = AttendanceStatus.CHECKED_IN;
       day.overallApprovalStatus = approvalStatus;
       day.checkInAt = recordedAt;
@@ -671,7 +732,7 @@ export class AttendanceService {
     const empObjectId = new Types.ObjectId(employeeId);
     const workDate = this.getTodayWorkDate();
 
-    const claim = session ? await this.periodVersion.claimForWorkDate(organizationId, workDate, session) : null;
+    const claim = session ? await this.claimPeriodIfAny(organizationId, workDate, session) : null;
 
     // 1. Tìm ngày công hiện tại
     const dayQuery = this.attendanceDayModel.findOne({
@@ -700,15 +761,7 @@ export class AttendanceService {
     }
 
     // 2. Lấy Assignment và Workplace
-    const assignment: any = await this.assignmentModel
-      .findOne({
-        organizationId: orgObjectId,
-        $or: [{ userId: empObjectId }, { employeeId: empObjectId }],
-        active: true,
-      })
-      .populate('workplaceId')
-      .populate('shiftTemplateId')
-      .populate('departmentId');
+    const assignment: any = await this.findEffectiveAssignment(orgObjectId, [empObjectId], workDate);
 
     const workplace = assignment?.workplaceId;
     const shift = day.shiftSnapshot || assignment?.shiftTemplateId || assignment?.shiftId;
@@ -1429,4 +1482,25 @@ export class AttendanceService {
 
     return workplaceAddress || clientAddress || undefined;
   }
+}
+
+const dayKey = (value: unknown): string | null => {
+  if (!value) return null;
+  const text = value instanceof Date ? value.toISOString() : String(value);
+  return text.slice(0, 10);
+};
+
+/** Pure resolver, exported for tests. */
+export function pickEffectiveAssignment(rows: any[], workDate: string): any | null {
+  const effective = rows.filter((row) => {
+    const from = dayKey(row.effectiveFrom);
+    const to = dayKey(row.effectiveTo);
+    return (!from || from <= workDate) && (!to || to >= workDate);
+  });
+  if (effective.length === 0) return null;
+  effective.sort((a, b) => (dayKey(b.effectiveFrom) ?? '').localeCompare(dayKey(a.effectiveFrom) ?? ''));
+  if (effective.length > 1 && (dayKey(effective[0].effectiveFrom) ?? '') === (dayKey(effective[1].effectiveFrom) ?? '')) {
+    throw new ConflictException('ASSIGNMENT_OVERLAP');
+  }
+  return effective[0];
 }

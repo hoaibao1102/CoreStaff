@@ -94,3 +94,55 @@ export async function setOrganizationStatus(base: string, organizationId: string
         method: 'POST',
     });
 }
+
+export interface PlatformAuditLogItem {
+    _id: string;
+    eventId: string;
+    occurredAt: string;
+    actorId?: string;
+    actorNameSnapshot?: string;
+    actorEmailSnapshot?: string;
+    actorRoleSnapshot?: string;
+    action: string;
+    targetType: string;
+    targetId?: string;
+    targetSummary?: string;
+    targetOrganizationId?: string;
+    outcome: 'SUCCEEDED' | 'FAILED' | string;
+    reason?: string;
+    source?: string;
+    ip?: string;
+    userAgent?: string;
+    details?: Record<string, unknown>;
+}
+
+export interface PlatformAuditPage {
+    items: PlatformAuditLogItem[];
+    total: number;
+    /** Every action the platform audit can hold, for the filter. */
+    actions: string[];
+}
+
+export interface PlatformAuditFilters {
+    action?: string;
+    outcome?: string;
+    organizationId?: string;
+    /** YYYY-MM-DD */
+    from?: string;
+    to?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+}
+
+export async function getPlatformAuditLogs(base: string, filters: PlatformAuditFilters = {}): Promise<PlatformAuditPage> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== '') query.set(key, String(value));
+    }
+    const data = await platformRequest<Partial<PlatformAuditPage> | PlatformAuditLogItem[]>(
+        base, `api/platform/audit-logs${query.size ? `?${query}` : ''}`, { method: 'GET' },
+    );
+    if (Array.isArray(data)) return { items: data, total: data.length, actions: [] };
+    return { items: data?.items ?? [], total: data?.total ?? 0, actions: data?.actions ?? [] };
+}

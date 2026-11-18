@@ -11,6 +11,7 @@ import {
     Coins,
     Plus,
     UsersRound,
+    UserPlus,
 } from 'lucide-react';
 import { Badge } from '@/components/badge';
 import type { AuthUser } from '../../services/auth';
@@ -28,6 +29,8 @@ import {
     EMPLOYMENT_STATUS_LABELS,
     EMPLOYMENT_STATUS_BADGE,
     EMPLOYMENT_STATUS_TRANSITIONS,
+    CORE_EMPLOYMENT_STATUSES,
+    getEffectiveStatus,
     EMPLOYMENT_TYPE_LABELS,
     GENDER_LABELS,
     type EmploymentStatus,
@@ -56,7 +59,6 @@ import {
     DEPENDENT_RELATIONSHIP_LABELS,
 } from '../../services/hrService';
 import {
-    deriveInsuranceSalary,
     listSalaryProfiles,
     getOrganizationAllowances,
     type SalaryProfile,
@@ -73,6 +75,7 @@ import {
     validateEditJoinDate,
     validateStatusEffectiveDate,
 } from './validation';
+import { formatVN } from '@/lib/datetime';
 
 /* ───────── Helpers ───────── */
 function formatVnd(val?: number | null): string {
@@ -196,6 +199,8 @@ export function EmployeeDetailDialog(props: {
     employeeId: string;
     onClose: () => void;
     onChanged?: () => void;
+    /** Nghỉ việc rồi quay lại: mở form tạo hồ sơ mới với thông tin đã prefill. */
+    onRehire?: (employee: EmployeeProfile) => void;
 }) {
     return (
         <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }}>
@@ -222,11 +227,13 @@ function EmployeeDetailContent({
     apiBase,
     employeeId,
     onChanged,
+    onRehire,
 }: {
     user: AuthUser;
     apiBase: string;
     employeeId: string;
     onChanged?: () => void;
+    onRehire?: (employee: EmployeeProfile) => void;
 }) {
     const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
     const [history, setHistory] = useState<EmploymentHistoryRecord[]>([]);
@@ -285,18 +292,14 @@ function EmployeeDetailContent({
         citizenId: '',
         taxCode: '',
         socialInsuranceCode: '',
-        bankAccount: '',
     });
     const [personalErrors, setPersonalErrors] = useState<Record<string, string | null>>({});
 
-    /* Tab 2: Employment info form state */
+    /* Tab 2: Employment info form state — QC 3.2/4.4/4.8: no manager, workplace or employment type. */
     const [employmentForm, setEmploymentForm] = useState({
-        employmentType: '' as EmploymentType | '',
         joinDate: '',
         departmentId: '',
         positionId: '',
-        directManagerId: '',
-        workplaceId: '',
     });
     const [employmentErrors, setEmploymentErrors] = useState<Record<string, string | null>>({});
 
@@ -313,32 +316,23 @@ function EmployeeDetailContent({
         setLoading(true);
         setError(null);
         try {
-            const [data, deptList, posList, workplaceList, empList] = await Promise.all([
+            const [data, deptList, posList] = await Promise.all([
                 getEmployeeById(apiBase, employeeId),
                 getDepartments(apiBase, true).catch(() => []),
                 getPositions(apiBase, { activeOnly: true }).catch(() => []),
-                getWorkplaces(apiBase).catch(() => []),
-                getEmployees(apiBase).catch(() => ({ employees: [] })),
             ]);
 
             setDepartments(Array.isArray(deptList) ? deptList : []);
             setPositions(Array.isArray(posList) ? posList : []);
-            setWorkplaces(Array.isArray(workplaceList) ? workplaceList : []);
-            const allEmps: EmployeeProfile[] = Array.isArray(empList) ? empList : (empList?.employees ?? []);
-            setManagers(allEmps.filter(e => e.userId !== data.userId));
 
             // Build lookup maps for client-side name resolution
             const deptMap = new Map((Array.isArray(deptList) ? deptList : []).map(d => [d._id, d.name]));
             const posMap = new Map((Array.isArray(posList) ? posList : []).map(p => [p._id, p.name]));
-            const wpMap = new Map((Array.isArray(workplaceList) ? workplaceList : []).map(w => [w._id, w.name]));
-            const mgrMap = new Map(allEmps.map(e => [e.userId, e.fullName || e.employeeCode]));
 
             const enriched: EmployeeProfile = {
                 ...data,
                 departmentName: data.departmentId ? (deptMap.get(data.departmentId) ?? data.departmentName) : undefined,
                 positionName: data.positionId ? (posMap.get(data.positionId) ?? data.positionName) : undefined,
-                workplaceName: data.workplaceId ? (wpMap.get(data.workplaceId) ?? data.workplaceName) : undefined,
-                managerName: data.directManagerId ? (mgrMap.get(data.directManagerId) ?? data.managerName) : undefined,
             };
 
             setEmployee(enriched);
@@ -357,16 +351,12 @@ function EmployeeDetailContent({
                 citizenId: data.citizenId || '',
                 taxCode: data.taxCode || '',
                 socialInsuranceCode: data.socialInsuranceCode || '',
-                bankAccount: data.bankAccount || '',
             });
 
             setEmploymentForm({
-                employmentType: data.employmentType || '',
                 joinDate: formattedJoinDate,
                 departmentId: data.departmentId || '',
                 positionId: data.positionId || '',
-                directManagerId: data.directManagerId || '',
-                workplaceId: data.workplaceId || '',
             });
         } catch (err: unknown) {
             const status = (err as any)?.status;
@@ -493,9 +483,13 @@ function EmployeeDetailContent({
         const joinDateError = validateEditJoinDate(employmentForm.joinDate);
         if (joinDateError) errors.joinDate = joinDateError;
 
+        if (employmentForm.departmentId && !employmentForm.positionId) {
+            errors.positionId = 'Vui lòng chọn chức danh cho phòng ban đã chọn.';
+        }
+
         if (Object.keys(errors).length > 0) {
             setEmploymentErrors(errors);
-            toast.warning('Vui lòng kiểm tra thông tin', 'Ngày vào làm chưa hợp lệ.');
+            toast.warning('Vui lòng kiểm tra thông tin', errors.positionId || 'Ngày vào làm chưa hợp lệ.');
             return;
         }
 
@@ -514,15 +508,11 @@ function EmployeeDetailContent({
             // Re-resolve names
             const deptMap = new Map(departments.map(d => [d._id, d.name]));
             const posMap = new Map(positions.map(p => [p._id, p.name]));
-            const wpMap = new Map(workplaces.map(w => [w._id, w.name]));
-            const mgrMap = new Map(managers.map(m => [m.userId, m.fullName || m.employeeCode]));
 
             const enriched: EmployeeProfile = {
                 ...updated,
                 departmentName: updated.departmentId ? (deptMap.get(updated.departmentId) ?? updated.departmentName) : undefined,
                 positionName: updated.positionId ? (posMap.get(updated.positionId) ?? updated.positionName) : undefined,
-                workplaceName: updated.workplaceId ? (wpMap.get(updated.workplaceId) ?? updated.workplaceName) : undefined,
-                managerName: updated.directManagerId ? (mgrMap.get(updated.directManagerId) ?? updated.managerName) : undefined,
             };
 
             setEmployee(prev => prev ? { ...prev, ...enriched } : enriched);
@@ -537,12 +527,16 @@ function EmployeeDetailContent({
         }
     };
 
+    const effectiveStatus = employee ? getEffectiveStatus(employee.employmentStatus, employee.endDate) : 'ACTIVE';
+
     /* ── Tab 3: Status Change Validation & Save ── */
     const validateStatusChange = useCallback((): boolean => {
         const errors: Record<string, string | null> = {};
 
         if (!statusForm.newStatus) {
             errors.newStatus = 'Vui lòng chọn trạng thái mới.';
+        } else if (employee && statusForm.newStatus === getEffectiveStatus(employee.employmentStatus, employee.endDate)) {
+            errors.newStatus = 'Nhân viên hiện đã ở trạng thái này. Vui lòng chọn trạng thái mới.';
         }
 
         const effectiveDateError = validateStatusEffectiveDate(statusForm.effectiveDate);
@@ -550,7 +544,7 @@ function EmployeeDetailContent({
 
         setStatusErrors(errors);
         return Object.keys(errors).length === 0;
-    }, [statusForm]);
+    }, [statusForm, employee]);
 
     const handleStatusChange = async () => {
         if (!validateStatusChange()) {
@@ -576,7 +570,13 @@ function EmployeeDetailContent({
             setStatusForm({ newStatus: '', effectiveDate: '', reason: '' });
             onChanged?.();
             await loadHistory();
-            toast.success('Cập nhật trạng thái thành công', 'Trạng thái nhân sự và lịch sử thay đổi đã được cập nhật.');
+            const impact = (updated as any)?.offboarding;
+            toast.success(
+                'Cập nhật trạng thái thành công',
+                impact
+                    ? `Đã chấm dứt ${impact.contractsTerminated} hợp đồng, gỡ ${impact.assignmentsClipped + impact.assignmentsDeactivated} phân công, ${impact.managerAssignmentsClosed} phân công quản lý, huỷ ${impact.leaveRequestsCancelled} đơn nghỉ và khoá tài khoản.`
+                    : 'Trạng thái nhân sự và lịch sử thay đổi đã được cập nhật.',
+            );
         } catch (err: unknown) {
             const code = (err as any)?.code;
             const message = code === 'EMPLOYMENT_STATUS_TRANSITION_INVALID'
@@ -622,8 +622,9 @@ function EmployeeDetailContent({
     }
 
     const validTransitions = employee
-        ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[employee.employmentStatus] || []
+        ? (EMPLOYMENT_STATUS_TRANSITIONS as Record<string, string[]>)[effectiveStatus] || []
         : [];
+    const isTerminal = employee?.employmentStatus === 'RESIGNED' || employee?.employmentStatus === 'TERMINATED';
 
     return (
         <>
@@ -661,19 +662,19 @@ function EmployeeDetailContent({
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[employee.employmentStatus]}`}>
-                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}
+                                    <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[effectiveStatus]}`}>
+                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]}
                                     </span>
                                 </div>
                             </CardContent>
                         </Card>
 
                         {/* 3 Sub-Tabs Navigation */}
-                        <div className="flex border-b border-border/80 gap-1 sm:gap-2">
+                        <div className="flex flex-wrap justify-start border-b border-border/80 gap-1 sm:gap-2">
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'personal'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -686,7 +687,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'employment'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -699,7 +700,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'compensation'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -717,7 +718,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'tax'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -735,7 +736,7 @@ function EmployeeDetailContent({
                             <button
                                 type="button"
                                 className={cn(
-                                    "flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-all",
+                                    "flex items-center justify-start gap-2 border-b-2 px-3.5 py-2.5 text-left text-sm font-medium transition-all",
                                     activeTab === 'status'
                                         ? "border-primary text-primary font-semibold"
                                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
@@ -856,11 +857,6 @@ function EmployeeDetailContent({
                                                 value={personalForm.socialInsuranceCode}
                                                 onChange={(v) => setPersonalForm(prev => ({ ...prev, socialInsuranceCode: v.replace(/[^\d]/g, '').slice(0, 12) }))}
                                             />
-                                            <EditField
-                                                label="Tài khoản ngân hàng"
-                                                value={personalForm.bankAccount}
-                                                onChange={(v) => setPersonalForm(prev => ({ ...prev, bankAccount: v.replace(/[^\d]/g, '').slice(0, 17) }))}
-                                            />
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -878,8 +874,8 @@ function EmployeeDetailContent({
                                 >
                                     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         <FieldRow label="Mã nhân viên" value={employee.employeeCode} />
-                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
-                                        <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('vi-VN') : undefined} />
+                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? formatVN(employee.joinDate) : undefined} />
+                                        <FieldRow label="Ngày sinh" value={employee.dateOfBirth ? formatVN(employee.dateOfBirth) : undefined} />
                                         <FieldRow label="Giới tính" value={employee.gender ? (GENDER_LABELS as Record<string, string>)[employee.gender] : undefined} />
                                         <FieldRow label="Số điện thoại" value={employee.phone} />
                                         <FieldRow label="Email" value={employee.email} />
@@ -887,7 +883,6 @@ function EmployeeDetailContent({
                                         <FieldRow label="CCCD/CMND" value={employee.citizenId} />
                                         <FieldRow label="Mã số thuế" value={employee.taxCode} />
                                         <FieldRow label="Số BHXH" value={employee.socialInsuranceCode} />
-                                        <FieldRow label="Tài khoản ngân hàng" value={employee.bankAccount} />
                                     </dl>
                                 </ProfileSection>
                             )}
@@ -905,11 +900,11 @@ function EmployeeDetailContent({
                                                 </div>
                                                 <div>
                                                     <CardTitle className="text-base">Chỉnh sửa thông tin công việc</CardTitle>
-                                                    <p className="text-sm text-muted-foreground">Cập nhật phòng ban, chức danh, quản lý và nơi làm việc.</p>
+                                                    <p className="text-sm text-muted-foreground">Cập nhật phòng ban, chức danh và nơi làm việc.</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button size="sm" onClick={handleSaveEmployment} disabled={savingEmployment}>
+                                                <Button size="sm" onClick={handleSaveEmployment} disabled={savingEmployment || (!!employmentForm.departmentId && !employmentForm.positionId)}>
                                                     <Save className="mr-1.5 h-4 w-4" />
                                                     {savingEmployment ? 'Đang lưu…' : 'Lưu thông tin công việc'}
                                                 </Button>
@@ -922,21 +917,6 @@ function EmployeeDetailContent({
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                            {/* Loại lao động */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-employmentType" required>Loại lao động</FormLabel>
-                                                <select
-                                                    id="edit-employmentType"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.employmentType}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, employmentType: e.target.value as EmploymentType }))}
-                                                >
-                                                    {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([key, label]) => (
-                                                        <option key={key} value={key}>{label}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
                                             {/* Ngày vào làm */}
                                             <EditField
                                                 label="Ngày vào làm"
@@ -954,7 +934,10 @@ function EmployeeDetailContent({
                                                     id="edit-departmentId"
                                                     className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                     value={employmentForm.departmentId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value, positionId: '' }))}
+                                                    onChange={(e) => {
+                                                        setEmploymentForm(prev => ({ ...prev, departmentId: e.target.value, positionId: '' }));
+                                                        if (employmentErrors.positionId) setEmploymentErrors(prev => ({ ...prev, positionId: null }));
+                                                    }}
                                                 >
                                                     <option value="">Chưa chọn phòng ban</option>
                                                     {departments.map((d) => (
@@ -965,53 +948,25 @@ function EmployeeDetailContent({
 
                                             {/* Chức danh — chỉ hiện chức danh thuộc phòng ban đã chọn */}
                                             <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-positionId">Chức danh</FormLabel>
+                                                <FormLabel htmlFor="edit-positionId" required={!!employmentForm.departmentId}>Chức danh</FormLabel>
                                                 <select
                                                     id="edit-positionId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                                                    className={`block h-10 w-full rounded-lg border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${employmentErrors.positionId ? 'border-destructive ring-1 ring-destructive' : 'border-input'}`}
                                                     value={employmentForm.positionId}
                                                     disabled={!employmentForm.departmentId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, positionId: e.target.value }))}
+                                                    onChange={(e) => {
+                                                        setEmploymentForm(prev => ({ ...prev, positionId: e.target.value }));
+                                                        if (employmentErrors.positionId) setEmploymentErrors(prev => ({ ...prev, positionId: null }));
+                                                    }}
                                                 >
-                                                    <option value="">Chưa chọn chức danh</option>
+                                                    <option value="">{employmentForm.departmentId ? 'Chọn chức danh' : 'Chưa chọn phòng ban'}</option>
                                                     {positions.filter((p) => p.departmentId === employmentForm.departmentId).map((p) => (
                                                         <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
                                                     ))}
                                                 </select>
-                                            </div>
-
-                                            {/* Quản lý trực tiếp */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-directManagerId">Quản lý trực tiếp</FormLabel>
-                                                <select
-                                                    id="edit-directManagerId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.directManagerId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, directManagerId: e.target.value }))}
-                                                >
-                                                    <option value="">Chưa chọn quản lý</option>
-                                                    {managers.map((m) => (
-                                                        <option key={m.userId} value={m.userId}>
-                                                            {m.fullName || m.employeeCode} ({m.employeeCode})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            {/* Nơi làm việc */}
-                                            <div className="space-y-1.5">
-                                                <FormLabel htmlFor="edit-workplaceId">Nơi làm việc</FormLabel>
-                                                <select
-                                                    id="edit-workplaceId"
-                                                    className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    value={employmentForm.workplaceId}
-                                                    onChange={(e) => setEmploymentForm(prev => ({ ...prev, workplaceId: e.target.value }))}
-                                                >
-                                                    <option value="">Chưa chọn nơi làm việc</option>
-                                                    {workplaces.map((w) => (
-                                                        <option key={w._id} value={w._id}>{w.name} ({w.code})</option>
-                                                    ))}
-                                                </select>
+                                                {employmentErrors.positionId && (
+                                                    <p className="text-xs text-destructive">{employmentErrors.positionId}</p>
+                                                )}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -1030,13 +985,11 @@ function EmployeeDetailContent({
                                 >
                                     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         <FieldRow label="Loại lao động" value={(EMPLOYMENT_TYPE_LABELS as Record<string, string>)[employee.employmentType]} />
-                                        <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]} />
-                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? new Date(employee.joinDate).toLocaleDateString('vi-VN') : undefined} />
-                                        <FieldRow label="Ngày kết thúc" value={employee.endDate ? new Date(employee.endDate).toLocaleDateString('vi-VN') : undefined} />
+                                        <FieldRow label="Trạng thái" value={(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]} />
+                                        <FieldRow label="Ngày vào làm" value={employee.joinDate ? formatVN(employee.joinDate) : undefined} />
+                                        <FieldRow label="Ngày kết thúc" value={employee.endDate ? formatVN(employee.endDate) : undefined} />
                                         <FieldRow label="Phòng ban" value={employee.departmentName || undefined} />
                                         <FieldRow label="Chức danh" value={employee.positionName || undefined} />
-                                        <FieldRow label="Quản lý trực tiếp" value={employee.managerName || undefined} />
-                                        <FieldRow label="Nơi làm việc" value={employee.workplaceName || undefined} />
                                     </dl>
                                 </ProfileSection>
                             )}
@@ -1077,8 +1030,8 @@ function EmployeeDetailContent({
                                                     <div>
                                                         <CardTitle className="text-base">Mức lương & Đóng bảo hiểm</CardTitle>
                                                         <p className="text-sm text-muted-foreground">
-                                                            Hiệu lực từ: {new Date(salaryProfile.effectiveFrom).toLocaleDateString('vi-VN')}
-                                                            {salaryProfile.effectiveTo ? ` đến ${new Date(salaryProfile.effectiveTo).toLocaleDateString('vi-VN')}` : ' (Hiện tại)'}
+                                                            Hiệu lực từ: {formatVN(salaryProfile.effectiveFrom)}
+                                                            {salaryProfile.effectiveTo ? ` đến ${formatVN(salaryProfile.effectiveTo)}` : ' (Hiện tại)'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1097,7 +1050,7 @@ function EmployeeDetailContent({
                                         <CardContent>
                                             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                                 <FieldRow label="Lương cơ bản" value={formatVnd(salaryProfile.baseSalary)} />
-                                                <FieldRow label="Lương đóng BHXH (tự tính)" value={formatVnd(deriveInsuranceSalary(salaryProfile.baseSalary, salaryProfile.allowances))} />
+                                                <FieldRow label="Lương đóng BH" value={formatVnd(salaryProfile.insuranceSalary ?? 0)} />
                                                 {salaryProfile.probationJobSalary ? (
                                                     <FieldRow label="Lương theo công việc thử việc" value={formatVnd(salaryProfile.probationJobSalary)} />
                                                 ) : null}
@@ -1172,7 +1125,7 @@ function EmployeeDetailContent({
                                                                             "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
                                                                             orgAllowance?.insuranceBased ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                                                                         )}>
-                                                                            {orgAllowance?.insuranceBased ? 'Tính đóng BHXH' : 'Không đóng BHXH'}
+                                                                            {orgAllowance?.insuranceBased ? 'Tính đóng BH' : 'Không đóng BH'}
                                                                         </span>
                                                                         {orgAllowance?.prorated && (
                                                                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
@@ -1280,7 +1233,7 @@ function EmployeeDetailContent({
                                                         </div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                             {dep.dateOfBirth && (
-                                                                <p>Ngày sinh: {new Date(dep.dateOfBirth).toLocaleDateString('vi-VN')}</p>
+                                                                <p>Ngày sinh: {formatVN(dep.dateOfBirth)}</p>
                                                             )}
                                                             {dep.idCardNumber && (
                                                                 <p>CCCD: {dep.idCardNumber}</p>
@@ -1331,6 +1284,19 @@ function EmployeeDetailContent({
                                                 <p className="text-sm text-muted-foreground">Trạng thái nhân sự và quyền chuyển tiếp.</p>
                                             </div>
                                         </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                        {isTerminal && onRehire && (
+                                            <Button
+                                                id="employee-rehire-trigger"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => onRehire(employee)}
+                                                title="Tạo hồ sơ mới cho người quay lại làm việc. Hồ sơ cũ vẫn được giữ làm lịch sử."
+                                            >
+                                                <UserPlus className="mr-1.5 h-4 w-4" />
+                                                Tuyển lại nhân sự
+                                            </Button>
+                                        )}
                                         <Button
                                             id="employee-status-trigger"
                                             size="sm"
@@ -1341,6 +1307,7 @@ function EmployeeDetailContent({
                                             <Shield className="mr-1.5 h-4 w-4" />
                                             Thay đổi trạng thái
                                         </Button>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -1348,8 +1315,8 @@ function EmployeeDetailContent({
                                         <div>
                                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trạng thái</p>
                                             <div className="mt-1">
-                                                <span className={`inline-flex rounded-full px-3.5 py-1 text-sm font-semibold ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[employee.employmentStatus]}`}>
-                                                    {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus]}
+                                                <span className={`inline-flex rounded-full px-3.5 py-1 text-sm font-semibold ${(EMPLOYMENT_STATUS_BADGE as Record<string, string>)[effectiveStatus]}`}>
+                                                    {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus]}
                                                 </span>
                                             </div>
                                         </div>
@@ -1357,7 +1324,7 @@ function EmployeeDetailContent({
                                             <div>
                                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ngày kết thúc</p>
                                                 <p className="text-sm font-medium text-foreground mt-1">
-                                                    {new Date(employee.endDate).toLocaleDateString('vi-VN')}
+                                                    {formatVN(employee.endDate)}
                                                 </p>
                                             </div>
                                         )}
@@ -1409,7 +1376,7 @@ function EmployeeDetailContent({
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground mt-1">
-                                                            Hiệu lực: {new Date(record.effectiveDate).toLocaleDateString('vi-VN')}
+                                                            Hiệu lực: {formatVN(record.effectiveDate)}
                                                             {record.reason && ` · Lý do: ${record.reason}`}
                                                         </p>
                                                     </div>
@@ -1418,7 +1385,7 @@ function EmployeeDetailContent({
                                                             Bởi {record.changedByName || record.changedBy}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground/80 mt-0.5">
-                                                            {new Date(record.createdAt).toLocaleDateString('vi-VN')}
+                                                            {formatVN(record.createdAt)}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1449,7 +1416,7 @@ function EmployeeDetailContent({
                             <div>
                                 <DialogTitle>Thay đổi trạng thái</DialogTitle>
                                 <DialogDescription className="mt-1.5">
-                                    Trạng thái hiện tại: {employee ? (EMPLOYMENT_STATUS_LABELS as Record<string, string>)[employee.employmentStatus] : '—'}
+                                    Trạng thái hiện tại: {employee ? (EMPLOYMENT_STATUS_LABELS as Record<string, string>)[effectiveStatus] : '—'}
                                 </DialogDescription>
                             </div>
                         </div>
@@ -1470,9 +1437,13 @@ function EmployeeDetailContent({
                                 aria-invalid={!!statusErrors.newStatus}
                             >
                                 <option value="">Chọn trạng thái mới</option>
-                                {validTransitions.map((status) => (
-                                    <option key={status} value={status}>
-                                        {(EMPLOYMENT_STATUS_LABELS as Record<string, string>)[status]}
+                                {CORE_EMPLOYMENT_STATUSES.map(({ value, label }) => (
+                                    <option
+                                        key={value}
+                                        value={value}
+                                        disabled={value === effectiveStatus}
+                                    >
+                                        {label} {value === effectiveStatus ? '(Hiện tại)' : ''}
                                     </option>
                                 ))}
                             </select>
@@ -1510,6 +1481,20 @@ function EmployeeDetailContent({
                             />
                             <p className="text-right text-xs text-muted-foreground">{statusForm.reason.length}/500</p>
                         </div>
+
+                        {(statusForm.newStatus === 'RESIGNED' || statusForm.newStatus === 'TERMINATED') && (
+                            <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <p className="font-medium">Hệ thống sẽ tự động thực hiện:</p>
+                                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                                    <li>Chấm dứt hợp đồng lao động đang hiệu lực/nháp.</li>
+                                    <li>Kết thúc phân công phòng ban, ca làm tại ngày hiệu lực; huỷ phân công tương lai.</li>
+                                    <li>Thu hồi vai trò Trưởng phòng (nếu có).</li>
+                                    <li>Huỷ đơn nghỉ phép bắt đầu sau ngày hiệu lực.</li>
+                                    <li>Đăng xuất mọi thiết bị và khoá tài khoản đăng nhập.</li>
+                                </ul>
+                                <p className="mt-1 text-xs">Thao tác không thể hoàn tác.</p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-muted/30 px-6 py-5">

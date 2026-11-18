@@ -11,13 +11,15 @@ import { UserDocument } from '../database/schemas/user.schema';
 import { UserSessionDocument } from '../database/schemas/user-session.schema';
 import { ManagerAssignmentDocument } from '../database/schemas/manager-assignment.schema';
 import { getCookie } from '../common/parse-cookies';
+import { isOriginAllowed } from '../common/origin-policy';
 import { hashToken } from '../auth/strategies/token-strategy';
+import { UserStatus } from '../database/schemas/enums';
 
 @WebSocketGateway({
   cors: {
     origin: (origin, callback) => {
-      // Cho phép origin từ client và credentials
-      callback(null, true);
+      // AUD-C09: same allowlist as HTTP CORS (CORS_ORIGINS); no Origin = native client.
+      callback(null, isOriginAllowed(origin));
     },
     credentials: true,
   },
@@ -58,7 +60,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const user = await this.userModel.findById(session.userId).lean();
-      if (!user) {
+      // AUD-H08: same rule as AuthGuard, only an ACTIVE account may open a socket.
+      if (!user || user.status !== UserStatus.ACTIVE) {
         client.disconnect(true);
         return;
       }
@@ -72,6 +75,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // 1. Gia nhập room cá nhân của user
       client.join(`user:${userIdStr}`);
+      // AUD-H07: addressable rooms so a revoked session / user / tenant can be cut off.
+      client.join(`sess:${tokenHash}`);
+      if (orgIdStr) client.join(`org:${orgIdStr}`);
 
       // 2. Nếu là Quản lý phòng ban (DEPARTMENT_MANAGER) hoặc HR:
       if (user.role === 'DEPARTMENT_MANAGER' || user.role === 'HR') {
@@ -99,10 +105,29 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     } catch (err) {
       console.error('[EventsGateway] handleConnection error:', err);
+      // AUD-H07: fail closed. A half-initialised socket must not stay connected.
+      client.disconnect(true);
     }
   }
 
   handleDisconnect(_client: Socket) {}
+
+  /**
+   * AUD-H07: terminate live sockets after a revocation. Clients reconnect with
+   * their cookie, and handleConnection re-validates session, user and status,
+   * so a still-valid session recovers while a revoked one stays out.
+   */
+  disconnectSession(tokenHash: string) {
+    this.server?.in(`sess:${tokenHash}`).disconnectSockets(true);
+  }
+
+  disconnectUser(userId: string) {
+    this.server?.in(`user:${userId}`).disconnectSockets(true);
+  }
+
+  disconnectOrganization(organizationId: string) {
+    this.server?.in(`org:${organizationId}`).disconnectSockets(true);
+  }
 
   /**
    * Phát thông báo yêu cầu mới (Chấm công Selfie / OT) tới Quản lý phòng ban

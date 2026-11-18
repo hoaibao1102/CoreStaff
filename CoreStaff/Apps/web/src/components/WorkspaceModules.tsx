@@ -138,7 +138,7 @@ const modules: WorkspaceModule[] = [
   {
     id: 'organizations',
     title: 'Organizations',
-    description: 'Quản lý Organization, HR đầu tiên, tenant status và audit platform.',
+    description: 'Quản lý Organization, HR đầu tiên và trạng thái tenant.',
     route: '/platform/organizations',
     status: 'ready',
     icon: Building2,
@@ -146,10 +146,10 @@ const modules: WorkspaceModule[] = [
   },
   {
     id: 'audit-logs',
-    title: 'Platform audit',
-    description: 'Theo dõi audit nền tảng và support mode theo phần quyền System Admin.',
+    title: 'Nhật ký hệ thống',
+    description: 'Thao tác của System Admin (tạo, khóa tổ chức, cấp HR đầu tiên) và sự kiện bảo mật của tài khoản admin.',
     route: '/platform/audit-logs',
-    status: 'planned',
+    status: 'ready',
     icon: ShieldCheck,
     roles: ['SYSTEM_ADMIN'],
   },

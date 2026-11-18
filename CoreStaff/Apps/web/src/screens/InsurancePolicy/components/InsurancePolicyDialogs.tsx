@@ -9,6 +9,7 @@ import { FormError } from '../../../components/form/FormError';
 import { toast } from '../../../components/toast';
 import { INSURANCE_CONTRIBUTION_TYPE, INSURANCE_CONTRIBUTION_TYPE_LABELS, type InsuranceContributionType } from '../../../lib/types';
 import { createInsurancePolicy, hrErrorMessage, type InsurancePolicy, type InsurancePolicyCreateDto } from '../../../services/hrService';
+import { formatVN } from '@/lib/datetime';
 
 const TYPES: InsuranceContributionType[] = [
   INSURANCE_CONTRIBUTION_TYPE.SOCIAL_INSURANCE,
@@ -20,8 +21,7 @@ const VND = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND',
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN');
+  return formatVN(value);
 }
 
 interface TypeRowForm {

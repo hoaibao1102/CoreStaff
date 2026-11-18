@@ -1,13 +1,16 @@
+import { planAttendanceEvidence } from '../attendance-plan';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import { getAttendanceHistory, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type PunchLocation, type TodayAttendance } from '../employee-api';
+import { getAttendanceHistory, getMyLeaveRequests, getTodayAttendance, punchAttendance, friendlyEmployeeError, type AttendanceDay, type AttendanceHistory, type LeaveRequest, type PunchLocation, type TodayAttendance } from '../employee-api';
 import { DayDetailSheet } from '../components/DayDetailSheet';
-import { AttendanceCalendar } from '../components/AttendanceCalendar';
-import { currentWifi } from '../wifi';
+import { AttendanceCalendar, type LeaveMark } from '../components/AttendanceCalendar';
+import { leaveShortTag } from '../components/RequestsCalendar';
+import { currentWifi, wifiDiagnostics, type WifiDiagnostics } from '../wifi';
 import { AppButton, Card, ErrorBanner, ErrorState, LoadingBlock, NoticeBanner, ScreenHeader, SectionTitle, StatusBadge, SuccessBanner, formatDate, formatMinutes, formatTime, shiftTitle, todayKey } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 
 const monthKey = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7);
 
@@ -36,8 +39,10 @@ async function takeSelfie(): Promise<string | undefined> {
 }
 
 export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: string; realtimeRevision?: number }) {
+  const { confirm, dialog } = useConfirmDialog();
   const [today, setToday] = useState<TodayAttendance | null>(null);
   const [history, setHistory] = useState<AttendanceHistory | null>(null);
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [month, setMonth] = useState(monthKey());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,14 +58,35 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
 
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true); setError(null);
-    const [todayResult, historyResult] = await Promise.allSettled([getTodayAttendance(apiBase), getAttendanceHistory(apiBase, month)]);
+    const [todayResult, historyResult, leaveResult] = await Promise.allSettled([getTodayAttendance(apiBase), getAttendanceHistory(apiBase, month), getMyLeaveRequests(apiBase)]);
     if (todayResult.status === 'fulfilled') setToday(todayResult.value);
+    // Danh sách đơn chỉ để đánh dấu lịch: lỗi tải không được làm hỏng màn chấm công.
+    if (leaveResult.status === 'fulfilled') setLeaves(leaveResult.value || []);
     if (historyResult.status === 'fulfilled') setHistory(historyResult.value);
     const failure = todayResult.status === 'rejected' ? todayResult.reason : historyResult.status === 'rejected' ? historyResult.reason : null;
     if (failure) setError(friendlyEmployeeError(failure));
     setLoading(false); setRefreshing(false);
   }, [apiBase, month, realtimeRevision]);
   useEffect(() => { void load(); }, [load]);
+
+  // Lịch chấm công chỉ có ngày HR đã áp dụng nghỉ. Đơn đang chờ duyệt hoặc đã duyệt mà HR chưa áp dụng
+  // vẫn phải thấy được trên lịch, kẻo nhân viên tưởng đơn "biến mất" sau khi quản lý duyệt.
+  const leaveMarks = useMemo(() => {
+    const marks = new Map<string, LeaveMark>();
+    for (const leave of leaves) {
+      const stage = leave.status === 'PENDING_MANAGER' ? 'PENDING' : leave.status === 'APPROVED' ? 'APPROVED' : null;
+      if (!stage) continue;
+      const first = leave.startDate.slice(0, 10), last = (leave.endDate || leave.startDate).slice(0, 10);
+      for (let t = Date.UTC(+first.slice(0, 4), +first.slice(5, 7) - 1, +first.slice(8, 10)), n = 0; n < 62; t += 86400000, n++) {
+        const d = new Date(t).toISOString().slice(0, 10);
+        if (d > last) break;
+        if (d.slice(0, 7) !== month) continue;
+        const existing = marks.get(d);
+        if (!existing || stage === 'PENDING') marks.set(d, { tag: leaveShortTag(leave), stage });
+      }
+    }
+    return marks;
+  }, [leaves, month]);
 
   const actionLabel = today?.availableAction === 'CHECK_IN' ? 'Xác nhận vào ca' : today?.availableAction === 'CHECK_OUT' ? 'Xác nhận ra ca' : 'Ca làm đã hoàn tất';
 
@@ -86,17 +112,26 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
         if (!selfieUri) return;
         await punch({ selfieUri });
       } else {
-        const wifiFirst = today.assignment.hasWifiNetworks !== false;
-        const wifi = wifiFirst ? await currentWifi() : {};
-        if (!(wifiFirst && await accepted({ wifi }))) {
-          setPunchNotice('Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…');
-          const location = await currentLocation();
-          if (!(await accepted({ location, wifi }))) {
-            setPunchNotice('Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.');
-            const selfieUri = await takeSelfie();
-            if (!selfieUri) return;
-            await punch({ location, selfieUri, wifi });
+        // Only attempt the steps the workplace policy allows (AUD-H17).
+        const plan = planAttendanceEvidence(today.assignment);
+        if (!plan.wifi && !plan.gps && !plan.selfie) {
+          throw new PunchError('Nơi làm việc này không cho phép phương thức chấm công nào. Hãy liên hệ HR.');
+        }
+        const wifi = plan.wifi ? await currentWifi() : {};
+        if (!(plan.wifi && await accepted({ wifi }))) {
+          let location: PunchLocation | undefined;
+          if (plan.gps) {
+            setPunchNotice(plan.wifi ? 'Chưa xác thực được Wi-Fi công ty. Đang kiểm tra vị trí GPS…' : 'Đang kiểm tra vị trí GPS…');
+            location = await currentLocation();
+            if (await accepted({ location, wifi })) { setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.'); await load(true); return; }
           }
+          if (!plan.selfie) {
+            throw new PunchError('Chưa xác thực được vị trí chấm công và nơi làm việc không cho phép chụp selfie thay thế.');
+          }
+          setPunchNotice(plan.gps ? 'Vị trí ngoài phạm vi công ty. Chụp ảnh selfie để gửi quản lý duyệt.' : 'Chụp ảnh selfie để gửi quản lý duyệt.');
+          const selfieUri = await takeSelfie();
+          if (!selfieUri) return;
+          await punch({ location, selfieUri, wifi });
         }
       }
       setSuccess(action === 'CHECK_IN' ? 'Đã ghi nhận thời gian vào ca.' : 'Đã ghi nhận thời gian ra ca.');
@@ -112,13 +147,16 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
     if (!today || today.availableAction === 'NONE') return;
     const checkingIn = today.availableAction === 'CHECK_IN';
     const outOffice = today.assignment.workplaceType === 'OUT_OFFICE';
-    Alert.alert(checkingIn ? 'Xác nhận vào ca' : 'Xác nhận ra ca', checkingIn ? `Ghi nhận vào ca tại ${today.assignment.workplaceName}?` : 'Ghi nhận kết thúc ca làm việc hôm nay?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: outOffice ? 'Chụp selfie' : checkingIn ? 'Vào ca' : 'Ra ca', onPress: () => void submit() },
-    ]);
+    confirm({
+      title: checkingIn ? 'Xác nhận vào ca' : 'Xác nhận ra ca',
+      message: checkingIn ? `Ghi nhận vào ca tại ${today.assignment.workplaceName}?` : 'Ghi nhận kết thúc ca làm việc hôm nay?',
+      confirmLabel: outOffice ? 'Chụp selfie' : checkingIn ? 'Vào ca' : 'Ra ca',
+      icon: outOffice ? 'camera-outline' : 'time-outline',
+      onConfirm: () => { void submit(); },
+    });
   };
 
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
+  return <><ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}>
     <ScreenHeader eyebrow="CHẤM CÔNG" title="Chấm công" description="Ghi nhận thời gian và theo dõi công của bạn." />
     {punchNotice ? <NoticeBanner message={punchNotice} /> : null}{punchError ? <ErrorBanner message={punchError} /> : null}{error && (loading || today || history) ? <ErrorBanner message={error} /> : null}{success ? <SuccessBanner message={success} /> : null}
     {loading ? <LoadingBlock /> : error && !today && !history ? <ErrorState message={error} onRetry={() => void load()} /> : <>
@@ -129,17 +167,38 @@ export function AttendanceScreen({ apiBase, realtimeRevision = 0 }: { apiBase: s
         <AppButton variant="accent" label={actionLabel} loading={submitting} disabled={!today || today.availableAction === 'NONE'} onPress={confirmSubmit} />
         {today?.assignment.workplaceType === 'OUT_OFFICE' ? <Text style={styles.heroNote}>Ca ngoài văn phòng có thể yêu cầu vị trí hoặc selfie theo chính sách công ty.</Text> : null}
       </Card>
+      {process.env.EXPO_PUBLIC_WIFI_DEBUG === '1' ? <WifiDebugCard /> : null}
       {today?.attendanceRequirements ? <Card style={styles.leaveCard}><Text style={styles.leaveTitle}>Nghỉ phép đã được HR áp dụng</Text><Text style={styles.leaveText}>Thời gian nghỉ: {intervalText(today.attendanceRequirements.approvedLeaveIntervals)} ({formatMinutes(today.attendanceRequirements.approvedLeaveMinutes)})</Text><Text style={styles.leaveText}>Thời gian còn phải làm: {intervalText(today.attendanceRequirements.requiredWorkingIntervals)} ({formatMinutes(today.attendanceRequirements.requiredWorkingMinutes)})</Text><Text style={styles.leaveText}>Khung chấm công hiệu lực: {today.attendanceRequirements.effectiveCheckInTime || '—'} – {today.attendanceRequirements.effectiveCheckOutTime || '—'}</Text></Card> : today?.pendingLeave ? <Card style={styles.pendingCard}><Text style={styles.pendingTitle}>Đơn nghỉ đang chờ xử lý</Text><Text style={styles.pendingText}>{pendingLeaveText(today.pendingLeave.durationType, today.pendingLeave.requestedStart, today.pendingLeave.requestedEnd)}. Ca làm gốc vẫn được áp dụng cho tới khi quản lý duyệt và HR áp dụng.</Text></Card> : null}
       <View style={styles.metricGrid}><Metric label="Giờ làm" value={formatMinutes(today?.workingMinutes)} /><Metric label="Đi muộn" value={formatMinutes(today?.lateMinutes)} /><Metric label="Về sớm" value={formatMinutes(today?.earlyMinutes)} /></View>
       <View style={styles.monthHeader}><SectionTitle>Lịch sử tháng</SectionTitle><View style={styles.monthControl}><MonthButton label="Tháng trước" symbol="‹" onPress={() => changeMonth(-1)} /><Text style={styles.monthText}>{monthLabel}</Text><MonthButton label="Tháng sau" symbol="›" disabled={!canMoveNext} onPress={() => changeMonth(1)} /></View></View>
-      {history ? <View style={styles.summaryRow}><Summary label="Ngày công" value={history.summary.workingDays} /><Summary label="Ngày đi muộn" value={history.summary.lateDays} /><Summary label="Tăng ca" value={formatMinutes(history.summary.otMinutes)} /></View> : null}
-      <AttendanceCalendar month={month} items={history?.items ?? []} onSelect={setSelectedDay} />
+      {history ? <View style={styles.summaryRow}><Summary label="Ngày công" value={history.summary.workingDays} /><Summary label="Ngày đi muộn" value={history.summary.lateDays} /><Summary label="Ngày về sớm" value={history.summary.earlyDays ?? 0} /><Summary label="Tăng ca (giờ)" value={history.summary.otMinutes > 0 ? (history.summary.otMinutes / 60).toFixed(1) : history.summary.otDays ?? 0} /></View> : null}
+      <AttendanceCalendar month={month} items={history?.items ?? []} leaveMarks={leaveMarks} onSelect={setSelectedDay} />
       {!history?.items.length ? <Text style={styles.emptyText}>Chưa có dữ liệu chấm công trong tháng này.</Text> : null}
     </>}
     <DayDetailSheet day={selectedDay} policy={history?.workCreditPolicy} apiBase={apiBase} onClose={() => setSelectedDay(null)} />
-  </ScrollView>;
+  </ScrollView>{dialog}</>;
 }
 
+/** Dev only: shows what the phone reads so HR can paste the BSSID into the workplace's Wi-Fi list. */
+function WifiDebugCard() {
+  const [info, setInfo] = useState<WifiDiagnostics | null>(null);
+  const [busy, setBusy] = useState(false);
+  const scan = useCallback(async () => { setBusy(true); try { setInfo(await wifiDiagnostics()); } finally { setBusy(false); } }, []);
+  useEffect(() => { void scan(); }, [scan]);
+  const hint = !info ? null
+    : !info.moduleLoaded ? 'Thiếu module native (đang chạy Expo Go?). Cần dev build.'
+    : !info.permission ? 'Chưa cấp quyền Vị trí cho app.'
+    : !info.servicesEnabled ? 'Dịch vụ Vị trí của máy đang tắt.'
+    : !info.bssid ? 'Không đọc được BSSID: chưa kết nối WiFi hoặc OS che dữ liệu.'
+    : null;
+  return <Card style={styles.debugCard}>
+    <Text style={styles.debugTitle}>DEBUG · WiFi đọc được</Text>
+    <Text selectable style={styles.debugLine}>SSID: {info?.ssid ?? '—'}</Text>
+    <Text selectable style={styles.debugLine}>BSSID: {info?.bssid ?? '—'}</Text>
+    {hint ? <Text style={styles.debugHint}>{hint}</Text> : null}
+    <Pressable accessibilityRole="button" onPress={() => void scan()} disabled={busy} style={({ pressed }) => [styles.debugButton, pressed && styles.pressed]}><Text style={styles.debugButtonText}>{busy ? 'Đang đọc…' : 'Đọc lại'}</Text></Pressable>
+  </Card>;
+}
 function attendanceLabel(status?: string) { return ({ NOT_CHECKED_IN: 'Chưa vào ca', CHECKED_IN: 'Đang trong ca', COMPLETED: 'Hoàn thành', DAY_OFF: 'Ngày nghỉ', LOCKED: 'Đã khóa' } as Record<string, string>)[status || ''] || 'Chưa có dữ liệu'; }
 function intervalText(items: Array<{ from: string; to: string }>) { return items.length ? items.map(item => `${item.from}–${item.to}`).join(', ') : 'Không có'; }
 function pendingLeaveText(duration: string, start?: string, end?: string) { if (duration === 'MORNING_HALF') return 'Nghỉ buổi sáng'; if (duration === 'AFTERNOON_HALF') return 'Nghỉ buổi chiều'; if (duration === 'CUSTOM_HOURS') return `Nghỉ theo giờ${start && end ? ` (${start}–${end})` : ''}`; return 'Nghỉ cả ngày'; }
@@ -155,5 +214,6 @@ const styles = StyleSheet.create({
   metricGrid: { flexDirection: 'row', gap: spacing.xs }, metric: { flex: 1, minHeight: 76, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', padding: spacing.xs }, metricValue: { color: colors.ink, fontSize: 14, fontWeight: '800', textAlign: 'center' }, metricLabel: { color: colors.muted, fontSize: 11, marginTop: 4 },
   leaveCard: { backgroundColor: colors.successSoft, borderColor: colors.success }, leaveTitle: { color: colors.successText, fontSize: 13, fontWeight: '800' }, leaveText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 }, pendingCard: { backgroundColor: colors.warningSoft }, pendingTitle: { color: colors.warningText, fontSize: 13, fontWeight: '800' }, pendingText: { color: colors.inkSoft, fontSize: 11, lineHeight: 17, marginTop: 4 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs }, sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' }, monthControl: { flexDirection: 'row', alignItems: 'center', gap: 2 }, monthButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md }, monthButtonDisabled: { opacity: 0.35 }, monthArrow: { color: colors.primary, fontSize: 24, lineHeight: 27, fontWeight: '700' }, monthText: { minWidth: 82, color: colors.inkSoft, fontSize: 12, fontWeight: '800', textAlign: 'center' }, summaryRow: { flexDirection: 'row', backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.sm }, summary: { flex: 1, alignItems: 'center' }, summaryValue: { color: colors.primaryDark, fontSize: 17, fontWeight: '800' }, summaryLabel: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  debugCard: { backgroundColor: colors.warningSoft, gap: 4 }, debugTitle: { color: colors.warningText, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }, debugLine: { color: colors.ink, fontSize: 13, fontWeight: '700' }, debugHint: { color: colors.warningText, fontSize: 12, lineHeight: 17 }, debugButton: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.warningText, marginTop: 4 }, debugButtonText: { color: colors.warningText, fontSize: 12, fontWeight: '800' },
   dayCard: { gap: spacing.sm }, dayTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }, dayDate: { color: colors.ink, fontSize: 14, fontWeight: '800' }, dayTimes: { color: colors.muted, fontSize: 12, marginTop: 5 }, dayMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider }, dayMetaText: { color: colors.inkSoft, fontSize: 11, fontWeight: '700' }, warningText: { color: colors.warningText, fontSize: 11, fontWeight: '700' }, earlyText: { color: colors.dangerText, fontSize: 11, fontWeight: '700' }, blueText: { color: colors.primaryDark, fontSize: 11, fontWeight: '700' }, emptyText: { color: colors.muted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.lg }, pressed: { opacity: 0.7 },
 });
