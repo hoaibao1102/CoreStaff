@@ -7,7 +7,7 @@ import { FormInputField } from '@/components/form/FormInputField';
 import { FormSelectField } from '@/components/form/FormSelectField';
 import { Skeleton } from '@/components/skeleton';
 import { toast } from '@/components/toast';
-import { assignmentErrorMessage, getAssignmentById, isWorkingEmployee, todayIso, updateAssignment, type UpdateAssignmentPayload } from '@/services/assignment.service';
+import { assignmentErrorMessage, getAssignmentById, todayIso, updateAssignment, type UpdateAssignmentPayload } from '@/services/assignment.service';
 import type { Department, EmployeeProfile, Workplace } from '@/services/hrService';
 import { formatDateOnlyVN } from '@/lib/datetime';
 
@@ -130,25 +130,21 @@ export function AssignmentEditDialog({ apiBase, assignmentId, employees, departm
     }
   }
 
-  // Only working employees can be (re)assigned; the current assignee stays
-  // selectable so an existing row never shows an empty select.
-  const employeeOptions = employees
-    .filter(item => isWorkingEmployee(item.employmentStatus) || item.userId === original?.userId)
-    .map(item => ({ value: item.userId, label: (item.fullName || item.employeeCode) + (isWorkingEmployee(item.employmentStatus) ? '' : ' (không còn làm việc)') }));
-  if (original?.userId && !employeeOptions.some(option => option.value === original.userId)) {
-    employeeOptions.unshift({ value: original.userId, label: 'Người dùng chưa có hồ sơ nhân viên' });
-  }
+  // Editing changes where/when one employee works — never who. The employee is
+  // fixed; to move work to someone else, end this assignment and create a new one.
+  const owner = employees.find(item => item.userId === original?.userId);
+  const ownerLabel = owner ? (owner.fullName || owner.employeeCode) : 'Người dùng chưa có hồ sơ nhân viên';
   const departmentOptions = departments.map(item => ({ value: item._id, label: item.name }));
   const workplaceOptions = workplaces.map(item => ({ value: item._id, label: item.name }));
 
   return <Dialog open onOpenChange={open => { if (!open && !submittingRef.current) onClose(); }}>
-    <DialogContent showCloseButton={!submitting} initialFocus={() => document.getElementById('edit-assignment-userId')}>
+    <DialogContent showCloseButton={!submitting} initialFocus={() => document.getElementById('edit-assignment-departmentId')}>
       <DialogHeader className="border-b border-border pr-16"><DialogTitle>Chỉnh sửa phân công</DialogTitle><DialogDescription>Cập nhật đơn vị công tác và thời gian phân công. Các trường có dấu * là bắt buộc.</DialogDescription></DialogHeader>
       {loading ? <div className="space-y-4 px-6 pb-6" role="status" aria-label="Đang tải thông tin phân công">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-11 w-full" />)}</div>
         : notFound ? <div className="px-6 pb-6"><Alert><AlertDescription>Không tìm thấy phân công.</AlertDescription></Alert></div>
           : loadError ? <div className="px-6 pb-6"><Alert variant="destructive"><AlertDescription className="flex flex-wrap items-center justify-between gap-4"><span>Không thể tải thông tin phân công: {loadError}</span><Button variant="outline" className="min-h-11" onClick={() => setRevision(value => value + 1)}>Thử lại</Button></AlertDescription></Alert></div>
             : <form onSubmit={submit} noValidate className="space-y-5 overflow-y-auto px-6 pb-6" aria-busy={submitting}>
-              <FormSelectField id="edit-assignment-userId" label="Nhân viên" required value={form.userId} onChange={event => updateField('userId', event.target.value)} options={employeeOptions} placeholder="Chọn nhân viên" disabled={submitting} error={errors.userId} />
+              <FormInputField id="edit-assignment-userId" label="Nhân viên" value={ownerLabel} readOnly disabled />
               <FormSelectField id="edit-assignment-departmentId" label="Phòng ban" required value={form.departmentId} onChange={event => updateField('departmentId', event.target.value)} options={departmentOptions} placeholder="Chọn phòng ban" disabled={submitting} error={errors.departmentId} />
               <FormSelectField id="edit-assignment-workplaceId" label="Nơi làm việc" value={form.workplaceId} onChange={event => updateField('workplaceId', event.target.value)} options={workplaceOptions} placeholder="Chưa chỉ định" disabled={submitting} error={errors.workplaceId} />
               <div className="grid gap-4 sm:grid-cols-2">

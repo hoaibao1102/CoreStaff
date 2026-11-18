@@ -18,7 +18,7 @@ import { Input } from '../../components/input';
 import { Skeleton } from '../../components/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '../../components/alert';
 import { EmployeeDataState } from '../../components/EmployeeDataState';
-import { EMPLOYMENT_STATUS_LABELS } from '../../lib/types';
+import { EMPLOYMENT_STATUS_LABELS, CORE_EMPLOYMENT_STATUSES } from '../../lib/types';
 import { hrErrorMessage, paginateEmployees, type EligibleEmployeeAccount, type EmployeeProfile } from '../../services/hrService';
 import { useHrResource } from '../../lib/useHrResource';
 import { EmployeeTable } from './components/EmployeeTable';
@@ -150,8 +150,8 @@ function FilterBar({
               onChange={(e) => onStatusChange(e.target.value)}
             >
               <option value="">Tất cả trạng thái</option>
-              {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
+              {CORE_EMPLOYMENT_STATUSES.map(({ value, label }) => (
+                <option key={value} value={value}>
                   {label}
                 </option>
               ))}

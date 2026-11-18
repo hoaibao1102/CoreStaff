@@ -11,6 +11,10 @@ import { UserSessionSchema } from '../../database/schemas/user-session.schema';
 import { AttendanceBonusPolicySchema, OrganizationAllowanceSchema, SalaryProfileSchema } from '../../database/schemas/compensation.schema';
 import { InsuranceProfileSchema } from '../../database/schemas/insurance-profile.schema';
 import { EmploymentContractSchema } from '../../database/schemas/employment-contract.schema';
+import { EmployeeAssignmentSchema } from '../../database/schemas/assignment.schema';
+import { ManagerAssignmentSchema } from '../../database/schemas/manager-assignment.schema';
+import { LeaveRequestSchema } from '../../database/schemas/leave-request.schema';
+import { PeriodVersionModule } from '../timesheet/period-version.module';
 import { EmployeeController } from './employee.controller';
 import { DependentsController } from './dependents.controller';
 import { EmployeeImportController } from './employee-import.controller';
@@ -37,7 +41,12 @@ import { EmployeeImportService } from './services/employee-import.service';
 			// Import may create the contract too — written straight through the model
 			// rather than `EmploymentContractService`, which takes no session.
 			{ name: 'EmploymentContract', schema: EmploymentContractSchema },
+			// Offboarding cascade (offboarding.ts) — resolved via the connection.
+			{ name: 'Assignment', schema: EmployeeAssignmentSchema },
+			{ name: 'ManagerAssignment', schema: ManagerAssignmentSchema },
+			{ name: 'LeaveRequest', schema: LeaveRequestSchema },
 		]),
+		PeriodVersionModule,
 	],
 	controllers: [EmployeeController, DependentsController, EmployeeImportController],
 	providers: [EmployeeService, EmployeeImportService, RolesGuard],
