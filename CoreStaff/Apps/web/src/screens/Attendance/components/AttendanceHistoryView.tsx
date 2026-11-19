@@ -221,7 +221,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
             type="button"
             aria-label="Tháng trước"
             onClick={handlePrevMonth}
-            className="size-6 lg:size-7 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            className="size-11 shrink-0 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-white"
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -232,7 +232,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
             type="button"
             aria-label="Tháng sau"
             onClick={handleNextMonth}
-            className="size-6 lg:size-7 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer"
+            className="size-11 shrink-0 rounded bg-[#272f4e] hover:bg-[#343e66] flex items-center justify-center text-white transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-white"
           >
             <ChevronRight className="size-3.5" />
           </button>
@@ -280,6 +280,9 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
           </div>
         )}
 
+        {/* Preserve seven aligned days; narrow phones scroll this region, not the page. */}
+        <div className="min-w-0 overflow-x-auto" role="region" aria-label="Lịch chấm công, cuộn ngang để xem đủ tuần" tabIndex={0}>
+        <div className="min-w-[352px]">
         {/* Weekday Names */}
         <div className="grid grid-cols-7 gap-1.5 sm:gap-2 lg:gap-3 text-center text-xs sm:text-sm font-bold text-slate-400 pb-1 shrink-0">
           {WEEKDAY_NAMES.map((d) => (
@@ -342,7 +345,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
                   if (day) setActiveDetailDay(day);
                 }}
                 disabled={!day}
-                className={`relative w-full h-full min-h-0 ${cellColorClass} text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-30`}
+                className={`relative w-full h-full min-h-11 min-w-11 ${cellColorClass} text-white rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-white`}
               >
                 <span className="text-xs sm:text-sm md:text-base font-bold text-white leading-none">
                   {dayNum}
@@ -381,6 +384,7 @@ export function AttendanceHistoryView({ apiBase: propApiBase }: AttendanceHistor
             );
           })}
         </div>
+        </div></div>
       </div>
 
       {/* ── Status Badges Legend ───────────────────────────── */}

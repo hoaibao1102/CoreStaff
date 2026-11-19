@@ -1,15 +1,17 @@
 import { useEffect, useState, type ImgHTMLAttributes } from 'react';
-import { tryRefreshSession } from '../services/auth';
+import { authenticatedFetch } from '../services/auth';
+import { getApiBaseSync } from '../config/api';
 
 /** Evidence photos sit behind the session cookie, so a bare <img src> can't load them reliably. */
 const PRIVATE_PATH = '/api/attendance/evidence/';
 
-async function fetchPhoto(url: string, retry = true): Promise<Blob> {
-  const res = await fetch(url, { credentials: 'include' });
-  if (res.status === 401 && retry) {
-    const origin = new URL(url, window.location.href).origin;
-    if (await tryRefreshSession(origin)) return fetchPhoto(url, false);
-  }
+export async function fetchPhoto(url: string): Promise<Blob> {
+  const target = new URL(url, window.location.href);
+  const base = new URL(getApiBaseSync(), window.location.href);
+  if (target.origin !== window.location.origin && target.origin !== base.origin) throw new Error('Untrusted evidence origin');
+  const prefix = target.pathname.slice(0, target.pathname.indexOf(PRIVATE_PATH));
+  if (!target.pathname.includes(PRIVATE_PATH)) throw new Error('Invalid evidence path');
+  const res = await authenticatedFetch(target.origin + prefix, target.pathname.slice(prefix.length) + target.search);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }

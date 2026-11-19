@@ -9,7 +9,7 @@ const health = {
 };
 
 // Exercise both standalone clients without loading Vite or the native runtime.
-function loadClient(platform, fetch, production = false, useDefaults = false) {
+function loadClient(platform, fetch, production = false, useDefaults = false, overrides = {}, runtime = {}) {
   const file = platform === 'web' ? '../src/config/api.ts' : '../../mobile/src/config.ts';
   const source = readFileSync(new URL(file, import.meta.url), 'utf8')
     .replaceAll('import.meta.env', 'testEnv');
@@ -21,27 +21,67 @@ function loadClient(platform, fetch, production = false, useDefaults = false) {
     exports, fetch, AbortController, setTimeout, clearTimeout,
     require: () => ({ Platform: { OS: 'android' } }),
     window: { location: { origin: 'http://web.test' } },
-    __VITE_ENV__: { PROD: String(production), VITE_API_URL: useDefaults ? undefined : 'https://api.test/' },
+    __VITE_ENV__: { PROD: String(production), VITE_API_URL: useDefaults ? undefined : 'https://api.test/', ...overrides },
     testEnv: { PROD: production, VITE_API_URL: useDefaults ? undefined : 'https://api.test/' },
     process: { env: { EXPO_PUBLIC_API_URL: useDefaults ? undefined : 'https://api.test/' } },
     __DEV__: !production,
+    ...runtime,
   });
   return exports;
 }
+
+test('web: production without window falls back to remote for async and sync callers', async () => {
+  const calls = [];
+  const c = loadClient('web', async url => { calls.push(url); return response(); }, true, false, {}, { window: undefined });
+  assert.equal(c.getApiBaseSync(), 'https://api.test');
+  assert.equal((await c.resolveApiBase()).base, 'https://api.test');
+  assert.deepEqual(calls, ['https://api.test/api/healthz']);
+});
+
+test('web: real Vite environment branch selects first-party production and direct opt-in', async () => {
+  for (const direct of [undefined, 'true']) {
+    const c = loadClient('web', async () => response(), false, false, {}, {
+      __VITE_ENV__: undefined,
+      testEnv: { PROD: true, VITE_API_URL: 'https://vite.test/', VITE_API_DIRECT: direct },
+    });
+    const expected = direct ? 'https://vite.test' : 'http://web.test';
+    assert.equal(c.getApiBaseSync(), expected);
+    assert.equal((await c.resolveApiBase()).base, expected);
+  }
+});
+
+test('web: synchronous runtime override precedes process override and production origin', () => {
+  const runtime = { __VITE_API_BASE__: 'https://runtime.test', process: { env: { VITE_API_BASE: 'https://process.test' } } };
+  assert.equal(loadClient('web', null, true, false, {}, runtime).getApiBaseSync(), 'https://runtime.test');
+  assert.equal(loadClient('web', null, true, false, {}, { ...runtime, __VITE_API_BASE__: '' }).getApiBaseSync(), 'https://process.test');
+});
+
+test('web: explicit legacy production opt-in preserves direct API resolution', async () => {
+  const calls = [];
+  const client = loadClient('web', async url => {
+    calls.push(url);
+    return response();
+  }, true, false, { VITE_API_DIRECT: 'true' });
+  assert.equal((await client.resolveApiBase()).base, 'https://api.test');
+  assert.equal(client.getApiBaseSync(), 'https://api.test');
+  assert.deepEqual(calls, ['https://api.test/api/healthz']);
+  assert.equal(client.apiUrl('https://api.test/', 'api/auth/refresh'), 'https://api.test/api/auth/refresh');
+});
 
 function response(body = health, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
 for (const platform of ['web', 'mobile']) {
-  test(`${platform}: defaults to the deployed API in production`, async () => {
+  test(`${platform}: production uses its supported first-party API target`, async () => {
     const calls = [];
     const client = loadClient(platform, async url => {
       calls.push(url);
       return response();
     }, true, true);
     assert.deepEqual((await client.resolveApiBase()).health, health);
-    assert.deepEqual(calls, ['https://18-141-68-40.sslip.io/api/healthz']);
+    assert.deepEqual(calls, [platform === 'web' ? 'http://web.test/api/healthz' : 'https://18-141-68-40.sslip.io/api/healthz']);
+    if (platform === 'web') assert.equal(client.getApiBaseSync(), 'http://web.test');
   });
 
   test(`${platform}: reads the public health contract with one startup request`, async () => {
@@ -119,6 +159,6 @@ for (const platform of ['web', 'mobile']) {
       throw new Error('Network unavailable');
     }, true);
     await assert.rejects(client.resolveApiBase(), /Network unavailable/);
-    assert.deepEqual(calls, ['https://api.test/api/healthz']);
+    assert.deepEqual(calls, [platform === 'web' ? 'http://web.test/api/healthz' : 'https://api.test/api/healthz']);
   });
 }

@@ -373,8 +373,15 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
         attendanceRequirements: todayData.attendanceRequirements,
         pendingLeave: todayData.pendingLeave,
       }));
-    } catch {
-      setLoadError('Không thể tải trạng thái chấm công hôm nay. Vui lòng thử lại.');
+    } catch (error) {
+      const detail = error as { status?: number; code?: string };
+      setLoadError(detail.status === 401
+        ? 'Phiên đăng nhập cần được xác thực lại. Vui lòng thử lại hoặc đăng nhập lại.'
+        : detail.status === 403
+          ? 'Bạn không có quyền xem trạng thái chấm công này. Vui lòng liên hệ HR.'
+          : detail.code === 'ASSIGNMENT_NOT_FOUND' || detail.code === 'NO_ASSIGNMENT'
+            ? 'Bạn chưa được phân công ca làm việc hôm nay. Vui lòng liên hệ HR.'
+            : 'Không thể tải trạng thái chấm công do kết nối hoặc dịch vụ tạm thời gián đoạn. Vui lòng thử lại.');
     } finally {
       setIsLoadingWorkplace(false);
     }
@@ -694,7 +701,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 px-4 py-4 sm:px-6 max-w-7xl mx-auto w-full space-y-4 pb-24 md:pb-8">
+      <div className="employee-attendance-content flex-1 px-4 py-4 sm:px-6 max-w-7xl mx-auto w-full space-y-4 pb-44 lg:pb-8">
         {isLoadingWorkplace ? (
           <div className="flex flex-col items-center justify-center min-h-[380px] gap-3 text-muted-foreground">
             <RefreshCw className="size-8 animate-spin text-primary" />
@@ -846,7 +853,7 @@ export function AttendanceScreen({ user, apiBase }: { user: AuthUser; apiBase?: 
             )}
           </>
         )}
-      </main>
+      </div>
 
       {/* Selfie Preview Screen (shown after capturing photo) */}
       {previewPhotoUrl && (

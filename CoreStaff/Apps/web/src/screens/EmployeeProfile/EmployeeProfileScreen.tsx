@@ -216,7 +216,7 @@ function ProfileHeader({ user, profile }: { user: AuthUser; profile?: EmployeePr
             </span>
             <span className="inline-flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:justify-start">
               <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="truncate">{contactEmail}</span>
+              <span className="min-w-0 break-all">{contactEmail}</span>
             </span>
             <span className="inline-flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:justify-start">
               <Phone className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -422,9 +422,11 @@ function MyDocumentsSection({ apiBase }: { apiBase: string }) {
 export function EmployeeProfileScreen({
   user,
   apiBase,
+  onLogout,
 }: {
   user: AuthUser;
   apiBase: string | null;
+  onLogout?: () => void;
 }) {
   const [selfProvisionOpen, setSelfProvisionOpen] = useState(false);
   const loader = useCallback(async () => {
@@ -501,6 +503,10 @@ export function EmployeeProfileScreen({
       </div>
 
       {/* Data state banners */}
+      <nav aria-label="Tài khoản và bảo mật" className="flex flex-wrap gap-3">
+        <AppLink href="#account-security" className="inline-flex min-h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring"><ShieldCheck className="size-4" aria-hidden="true" />Bảo mật tài khoản</AppLink>
+        {onLogout && <Button variant="outline" className="min-h-11" onClick={onLogout}>Đăng xuất</Button>}
+      </nav>
       {!apiBase && (
         <StateBanner kind="unavailable" message="API nhân sự chưa khả dụng. Thông tin tài khoản vẫn được hiển thị từ phiên đăng nhập." />
       )}
@@ -550,11 +556,11 @@ export function EmployeeProfileScreen({
                 description="Thông tin tổ chức, vị trí và thời điểm làm việc."
                 fields={employmentFields}
               />
-              <InfoSection
+              <div id="account-security" className="scroll-mt-4"><InfoSection
                 title="Tài khoản & bảo mật"
                 description="Quyền truy cập và trạng thái tài khoản hiện tại."
                 fields={accountFields}
-              />
+              /></div>
               <InfoSection
                 title="Pháp lý & thanh toán"
                 description="Thông tin pháp lý có trong hồ sơ nhân sự."

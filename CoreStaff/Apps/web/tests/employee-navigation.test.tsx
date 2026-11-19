@@ -58,6 +58,9 @@ beforeEach(() => {
       body = { success: true, data: { user: loginUser, mustChangePassword: !!loginUser.mustChangePassword } };
       expect(init?.credentials).toBe('include');
       expect(JSON.parse(String(init?.body))).toEqual({ identifier: 'user@example.test', password: 'TestPassword1' });
+    } else if (url.endsWith('/api/auth/refresh')) {
+      status = changePasswordStatus === 401 ? 401 : 200;
+      body = status === 401 ? { success: false, error: { code: 'AUTH_SESSION_EXPIRED' } } : { success: true, data: { token: 'refreshed-access', user: session } };
     } else if (url.endsWith('/api/auth/change-password')) {
       status = changePasswordStatus;
       body = status === 200 ? { success: true } : { success: false };

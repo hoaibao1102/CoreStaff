@@ -17,6 +17,47 @@
   background: var(--background);
 }
 
+/* Expo-inspired self-service tokens are deliberately not global. */
+.workspace-shell[data-experience="self-service"] {
+  --background: #f6f8fc;
+  --card: #fff;
+  --foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #fff;
+  --ring: #2563eb;
+  --border: #e2e8f0;
+  --employee-shift-surface: #172554;
+  --employee-nav-height: 64px;
+  --employee-safe-area: env(safe-area-inset-bottom, 0px);
+  --employee-nav-offset: calc(var(--employee-nav-height) + var(--employee-safe-area));
+  color: var(--foreground);
+}
+.employee-bottom-nav {
+  height: var(--employee-nav-offset);
+  padding-bottom: var(--employee-safe-area);
+}
+.employee-workspace-content {
+  padding-bottom: calc(var(--employee-nav-offset) + 32px);
+  overflow-wrap: anywhere;
+}
+.employee-sticky-action {
+  bottom: calc(var(--employee-nav-offset, 64px) + 24px);
+}
+/* Fade animations must not create a containing block for the fixed CTA. */
+@media (max-width: 63.999rem) {
+  .employee-workspace-content .animate-in:has(.employee-sticky-action) {
+    animation: none;
+    transform: none;
+    filter: none;
+  }
+}
+.workspace-shell[data-experience="self-service"] [data-slot="card"] { border-radius: 20px; }
+.employee-bottom-nav [aria-current="page"] { color: var(--primary); }
+.employee-bottom-nav a > div > span:first-child { background-color: transparent; }
+.employee-bottom-nav a[href="/app/attendance"] > div > span:first-child { background: var(--primary); color: white; }
+.employee-bottom-nav a[aria-current="page"] > div { color: var(--primary); }
+.employee-bottom-nav a:not([aria-current]) > div { color: #475569; }
+
 .workspace-main {
   display: flex;
   flex: 1;
@@ -244,6 +285,8 @@
 }
 
 @media (min-width: 64rem) {
+  .workspace-shell[data-experience="self-service"] { --employee-nav-offset: 0px; }
+  .employee-workspace-content { padding-bottom: 0; }
   .workspace-sidebar-desktop {
     position: sticky;
     top: 0;

@@ -20,12 +20,23 @@ export function MyCompensationScreen({
       <p className="mt-2 text-sm text-muted-foreground">Theo dõi xuyên suốt từ xác nhận bảng công đến nhận phiếu lương.</p>
     </header>
 
-    <div className="inline-flex w-full rounded-xl bg-muted p-1 sm:w-auto" role="tablist" aria-label="Công và lương của tôi">
+    <div className="inline-flex w-full rounded-xl bg-muted p-1 sm:w-auto" role="tablist" aria-label="Công và lương của tôi" onKeyDown={event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+      const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const index = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : current === 0 ? 1 : 0;
+      setTab(index === 0 ? 'timesheet' : 'payslip');
+      buttons[index].focus();
+    }}>
       <button
         type="button"
         role="tab"
         aria-selected={tab === 'timesheet'}
-        className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors sm:min-w-44 ${tab === 'timesheet' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        id="compensation-timesheet-tab"
+        aria-controls="compensation-panel"
+        tabIndex={tab === 'timesheet' ? 0 : -1}
+        className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:min-w-44 ${tab === 'timesheet' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         onClick={() => setTab('timesheet')}
       >
         <CalendarCheck2 className="size-4" />Bảng công
@@ -34,14 +45,17 @@ export function MyCompensationScreen({
         type="button"
         role="tab"
         aria-selected={tab === 'payslip'}
-        className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors sm:min-w-44 ${tab === 'payslip' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        id="compensation-payslip-tab"
+        aria-controls="compensation-panel"
+        tabIndex={tab === 'payslip' ? 0 : -1}
+        className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:min-w-44 ${tab === 'payslip' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         onClick={() => setTab('payslip')}
       >
         <WalletCards className="size-4" />Bảng lương
       </button>
     </div>
 
-    <div role="tabpanel">
+    <div role="tabpanel" id="compensation-panel" aria-labelledby={`compensation-${tab}-tab`} tabIndex={0}>
       {tab === 'timesheet'
         ? <EmployeeTimesheetReviewScreen apiBase={apiBase} embedded />
         : <MyPayslipsScreen apiBase={apiBase} embedded />}

@@ -19,9 +19,10 @@ export class AuthController {
 
 	@Post('login')
 	@ApiOperation({ summary: 'Log in; sets the HttpOnly `sid` session cookie and the `rt` refresh cookie.' })
-	@ApiCreatedSuccess('Authenticated. Tokens are cookie-only, never in the body.', {
+	@ApiCreatedSuccess('Authenticated. Access token is returned; refresh credential stays HttpOnly.', {
 		user: userExample,
 		mustChangePassword: false,
+		token: 'access-token',
 	})
 	@ApiResponse({ status: 401, description: 'AUTH_INVALID_CREDENTIALS | AUTH_AMBIGUOUS_IDENTIFIER' })
 	@ApiResponse({ status: 403, description: 'AUTH_ACCOUNT_DISABLED' })
@@ -50,7 +51,7 @@ export class AuthController {
 	 */
 	@Post('refresh')
 	@ApiOperation({ summary: 'Exchange the `rt` refresh cookie for a new `sid` session cookie.' })
-	@ApiSuccess('Session renewed.', { user: userExample })
+	@ApiSuccess('Session renewed. Replacement access token returned; refresh credential stays HttpOnly.', { user: userExample, token: 'replacement-access-token' })
 	@ApiResponse({ status: 401, description: 'AUTH_SESSION_EXPIRED (refresh cookie missing/expired/revoked)' })
 	@ApiErrorExamples()
 	async refresh(
@@ -66,7 +67,7 @@ export class AuthController {
 		// Refresh cookie is deliberately not rotated — see AuthService.refreshSession.
 		setSessionCookies(res, result.sessionId);
 
-		return { success: true, data: { user: result.user } };
+		return { success: true, data: { user: result.user, token: result.sessionId } };
 	}
 
 	@Post('logout')

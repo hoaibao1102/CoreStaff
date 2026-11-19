@@ -14,6 +14,7 @@ function viteEnv(): Record<string, string> {
       return {
         PROD: String(metaEnv.PROD),
         VITE_API_URL: metaEnv.VITE_API_URL,
+        VITE_API_DIRECT: metaEnv.VITE_API_DIRECT,
         VITE_API_FALLBACK_URL: metaEnv.VITE_API_FALLBACK_URL,
       };
     }
@@ -73,13 +74,15 @@ let cachedResolveBasePromise: Promise<{ base: string; source: ApiSource; health:
 
 /**
  * Dev: use same-origin Vite proxies so the browser can retain session cookies.
- * Production build: chỉ dùng VITE_API_URL (không trỏ localhost của máy user).
+ * Production: first-party /api rewrite; direct legacy hosting is explicit opt-in.
  */
 export function resolveApiBase(): Promise<{ base: string; source: ApiSource; health: HealthResponse }> {
   if (cachedResolveBasePromise) return cachedResolveBasePromise;
   cachedResolveBasePromise = (async () => {
     if (VITE_ENV.PROD === 'true') {
-      return { base: REMOTE_API_URL, source: 'remote', health: await getHealth(REMOTE_API_URL) };
+      const base = VITE_ENV.VITE_API_DIRECT === 'true' || typeof window === 'undefined'
+        ? REMOTE_API_URL : window.location.origin;
+      return { base, source: 'remote', health: await getHealth(base) };
     }
     try {
       const base = window.location.origin;
@@ -100,7 +103,8 @@ export function apiUrl(base: string, path: string): string {
 /**
  * Synchronous helper that returns the API base URL for callers that cannot await
  * `resolveApiBase()`. Prefers the runtime stub (set in test setups), then
- * `process.env.VITE_API_BASE`, then the default remote URL.
+ * `process.env.VITE_API_BASE`, then the production first-party origin (unless
+ * direct legacy hosting is explicitly enabled), then the default remote URL.
  */
 export function getApiBaseSync(): string {
   const stub = (globalThis as { __VITE_API_BASE__?: string }).__VITE_API_BASE__;
@@ -108,5 +112,6 @@ export function getApiBaseSync(): string {
   const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   const v = proc?.env?.VITE_API_BASE;
   if (typeof v === 'string' && v) return v;
+  if (VITE_ENV.PROD === 'true' && VITE_ENV.VITE_API_DIRECT !== 'true' && typeof window !== 'undefined') return window.location.origin;
   return REMOTE_API_URL;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './screens/Auth/AuthScreen';
 import { WorkspaceRoutes } from './routes/WorkspaceRoutes';
 import { CoreStaffLogo } from './components/CoreStaffLogo';
@@ -29,6 +29,8 @@ export default function App() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [booting, setBooting] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [bootAttempt, setBootAttempt] = useState(0);
+  const sessionVersion = useRef(0);
 
   useEffect(() => {
     const updateLocation = () => setPath(window.location.pathname);
@@ -48,6 +50,9 @@ export default function App() {
   // Resolve the API base once, then restore a session that a previous visit remembered.
   useEffect(() => {
     let cancelled = false;
+    const version = sessionVersion.current;
+    setBooting(true);
+    setBootError(null);
 
     void (async () => {
       try {
@@ -61,16 +66,15 @@ export default function App() {
         if (hasRememberedSession()) {
           try {
             const currentUser = await me(resolved.base);
-            if (!cancelled) {
+            if (!cancelled && version === sessionVersion.current && hasRememberedSession()) {
               setUser(currentUser);
               setMustChangePassword(!!currentUser.mustChangePassword);
             }
-          } catch {
-            forgetSession();
-            if (!cancelled) {
-              setUser(null);
-              setMustChangePassword(false);
-            }
+          } catch (err) {
+            // Confirmed refresh rejection emits signedOutEvent. Other failures
+            // keep the remembered marker and show a retryable bootstrap error.
+            if (hasRememberedSession()) throw err;
+            if (!cancelled) setUser(null);
           }
         }
       } catch (err: unknown) {
@@ -83,13 +87,14 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bootAttempt]);
 
   // The API session cookie is short-lived; services/auth.ts renews it silently
   // (SRS §4.4). This is what's left when renewal itself fails — the refresh
   // token expired too, so the only honest move is the login screen.
   useEffect(() => {
     const onSignedOut = () => {
+      sessionVersion.current++;
       forgetSession();
       setUser(null);
       setMustChangePassword(false);
@@ -112,11 +117,18 @@ export default function App() {
   }, []);
 
   const signOut = () => {
+    sessionVersion.current++;
     setUser(null);
     setMustChangePassword(false);
   };
 
   if (booting) return <BootScreen />;
+  if (bootError && hasRememberedSession()) return (
+    <main className="grid min-h-screen place-content-center gap-4 p-6">
+      <p role="alert">{bootError}</p>
+      <button type="button" onClick={() => setBootAttempt(attempt => attempt + 1)}>Thử lại</button>
+    </main>
+  );
 
   return <>
     <AuthScreen
@@ -125,6 +137,7 @@ export default function App() {
       user={user}
       mustChangePassword={mustChangePassword}
       onSession={(nextUser, nextMustChange) => {
+        sessionVersion.current++;
         setUser(nextUser);
         setMustChangePassword(nextMustChange);
       }}

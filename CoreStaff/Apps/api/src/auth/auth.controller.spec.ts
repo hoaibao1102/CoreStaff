@@ -74,7 +74,7 @@ describe('AuthController.refresh', () => {
 		);
 
 		expect(authService.refreshSession).toHaveBeenCalledWith('rt-value');
-		expect(body).toEqual({ success: true, data: { user: { _id: 'u1' } } });
+		expect(body).toEqual({ success: true, data: { user: { _id: 'u1' }, token: 'new-sid' } });
 		// Only the access cookie is re-issued: an absent refreshToken argument
 		// must leave the existing `rt` untouched, or every refresh would reset
 		// the 14-day ceiling.

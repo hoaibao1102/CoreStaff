@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Menu, Fingerprint, Clock, FileText, Building2, User } from 'lucide-react';
+import { Menu, Fingerprint, Clock, FileText, Building2, User, Wallet } from 'lucide-react';
 import { Button } from './button';
 import { Sidebar } from './Sidebar';
 import { AppLink, navigationEvent } from './AppLink';
@@ -39,8 +39,10 @@ function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps)
         { href: '/app/profile', label: 'Cá nhân', icon: User },
     ] : [
         { href: '/app/attendance/history', label: 'Lịch sử', icon: Clock },
+        { href: '/app/leave', label: 'Đơn từ', icon: FileText },
         { href: '/app/attendance', label: 'Chấm công', icon: Fingerprint, primary: true },
-        { href: '/app/profile', label: 'Cá nhân', icon: User },
+        { href: '/app/compensation', label: 'Công & Lương', icon: Wallet },
+        { href: '/app/profile', label: 'Tài khoản', icon: User },
     ];
 
     const path = currentPath.replace(/\/$/, '') || '/';
@@ -48,15 +50,18 @@ function MobileBottomNav({ currentPath, manager = false }: MobileBottomNavProps)
     return (
         <nav
             aria-label="Thanh điều hướng nhân viên"
-            className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-[64px] border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-around px-4 shadow-[0_-3px_16px_rgba(0,0,0,0.05)]"
+            className="employee-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-around px-1 shadow-[0_-3px_16px_rgba(0,0,0,0.05)]"
         >
             {tabs.map(({ href, label, icon: Icon, primary }) => {
-                const isActive = path === href || (href !== '/app/attendance' && path.startsWith(href));
+                const isActive = path === href || (href !== '/app/attendance' && path.startsWith(`${href}/`))
+                    || (href === '/app/leave' && path === '/app/ot')
+                    || (href === '/app/compensation' && (path === '/app/timesheet-review' || path === '/app/payslips' || path.startsWith('/app/payslips/')));
                 return (
                     <AppLink
                         key={href}
                         href={href}
-                        className="flex min-w-0 flex-1 flex-col items-center justify-center transition-all"
+                        aria-current={isActive ? 'page' : undefined}
+                        className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-lg transition-all focus-visible:outline-2 focus-visible:outline-ring"
                     >
                         {primary ? (
                             <div className="-mt-7 flex flex-col items-center justify-center transition-transform active:scale-95">
@@ -118,7 +123,7 @@ export function WorkspaceShell({ user, currentPath, onLogout, children, apiBase 
     }, []);
 
     return (
-        <div className="workspace-shell" data-collapsed={collapsed}>
+        <div className="workspace-shell" data-collapsed={collapsed} data-experience={isEmployeeExperience ? 'self-service' : undefined}>
             {/* Desktop Sidebar */}
             <div ref={desktopContainer} className="workspace-sidebar-desktop">
                 <Sidebar id="desktop-sidebar" user={user} currentPath={currentPath} collapsed={collapsed}
@@ -148,7 +153,17 @@ export function WorkspaceShell({ user, currentPath, onLogout, children, apiBase 
                 ) : null}
 
                 {/* Main Content Area */}
-                <main className={`min-w-0 flex-1 ${isEmployeeExperience ? 'pb-[76px] md:pb-0' : ''}`}>{children}</main>
+                <main className={`min-w-0 flex-1 ${isEmployeeExperience ? 'employee-workspace-content' : ''}`}>
+                    {isEmployeeExperience && ['/app/leave', '/app/ot'].includes(currentPath) && (
+                        <nav aria-label="Loại đơn từ" className="mx-auto flex w-full max-w-7xl flex-wrap gap-2 px-4 pt-4 sm:px-6 lg:px-8">
+                            {[{ href: '/app/leave', label: 'Nghỉ phép' }, { href: '/app/ot', label: 'Tăng ca & Xác nhận công' }].map(item => (
+                                <AppLink key={item.href} href={item.href} aria-current={currentPath === item.href ? 'page' : undefined}
+                                    className={`inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring ${currentPath === item.href ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground'}`}>{item.label}</AppLink>
+                            ))}
+                        </nav>
+                    )}
+                    {children}
+                </main>
 
                 {/* Employee and Department Manager share the mobile-web personal experience. */}
                 {isEmployeeExperience && <MobileBottomNav currentPath={currentPath} manager={isManager} />}

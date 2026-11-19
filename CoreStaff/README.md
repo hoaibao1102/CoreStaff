@@ -73,7 +73,7 @@ Mở `Apps/api/.env` và điền:
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `VITE_API_URL` / `EXPO_PUBLIC_API_URL` | `https://18-141-68-40.sslip.io` | API remote dùng chung cho web và mobile |
+| `VITE_API_URL` / `EXPO_PUBLIC_API_URL` | `https://18-141-68-40.sslip.io` | Mobile remote / Vite dev upstream; web production dùng same-origin rewrite trừ opt-in `VITE_API_DIRECT=true` (xem deployment). |
 | `VITE_API_FALLBACK_URL` / `EXPO_PUBLIC_API_FALLBACK_URL` | `http://localhost:3000` | Fallback khi remote healthz fail (**chỉ dev**). Android emulator đổi `localhost` → `10.0.2.2`. |
 
 Dev (`npm run dev:web` / Expo `__DEV__`): gọi `GET /api/healthz` với timeout 4 giây; lỗi HTTP, mạng hoặc JSON không đúng contract thì thử API local (timeout 4 giây). Web gọi qua proxy Vite để giữ cookie phiên đăng nhập. Kết quả health được dùng ngay khi khởi động, không gọi lặp. Production/release **không** fallback localhost.
@@ -228,7 +228,23 @@ Trong project Vercel (BE):
 
 Sau deploy: `GET https://<domain>/api/healthz` phải trả JSON `status: ok`.
 
-Web trên Vercel: project riêng, Root Directory `CoreStaff/Apps/web`, env build-time `VITE_API_URL=https://18-141-68-40.sslip.io` (Vite bake lúc build, không fallback localhost).
+### Web trên Vercel — first-party REST và Socket.IO polling
+
+- Project web riêng: **Root Directory = `CoreStaff/Apps/web`**, build `npm run build`, output `dist`. File được chọn theo root này là `Apps/web/vercel.json`; `CoreStaff/vercel.json` cũng có cùng rewrite nhưng không chứng minh project đang dùng root đó. Git root hiện không có `vercel.json`; không tạo thêm file theo suy đoán cấu hình dashboard.
+- Production mặc định gọi `${window.location.origin}/api/...`, không dùng `VITE_API_URL` làm browser REST target và không fallback localhost khi health lỗi. Các service vẫn ghép `/api` vào base origin (không đặt base thành `/api` để tránh `/api/api`).
+- Rewrite `/api/:path*` → `https://18-141-68-40.sslip.io/api/:path*` và `/socket.io/:path*` → cùng backend, **trước SPA fallback**. Đổi backend cần sửa destination trong đúng config active; chỉ đổi env build không đổi rewrite.
+- Socket cùng origin dùng **HTTP polling only**, `upgrade: false`, `withCredentials: true`, `addTrailingSlash: false`, namespace `/events`, Engine.IO path `/socket.io`. Dấu slash cuối làm URL rơi vào SPA trên deployment đang chạy (xem probe bên dưới). Không dựa vào WebSocket upgrade trên Vercel. Backend phải là Nest lâu dài có Socket.IO, không phải API serverless adapter; nhiều instance cần sticky routing/session affinity cho polling.
+- `sid`/`rt` do backend đặt với `HttpOnly; Secure; SameSite=None; Path=/`, không Domain theo `session-cookies.ts`. `Path=/` cho phép `sid` đến cả `/api` và `/socket.io`; frontend không đọc cookie hay gửi refresh credential qua JS/localStorage. Không nới guard, role rooms hoặc CORS để chữa kết nối.
+- Legacy hosting không có rewrite: opt-in **`VITE_API_DIRECT=true`** cùng `VITE_API_URL=https://<backend>` lúc build giữ đường REST trực tiếp; socket khi nhận base khác origin giữ transport trực tiếp websocket/polling và cookie-only auth. Đường này vẫn phụ thuộc cookie cross-site của browser. Dev giữ Vite REST proxy/local fallback và socket Nest port 3000 trên localhost/127.0.0.1.
+
+#### Evidence và gate trước/sau deploy (chưa nghiệm thu production)
+
+- Đã đọc commit socket `99f15c6` và revert `ed1fdcc`: commit cũ thêm Bearer/handshake auth phía gateway và đổi polling-first; revert chỉ ghi hoàn tác, **không nêu lý do**. Không tái đưa Bearer hoặc thay role/session gateway; thay đổi hiện tại chỉ chọn polling-only cho proxy cùng origin.
+- Public read-only probe: backend `/api/healthz` trả 200 JSON và Engine.IO `GET /socket.io/?EIO=4&transport=polling` trả 200 open packet. URL preview có trong origin-policy test trả 200 HTML cho cả hai đường, không chứng minh rewrite đang chạy (có thể protection/stale deployment). Không có credential/login production được dùng; Engine.IO open packet chưa xác minh namespace `/events` có xác thực.
+- Read-only probe xác nhận lại lúc **2026-11-19 04:52 UTC** trên `https://core-staff.vercel.app`: `GET /api/healthz` → **200 application/json**, `status=ok`, `service=corestaff-api`, `mongo=configured`, `timezone=Asia/Ho_Chi_Minh`; `GET /socket.io/?EIO=4&transport=polling` → **200 text/html** (SPA); `GET /socket.io?EIO=4&transport=polling` → **200 text/plain**, Engine.IO open packet. Không dùng cookie/login production, không ghi session identifier. Probe chỉ đọc; không deploy.
+- Local tests chứng minh resolver/transport contract, Vite dev cookie proxy và real Socket.IO `/events` roundtrip qua HTTP reverse proxy exact-path `/socket.io` (slash cuối trả SPA), GET/POST chuyển cookie fixture, namespace từ chối thiếu cookie và chấp nhận fixture. Không dùng DB hoặc credential production. **Không** chứng minh Vercel chuyển nguyên Set-Cookie hoặc cookie được browser gửi lại. Backend public health/polling không phát session cookies nên không thể kiểm tra session-cookie flags live bằng các GET đó.
+- Sau deploy được phê duyệt riêng: kiểm tra exact deployment/build và Root Directory; health phải là JSON, polling phải là Engine.IO packet, không phải HTML/login protection. Xác minh request query/sid routing, polling POST và timeout của proxy trong kết nối dài.
+- Bằng phiên test được cho phép, trong Network kiểm tra login Set-Cookie có `HttpOnly`, `Secure`, `SameSite=None`, `Path=/`, không Domain upstream; refresh POST gửi `rt` cùng origin; `/socket.io` gửi `sid`; kiểm tra room/sự kiện theo quyền, reload và refresh hết hạn. Chỉ ghi tên/flags/status, không ghi giá trị cookie/token. Safari iOS/Chrome Android thật, chế độ chặn third-party cookie và background/resume vẫn **Unverified**; emulation/unit tests không thay gate này.
 
 ## Ghi chú
 

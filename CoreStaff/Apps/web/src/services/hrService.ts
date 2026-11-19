@@ -1,5 +1,4 @@
-import { apiUrl } from '../config/api';
-import { getSessionToken, notifySignedOut, tryRefreshSession } from './auth';
+import { authenticatedFetch } from './auth';
 import type {
     ContractStatus,
     ContractType,
@@ -612,35 +611,15 @@ interface ApiFailure {
 }
 
 export async function hrRequest<T>(base: string, path: string, options?: RequestInit): Promise<T> {
-    return send<T>(base, path, options, true);
+    return send<T>(base, path, options);
 }
 
-/**
- * Same 401 → refresh → retry-once dance as services/auth.ts, so every HR call
- * survives an expired session cookie the way the SRS §4.4 refresh is meant to.
- * `allowRefresh=false` on the retry stops a second expiry from looping.
- */
-async function send<T>(base: string, path: string, options: RequestInit | undefined, allowRefresh: boolean): Promise<T> {
-    const token = getSessionToken();
-    const res = await fetch(apiUrl(base, path), {
+/** Session recovery is owned by the shared authenticated transport. */
+async function send<T>(base: string, path: string, options: RequestInit | undefined): Promise<T> {
+    const res = await authenticatedFetch(base, path, {
         ...options,
-        credentials: 'include',
         cache: 'no-store',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(options?.headers || {}),
-        },
     });
-
-    // `allowRefresh` is what bounds the loop: a retry that still gets 401 (a
-    // real permission error behind a valid session) must not refresh again.
-    if (res.status === 401 && allowRefresh) {
-        // Same rule as services/auth.ts: renewal failed for good, so the app
-        // must drop to the login screen rather than show a dead page.
-        if (await tryRefreshSession(base)) return send<T>(base, path, options, false);
-        notifySignedOut();
-    }
 
     // HTTP 304 Not Modified: browser cache hit, no body. Return empty array
     // so callers like listTaxPolicies don't receive null and crash.
@@ -758,12 +737,12 @@ export function importEmployees(
     const form = new FormData();
     form.append('file', file);
     form.append('dryRun', String(dryRun));
-    return fetchRaw<EmployeeImportResult>(base, '/api/hr/employees/import', { method: 'POST', body: form }, true);
+    return fetchRaw<EmployeeImportResult>(base, '/api/hr/employees/import', { method: 'POST', body: form });
 }
 
 /** Same blob → object-URL → anchor dance as `downloadDocument`. */
 export async function downloadEmployeeImportTemplate(base: string): Promise<void> {
-    const res = await fetch(apiUrl(base, '/api/hr/employees/import/template'), {
+    const res = await authenticatedFetch(base, '/api/hr/employees/import/template', {
         method: 'GET',
         credentials: 'include',
     });
@@ -1276,21 +1255,11 @@ export function uploadDocument(
 
     // Raw fetch keeps multipart's boundary out of our hands; the same
     // 401 → refresh → retry-once applies, so it goes through `fetchRaw`.
-    return fetchRaw<UploadDocumentResult>(base, '/api/hr/documents/upload', { method: 'POST', body: form }, true);
+    return fetchRaw<UploadDocumentResult>(base, '/api/hr/documents/upload', { method: 'POST', body: form });
 }
 
-async function fetchRaw<T>(base: string, path: string, options: RequestInit, allowRefresh: boolean): Promise<T> {
-    const token = getSessionToken();
-    const headers = {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-    };
-    const res = await fetch(apiUrl(base, path), { ...options, headers, credentials: 'include' });
-
-    if (res.status === 401 && allowRefresh) {
-        if (await tryRefreshSession(base)) return fetchRaw<T>(base, path, options, false);
-        notifySignedOut();
-    }
+async function fetchRaw<T>(base: string, path: string, options: RequestInit): Promise<T> {
+    const res = await authenticatedFetch(base, path, options);
 
     const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
     if (!res.ok || body?.success === false) {
@@ -1312,13 +1281,9 @@ async function fetchRaw<T>(base: string, path: string, options: RequestInit, all
  * the server derives Content-Disposition from the stored originalName, and the
  * endpoint is tenant+owner scoped. */
 export async function downloadDocument(base: string, id: string): Promise<void> {
-    const token = getSessionToken();
-    const res = await fetch(apiUrl(base, `/api/hr/documents/${encodeURIComponent(id)}/download`), {
+    const res = await authenticatedFetch(base, `/api/hr/documents/${encodeURIComponent(id)}/download`, {
         method: 'GET',
         credentials: 'include',
-        headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
     });
     if (!res.ok) {
         const body = await parseJson<ApiFailure>(res);

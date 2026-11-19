@@ -24,11 +24,11 @@ export function getSocket(apiBase?: string | null): Socket {
       if (isLocalDevelopment && url.origin === window.location.origin) {
         socketPath = '/socket.io';
       } else if (url.origin !== window.location.origin) {
-        // Direct remote backend URL (e.g. production)
+        // Explicit legacy/direct backend; cookie policy remains the backend's.
         targetOrigin = url.origin;
         socketPath = '/socket.io';
       } else {
-        // Same-origin dev proxy
+        // Same-origin proxy (Vite or production HTTP rewrite).
         targetOrigin = window.location.origin;
         if (url.pathname.includes('/local-api')) {
           socketPath = '/local-api/socket.io';
@@ -41,6 +41,10 @@ export function getSocket(apiBase?: string | null): Socket {
     }
   }
 
+  // Vercel rewrites proxy HTTP requests, not a WebSocket server. Polling stays
+  // first-party so the HttpOnly sid cookie authenticates /events unchanged.
+  // Keep direct Nest development/legacy transports outside this proxy path.
+  const sameOriginProxy = !isLocalDevelopment && targetOrigin === window.location.origin;
   const targetKey = `${targetOrigin}:${socketPath}`;
 
   if (socketInstance && currentTargetKey === targetKey && socketInstance.connected) {
@@ -57,7 +61,10 @@ export function getSocket(apiBase?: string | null): Socket {
     socketInstance = io(`${targetOrigin}/events`, {
       path: socketPath,
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: sameOriginProxy ? ['polling'] : ['websocket', 'polling'],
+      upgrade: !sameOriginProxy,
+      // The production rewrite matches /socket.io exactly, not /socket.io/.
+      addTrailingSlash: !sameOriginProxy,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,

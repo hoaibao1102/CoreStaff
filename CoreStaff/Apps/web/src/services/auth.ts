@@ -21,6 +21,13 @@ export interface LoginResult {
 }
 
 const TOKEN_KEY = 'corestaff_session_token';
+// Shared sign-in/out identity stays stable across access-token renewal.
+const SESSION_ID_KEY = 'corestaff_session_identity';
+let sessionGeneration = 0;
+
+function sessionIdentity(): string | null {
+  try { return localStorage.getItem(SESSION_ID_KEY); } catch { return null; }
+}
 
 export function getSessionToken(): string | null {
   try {
@@ -31,6 +38,14 @@ export function getSessionToken(): string | null {
 }
 
 export function setSessionToken(token?: string | null): void {
+  sessionGeneration++;
+  try {
+    localStorage.setItem(SESSION_ID_KEY, globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+  } catch {}
+  storeSessionToken(token);
+}
+
+function storeSessionToken(token?: string | null): void {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
@@ -94,27 +109,45 @@ const NO_REFRESH_PATHS = new Set([
   '/api/auth/reset-password',
 ]);
 
-async function request<T>(base: string, path: string, init?: RequestInit, allowRefresh = true): Promise<T> {
-  const token = getSessionToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(init?.headers as Record<string, string> || {}),
-  };
-  const res = await fetch(apiUrl(base, path), {
-    ...init,
-    credentials: 'include',
-    headers,
-  });
-
-  // SRS §4.4: the session cookie is short-lived, so a 401 usually means
-  // "renew me", not "log in again". Retry once behind the refresh token.
-  if (res.status === 401 && allowRefresh && !NO_REFRESH_PATHS.has(path)) {
-    if (await tryRefreshSession(base)) {
-      return request<T>(base, path, init, false);
+/** Shared transport: preserve the original body/headers and retry only auth rejection. */
+export async function authenticatedFetch(base: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const credentialEndpoint = NO_REFRESH_PATHS.has(path.split('?')[0]);
+  const initialToken = getSessionToken();
+  const generation = sessionGeneration;
+  const identity = sessionIdentity();
+  const send = async () => {
+    const headers = new Headers(init.headers);
+    const token = getSessionToken();
+    if (credentialEndpoint) headers.delete('Authorization');
+    else if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (!(typeof FormData !== 'undefined' && init.body instanceof FormData) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
     }
-    notifySignedOut();
+    const response = await fetch(apiUrl(base, path), { ...init, credentials: 'include', headers: [...headers].length ? headers : undefined });
+    if (!credentialEndpoint && (generation !== sessionGeneration || identity !== sessionIdentity())) {
+      throw new AuthApiError('Phiên đã thay đổi. Vui lòng thử lại.', 409, 'AUTH_SESSION_CHANGED');
+    }
+    return response;
+  };
+  const res = await send();
+  if (!credentialEndpoint && (generation !== sessionGeneration || identity !== sessionIdentity())) {
+    throw new AuthApiError('Phiên đã thay đổi. Vui lòng thử lại.', 409, 'AUTH_SESSION_CHANGED');
   }
+  if (res.status === 401 && !credentialEndpoint) {
+    if (generation !== sessionGeneration) throw new AuthApiError('Phiên đã thay đổi. Vui lòng thử lại.', 409, 'AUTH_SESSION_CHANGED');
+    if (getSessionToken() && getSessionToken() !== initialToken) return send();
+    const refresh = await refreshSession(base);
+    if ((generation !== sessionGeneration || identity !== sessionIdentity()) && refresh.status !== 'invalid-session') throw new AuthApiError('Phiên đã thay đổi. Vui lòng thử lại.', 409, 'AUTH_SESSION_CHANGED');
+    if (refresh.status === 'success') return send();
+    if (refresh.status === 'transient-failure') {
+      throw new AuthApiError('Không thể kết nối để gia hạn phiên. Vui lòng thử lại.', 503, 'AUTH_REFRESH_UNAVAILABLE');
+    }
+  }
+  return res;
+}
+
+async function request<T>(base: string, path: string, init?: RequestInit): Promise<T> {
+  const res = await authenticatedFetch(base, path, init);
 
   const body = await parseJson<ApiSuccess<T> | ApiFailure>(res);
 
@@ -136,19 +169,45 @@ async function request<T>(base: string, path: string, init?: RequestInit, allowR
  * cookie expired must send one refresh, not five, or they race each other to
  * rewrite the session token.
  */
-let refreshInflight: Promise<boolean> | null = null;
+export type RefreshResult = { status: 'success' | 'invalid-session' | 'transient-failure' };
+let refreshInflight: Promise<RefreshResult> | null = null;
 
-export function tryRefreshSession(base: string): Promise<boolean> {
-  refreshInflight ??= request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
-    .then(result => {
-      if (result.token) setSessionToken(result.token);
-      return true;
+export function refreshSession(base: string): Promise<RefreshResult> {
+  const generation = sessionGeneration;
+  const identity = sessionIdentity();
+  const token = getSessionToken();
+  const renew = async (): Promise<RefreshResult> => {
+    if (generation !== sessionGeneration || identity !== sessionIdentity()) return { status: 'transient-failure' };
+    // Another tab may have completed renewal while we waited for its lock.
+    if (token !== getSessionToken()) return { status: getSessionToken() ? 'success' : 'invalid-session' };
+    return request<LoginResult>(base, '/api/auth/refresh', { method: 'POST' })
+    .then((result): RefreshResult => {
+      if (generation !== sessionGeneration || identity !== sessionIdentity() || token !== getSessionToken()) return { status: 'transient-failure' };
+      if (!result?.token || typeof result.token !== 'string') return { status: 'transient-failure' };
+      storeSessionToken(result.token);
+      return { status: 'success' };
     })
-    .catch(() => false)
+    .catch((error): RefreshResult => {
+      if (generation !== sessionGeneration || identity !== sessionIdentity() || token !== getSessionToken()) return { status: 'transient-failure' };
+      if (error instanceof AuthApiError && error.status === 401) {
+        notifySignedOut();
+        return { status: 'invalid-session' };
+      }
+      return { status: 'transient-failure' };
+    });
+  };
+  refreshInflight ??= Promise.resolve(typeof navigator !== 'undefined' && navigator.locks
+    ? navigator.locks.request('corestaff:session-refresh', renew)
+    : renew())
     .finally(() => {
       refreshInflight = null;
     });
   return refreshInflight;
+}
+
+/** Compatibility for callers that only need a success flag; transport uses the typed outcome. */
+export async function tryRefreshSession(base: string): Promise<boolean> {
+  return (await refreshSession(base)).status === 'success';
 }
 
 export async function login(base: string, identifier: string, password: string): Promise<LoginResult> {
