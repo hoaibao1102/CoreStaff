@@ -294,7 +294,8 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
     }
   };
 
-  const handleExportExcel = async (runId: string) => {
+  const handleExportExcel = async (run: PayrollRun) => {
+    const runId = run._id;
     try {
       const response = await fetch(`${apiBase}/api/payroll-runs/${runId}/export/excel`, {
         credentials: 'include',
@@ -310,7 +311,10 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
       const blob = await response.blob();
       const disposition = response.headers.get('Content-Disposition');
       const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
-      const filename = filenameMatch?.[1] || `payroll-${runId}.xlsx`;
+      // Cross-origin responses hide Content-Disposition unless CORS exposes it,
+      // so fall back to the period label rather than the run id.
+      const safePeriodLabel = (run.periodLabel || '').replace(/[^a-zA-Z0-9\-_]/g, '_');
+      const filename = filenameMatch?.[1] || `payroll-${safePeriodLabel || runId}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -441,7 +445,7 @@ export function PayrollRunScreen({ apiBase, organizationId, timesheetPeriodId }:
                           </Button>
                         )}
                         {(run.status === 'CALCULATED' || run.status === 'LOCKED' || run.status === 'RELEASED') && (
-                          <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run._id)} disabled={loading}>
+                          <Button size="sm" variant="ghost" onClick={() => handleExportExcel(run)} disabled={loading}>
                             <Download aria-hidden="true" />Xuất Excel
                           </Button>
                         )}
