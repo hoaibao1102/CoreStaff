@@ -8,7 +8,7 @@ import { PayrollInputSnapshot, PayrollInputSnapshotDocument } from '../../databa
 import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
 import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.schema';
 import { InsuranceService } from './insurance.service';
-import { OVERTIME_RATES, computeOvertimePay } from '../timesheet/payroll-snapshot.service';
+import { computeOvertimePay, overtimeRatesOf } from '../timesheet/payroll-snapshot.service';
 import { PitService } from './pit.service';
 import { EventsGateway } from '../../events/events.gateway';
 import { earningsKpiBonus } from './payroll-earnings-contract';
@@ -205,6 +205,11 @@ export class PayslipService {
     const otBreakdown = snapshot.otMinutesByType ? (() => {
       const hourlyRate = snapshot.hourlyRate ?? 0;
       const otMinutes = snapshot.otMinutesByType;
+      // Read the rates that produced this snapshot's `otPay`, never today's policy:
+      // a payslip must stay explainable after HR edits the rate mid-quarter.
+      // Snapshots written before `overtimeRateEvidence` existed fall back to the
+      // static seed rates, which is what they were calculated with.
+      const rates = overtimeRatesOf(snapshot);
 
       // Đổi phút → giờ cho tất cả các loại OT
       const workingDayHours = (otMinutes.otWorkingDayMinutes || 0) / 60;
@@ -214,9 +219,9 @@ export class PayslipService {
 
       // Cờ công ty: cả tiền OT chịu thuế hay miễn hết — không chia tiền OT.
       const overtimeTaxable = snapshot.overtimeTaxable === true;
-      const workingDayAmount = computeOvertimePay(otMinutes.otWorkingDayMinutes || 0, hourlyRate, OVERTIME_RATES.workingDay);
-      const weeklyOffAmount = computeOvertimePay(otMinutes.otWeeklyOffMinutes || 0, hourlyRate, OVERTIME_RATES.weeklyOff);
-      const publicHolidayAmount = computeOvertimePay(otMinutes.otPublicHolidayMinutes || 0, hourlyRate, OVERTIME_RATES.publicHoliday);
+      const workingDayAmount = computeOvertimePay(otMinutes.otWorkingDayMinutes || 0, hourlyRate, rates.workingDay);
+      const weeklyOffAmount = computeOvertimePay(otMinutes.otWeeklyOffMinutes || 0, hourlyRate, rates.weeklyOff);
+      const publicHolidayAmount = computeOvertimePay(otMinutes.otPublicHolidayMinutes || 0, hourlyRate, rates.publicHoliday);
       return {
         totalMinutes: otMinutes.totalOvertimeMinutes || 0,
         totalHours: totalHours,
@@ -235,7 +240,7 @@ export class PayslipService {
             label: 'Ngày thường',
             minutes: otMinutes.otWorkingDayMinutes,
             hours: workingDayHours,
-            coefficient: OVERTIME_RATES.workingDay,
+            coefficient: rates.workingDay,
             amount: workingDayAmount,
           }] : []),
           ...(otMinutes.otWeeklyOffMinutes > 0 ? [{
@@ -243,7 +248,7 @@ export class PayslipService {
             label: 'Cuối tuần',
             minutes: otMinutes.otWeeklyOffMinutes,
             hours: weeklyOffHours,
-            coefficient: OVERTIME_RATES.weeklyOff,
+            coefficient: rates.weeklyOff,
             amount: weeklyOffAmount,
           }] : []),
           ...(otMinutes.otPublicHolidayMinutes > 0 ? [{
@@ -251,7 +256,7 @@ export class PayslipService {
             label: 'Lễ, Tết',
             minutes: otMinutes.otPublicHolidayMinutes,
             hours: publicHolidayHours,
-            coefficient: OVERTIME_RATES.publicHoliday,
+            coefficient: rates.publicHoliday,
             amount: publicHolidayAmount,
           }] : []),
         ],

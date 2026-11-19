@@ -1,4 +1,12 @@
-import { OVERTIME_RATES, computeOvertimePay, deriveInsuranceSalary, hourlyRateFor, resolvePayrollWorkdays } from './payroll-snapshot.service';
+import {
+  OVERTIME_RATES,
+  computeOvertimePay,
+  deriveInsuranceSalary,
+  hourlyRateFor,
+  overtimeRatesOf,
+  resolveOvertimeRatesForPeriod,
+  resolvePayrollWorkdays,
+} from './payroll-snapshot.service';
 
 describe('payroll snapshot workday basis', () => {
   it('preserves decimal frozen work units for versioned summaries', () => {
@@ -76,5 +84,49 @@ describe('OT pay — số giờ × tiền công 1 giờ × hệ số', () => {
 
   it('hệ số giữ nguyên 1.5 / 2.0 / 3.0 (SRS §30D.2)', () => {
     expect(OVERTIME_RATES).toEqual({ workingDay: 1.5, weeklyOff: 2.0, publicHoliday: 3.0 });
+  });
+});
+
+/**
+ * Q — payroll đọc `OvertimePayPolicy` thay vì hằng số. Ba điều phải giữ:
+ * 1. Có policy hiệu lực → dùng hệ số của policy.
+ * 2. Không có policy (tổ chức cũ) → rơi về hằng số, KHÔNG nổ.
+ * 3. Payslip đọc hệ số đã đóng băng trong snapshot, không đọc policy hôm nay.
+ */
+describe('overtime rates — policy thay cho hằng số', () => {
+  const model = (row: any) => ({ findOne: () => ({ sort: () => ({ session: () => ({ lean: async () => row }) }) }) }) as any;
+
+  it('dùng hệ số của policy hiệu lực', async () => {
+    const rates = await resolveOvertimeRatesForPeriod(
+      model({ _id: 'p1', workingDayRate: 1.6, weeklyOffRate: 2.2, publicHolidayRate: 3.1, version: 4, legalReference: 'BLLĐ 45' }),
+      '507f1f77bcf86cd799439012',
+      '2026-11',
+    );
+    expect(rates).toMatchObject({
+      workingDay: 1.6, weeklyOff: 2.2, publicHoliday: 3.1,
+      policyId: 'p1', version: 4, contract: 'OVERTIME_PAY_POLICY',
+    });
+  });
+
+  it('không có policy hoặc không có model → fallback hằng số, không nổ', async () => {
+    for (const m of [model(null), undefined]) {
+      const rates = await resolveOvertimeRatesForPeriod(m, '507f1f77bcf86cd799439012', '2026-11');
+      expect(rates).toMatchObject({ workingDay: 1.5, weeklyOff: 2.0, publicHoliday: 3.0, policyId: null, contract: 'FROZEN_STATIC_RATES_V1' });
+    }
+  });
+
+  it('payslip đọc hệ số đã đóng băng trong snapshot', () => {
+    const frozen = { overtimeRateEvidence: [{ workingDay: 1.6, weeklyOff: 2.2, publicHoliday: 3.1 }] };
+    expect(overtimeRatesOf(frozen)).toEqual({ workingDay: 1.6, weeklyOff: 2.2, publicHoliday: 3.1 });
+    // Snapshot cũ không có evidence → đúng hằng số mà nó đã được tính bằng.
+    expect(overtimeRatesOf({})).toEqual(OVERTIME_RATES);
+    expect(overtimeRatesOf({ overtimeRateEvidence: [{ workingDay: -1 }] })).toEqual(OVERTIME_RATES);
+  });
+
+  it('đổi hệ số làm otPay đổi, nên evidence phải đi cùng snapshot', () => {
+    const hourlyRate = hourlyRateFor(20_000_000, 22);
+    const at15 = computeOvertimePay(120, hourlyRate, 1.5);
+    const at16 = computeOvertimePay(120, hourlyRate, 1.6);
+    expect(at16).toBeGreaterThan(at15);
   });
 });

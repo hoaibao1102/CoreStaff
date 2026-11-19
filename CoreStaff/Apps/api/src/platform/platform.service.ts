@@ -129,6 +129,28 @@ export class PlatformService {
 					},
 					{ upsert: true }
 				);
+
+				// TASK-037 — a new tenant has no OT pay policy yet, and payroll would
+				// silently fall back to the static rates while the HR screen shows an
+				// empty form. Seed the statutory 150/200/300% so both agree from day one.
+				await db.collection('overtime_pay_policies').updateOne(
+					{ organizationId: orgId, version: 1 },
+					{
+						$setOnInsert: {
+							organizationId: orgId,
+							effectiveFrom: new Date('2026-01-01'),
+							workingDayRate: 1.5,
+							weeklyOffRate: 2.0,
+							publicHolidayRate: 3.0,
+							legalReference: 'BLLĐ 45/2019/QH14',
+							version: 1,
+							active: true,
+							createdAt: now,
+							updatedAt: now,
+						},
+					},
+					{ upsert: true }
+				);
 			}
 
 			const created = doc.toObject();

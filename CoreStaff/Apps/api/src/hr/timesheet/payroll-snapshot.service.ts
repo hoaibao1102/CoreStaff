@@ -1,32 +1,105 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, ClientSession } from 'mongoose';
 import { PayrollInputSnapshot, PayrollInputSnapshotDocument } from '../../database/schemas/payroll-input-snapshot.schema';
 import { TimesheetSummary, TimesheetSummaryDocument } from '../../database/schemas/timesheet-summary.schema';
 import { EmployeeProfile, EmployeeProfileDocument } from '../../database/schemas/employee-profile.schema';
-import { SalaryProfile, SalaryProfileDocument } from '../../database/schemas/compensation.schema';
+import {
+  SalaryProfile,
+  SalaryProfileDocument,
+  OvertimePayPolicy,
+  OvertimePayPolicyDocument,
+} from '../../database/schemas/compensation.schema';
 import { InsurancePolicy, InsurancePolicyDocument } from '../../database/schemas/insurance-policy.schema';
 import { InsuranceProfile, InsuranceProfileDocument } from '../../database/schemas/insurance-profile.schema';
 import { TaxPolicy, TaxPolicyDocument } from '../../database/schemas/tax-policy.schema';
 import { EmploymentStatus, InsuranceContributionType } from '../../database/schemas/enums';
 import { calculateInsuranceContributions } from '../insurance-policy/insurance-calculation';
 import { PitService } from '../payroll/pit.service';
+import { resolveOvertimeRates } from '../policies/policies-domain';
 import { NO_KPI_EARNINGS_CONTRACT } from '../payroll/payroll-earnings-contract';
 import { createHash } from 'node:crypto';
 import { canonicalPayloadHash } from '../payroll/payroll-artifact-foundation';
 
 /**
- * Hệ số tiền làm thêm giờ (SRS §30D.2). Một chỗ khai duy nhất — payslip import lại
- * để không lệch giữa số đã lưu (`otPay`) và số hiện trên chi tiết OT.
- *
- * ponytail: vẫn hard-code, chưa nối `OvertimePayPolicy`. Nâng cấp: đọc qua
- * `resolveOvertimeRates` khi nối chính sách vào luồng tính lương.
+ * Hệ số tiền làm thêm giờ (SRS §30D.2). Constants này CHỈ còn là fallback khi
+ * tổ chức chưa cấu hình `OvertimePayPolicy` — luồng tính lương đọc hệ số hiệu
+ * lực qua `resolveOvertimeRatesForPeriod` bên dưới.
  */
 export const OVERTIME_RATES = {
   workingDay: 1.5,
   weeklyOff: 2.0,
   publicHoliday: 3.0,
 } as const;
+
+export interface EffectiveOvertimeRates {
+  workingDay: number;
+  weeklyOff: number;
+  publicHoliday: number;
+}
+
+export interface OvertimeRatesSource extends EffectiveOvertimeRates {
+  policyId: string | null;
+  version: number | null;
+  legalReference: string;
+  /** 'OVERTIME_PAY_POLICY' when configured, 'FROZEN_STATIC_RATES_V1' when fallback. */
+  contract: string;
+}
+
+/**
+ * Chọn hệ số hiệu lực cho một kỳ lương. Policy có hiệu lực được xét tại ngày
+ * đầu kỳ — cùng mốc với SalaryProfile/InsurancePolicy/TaxPolicy trong file này,
+ * nên toàn bộ snapshot đứng trên một lát cắt thời gian duy nhất.
+ *
+ * Không có policy → rơi về `OVERTIME_RATES`. Hành vi này giữ cho tổ chức cũ
+ * (chưa seed policy) tính lương được thay vì nổ, và được ghi rõ trong
+ * `overtimeRateEvidence.contract` để hậu kiểm đọc ra được nguồn số.
+ */
+export async function resolveOvertimeRatesForPeriod(
+  model: Model<OvertimePayPolicyDocument> | null | undefined,
+  organizationId: string,
+  periodKey: string,
+  session?: ClientSession,
+): Promise<OvertimeRatesSource> {
+  const at = new Date(`${periodKey}-01T00:00:00.000Z`);
+  const policy = model
+    ? await model
+        .findOne({
+          organizationId: new Types.ObjectId(organizationId),
+          active: true,
+          effectiveFrom: { $lte: at },
+          $or: [{ effectiveTo: null }, { effectiveTo: { $exists: false } }, { effectiveTo: { $gte: at } }],
+        })
+        .sort({ effectiveFrom: -1 })
+        .session(session ?? null)
+        .lean() as OvertimePayPolicy | null
+    : null;
+  if (!policy) {
+    return { ...OVERTIME_RATES, policyId: null, version: null, legalReference: '', contract: 'FROZEN_STATIC_RATES_V1' };
+  }
+  // `resolveOvertimeRates` is the single owner of the rate → type mapping and of
+  // the "rates may not be negative" rule; calling it here keeps payroll and the
+  // HR preview endpoint on one code path.
+  const resolved = resolveOvertimeRates(
+    {
+      workingDayRate: policy.workingDayRate,
+      weeklyOffRate: policy.weeklyOffRate,
+      publicHolidayRate: policy.publicHolidayRate,
+      version: policy.version,
+      legalReference: policy.legalReference,
+    },
+    [],
+  );
+  return {
+    workingDay: policy.workingDayRate,
+    weeklyOff: policy.weeklyOffRate,
+    publicHoliday: policy.publicHolidayRate,
+    policyId: String((policy as any)._id),
+    version: resolved.policyVersion,
+    legalReference: policy.legalReference,
+    contract: 'OVERTIME_PAY_POLICY',
+  };
+}
 
 export function resolvePayrollWorkdays(summary: Pick<TimesheetSummary, 'workingDays' | 'presentDays' | 'absentDays' | 'unpaidLeaveDays'> & Partial<Pick<TimesheetSummary, 'calculationContract' | 'standardWorkUnits' | 'payableWorkUnits'>>) {
   if (summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2') {
@@ -76,6 +149,22 @@ export function computeOvertimePay(minutes: number, hourlyRate: number, coeffici
 }
 
 /**
+ * Hệ số đã đóng băng trong snapshot. Không thấy `overtimeRateEvidence` nghĩa là
+ * snapshot sinh trước khi nối `OvertimePayPolicy` → dùng đúng hằng số mà nó đã
+ * được tính bằng. Payslip không bao giờ đọc policy hiện hành.
+ */
+export function overtimeRatesOf(snapshot: any): EffectiveOvertimeRates {
+  const evidence = Array.isArray(snapshot?.overtimeRateEvidence) ? snapshot.overtimeRateEvidence[0] : undefined;
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+  return {
+    workingDay: num(evidence?.workingDay, OVERTIME_RATES.workingDay),
+    weeklyOff: num(evidence?.weeklyOff, OVERTIME_RATES.weeklyOff),
+    publicHoliday: num(evidence?.publicHoliday, OVERTIME_RATES.publicHoliday),
+  };
+}
+
+/**
  * TASK-081/082 / SRS §30C.2 — Generate immutable PayrollInputSnapshots.
  *
  * Runs inside the close-period transaction (TASK-078) after TimesheetSummary is created.
@@ -109,6 +198,10 @@ export class PayrollSnapshotService {
     private readonly insuranceProfileModel: Model<InsuranceProfileDocument>,
     @InjectModel('TaxPolicy')
     private readonly taxPolicyModel: Model<TaxPolicyDocument>,
+    // Optional last so positional construction in scripts/specs stays valid.
+    @Optional()
+    @InjectModel('OvertimePayPolicy')
+    private readonly overtimePayPolicyModel?: Model<OvertimePayPolicyDocument>,
   ) {}
 
   /**
@@ -157,6 +250,14 @@ export class PayrollSnapshotService {
 
     // Step 2: Get policies effective for this period
     const { insurancePolicy, taxPolicy } = await this.getPolicies(organizationId, periodKey, session);
+    // One rate lookup per period — every employee in it is paid on the same
+    // effective policy, and the lookup is a read, not a per-row decision.
+    const overtimeRates = await resolveOvertimeRatesForPeriod(
+      this.overtimePayPolicyModel,
+      organizationId,
+      periodKey,
+      session,
+    );
 
     // Step 3: Generate snapshot for each employee
     let count = 0;
@@ -168,6 +269,7 @@ export class PayrollSnapshotService {
         summary,
         insurancePolicy,
         taxPolicy,
+        overtimeRates,
         session,
       );
       count++;
@@ -186,6 +288,11 @@ export class PayrollSnapshotService {
     summaries: TimesheetSummary[],
   ): Promise<any[]> {
     const { insurancePolicy, taxPolicy } = await this.getPolicies(organizationId, periodKey);
+    const overtimeRates = await resolveOvertimeRatesForPeriod(
+      this.overtimePayPolicyModel,
+      organizationId,
+      periodKey,
+    );
     const results: any[] = [];
     for (const summary of summaries) {
       const snapshot = await this.buildSnapshotForEmployee(
@@ -195,6 +302,7 @@ export class PayrollSnapshotService {
         summary,
         insurancePolicy,
         taxPolicy,
+        overtimeRates,
       );
       results.push(snapshot);
     }
@@ -249,6 +357,7 @@ export class PayrollSnapshotService {
     summary: TimesheetSummary,
     insurancePolicy: any,
     taxPolicy: any,
+    overtimeRates: OvertimeRatesSource,
     session: ClientSession,
   ): Promise<void> {
     const snapshotData = await this.buildSnapshotForEmployee(
@@ -258,6 +367,7 @@ export class PayrollSnapshotService {
       summary,
       insurancePolicy,
       taxPolicy,
+      overtimeRates,
     );
     const immutablePayload: any = {
       ...snapshotData,
@@ -282,6 +392,7 @@ export class PayrollSnapshotService {
     summary: TimesheetSummary,
     insurancePolicy: any,
     taxPolicy: any,
+    overtimeRates: OvertimeRatesSource = { ...OVERTIME_RATES, policyId: null, version: null, legalReference: '', contract: 'FROZEN_STATIC_RATES_V1' },
   ): Promise<any> {
     // Fetch employee profile
     const profile = await this.employeeProfileModel
@@ -358,7 +469,7 @@ export class PayrollSnapshotService {
       (summary.incompleteDays ?? 0) === 0;
     const attendanceBonus = qualifiesForAttendanceBonus ? attendanceBonusPolicy?.bonusAmount ?? 0 : 0;
 
-    // Calculate OT pay — hệ số dùng chung ở OVERTIME_RATES (SRS §30D.2)
+    // Calculate OT pay — hệ số hiệu lực của kỳ (policy, fallback là OVERTIME_RATES)
     const hourlyRate = hourlyRateFor(
       monthlyBaseSalary,
       standardWorkingDays,
@@ -366,9 +477,9 @@ export class PayrollSnapshotService {
     );
 
     // Tiền OT = số giờ × tiền công 1 giờ × hệ số, cộng theo từng loại ngày.
-    const otWorkingDayPay = computeOvertimePay(summary.otWorkingDayMinutes, hourlyRate, OVERTIME_RATES.workingDay);
-    const otWeeklyOffPay = computeOvertimePay(summary.otWeeklyOffMinutes, hourlyRate, OVERTIME_RATES.weeklyOff);
-    const otPublicHolidayPay = computeOvertimePay(summary.otPublicHolidayMinutes, hourlyRate, OVERTIME_RATES.publicHoliday);
+    const otWorkingDayPay = computeOvertimePay(summary.otWorkingDayMinutes, hourlyRate, overtimeRates.workingDay);
+    const otWeeklyOffPay = computeOvertimePay(summary.otWeeklyOffMinutes, hourlyRate, overtimeRates.weeklyOff);
+    const otPublicHolidayPay = computeOvertimePay(summary.otPublicHolidayMinutes, hourlyRate, overtimeRates.publicHoliday);
     const otPay = otWorkingDayPay + otWeeklyOffPay + otPublicHolidayPay;
 
     // Cờ công ty: cả tiền OT chịu thuế hay miễn hết. Không chia tiền OT.
@@ -421,6 +532,7 @@ export class PayrollSnapshotService {
       0,
       NO_KPI_EARNINGS_CONTRACT,
       { insuranceSalary, participation, standardWorkingDays, payableWorkingDays },
+      overtimeRates,
     );
 
     return {
@@ -443,14 +555,21 @@ export class PayrollSnapshotService {
         payableWorkUnits: summary.payableWorkUnits,
         dailyWorkCredits: summary.dailyWorkCredits,
         workCreditPolicySnapshots: summary.workCreditPolicySnapshots,
-        overtimeRateEvidence: [{
-          contract: 'FROZEN_STATIC_RATES_V1',
-          workingDay: OVERTIME_RATES.workingDay,
-          weeklyOff: OVERTIME_RATES.weeklyOff,
-          publicHoliday: OVERTIME_RATES.publicHoliday,
-          standardWorkMinutes: summary.standardWorkMinutes,
-        }],
       } : {}),
+      // Which rates produced `otPay`, and where they came from — always written so a
+      // later policy edit cannot make a closed payslip unexplainable.
+      overtimeRateEvidence: [{
+        contract: overtimeRates.contract,
+        workingDay: overtimeRates.workingDay,
+        weeklyOff: overtimeRates.weeklyOff,
+        publicHoliday: overtimeRates.publicHoliday,
+        policyId: overtimeRates.policyId,
+        policyVersion: overtimeRates.version,
+        legalReference: overtimeRates.legalReference,
+        ...(summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2'
+          ? { standardWorkMinutes: summary.standardWorkMinutes }
+          : {}),
+      }],
       totalAllowances,
       attendanceBonus,
       earningsContract: NO_KPI_EARNINGS_CONTRACT,
@@ -545,12 +664,13 @@ export class PayrollSnapshotService {
       standardWorkingDays: 0,
       payableWorkingDays: 0,
     },
+    overtimeRates: EffectiveOvertimeRates & { policyId?: string | null; version?: number | null } = OVERTIME_RATES,
   ): string {
     const assignedAllowances = (salaryProfile?.allowances ?? [])
       .map((item: any) => `${item.allowanceId}:${item.amount}`)
       .sort()
       .join(',');
-    const hashInput = [
+    const hashInputBase = [
       String(summary.periodId),
       String(summary.employeeProfileId),
       String(summary.totalDays),
@@ -584,6 +704,14 @@ export class PayrollSnapshotService {
       String(insurance.standardWorkingDays),
       String(insurance.payableWorkingDays),
     ].join('|');
+
+    // Hệ số OT đi vào hash CHỈ khi kỳ đó tính bằng `OvertimePayPolicy` thật.
+    // Snapshot cũ (chưa có policy) phải giữ nguyên hash từng byte, nếu không
+    // `verifyIntegrity` sẽ báo sai lệch cho toàn bộ lịch sử.
+    const overtimeSegment = overtimeRates.policyId
+      ? `|${overtimeRates.policyId}|${overtimeRates.version ?? 0}|${overtimeRates.workingDay}|${overtimeRates.weeklyOff}|${overtimeRates.publicHoliday}`
+      : '';
+    const hashInput = `${hashInputBase}${overtimeSegment}`;
 
     if (summary.calculationContract === 'VERSIONED_WORK_CREDIT_V2') {
       return canonicalPayloadHash({ legacyInputs: hashInput, calculationContract: summary.calculationContract,
@@ -674,6 +802,13 @@ export class PayrollSnapshotService {
     );
     const profile = await this.employeeProfileModel.findById(snapshot.employeeProfileId).lean();
     const dependentCount = profile?.dependents?.filter((d) => d.status === 'ACTIVE').length ?? 0;
+    // Re-resolve the rates rather than trusting the stored evidence: editing the
+    // policy must make this hash differ, which is exactly what this method is for.
+    const overtimeRates = await resolveOvertimeRatesForPeriod(
+      this.overtimePayPolicyModel,
+      String(snapshot.organizationId),
+      snapshot.periodKey,
+    );
     const currentHash = this.generateSourceHash(
       summary as any,
       salaryProfile,
@@ -682,6 +817,8 @@ export class PayrollSnapshotService {
       dependentCount,
       snapshot.kpiBonus ?? 0,
       snapshot.earningsContract,
+      undefined,
+      overtimeRates,
     );
 
     return currentHash === snapshot.sourceHash;

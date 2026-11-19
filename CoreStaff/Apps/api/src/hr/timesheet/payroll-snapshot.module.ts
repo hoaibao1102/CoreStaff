@@ -7,6 +7,7 @@ import { EmployeeProfile, EmployeeProfileSchema } from '../../database/schemas/e
 import {
   AttendanceBonusPolicySchema,
   OrganizationAllowanceSchema,
+  OvertimePayPolicySchema,
   SalaryProfileSchema,
 } from '../../database/schemas/compensation.schema';
 import { InsurancePolicySchema } from '../../database/schemas/insurance-policy.schema';
@@ -25,6 +26,7 @@ import { TaxPolicySchema } from '../../database/schemas/tax-policy.schema';
       { name: 'InsurancePolicy', schema: InsurancePolicySchema },
       { name: 'InsuranceProfile', schema: InsuranceProfileSchema },
       { name: 'TaxPolicy', schema: TaxPolicySchema },
+      { name: 'OvertimePayPolicy', schema: OvertimePayPolicySchema },
     ]),
   ],
   providers: [PayrollSnapshotService],
